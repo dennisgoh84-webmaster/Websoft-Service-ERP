@@ -1,9 +1,10 @@
 """
-Module Control -- lets an owner see and toggle which business-area
-modules are enabled/licensed for their company. See
-app/models/licensing.py for the data model rationale.
+Module access check -- used by the frontend nav to determine which
+modules the current user can see, and a read-only catalog used by
+Group Authority setup.  Module management (enable/disable) has moved
+to Central Command (Client Control).
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -11,13 +12,10 @@ from app.core.deps import get_current_user
 from app.models.core import User, UserRole
 from app.models.groups import AccessLevel
 from app.models.licensing import CompanyModule, Module
-from app.schemas.schemas import ModuleOut, ModuleToggleRequest
-from app.services import audit
-from app.services.authority import has_access, require_module_access
-from datetime import datetime, timezone
+from app.schemas.schemas import ModuleOut
+from app.services.authority import has_access
 
 router = APIRouter(prefix="/api/modules", tags=["modules"])
-MODULE = "core_administration"
 
 
 @router.get("/my-access", response_model=dict[str, bool])
@@ -26,12 +24,15 @@ def my_module_access(
     current_user: User = Depends(get_current_user),
 ):
     """Which built modules the current user can actually reach right now
-    in their active company -- Group Authority AND Module Control both
+    in their active company -- Group Authority AND module enablement both
     have to say yes (see app/services/authority.py). Used by the
     frontend nav to hide links the user has no access to, rather than
     showing a link that immediately 403s. Not itself gated by a module
     check: the app shell needs this before it knows what the user can
-    see at all."""
+    see at all.
+
+    Module management (toggle on/off, license type) is handled from
+    Central Command → Client Control, not from within the ERP."""
     modules = db.query(Module).filter(Module.is_built.is_(True)).all()
     company_modules = {
         cm.module_key: cm
@@ -53,8 +54,11 @@ def my_module_access(
 @router.get("", response_model=list[ModuleOut])
 def list_modules(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module_access(MODULE, AccessLevel.VIEW)),
+    current_user: User = Depends(get_current_user),
 ):
+    """Read-only module catalog. Used by Group Authority setup to show
+    which modules exist so permissions can be assigned.  Module
+    enable/disable has moved to Central Command → Client Control."""
     modules = db.query(Module).order_by(Module.key).all()
     company_modules = {
         cm.module_key: cm
@@ -74,59 +78,3 @@ def list_modules(
             )
         )
     return out
-
-
-@router.post("/{module_key}/toggle", response_model=ModuleOut)
-def toggle_module(
-    module_key: str,
-    payload: ModuleToggleRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_module_access(MODULE, AccessLevel.FULL)),
-):
-    module = db.get(Module, module_key)
-    if not module:
-        raise HTTPException(status_code=404, detail="Module not found")
-
-    cm = (
-        db.query(CompanyModule)
-        .filter(
-            CompanyModule.company_id == current_user.company_id,
-            CompanyModule.module_key == module_key,
-        )
-        .first()
-    )
-    if not cm:
-        cm = CompanyModule(company_id=current_user.company_id, module_key=module_key)
-        db.add(cm)
-        db.flush()
-
-    old_value = {"enabled": cm.enabled, "license_type": cm.license_type.value}
-
-    cm.enabled = payload.enabled
-    if payload.license_type is not None:
-        cm.license_type = payload.license_type
-    if payload.notes is not None:
-        cm.notes = payload.notes
-    if payload.enabled:
-        cm.enabled_at = datetime.now(timezone.utc)
-
-    audit.record(
-        db,
-        entity_type="company_module",
-        entity_id=cm.id,
-        action="toggled",
-        actor_user_id=current_user.id,
-        details=f"module={module_key}, enabled={payload.enabled}",
-        old_value=old_value,
-        new_value={"enabled": cm.enabled, "license_type": cm.license_type.value},
-    )
-    db.commit()
-
-    return ModuleOut(
-        key=module.key,
-        name=module.name,
-        description=module.description,
-        is_built=module.is_built,
-        enabled=cm.enabled,
-        license_type=cm.license_type,
-    )

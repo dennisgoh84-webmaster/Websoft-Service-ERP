@@ -6,7 +6,7 @@ const NAV = [
   { to: '/', label: '📊 Dashboard' },
   { to: '/clients', label: '🏢 Clients' },
   { to: '/advertisements', label: '📢 Advertisements' },
-  { to: '/licenses', label: '🔑 Licenses' },
+  { to: '/licenses', label: '🎛️ Client Control' },
   { to: '/config-updates', label: '⚙️ Config Updates' },
   { to: '/versions', label: '🔄 Version Control' },
   { to: '/staff', label: '👤 Staff' },

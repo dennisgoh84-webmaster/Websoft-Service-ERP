@@ -108,7 +108,7 @@ export default function LicensesPage() {
 
   return (
     <div>
-      <h1 style={{ margin: '0 0 16px', fontSize: 22 }}>License Management</h1>
+      <h1 style={{ margin: '0 0 16px', fontSize: 22 }}>Client Control</h1>
 
       <div style={{ marginBottom: 20 }}>
         <label style={{ fontSize: 13, fontWeight: 600, marginRight: 8 }}>Select Client:</label>

@@ -1590,11 +1590,11 @@ export const api = {
 
   dashboardSummary: () => request<DashboardSummary>('/dashboard/summary'),
 
+  /** Read-only module catalog — used by Group Authority setup. */
   listModules: () => request<ModuleInfo[]>('/modules'),
-  toggleModule: (key: string, enabled: boolean) =>
-    request<ModuleInfo>(`/modules/${key}/toggle`, { method: 'POST', body: JSON.stringify({ enabled }) }),
   /** module_key -> can the current user reach it right now (Group Authority AND
-   * Module Control both say yes)? Drives which nav links show at all. */
+   * module enablement both say yes)? Drives which nav links show at all.
+   * Module management (toggle on/off) is handled from Central Command → Client Control. */
   myModuleAccess: () => request<Record<string, boolean>>('/modules/my-access'),
 
   // Dynamic filter: free-text `q` matches name/email/phone/mobile/UEN/

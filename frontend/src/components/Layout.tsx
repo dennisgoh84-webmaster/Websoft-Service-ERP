@@ -140,7 +140,6 @@ export default function Layout() {
       visible: can('core_administration'),
     },
     { key: 'staff', path: '/staff', label: 'Staff Master', visible: can('core_administration') },
-    { key: 'modules', path: '/modules', label: 'Module Control', visible: can('core_administration') },
     { key: 'groups', path: '/groups', label: 'Group Authority', visible: can('core_administration') },
     { key: 'product-catalog', path: '/product-catalog', label: 'Product Catalog', visible: can('sales') },
     { key: 'setup-lists', path: '/setup-lists', label: 'Setup Lists', visible: can('core_administration') },

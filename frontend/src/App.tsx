@@ -35,7 +35,6 @@ import IncidentsPage from './pages/IncidentsPage'
 import JobOrdersPage from './pages/JobOrdersPage'
 import Login from './pages/Login'
 import MobileApp from './pages/MobileApp'
-import ModulesPage from './pages/ModulesPage'
 import OperationsReportsPage from './pages/OperationsReportsPage'
 import OpsDashboardPage from './pages/OpsDashboardPage'
 import PaymentVoucherPage from './pages/PaymentVoucherPage'
@@ -121,7 +120,6 @@ function AppRoutes() {
         <Route path="/accounting-reports" element={<AccountingReportsPage />} />
         <Route path="/commission-payouts" element={<CommissionPayoutsPage />} />
         <Route path="/company-setup" element={<CompanySetupPage />} />
-        <Route path="/modules" element={<ModulesPage />} />
         <Route path="/announcements" element={<AnnouncementsPage />} />
         <Route path="/staff" element={<StaffMasterPage />} />
         <Route path="/staff/:id" element={<StaffDetailPage />} />
