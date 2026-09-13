@@ -60,6 +60,7 @@ import GoodsReceiveNotePage from './pages/GoodsReceiveNotePage'
 import GoodsReturnNotePage from './pages/GoodsReturnNotePage'
 import GoodsTransferNotePage from './pages/GoodsTransferNotePage'
 import StockAdjustmentPage from './pages/StockAdjustmentPage'
+import StockItemDetailPage from './pages/StockItemDetailPage'
 import StockMasterPage from './pages/StockMasterPage'
 import StockReportsPage from './pages/StockReportsPage'
 import WarehousesPage from './pages/WarehousesPage'
@@ -139,6 +140,7 @@ function AppRoutes() {
         <Route path="/event-logs" element={<EventLogsPage />} />
         <Route path="/warehouses" element={<WarehousesPage />} />
         <Route path="/stock-master" element={<StockMasterPage />} />
+        <Route path="/stock-master/:id" element={<StockItemDetailPage />} />
         <Route path="/grn" element={<GoodsReceiveNotePage />} />
         <Route path="/gtn" element={<GoodsTransferNotePage />} />
         <Route path="/grtn" element={<GoodsReturnNotePage />} />

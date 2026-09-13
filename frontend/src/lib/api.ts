@@ -2767,6 +2767,7 @@ export const api = {
     request<Warehouse>(`/stock/warehouses/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   listStockItems: () => request<StockItemRow[]>('/stock/items'),
+  getStockItem: (id: string) => request<StockItemRow>(`/stock/items/${id}`),
   createStockItem: (data: { code: string; name: string; description?: string; category?: string; unit_of_measure?: string; reorder_level?: number }) =>
     request<StockItemRow>('/stock/items', { method: 'POST', body: JSON.stringify(data) }),
   updateStockItem: (id: string, data: Partial<{ code: string; name: string; description: string; category: string; unit_of_measure: string; reorder_level: number; is_active: boolean }>) =>

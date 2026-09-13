@@ -146,6 +146,18 @@ def update_stock_item(
     return item
 
 
+@router.get("/items/{item_id}", response_model=StockItemOut)
+def get_stock_item(
+    item_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.VIEW)),
+):
+    item = db.query(StockItem).filter(StockItem.id == item_id, StockItem.company_id == current_user.company_id).first()
+    if not item:
+        raise HTTPException(404, "Stock item not found")
+    return item
+
+
 # ━━ Stock Levels ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 @router.get("/levels", response_model=list[StockLevelOut])
