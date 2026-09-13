@@ -49,18 +49,16 @@ export default function Layout() {
   const [sidebarPeek, setSidebarPeek] = useState(false)
 
   // "After login successfully, all modules, hide menu bar" (2026-09-12)
-  // -- extends what started 2026-09-11 as a special case for just the
-  // two dashboards ("for the first 2 dashboard, when we go in ... hide
-  // the menu bar, so we can display more wider on the screen") to every
-  // page: the sidebar is hidden by default everywhere now, with the
-  // "☰ Menu" button in the topbar below letting you peek it back open
-  // without leaving the page.
+  // -- sidebar is hidden by default everywhere, with the "☰ Menu" button
+  // in the topbar letting you peek it back open without leaving the page.
+  // "Menu bar should always be able to see this fixed: OPERATIONS /
+  // STOCK INVENTORY / ACCOUNTS / MAINTENANCE" (2026-09-13) -- the 4
+  // section titles are CSS sticky so they never scroll off-screen when
+  // the sidebar is open.
   const sidebarHidden = !sidebarPeek
 
   // Re-hides the menu every time you land on a new page -- "peek" is a
-  // per-visit override (so you can still reach the rest of the nav from
-  // wherever you are) rather than a remembered preference, so leaving
-  // and coming back always re-hides it.
+  // per-visit override rather than a remembered preference.
   useEffect(() => {
     setSidebarPeek(false)
   }, [location.pathname])
@@ -90,6 +88,7 @@ export default function Layout() {
       label: 'Service Record Approval',
       visible: can('service_records'),
     },
+    { key: 'approval-center', path: '/approval-center', label: 'Approval Center', visible: can('core_administration') },
     { key: 'excess-review', path: '/excess-review', label: 'Excess Review', visible: can('service_contracts') },
     { key: 'software-tasks', path: '/software-tasks', label: 'Software Tasks', visible: can('software_development') },
     { key: 'operations-reports', path: '/operations-reports', label: 'Operations Reports', visible: can('operations_reports') },
@@ -122,10 +121,21 @@ export default function Layout() {
     { key: 'accounts-payable', path: '/accounts-payable', label: 'Accounts Payable', visible: can('accounts_payable') },
     { key: 'payment-voucher', path: '/payment-voucher', label: 'Payment Voucher', visible: can('accounts_payable') },
     { key: 'general-ledger', path: '/general-ledger', label: 'Journal Voucher', visible: can('finance_accounting') },
+    { key: 'gl-transactions', path: '/gl-transactions', label: 'GL Transactions', visible: can('finance_accounting') },
     { key: 'chart-of-accounts', path: '/chart-of-accounts', label: 'Chart of Accounts', visible: can('finance_accounting') },
     { key: 'accounting-periods', path: '/accounting-periods', label: 'GST and Account Period', visible: can('finance_accounting') },
     { key: 'year-end-closing', path: '/year-end-closing', label: 'Year-End Closing', visible: can('finance_accounting') },
     { key: 'accounting-reports', path: '/accounting-reports', label: 'Accounting Reports', visible: can('accounting_reports') },
+    { key: 'commission-payouts', path: '/commission-payouts', label: 'Commission Payouts', visible: can('accounting_reports') },
+  ]
+
+  const stockItems: NavItem[] = [
+    { key: 'stock-master', path: '/stock-master', label: 'Stock Master', visible: can('stock_master') },
+    { key: 'grn', path: '/grn', label: 'Goods Receive', visible: can('goods_receive_note') },
+    { key: 'gtn', path: '/gtn', label: 'Goods Transfer', visible: can('goods_transfer_note') },
+    { key: 'grtn', path: '/grtn', label: 'Goods Return', visible: can('goods_return_note') },
+    { key: 'stock-adjustment', path: '/stock-adjustment', label: 'Stock Adjustment', visible: can('stock_adjustment') },
+    { key: 'stock-reports', path: '/stock-reports', label: 'Stock Reports', visible: can('stock_operation_reports') },
   ]
 
   const maintenanceItems: NavItem[] = [
@@ -137,7 +147,6 @@ export default function Layout() {
       visible: can('core_administration'),
     },
     { key: 'staff', path: '/staff', label: 'Staff Master', visible: can('core_administration') },
-    { key: 'modules', path: '/modules', label: 'Module Control', visible: can('core_administration') },
     { key: 'groups', path: '/groups', label: 'Group Authority', visible: can('core_administration') },
     { key: 'product-catalog', path: '/product-catalog', label: 'Product Catalog', visible: can('sales') },
     { key: 'setup-lists', path: '/setup-lists', label: 'Setup Lists', visible: can('core_administration') },
@@ -146,6 +155,12 @@ export default function Layout() {
     { key: 'tax-types', path: '/tax-types', label: 'Tax Types', visible: can('finance_accounting') },
     { key: 'currency-rates', path: '/currency-rates', label: 'Currency Rate Table', visible: can('finance_accounting') },
     { key: 'document-control', path: '/document-control', label: 'Document Control', visible: can('core_administration') },
+    { key: 'warehouses', path: '/warehouses', label: 'Warehouses', visible: can('stock_master') },
+    { key: 'stock-categories', path: '/stock-categories', label: 'Stock Categories', visible: can('stock_master') },
+    { key: 'stock-groups', path: '/stock-groups', label: 'Stock Groups', visible: can('stock_master') },
+    { key: 'stock-brands-models', path: '/stock-brands-models', label: 'Brands / Models', visible: can('stock_master') },
+    { key: 'stock-usages', path: '/stock-usages', label: 'Stock Usages', visible: can('stock_master') },
+    { key: 'approval-authorities', path: '/approval-authorities', label: 'Approval Authority', visible: can('core_administration') },
     { key: 'event-logs', path: '/event-logs', label: 'Event Logs', visible: can('event_logs') },
   ]
 
@@ -191,6 +206,14 @@ export default function Layout() {
             items={accountsItems}
             collapsed={!!collapsed.accounts}
             onToggle={() => toggleSection('accounts')}
+          />
+
+          <NavSection
+            sectionKey="stock"
+            title="Stock Inventory"
+            items={stockItems}
+            collapsed={!!collapsed.stock}
+            onToggle={() => toggleSection('stock')}
           />
 
           <NavSection

@@ -90,3 +90,18 @@ from app.models.attachments import (  # noqa: F401
     ServiceRecordAttachment,
     ServiceRecordSignoff,
 )
+from app.models.documents import (  # noqa: F401
+    DocumentAttachment,
+    DocumentEntityType,
+    DocumentSignature,
+)
+from app.models.approvals import (  # noqa: F401
+    ApprovalAuthority,
+    ApprovalAuthorityMember,
+    ApprovalDecision,
+    ApprovalDecisionValue,
+    ApprovalMode,
+    ApprovalRequest,
+    ApprovalRule,
+    ApprovalStatus,
+)

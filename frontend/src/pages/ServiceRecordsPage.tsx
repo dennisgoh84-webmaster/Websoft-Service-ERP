@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { EmailIcon, PrintIcon, WhatsAppIcon } from '../components/DocActionIcons'
+import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
+import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type CompanyIndividual, type CurrentUser, type JobOrder, type ServiceRecord } from '../lib/api'
 
 // wa.me needs digits only (country code + number, no "+", spaces or dashes).
@@ -17,6 +19,7 @@ export default function ServiceRecordsPage() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [docPanelId, setDocPanelId] = useState<string | null>(null)
 
   const [filterEmployee, setFilterEmployee] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
@@ -149,7 +152,8 @@ export default function ServiceRecordsPage() {
             {records.map((r) => {
               const customer = customerOf(r.job_order_id)
               return (
-                <tr key={r.id}>
+                <Fragment key={r.id}>
+                <tr>
                   <td className="muted">{r.service_record_number}</td>
                   <td>
                     <Link to={`/job-orders/${r.job_order_id}`}>{jobOrderSubject(r.job_order_id)}</Link>
@@ -179,6 +183,12 @@ export default function ServiceRecordsPage() {
                   <td>{r.outcome}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <button
+                        className="secondary icon-button"
+                        title="Attachments & Signatures"
+                        aria-label="Attachments & Signatures"
+                        onClick={() => setDocPanelId(docPanelId === r.id ? null : r.id)}
+                      >📎</button>
                       <Link to={`/service-records/${r.id}/print`} className="secondary icon-button" title="Print" aria-label="Print">
                         <PrintIcon />
                       </Link>
@@ -203,6 +213,15 @@ export default function ServiceRecordsPage() {
                     </div>
                   </td>
                 </tr>
+                {docPanelId === r.id && (
+                  <tr>
+                    <td colSpan={9} style={{ padding: 16, background: 'var(--bg-muted, #f9f9f9)' }}>
+                      <DocumentAttachmentsPanel entityType="service_record" entityId={r.id} />
+                      <SignaturePanel entityType="service_record" entityId={r.id} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               )
             })}
             {records.length === 0 && (

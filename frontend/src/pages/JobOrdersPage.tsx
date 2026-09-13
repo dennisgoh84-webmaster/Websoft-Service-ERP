@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
-import { api, downloadBlob, type Contract, type CompanyIndividual, type JobOrder, type JobOrderPriority } from '../lib/api'
+import { api, downloadBlob, type Contract, type CompanyIndividual, type JobOrder, type JobOrderPriority, type JobOrderType } from '../lib/api'
 
 export default function JobOrdersPage() {
   const [jobOrders, setJobOrders] = useState<JobOrder[]>([])
@@ -13,6 +13,7 @@ export default function JobOrdersPage() {
   const [customerId, setCustomerId] = useState('')
   const [contractId, setContractId] = useState('')
   const [subject, setSubject] = useState('')
+  const [jobOrderType, setJobOrderType] = useState<JobOrderType>('support')
   const [priority, setPriority] = useState<JobOrderPriority>('normal')
   const [dueDate, setDueDate] = useState('')
   const [isUrgent, setIsUrgent] = useState(false)
@@ -23,6 +24,7 @@ export default function JobOrdersPage() {
   const [filterPriority, setFilterPriority] = useState('')
   const [filterCompanyIndividual, setFilterCompanyIndividual] = useState('')
   const [filterContract, setFilterContract] = useState(preselectedContract)
+  const [filterType, setFilterType] = useState('')
 
   function refresh() {
     api
@@ -31,13 +33,14 @@ export default function JobOrdersPage() {
         priority: filterPriority || undefined,
         customer_id: filterCompanyIndividual || undefined,
         contract_id: filterContract || undefined,
+        job_order_type: filterType || undefined,
       })
       .then(setJobOrders)
     api.listCompanyIndividuals().then(setCustomers)
     api.listContracts().then(setContracts)
   }
 
-  useEffect(refresh, [filterStatus, filterPriority, filterCompanyIndividual, filterContract])
+  useEffect(refresh, [filterStatus, filterPriority, filterCompanyIndividual, filterContract, filterType])
 
   const customerName = (id: string) => customers.find((c) => c.id === id)?.name ?? id.slice(0, 8)
   const contractsForCompanyIndividual = contracts.filter((c) => c.customer_id === customerId)
@@ -50,11 +53,13 @@ export default function JobOrdersPage() {
         customer_id: customerId,
         contract_id: contractId,
         subject,
+        job_order_type: jobOrderType,
         priority,
         due_date: dueDate || undefined,
         is_urgent: isUrgent,
       })
       setSubject('')
+      setJobOrderType('support')
       setDueDate('')
       setIsUrgent(false)
       refresh()
@@ -68,6 +73,7 @@ export default function JobOrdersPage() {
     setFilterPriority('')
     setFilterCompanyIndividual('')
     setFilterContract('')
+    setFilterType('')
   }
 
   async function onExport(format: string) {
@@ -125,6 +131,13 @@ export default function JobOrdersPage() {
           <div className="form-row">
             <label>Subject</label>
             <input value={subject} onChange={(e) => setSubject(e.target.value)} required />
+          </div>
+          <div className="form-row">
+            <label>Type</label>
+            <select value={jobOrderType} onChange={(e) => setJobOrderType(e.target.value as JobOrderType)}>
+              <option value="support">Support (ad-hoc)</option>
+              <option value="project">Project (milestone schedule)</option>
+            </select>
           </div>
           <div className="form-row">
             <label>Priority</label>
@@ -201,6 +214,14 @@ export default function JobOrdersPage() {
               ))}
             </select>
           </div>
+          <div className="form-row" style={{ margin: 0 }}>
+            <label>Type</label>
+            <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+              <option value="">All</option>
+              <option value="support">Support</option>
+              <option value="project">Project</option>
+            </select>
+          </div>
           <button type="button" className="secondary" onClick={resetFilters}>
             Reset filters
           </button>
@@ -220,6 +241,7 @@ export default function JobOrdersPage() {
             <tr>
               <th>Number</th>
               <th>Subject</th>
+              <th>Type</th>
               <th>Company / Individual</th>
               <th>Priority</th>
               <th>Status</th>
@@ -237,6 +259,13 @@ export default function JobOrdersPage() {
                   <td>
                     {t.subject}
                     {t.is_urgent && <span className="badge exceeded" style={{ marginLeft: 6 }}>URGENT</span>}
+                  </td>
+                  <td>
+                    {t.job_order_type === 'project' ? (
+                      <span className="badge active">PROJECT</span>
+                    ) : (
+                      <span className="muted">Support</span>
+                    )}
                   </td>
                   <td>{customerName(t.customer_id)}</td>
                   <td>{t.priority}</td>
@@ -261,7 +290,7 @@ export default function JobOrdersPage() {
             })}
             {jobOrders.length === 0 && (
               <tr>
-                <td colSpan={7} className="muted">
+                <td colSpan={8} className="muted">
                   No job orders match these filters.
                 </td>
               </tr>

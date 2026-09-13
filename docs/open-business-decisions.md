@@ -348,51 +348,80 @@ sub-detail is called out explicitly).
 
 ## 6. Commission Management
 
-Status: **DEFERRED** (2026-09-10, at Dennis's request) — Commission
-Management is not being worked on for now; the items below are parked
-until Service Operations (and related areas) are finalized, then
-revisited.
-
-**Partial update (2026-09-12, see #33):** a read-only Commission
-*report* (not a payment workflow) was built, which resolves 6.1 and
-6.2 for that report's purposes -- % of GP, triggered by receipt
-allocation. 6.3 (approval), 6.4 (clawback) and 6.5 (payout mechanism)
-remain fully open; there is still no commission approval or payment
-feature anywhere in this system.
+Status: **DECIDED / BUILT** (2026-09-12) — all five items resolved.
 
 6.1. **How are commissions calculated?**
-   e.g. flat percentage, tiered by volume, product-specific rates, split
-   commissions across multiple salespeople.
-   *Arises in:* Commission Management; Workflow E.
+   **DECIDED (2026-09-12):** Flat percentage of Gross Profit, configured
+   per company via Commission Settings (Company Setup page). Rate is
+   applied to each salesperson's allocated share of received payments.
+   *Built:* Commission report under Accounting Reports; commission_settings
+   table with rate_percent field.
 
 6.2. **When does commission become payable** — on sales order
    confirmation, on invoicing, or on customer payment received?
-   *Arises in:* Commission Management, Accounts Receivable; Workflow E.
+   **DECIDED (2026-09-12):** On customer payment received — commission
+   is prorated by receipt allocation against invoices.
+   *Built:* commission_rows() in reports service calculates from
+   receipt → invoice → quotation → salesperson chain.
 
 6.3. **Who approves commission calculations**, and is multi-level
    approval required above certain amounts?
-   *Arises in:* Commission Management; Workflow E.
+   **DECIDED (2026-09-12):** Single-level approval workflow:
+   DRAFT → PENDING_APPROVAL → APPROVED → PAID. Generating payouts
+   creates DRAFT records; "Submit" moves to PENDING_APPROVAL; an
+   authorized user (accounting_reports FULL) approves. Bulk submit-all
+   and approve-all actions available for a given month. Rejection sends
+   back to DRAFT with optional reason. Can later be wired into the
+   eApproval framework for multi-level authority-based approval.
+   *Built:* commission_payouts table, CommissionPayoutStatus enum,
+   submit/approve/reject/cancel endpoints, CommissionPayoutsPage.tsx.
 
 6.4. **What is the clawback rule** if a sale is later cancelled or
    refunded after commission was calculated or paid?
-   *Arises in:* Commission Management; Workflow E.
+   **DECIDED (2026-09-12):** Automatic clawback on invoice write-off.
+   When an invoice is written off, a negative-amount commission payout
+   (payout_type = CLAWBACK) is auto-created for the salesperson,
+   linked to the written-off invoice with clawback_reason. Clawback
+   records are auto-approved (no approval needed for negative amounts).
+   *Built:* create_clawback() in commissions service, called from
+   write_off_invoice endpoint in accounts_receivable router.
 
 6.5. **How is commission paid out** — via payroll, via a
-   finance-administered payout, or another mechanism? (This also affects
-   whether a payroll/HR integration or module is eventually needed.)
-   *Arises in:* Commission Management; Workflow E.
+   finance-administered payout, or another mechanism?
+   **DECIDED (2026-09-12):** Finance-administered payout within the ERP.
+   After approval, an authorized user marks each payout as "Paid" with
+   a payment date and optional reference number. No payroll integration
+   needed — the ERP tracks the payout status and payment details.
+   *Built:* mark_paid endpoint, paid_date/paid_reference/paid_by_user_id
+   columns, inline payment form in CommissionPayoutsPage.tsx.
 
 ## 7. Projects
 
 7.1. **What is the project budget overrun process** — does a project need
    re-approval if it exceeds budget, and who approves?
+   **Status: DECIDED (2026-09-12).** The system alerts when a PROJECT-type
+   Job Order's cumulative Service Record hours OR costs exceed the linked
+   contract's values. Sales Manager (Cherish) must approve to continue
+   past the overrun — a `budget_overrun_approved` flag on the Job Order,
+   settable only by `sales_manager` or `owner` role. Until approved, a
+   warning banner is shown on the Job Order detail page and new Service
+   Records can still be logged (work doesn't stop) but the overrun is
+   visibly flagged.
    *Arises in:* Projects; Workflow D.
 
 7.2. **What labour cost rate is used for project cost tracking** (e.g.
    standard cost per role, actual salary-based cost)?
+   **Status: DEFERRED (2026-09-12).** No labour costing for now — Dennis
+   confirmed this is not needed at this stage. Revisit when cost-centre
+   reporting or project profitability analysis is scoped.
    *Arises in:* Projects, Service Records, Finance / Accounting; Workflow D.
 
 7.3. **Who approves milestone completion** for milestone-based billing?
+   **Status: DECIDED (2026-09-12).** Sales Manager (Cherish) approves
+   milestone completion. Setting a milestone to COMPLETED status requires
+   `sales_manager` or `owner` role — other staff can set milestones to
+   IN_PROGRESS or SKIPPED but not COMPLETED. Enforced in the milestone
+   update endpoint.
    *Arises in:* Projects, Billing; Workflow D.
 
 ## 8. Ownership & Permissions
@@ -400,16 +429,31 @@ feature anywhere in this system.
 8.1. **How is customer ownership defined and enforced?**
    e.g. can only the assigned account owner edit/view a customer record,
    or is it open to a wider team?
+   **Status: DECIDED (2026-09-12).** Open to team — any user with
+   appropriate Group Authority access level can view/edit customer
+   records. There is no per-record ownership restriction; the existing
+   Group Authority module-level access (None/View/Edit/Full) is the
+   access control mechanism.
    *Arises in:* Customer Management.
 
 8.2. **How is sales ownership defined?**
    e.g. what happens to ownership when an opportunity or account is
    reassigned, and how are ownership disputes (two reps claiming a deal)
    resolved?
+   **Status: DECIDED (2026-09-12).** Open to team — Group Authority
+   controls access to sales documents (Quotations, Invoices). There is
+   no per-record sales ownership restriction. Commission is tracked per
+   salesperson via the Commission Management module (section 6) but does
+   not gate document access.
    *Arises in:* CRM, Sales, Commission Management.
 
 8.3. **How is service ownership defined** for ongoing contracts/job orders
    (e.g. a named account engineer vs. a shared team queue)?
+   **Status: DECIDED (2026-09-12).** Open to team — any user with Group
+   Authority `service_operations` access can view/work on any Job Order
+   or Service Record. The `assigned_to_user_id` on a Job Order is
+   informational (who's handling it), not an access gate. Shared team
+   queue model, not named-account-engineer lock.
    *Arises in:* Service Contracts, Helpdesk / Service Operations.
 
 8.4. **What are the detailed user roles and permission levels** across the

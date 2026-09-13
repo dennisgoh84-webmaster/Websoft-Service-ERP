@@ -1,5 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { Fragment, useEffect, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
+import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
+import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type Account, type JournalEntry, type TrialBalance } from '../lib/api'
 import { formatMoney as money } from '../lib/format'
 
@@ -25,6 +28,7 @@ export default function GeneralLedgerPage() {
   const [narration, setNarration] = useState('')
   const [lines, setLines] = useState<DraftLine[]>([emptyLine(), emptyLine()])
   const [saving, setSaving] = useState(false)
+  const [docPanelId, setDocPanelId] = useState<string | null>(null)
 
   function refresh() {
     api.listVouchers().then(setVouchers).catch((e) => setError(e.message))
@@ -170,7 +174,9 @@ export default function GeneralLedgerPage() {
               {trialBalance.rows.map((r) => (
                 <tr key={r.account_id}>
                   <td>{r.code}</td>
-                  <td>{r.name}</td>
+                  <td>
+                    <Link to={`/gl-transactions?account=${r.account_id}`}>{r.name}</Link>
+                  </td>
                   <td>{r.account_type}</td>
                   <td>{money(r.debit_sgd)}</td>
                   <td>{money(r.credit_sgd)}</td>
@@ -353,7 +359,8 @@ export default function GeneralLedgerPage() {
             </thead>
             <tbody>
               {vouchers.map((v) => (
-                <tr key={v.id}>
+                <Fragment key={v.id}>
+                <tr>
                   <td>{v.voucher_number}</td>
                   <td>{v.entry_date}</td>
                   <td>
@@ -371,6 +378,12 @@ export default function GeneralLedgerPage() {
                     </span>
                   </td>
                   <td style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      className="secondary icon-button"
+                      title="Attachments & Signatures"
+                      aria-label="Attachments & Signatures"
+                      onClick={() => setDocPanelId(docPanelId === v.id ? null : v.id)}
+                    >📎</button>
                     {v.status === 'draft' && (
                       <button className="secondary" onClick={() => onPost(v)}>
                         Post
@@ -383,6 +396,15 @@ export default function GeneralLedgerPage() {
                     )}
                   </td>
                 </tr>
+                {docPanelId === v.id && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: 16, background: 'var(--bg-muted, #f9f9f9)' }}>
+                      <DocumentAttachmentsPanel entityType="journal_entry" entityId={v.id} />
+                      <SignaturePanel entityType="journal_entry" entityId={v.id} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
               {vouchers.length === 0 && (
                 <tr>

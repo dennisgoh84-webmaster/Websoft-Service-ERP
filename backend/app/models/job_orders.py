@@ -16,12 +16,18 @@ maybe_auto_close_job_order(). CLOSED replaced the old manual
 Resolve->Close two-step; VOID is new, a manual dead-end for a Job Order
 that should never have been raised (duplicate, raised in error),
 separate from a normal completed job.
+
+Job Order Type added 2026-09-12: SUPPORT (default, ad-hoc support work)
+or PROJECT (project-type work with a scheduled milestone template --
+installation, training, repeat training, handover, completion sign-off).
+PROJECT type Job Orders carry a project_milestones child table for
+Gantt chart rendering on the frontend.
 """
 import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, String, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -40,6 +46,26 @@ class JobOrderPriority(str, enum.Enum):
     NORMAL = "normal"
     HIGH = "high"
     CRITICAL = "critical"
+
+
+class JobOrderType(str, enum.Enum):
+    SUPPORT = "support"
+    PROJECT = "project"
+
+
+class MilestoneType(str, enum.Enum):
+    INSTALLATION = "installation"
+    TRAINING = "training"
+    REPEAT_TRAINING = "repeat_training"
+    HANDOVER = "handover"
+    COMPLETION_SIGNOFF = "completion_signoff"
+
+
+class MilestoneStatus(str, enum.Enum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    SKIPPED = "skipped"
 
 
 class JobOrder(Base):
@@ -62,6 +88,10 @@ class JobOrder(Base):
     # controlled"), same JO-<year>-<seq> pattern as every other document.
     job_order_number: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    # SUPPORT (default, ad-hoc) or PROJECT (milestone schedule + Gantt)
+    job_order_type: Mapped[JobOrderType] = mapped_column(
+        Enum(JobOrderType, name="job_order_type"), default=JobOrderType.SUPPORT
+    )
     priority: Mapped[JobOrderPriority] = mapped_column(
         Enum(JobOrderPriority, name="job_order_priority"), default=JobOrderPriority.NORMAL
     )
@@ -82,6 +112,20 @@ class JobOrder(Base):
     # app/services/service_records.py.
     is_urgent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
+    # PROJECT budget overrun approval (7.1): when cumulative Service
+    # Record hours OR costs exceed the linked contract's values, the
+    # Sales Manager (Cherish) must approve continuation. This flag is
+    # set by the /approve-overrun endpoint (sales_manager or owner).
+    budget_overrun_approved: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    budget_overrun_approved_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    budget_overrun_approved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # Set only when status is VOID -- why this Job Order was voided
     # instead of worked (duplicate, raised in error, etc.). Required by
     # the void endpoint; the audit log also records who/when.
@@ -95,3 +139,50 @@ class JobOrder(Base):
 
     customer: Mapped["CompanyIndividual"] = relationship()  # noqa: F821
     contract: Mapped["Contract | None"] = relationship()  # noqa: F821
+    milestones: Mapped[list["ProjectMilestone"]] = relationship(
+        back_populates="job_order", cascade="all, delete-orphan",
+        order_by="ProjectMilestone.sort_order",
+    )
+
+
+class ProjectMilestone(Base):
+    """One scheduled milestone in a PROJECT-type Job Order.
+
+    Typical milestones for a project installation:
+      installation → training → repeat_training → handover → completion_signoff
+
+    Each carries planned + actual dates so the frontend can render a
+    Gantt chart comparing schedule vs. reality. Duration is in calendar
+    days (1 = single-day event like a sign-off meeting).
+    """
+    __tablename__ = "project_milestones"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    job_order_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("job_orders.id"), nullable=False, index=True
+    )
+    milestone_type: Mapped[MilestoneType] = mapped_column(
+        Enum(MilestoneType, name="milestone_type"), nullable=False
+    )
+    label: Mapped[str] = mapped_column(String(200), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    planned_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    planned_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    actual_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    actual_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    assigned_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    status: Mapped[MilestoneStatus] = mapped_column(
+        Enum(MilestoneStatus, name="milestone_status"), default=MilestoneStatus.PENDING
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    job_order: Mapped["JobOrder"] = relationship(back_populates="milestones")

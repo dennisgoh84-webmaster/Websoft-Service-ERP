@@ -4,10 +4,12 @@
 // Company/Individual record flagged is_supplier=true (not a separate
 // master) -- this page only reads that list to populate the "Raise a
 // purchase order" form; add/edit suppliers on the Company/Individual page.
-import { useEffect, useState, type FormEvent } from 'react'
+import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { EmailIcon, PrintIcon, WhatsAppIcon } from '../components/DocActionIcons'
+import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
+import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type CompanyIndividual, type PurchaseOrder } from '../lib/api'
 import { formatMoney as money } from '../lib/format'
 
@@ -29,6 +31,7 @@ export default function PurchaseOrdersPage() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [docPanelId, setDocPanelId] = useState<string | null>(null)
 
   // New PO
   const [poSupplier, setPoSupplier] = useState('')
@@ -176,7 +179,8 @@ export default function PurchaseOrdersPage() {
               {pos.map((po) => {
                 const supplier = supplierOf(po.supplier_id)
                 return (
-                  <tr key={po.id}>
+                  <Fragment key={po.id}>
+                  <tr>
                     <td>{po.po_number}</td>
                     <td>{supplierName(po.supplier_id)}</td>
                     <td>{po.description}</td>
@@ -207,6 +211,12 @@ export default function PurchaseOrdersPage() {
                             Imported &rarr; {po.imported_bill_number}
                           </span>
                         )}
+                        <button
+                          className="secondary icon-button"
+                          title="Attachments & Signatures"
+                          aria-label="Attachments & Signatures"
+                          onClick={() => setDocPanelId(docPanelId === po.id ? null : po.id)}
+                        >📎</button>
                         <Link to={`/purchase-orders/${po.id}/print`} className="secondary icon-button" title="Print" aria-label="Print">
                           <PrintIcon />
                         </Link>
@@ -231,6 +241,15 @@ export default function PurchaseOrdersPage() {
                       </div>
                     </td>
                   </tr>
+                  {docPanelId === po.id && (
+                    <tr>
+                      <td colSpan={6} style={{ padding: 16, background: 'var(--bg-muted, #f9f9f9)' }}>
+                        <DocumentAttachmentsPanel entityType="purchase_order" entityId={po.id} />
+                        <SignaturePanel entityType="purchase_order" entityId={po.id} />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 )
               })}
               {pos.length === 0 && (

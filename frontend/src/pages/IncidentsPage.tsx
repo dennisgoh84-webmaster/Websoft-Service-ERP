@@ -4,6 +4,8 @@
 // #36 for the confirmed rules this implements.
 import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
+import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
+import SignaturePanel from '../components/SignaturePanel'
 import {
   api,
   type CompanyIndividual,
@@ -45,6 +47,8 @@ export default function IncidentsPage() {
   const [senderEmail, setSenderEmail] = useState('')
   const [senderPhone, setSenderPhone] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const [docPanelId, setDocPanelId] = useState<string | null>(null)
 
   // Per-row action panel
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -247,18 +251,34 @@ export default function IncidentsPage() {
                     </td>
                     <td>{new Date(inc.created_at).toLocaleDateString()}</td>
                     <td>
-                      {inc.status === 'open' && (
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button className="secondary" onClick={() => openPanel(inc)}>
-                            {expandedId === inc.id ? 'Hide' : 'Route...'}
-                          </button>
-                          <button className="secondary" onClick={() => onClose(inc)}>
-                            Close
-                          </button>
-                        </div>
-                      )}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button
+                          className="secondary icon-button"
+                          title="Attachments & Signatures"
+                          aria-label="Attachments & Signatures"
+                          onClick={() => setDocPanelId(docPanelId === inc.id ? null : inc.id)}
+                        >📎</button>
+                        {inc.status === 'open' && (
+                          <>
+                            <button className="secondary" onClick={() => openPanel(inc)}>
+                              {expandedId === inc.id ? 'Hide' : 'Route...'}
+                            </button>
+                            <button className="secondary" onClick={() => onClose(inc)}>
+                              Close
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
+                  {docPanelId === inc.id && (
+                    <tr>
+                      <td colSpan={7} style={{ padding: 16, background: 'var(--bg-muted, #f9f9f9)' }}>
+                        <DocumentAttachmentsPanel entityType="incident" entityId={inc.id} />
+                        <SignaturePanel entityType="incident" entityId={inc.id} />
+                      </td>
+                    </tr>
+                  )}
                   {expandedId === inc.id && (
                     <tr>
                       <td colSpan={7}>

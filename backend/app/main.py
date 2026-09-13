@@ -16,12 +16,15 @@ from app.core.config import settings
 from app.routers import (
     accounts,
     announcements,
+    approvals,
     bank_accounts,
     bank_transactions,
     payables,
     catalog,
+    commissions,
     currency_rates,
     document_control,
+    documents,
     gl_types,
     ledger,
     accounts_receivable,
@@ -48,6 +51,7 @@ from app.routers import (
     service_records,
     setup_lists,
     software_tasks,
+    stock,
     tax_codes,
     users,
 )
@@ -116,6 +120,10 @@ app.include_router(tax_codes.router)
 app.include_router(periods.router)
 app.include_router(ops_dashboard.router)
 app.include_router(mobile.router)
+app.include_router(documents.router)
+app.include_router(approvals.router)
+app.include_router(commissions.router)
+app.include_router(stock.router)
 
 
 @app.get("/api/health")

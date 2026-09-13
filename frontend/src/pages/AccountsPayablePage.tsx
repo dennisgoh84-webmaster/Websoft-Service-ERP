@@ -1,6 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
+import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
+import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type APAgingReport, type CompanyIndividual, type PurchaseOrder, type SupplierInvoice } from '../lib/api'
 import { formatMoney as money } from '../lib/format'
 
@@ -19,6 +21,7 @@ export default function AccountsPayablePage() {
   const [aging, setAging] = useState<APAgingReport | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [docPanelId, setDocPanelId] = useState<string | null>(null)
 
   // New bill
   const [billSupplier, setBillSupplier] = useState('')
@@ -226,11 +229,13 @@ export default function AccountsPayablePage() {
                 <th>Outstanding</th>
                 <th>Match</th>
                 <th>Status</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {bills.map((b) => (
-                <tr key={b.id}>
+                <Fragment key={b.id}>
+                <tr>
                   <td>{b.bill_number}</td>
                   <td>{supplierName(b.supplier_id)}</td>
                   <td>
@@ -247,11 +252,28 @@ export default function AccountsPayablePage() {
                       {b.status.replace('_', ' ')}
                     </span>
                   </td>
+                  <td>
+                    <button
+                      className="secondary icon-button"
+                      title="Attachments & Signatures"
+                      aria-label="Attachments & Signatures"
+                      onClick={() => setDocPanelId(docPanelId === b.id ? null : b.id)}
+                    >📎</button>
+                  </td>
                 </tr>
+                {docPanelId === b.id && (
+                  <tr>
+                    <td colSpan={8} style={{ padding: 16, background: 'var(--bg-muted, #f9f9f9)' }}>
+                      <DocumentAttachmentsPanel entityType="supplier_invoice" entityId={b.id} />
+                      <SignaturePanel entityType="supplier_invoice" entityId={b.id} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
               {bills.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="muted">
+                  <td colSpan={8} className="muted">
                     No bills yet.
                   </td>
                 </tr>

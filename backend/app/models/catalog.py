@@ -62,5 +62,10 @@ class Product(Base):
     default_reference_code_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("reference_codes.id"), nullable=True
     )
+    # 2026-09-12: flags this product as a stock (inventory) item.  The
+    # full Stock Master module lives in a separate Websoft Stock
+    # Distribution ERP project; when that's ready the two will be linked.
+    # Until then this is a simple flag for reporting / filtering.
+    is_stock: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

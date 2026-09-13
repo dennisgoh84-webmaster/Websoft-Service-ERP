@@ -360,6 +360,31 @@ def write_off_invoice(
         old_value={"status": "outstanding", "outstanding_sgd": str(outstanding)},
         new_value={"status": "written_off", "outstanding_sgd": "0.00"},
     )
+
+    # Commission clawback (6.4): if commission was earned on receipt
+    # allocations against this invoice, create a negative clawback record.
+    from app.services.commissions import create_clawback
+    clawback = create_clawback(
+        db,
+        company_id=current_user.company_id,
+        invoice=invoice,
+        user_id=current_user.id,
+        reason=f"Write-off of {invoice.invoice_number}: {payload.reason}",
+    )
+    if clawback:
+        audit.record(
+            db,
+            entity_type="commission_payout",
+            entity_id=clawback.id,
+            action="clawback_created",
+            actor_user_id=current_user.id,
+            new_value={
+                "payout_number": clawback.payout_number,
+                "amount_sgd": float(clawback.amount_sgd),
+                "invoice": invoice.invoice_number,
+            },
+        )
+
     db.commit()
     db.refresh(invoice)
     return invoice

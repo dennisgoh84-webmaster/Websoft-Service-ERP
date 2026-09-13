@@ -1,7 +1,9 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { EmailIcon, PrintIcon, WhatsAppIcon } from '../components/DocActionIcons'
+import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
+import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type CompanyIndividual, type Invoice, type Payment } from '../lib/api'
 import { formatMoney as money } from '../lib/format'
 
@@ -21,6 +23,7 @@ export default function ReceiptsPage() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [docPanelId, setDocPanelId] = useState<string | null>(null)
 
   // Record payment form
   const [customerId, setCustomerId] = useState('')
@@ -221,7 +224,8 @@ export default function ReceiptsPage() {
               const choice = allocFor[p.id] ?? { invoiceId: '', amount: '' }
               const customerInvoices = openInvoices.filter((i) => i.customer_id === p.customer_id)
               return (
-                <tr key={p.id}>
+                <Fragment key={p.id}>
+                <tr>
                   <td style={{ whiteSpace: 'nowrap' }}>{p.voucher_number}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>{p.payment_date}</td>
                   <td>{customerName(p.customer_id)}</td>
@@ -280,6 +284,12 @@ export default function ReceiptsPage() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button
+                        className="secondary icon-button"
+                        title="Attachments & Signatures"
+                        aria-label="Attachments & Signatures"
+                        onClick={() => setDocPanelId(docPanelId === p.id ? null : p.id)}
+                      >📎</button>
                       <Link to={`/receipts/${p.id}/print`} className="secondary icon-button" title="Print" aria-label="Print">
                         <PrintIcon />
                       </Link>
@@ -312,6 +322,15 @@ export default function ReceiptsPage() {
                     </div>
                   </td>
                 </tr>
+                {docPanelId === p.id && (
+                  <tr>
+                    <td colSpan={8} style={{ padding: 16, background: 'var(--bg-muted, #f9f9f9)' }}>
+                      <DocumentAttachmentsPanel entityType="receipt_voucher" entityId={p.id} />
+                      <SignaturePanel entityType="receipt_voucher" entityId={p.id} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               )
             })}
             {payments.length === 0 && (

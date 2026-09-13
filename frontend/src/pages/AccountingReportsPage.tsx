@@ -8,6 +8,7 @@
 // gst_return_data for what it does and does not do (read-only, no
 // filing, no GL posting). Every export is written to Event Logs.
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
 import {
   api,
@@ -40,7 +41,10 @@ const REPORT_GROUPS: { label: string; options: { value: ReportType; label: strin
   { label: 'AR', options: [{ value: 'ar-aging', label: 'AR Aging' }] },
   { label: 'AP', options: [{ value: 'ap-aging', label: 'AP Aging' }] },
   { label: 'Bank', options: [{ value: 'bank-accounts', label: 'Bank Accounts Listing' }] },
-  { label: 'GL', options: [{ value: 'trial-balance', label: 'Trial Balance' }] },
+  { label: 'GL', options: [
+    { value: 'trial-balance', label: 'Trial Balance' },
+    { value: 'account-ledger', label: 'Account Ledger' },
+  ] },
   {
     label: 'Sales',
     options: [
@@ -451,6 +455,19 @@ export default function AccountingReportsPage() {
               </table>
             </div>
           </>
+        )}
+
+        {reportType === 'account-ledger' && (
+          <div className="card" style={{ textAlign: 'center', padding: 32 }}>
+            <h2>Account Ledger</h2>
+            <p className="muted">
+              View every posted debit and credit for a single account with running balance,
+              date filters, and CSV/Excel export.
+            </p>
+            <Link to="/gl-transactions">
+              <button>Open GL Transactions →</button>
+            </Link>
+          </div>
         )}
 
         {reportType === 'chart-of-accounts' && (

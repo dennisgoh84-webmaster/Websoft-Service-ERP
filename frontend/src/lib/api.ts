@@ -458,6 +458,35 @@ export type JobOrderPriority = 'low' | 'normal' | 'high' | 'critical'
  * ('C'). VOID is a manual dead-end for a job that should never have
  * been raised (duplicate, raised in error). */
 export type JobOrderStatus = 'open' | 'assigned' | 'closed' | 'void'
+export type JobOrderType = 'support' | 'project'
+
+export type MilestoneType = 'installation' | 'training' | 'repeat_training' | 'handover' | 'completion_signoff'
+export type MilestoneStatus = 'pending' | 'in_progress' | 'completed' | 'skipped'
+
+export interface ProjectMilestone {
+  id: string
+  job_order_id: string
+  milestone_type: MilestoneType
+  label: string
+  sort_order: number
+  planned_start: string | null
+  planned_end: string | null
+  actual_start: string | null
+  actual_end: string | null
+  assigned_user_id: string | null
+  status: MilestoneStatus
+  notes: string | null
+  created_at: string
+}
+
+export interface BudgetOverrunStatus {
+  is_over_hours: boolean
+  is_over_cost: boolean
+  consumed_minutes: number
+  contracted_minutes: number
+  consumed_cost_sgd: number
+  contract_value_sgd: number
+}
 
 export interface JobOrder {
   id: string
@@ -465,6 +494,7 @@ export interface JobOrder {
   customer_id: string
   contract_id: string | null
   subject: string
+  job_order_type: JobOrderType
   priority: JobOrderPriority
   status: JobOrderStatus
   /** "Tick as Urgent" -- suggests a x1.5 deduction-minutes multiplier on approval. */
@@ -473,8 +503,13 @@ export interface JobOrder {
   /** Manual, optional -- set by Sales/Coordinator after discussion with Support. */
   due_date: string | null
   void_reason: string | null
+  budget_overrun_approved: boolean
+  budget_overrun_approved_by: string | null
+  budget_overrun_approved_at: string | null
   created_at: string
   closed_at: string | null
+  milestones: ProjectMilestone[]
+  budget_overrun: BudgetOverrunStatus | null
 }
 
 // ---- Operations/Accounting Reports filters ----
@@ -1015,6 +1050,36 @@ export interface CommissionReport {
   total_commission_sgd: number
 }
 
+// ---- Commission Payouts (6.3/6.4/6.5) ----
+export type CommissionPayoutType = 'earning' | 'clawback'
+export type CommissionPayoutStatus = 'draft' | 'pending_approval' | 'approved' | 'paid' | 'cancelled'
+
+export interface CommissionPayout {
+  id: string
+  company_id: string
+  payout_number: string
+  payout_type: CommissionPayoutType
+  status: CommissionPayoutStatus
+  sales_staff_id: string
+  period_month: string
+  period_start: string
+  period_end: string
+  amount_sgd: number
+  rate_percent: number
+  clawback_invoice_id: string | null
+  clawback_reason: string | null
+  submitted_by_user_id: string | null
+  submitted_at: string | null
+  approved_by_user_id: string | null
+  approved_at: string | null
+  paid_date: string | null
+  paid_reference: string | null
+  paid_by_user_id: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
 // ---- Ops Dashboard (personal task tracker, confirmed 2026-09-11) ----
 export type OpsTaskStatus = 'not_started' | 'in_progress' | 'watch' | 'blocked' | 'done'
 
@@ -1119,6 +1184,32 @@ export interface TrialBalance {
   total_debit: number
   total_credit: number
   is_balanced: boolean
+}
+
+export interface GLTransactionRow {
+  line_id: string
+  entry_id: string
+  voucher_number: string
+  voucher_type: string
+  entry_date: string
+  narration: string
+  line_description: string | null
+  debit_sgd: number
+  credit_sgd: number
+  balance_sgd: number
+}
+
+export interface GLTransactions {
+  account_id: string
+  account_code: string
+  account_name: string
+  account_type: string
+  date_from: string | null
+  date_to: string | null
+  rows: GLTransactionRow[]
+  total_debit: number
+  total_credit: number
+  closing_balance: number
 }
 
 // ---- Accounts Payable ----
@@ -1245,6 +1336,7 @@ export interface Product {
   unit_of_measure: string | null
   tax_code: string
   default_reference_code_id: string | null
+  is_stock: boolean
   is_active: boolean
   created_at: string
 }
@@ -1284,6 +1376,224 @@ export interface Quotation {
   created_at: string
   lines: QuotationLine[]
 }
+
+// ---- eDocument Attachments + eSignature ----
+
+export type DocumentEntityType =
+  | 'quotation'
+  | 'invoice'
+  | 'receipt_voucher'
+  | 'payment_voucher'
+  | 'purchase_order'
+  | 'supplier_invoice'
+  | 'journal_entry'
+  | 'job_order'
+  | 'service_record'
+  | 'contract'
+  | 'incident'
+
+export interface DocumentAttachment {
+  id: string
+  company_id: string
+  entity_type: DocumentEntityType
+  entity_id: string
+  uploaded_by_user_id: string
+  original_filename: string
+  content_type: string
+  file_size_bytes: number
+  description: string | null
+  uploaded_at: string
+}
+
+export interface DocumentSignature {
+  id: string
+  company_id: string
+  entity_type: DocumentEntityType
+  entity_id: string
+  signer_user_id: string
+  signer_name: string
+  role_label: string | null
+  signed_at: string
+}
+
+// ---- eApproval Master ----
+
+export type ApprovalMode = 'any_one' | 'all_must'
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
+export type ApprovalDecisionValue = 'approved' | 'rejected'
+
+export interface ApprovalAuthorityMember {
+  id: string
+  authority_id: string
+  user_id: string
+  added_at: string
+}
+
+export interface ApprovalRule {
+  id: string
+  authority_id: string
+  entity_type: DocumentEntityType
+  threshold_amount: number | null
+  priority: number
+  is_active: boolean
+  created_at: string
+}
+
+export interface ApprovalAuthority {
+  id: string
+  company_id: string
+  name: string
+  description: string | null
+  mode: ApprovalMode
+  bank_account_id: string | null
+  is_active: boolean
+  created_at: string
+  members: ApprovalAuthorityMember[]
+  rules: ApprovalRule[]
+}
+
+export interface ApprovalDecision {
+  id: string
+  request_id: string
+  user_id: string
+  decision: ApprovalDecisionValue
+  comment: string | null
+  decided_at: string
+}
+
+export interface ApprovalRequest {
+  id: string
+  company_id: string
+  entity_type: DocumentEntityType
+  entity_id: string
+  rule_id: string
+  authority_id: string
+  status: ApprovalStatus
+  requested_by_user_id: string
+  requested_at: string
+  resolved_at: string | null
+  decisions: ApprovalDecision[]
+}
+
+
+// ---- Stock / Inventory types ----
+export interface Warehouse {
+  id: string; company_id: string; code: string; name: string
+  address: string | null; is_active: boolean
+  created_at: string; updated_at: string
+}
+export interface StockItemAttachmentRow {
+  id: string; stock_item_id: string; filename: string
+  content_type: string | null; file_size: number | null
+  created_at: string
+}
+export interface StockItemRow {
+  id: string; company_id: string; code: string; name: string
+  description: string | null; category: string | null
+  unit_of_measure: string; product_id: string | null
+  reorder_level: number; is_active: boolean
+  // extended fields
+  category_id: string | null; group_id: string | null
+  brand_id: string | null; model_id: string | null; usage_id: string | null
+  barcode: string | null; part_number: string | null
+  invoice_description: string | null; memo: string | null; notes: string | null
+  dimensions: string | null
+  // joined names
+  category_name: string | null; group_name: string | null
+  brand_name: string | null; model_name: string | null; usage_name: string | null
+  attachments: StockItemAttachmentRow[]
+  created_at: string; updated_at: string
+}
+export interface StockSetupRow {
+  id: string; code?: string; name: string; is_active: boolean; created_at: string
+  company_id?: string; brand_id?: string
+}
+export interface StockBrandRow {
+  id: string; company_id: string; name: string; is_active: boolean; created_at: string
+}
+export interface StockLevelRow {
+  id: string; stock_item_id: string; warehouse_id: string
+  quantity: number; avg_cost: number
+  item_code: string; item_name: string
+  warehouse_code: string; warehouse_name: string
+}
+export interface StockMovementRow {
+  id: string; stock_item_id: string; warehouse_id: string
+  movement_type: string; quantity: number
+  unit_cost: number; total_cost: number
+  reference_type: string | null; reference_id: string | null
+  notes: string | null; created_at: string
+}
+export interface GRNLineRow {
+  id: string; stock_item_id: string; quantity: number
+  unit_cost: number; total_cost: number; notes: string | null
+}
+export interface GRNRow {
+  id: string; grn_number: string; warehouse_id: string
+  supplier_id: string | null; purchase_order_id: string | null
+  receive_date: string; status: string
+  notes: string | null; lines: GRNLineRow[]
+  created_at: string
+}
+export interface GRNCreatePayload {
+  warehouse_id: string; supplier_id?: string; purchase_order_id?: string
+  receive_date?: string; notes?: string
+  lines: { stock_item_id: string; quantity: number; unit_cost: number }[]
+}
+export interface GTNLineRow {
+  id: string; stock_item_id: string; quantity: number; notes: string | null
+}
+export interface GTNRow {
+  id: string; gtn_number: string
+  from_warehouse_id: string; to_warehouse_id: string
+  transfer_date: string; status: string
+  notes: string | null; lines: GTNLineRow[]
+  created_at: string
+}
+export interface GTNCreatePayload {
+  from_warehouse_id: string; to_warehouse_id: string
+  transfer_date?: string; notes?: string
+  lines: { stock_item_id: string; quantity: number; notes?: string }[]
+}
+export interface GRTNLineRow {
+  id: string; stock_item_id: string; quantity: number
+  unit_cost: number; total_cost: number; notes: string | null
+}
+export interface GRTNRow {
+  id: string; grtn_number: string; warehouse_id: string
+  supplier_id: string | null; return_date: string
+  reason: string | null; status: string
+  notes: string | null; lines: GRTNLineRow[]
+  created_at: string
+}
+export interface GRTNCreatePayload {
+  warehouse_id: string; supplier_id?: string
+  return_date?: string; reason?: string; notes?: string
+  lines: { stock_item_id: string; quantity: number; unit_cost: number }[]
+}
+export interface AdjustmentLineRow {
+  id: string; stock_item_id: string; quantity_change: number; notes: string | null
+}
+export interface AdjustmentRow {
+  id: string; adj_number: string; warehouse_id: string
+  adjustment_date: string; reason: string | null
+  status: string; approved_by: string | null
+  approved_at: string | null; lines: AdjustmentLineRow[]
+  created_at: string
+}
+export interface AdjustmentCreatePayload {
+  warehouse_id: string; adjustment_date?: string; reason?: string
+  lines: { stock_item_id: string; quantity_change: number; notes?: string }[]
+}
+export interface StockValuationReport {
+  items: { item_code: string; item_name: string; warehouse_code: string; warehouse_name: string; quantity: number; avg_cost: number; total_value: number }[]
+  total_value: number
+}
+export interface ReorderItem {
+  item_code: string; item_name: string; unit_of_measure: string
+  reorder_level: number; current_stock: number; shortfall: number
+}
+
 
 export const api = {
   me: () => request<CurrentUser>('/auth/me'),
@@ -1399,11 +1709,11 @@ export const api = {
 
   dashboardSummary: () => request<DashboardSummary>('/dashboard/summary'),
 
+  /** Read-only module catalog — used by Group Authority setup. */
   listModules: () => request<ModuleInfo[]>('/modules'),
-  toggleModule: (key: string, enabled: boolean) =>
-    request<ModuleInfo>(`/modules/${key}/toggle`, { method: 'POST', body: JSON.stringify({ enabled }) }),
   /** module_key -> can the current user reach it right now (Group Authority AND
-   * Module Control both say yes)? Drives which nav links show at all. */
+   * module enablement both say yes)? Drives which nav links show at all.
+   * Module management (toggle on/off) is handled from Central Command → Client Control. */
   myModuleAccess: () => request<Record<string, boolean>>('/modules/my-access'),
 
   // Dynamic filter: free-text `q` matches name/email/phone/mobile/UEN/
@@ -1617,7 +1927,7 @@ export const api = {
     request<ExcessUsageRecord[]>(`/contracts/${id}/excess-usage`),
 
   listJobOrders: (
-    filters: { status?: string; priority?: string; customer_id?: string; contract_id?: string } = {},
+    filters: { status?: string; priority?: string; customer_id?: string; contract_id?: string; job_order_type?: string } = {},
   ) => request<JobOrder[]>(`/job-orders${qs(filters)}`),
   exportJobOrdersCsv: (
     filters: { status?: string; priority?: string; customer_id?: string; contract_id?: string } = {},
@@ -1630,6 +1940,7 @@ export const api = {
     customer_id: string
     contract_id: string
     subject: string
+    job_order_type?: JobOrderType
     priority?: JobOrderPriority
     due_date?: string | null
     is_urgent?: boolean
@@ -1643,6 +1954,36 @@ export const api = {
   voidJobOrder: (id: string, reason: string) =>
     request<JobOrder>(`/job-orders/${id}/void`, { method: 'POST', body: JSON.stringify({ reason }) }),
   reopenJobOrder: (id: string) => request<JobOrder>(`/job-orders/${id}/reopen`, { method: 'POST' }),
+  approveBudgetOverrun: (id: string) =>
+    request<JobOrder>(`/job-orders/${id}/approve-overrun`, { method: 'POST' }),
+
+  // ---- Project Milestones ----
+  listMilestones: (jobOrderId: string) =>
+    request<ProjectMilestone[]>(`/job-orders/${jobOrderId}/milestones`),
+  addMilestone: (jobOrderId: string, payload: {
+    milestone_type: MilestoneType
+    label: string
+    sort_order?: number
+    planned_start?: string | null
+    planned_end?: string | null
+    assigned_user_id?: string | null
+    notes?: string | null
+  }) => request<ProjectMilestone>(`/job-orders/${jobOrderId}/milestones`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateMilestone: (jobOrderId: string, milestoneId: string, payload: {
+    label?: string
+    sort_order?: number
+    planned_start?: string | null
+    planned_end?: string | null
+    actual_start?: string | null
+    actual_end?: string | null
+    assigned_user_id?: string | null
+    status?: MilestoneStatus
+    notes?: string | null
+  }) => request<ProjectMilestone>(`/job-orders/${jobOrderId}/milestones/${milestoneId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteMilestone: (jobOrderId: string, milestoneId: string) =>
+    request<void>(`/job-orders/${jobOrderId}/milestones/${milestoneId}`, { method: 'DELETE' }),
+  initMilestoneTemplate: (jobOrderId: string) =>
+    request<ProjectMilestone[]>(`/job-orders/${jobOrderId}/milestones/init-template`, { method: 'POST' }),
 
   supportMonitoring: () => request<SupportMonitoring>('/monitoring/support'),
 
@@ -1848,6 +2189,14 @@ export const api = {
   exportTrialBalanceCsv: (as_at?: string) => requestBlob(`/ledger/trial-balance/export.csv${qs({ as_at })}`),
   exportTrialBalanceExcel: (as_at?: string) => requestBlob(`/ledger/trial-balance/export.xlsx${qs({ as_at })}`),
 
+  // GL Transaction Ledger (account drill-down)
+  glTransactions: (accountId: string, filters: { date_from?: string; date_to?: string } = {}) =>
+    request<GLTransactions>(`/ledger/transactions/${accountId}${qs(filters)}`),
+  exportGlTransactionsCsv: (accountId: string, filters: { date_from?: string; date_to?: string } = {}) =>
+    requestBlob(`/ledger/transactions/${accountId}/export.csv${qs(filters)}`),
+  exportGlTransactionsExcel: (accountId: string, filters: { date_from?: string; date_to?: string } = {}) =>
+    requestBlob(`/ledger/transactions/${accountId}/export.xlsx${qs(filters)}`),
+
   // Accounts Payable -- suppliers are managed via listCompanyIndividuals/
   // createCompanyIndividual/updateCompanyIndividual above (is_supplier=true), not here.
   listPurchaseOrders: (filters: { supplier_id?: string; status?: string } = {}) =>
@@ -2016,6 +2365,7 @@ export const api = {
     unit_of_measure?: string
     tax_code?: string
     default_reference_code_id?: string | null
+    is_stock?: boolean
   }) => request<Product>('/catalog', { method: 'POST', body: JSON.stringify(payload) }),
   updateCatalogItem: (
     id: string,
@@ -2030,6 +2380,7 @@ export const api = {
       unit_of_measure: string | null
       tax_code: string
       default_reference_code_id: string | null
+      is_stock: boolean
       is_active: boolean
     }>,
   ) => request<Product>(`/catalog/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
@@ -2136,6 +2487,43 @@ export const api = {
     request<{ rate_percent: number }>('/reports/accounting/commission-settings', {
       method: 'PUT',
       body: JSON.stringify({ rate_percent }),
+    }),
+
+  // ---- Commission Payouts (6.3/6.4/6.5) ----
+  generateCommissionPayouts: (period_month: string) =>
+    request<CommissionPayout[]>('/commissions/payouts/generate', {
+      method: 'POST',
+      body: JSON.stringify({ period_month }),
+    }),
+  listCommissionPayouts: (filters: { period_month?: string; status?: string; sales_staff_id?: string } = {}) =>
+    request<CommissionPayout[]>(`/commissions/payouts${qs(filters)}`),
+  getCommissionPayout: (id: string) =>
+    request<CommissionPayout>(`/commissions/payouts/${id}`),
+  submitCommissionPayout: (id: string) =>
+    request<CommissionPayout>(`/commissions/payouts/${id}/submit`, { method: 'POST' }),
+  approveCommissionPayout: (id: string) =>
+    request<CommissionPayout>(`/commissions/payouts/${id}/approve`, { method: 'POST' }),
+  rejectCommissionPayout: (id: string, reason?: string) =>
+    request<CommissionPayout>(`/commissions/payouts/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+  payCommissionPayout: (id: string, paid_date: string, paid_reference?: string) =>
+    request<CommissionPayout>(`/commissions/payouts/${id}/pay`, {
+      method: 'POST',
+      body: JSON.stringify({ paid_date, paid_reference }),
+    }),
+  cancelCommissionPayout: (id: string) =>
+    request<CommissionPayout>(`/commissions/payouts/${id}/cancel`, { method: 'POST' }),
+  submitAllCommissionPayouts: (period_month: string) =>
+    request<CommissionPayout[]>('/commissions/payouts/submit-all', {
+      method: 'POST',
+      body: JSON.stringify({ period_month }),
+    }),
+  approveAllCommissionPayouts: (period_month: string) =>
+    request<CommissionPayout[]>('/commissions/payouts/approve-all', {
+      method: 'POST',
+      body: JSON.stringify({ period_month }),
     }),
 
   // ---- GL Types ----
@@ -2324,4 +2712,171 @@ export const api = {
     }>,
   ) => request<OpsTask>(`/ops-dashboard/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   archiveOpsTask: (id: string) => request<OpsTask>(`/ops-dashboard/tasks/${id}/archive`, { method: 'POST' }),
+
+  // ---- eDocument Attachments ----
+  uploadDocumentAttachment: async (entityType: DocumentEntityType, entityId: string, file: File, description?: string): Promise<DocumentAttachment> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (description) formData.append('description', description)
+    const token = getToken()
+    const res = await fetch(`/api/documents/${entityType}/${entityId}/attachments`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'X-Device-Id': getDeviceId(),
+      },
+      body: formData,
+    })
+    if (!res.ok) {
+      let detail = res.statusText
+      try { const b = await res.json(); detail = b.detail ?? detail } catch { /* */ }
+      throw new Error(detail)
+    }
+    return res.json()
+  },
+  listDocumentAttachments: (entityType: DocumentEntityType, entityId: string) =>
+    request<DocumentAttachment[]>(`/documents/${entityType}/${entityId}/attachments`),
+  downloadDocumentAttachmentUrl: (entityType: DocumentEntityType, entityId: string, attachmentId: string) =>
+    `/api/documents/${entityType}/${entityId}/attachments/${attachmentId}/download`,
+  deleteDocumentAttachment: (entityType: DocumentEntityType, entityId: string, attachmentId: string) =>
+    request<void>(`/documents/${entityType}/${entityId}/attachments/${attachmentId}`, { method: 'DELETE' }),
+
+  // ---- eSignature ----
+  addDocumentSignature: (entityType: DocumentEntityType, entityId: string, payload: {
+    signer_name: string
+    signature_data_uri: string
+    role_label?: string
+  }) =>
+    request<DocumentSignature>(`/documents/${entityType}/${entityId}/signatures`, {
+      method: 'POST',
+      body: JSON.stringify({ entity_type: entityType, entity_id: entityId, ...payload }),
+    }),
+  listDocumentSignatures: (entityType: DocumentEntityType, entityId: string) =>
+    request<DocumentSignature[]>(`/documents/${entityType}/${entityId}/signatures`),
+
+  // ---- eApproval Master ----
+  listApprovalAuthorities: () => request<ApprovalAuthority[]>('/approvals/authorities'),
+  getApprovalAuthority: (id: string) => request<ApprovalAuthority>(`/approvals/authorities/${id}`),
+  createApprovalAuthority: (payload: { name: string; description?: string; mode?: ApprovalMode; bank_account_id?: string }) =>
+    request<ApprovalAuthority>('/approvals/authorities', { method: 'POST', body: JSON.stringify(payload) }),
+  updateApprovalAuthority: (id: string, payload: Partial<{ name: string; description: string; mode: ApprovalMode; bank_account_id: string; is_active: boolean }>) =>
+    request<ApprovalAuthority>(`/approvals/authorities/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  addApprovalMember: (authorityId: string, userId: string) =>
+    request<ApprovalAuthorityMember>(`/approvals/authorities/${authorityId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId }),
+    }),
+  removeApprovalMember: (authorityId: string, memberId: string) =>
+    request<void>(`/approvals/authorities/${authorityId}/members/${memberId}`, { method: 'DELETE' }),
+  createApprovalRule: (payload: { authority_id: string; entity_type: DocumentEntityType; threshold_amount?: number; priority?: number }) =>
+    request<ApprovalRule>('/approvals/rules', { method: 'POST', body: JSON.stringify(payload) }),
+  updateApprovalRule: (id: string, payload: Partial<{ entity_type: DocumentEntityType; threshold_amount: number; priority: number; is_active: boolean }>) =>
+    request<ApprovalRule>(`/approvals/rules/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteApprovalRule: (id: string) => request<void>(`/approvals/rules/${id}`, { method: 'DELETE' }),
+  submitForApproval: (payload: { entity_type: DocumentEntityType; entity_id: string; amount?: number }) =>
+    request<ApprovalRequest[]>('/approvals/submit', { method: 'POST', body: JSON.stringify(payload) }),
+  recordApprovalDecision: (requestId: string, payload: { decision: ApprovalDecisionValue; comment?: string }) =>
+    request<ApprovalRequest>(`/approvals/requests/${requestId}/decide`, { method: 'POST', body: JSON.stringify(payload) }),
+  listPendingApprovals: () => request<ApprovalRequest[]>('/approvals/pending'),
+  listApprovalsForEntity: (entityType: DocumentEntityType, entityId: string) =>
+    request<ApprovalRequest[]>(`/approvals/entity/${entityType}/${entityId}`),
+
+  // ---- Stock / Inventory ----
+  listWarehouses: () => request<Warehouse[]>('/stock/warehouses'),
+  createWarehouse: (data: { code: string; name: string; address?: string }) =>
+    request<Warehouse>('/stock/warehouses', { method: 'POST', body: JSON.stringify(data) }),
+  updateWarehouse: (id: string, data: Partial<{ code: string; name: string; address: string; is_active: boolean }>) =>
+    request<Warehouse>(`/stock/warehouses/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  listStockItems: () => request<StockItemRow[]>('/stock/items'),
+  getStockItem: (id: string) => request<StockItemRow>(`/stock/items/${id}`),
+  createStockItem: (data: { code: string; name: string; description?: string; category?: string; unit_of_measure?: string; reorder_level?: number }) =>
+    request<StockItemRow>('/stock/items', { method: 'POST', body: JSON.stringify(data) }),
+  updateStockItem: (id: string, data: Record<string, unknown>) =>
+    request<StockItemRow>(`/stock/items/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  // Stock item attachments
+  uploadStockItemAttachment: async (itemId: string, file: File) => {
+    const fd = new FormData(); fd.append('file', file)
+    const token = getToken()
+    const res = await fetch(`/api/stock/items/${itemId}/attachments`, {
+      method: 'POST', body: fd, headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error(await res.text())
+    return res.json() as Promise<StockItemAttachmentRow>
+  },
+  deleteStockItemAttachment: (itemId: string, attId: string) =>
+    request<void>(`/stock/items/${itemId}/attachments/${attId}`, { method: 'DELETE' }),
+
+  // Stock setup masters
+  listStockCategories: () => request<StockSetupRow[]>('/stock/categories'),
+  createStockCategory: (data: { code: string; name: string }) =>
+    request<StockSetupRow>('/stock/categories', { method: 'POST', body: JSON.stringify(data) }),
+  updateStockCategory: (id: string, data: { code: string; name: string }) =>
+    request<StockSetupRow>(`/stock/categories/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  toggleStockCategory: (id: string) =>
+    request<StockSetupRow>(`/stock/categories/${id}/toggle`, { method: 'PATCH' }),
+
+  listStockGroups: () => request<StockSetupRow[]>('/stock/groups'),
+  createStockGroup: (data: { code: string; name: string }) =>
+    request<StockSetupRow>('/stock/groups', { method: 'POST', body: JSON.stringify(data) }),
+  updateStockGroup: (id: string, data: { code: string; name: string }) =>
+    request<StockSetupRow>(`/stock/groups/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  toggleStockGroup: (id: string) =>
+    request<StockSetupRow>(`/stock/groups/${id}/toggle`, { method: 'PATCH' }),
+
+  listStockBrands: () => request<StockBrandRow[]>('/stock/brands'),
+  createStockBrand: (data: { name: string }) =>
+    request<StockBrandRow>('/stock/brands', { method: 'POST', body: JSON.stringify(data) }),
+  updateStockBrand: (id: string, data: { name: string }) =>
+    request<StockBrandRow>(`/stock/brands/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  toggleStockBrand: (id: string) =>
+    request<StockBrandRow>(`/stock/brands/${id}/toggle`, { method: 'PATCH' }),
+
+  listStockModels: (brandId: string) => request<StockSetupRow[]>(`/stock/brands/${brandId}/models`),
+  createStockModel: (data: { brand_id: string; name: string }) =>
+    request<StockSetupRow>('/stock/models', { method: 'POST', body: JSON.stringify(data) }),
+  updateStockModel: (id: string, data: { brand_id: string; name: string }) =>
+    request<StockSetupRow>(`/stock/models/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  toggleStockModel: (id: string) =>
+    request<StockSetupRow>(`/stock/models/${id}/toggle`, { method: 'PATCH' }),
+
+  listStockUsages: () => request<StockSetupRow[]>('/stock/usages'),
+  createStockUsage: (data: { code: string; name: string }) =>
+    request<StockSetupRow>('/stock/usages', { method: 'POST', body: JSON.stringify(data) }),
+  updateStockUsage: (id: string, data: { code: string; name: string }) =>
+    request<StockSetupRow>(`/stock/usages/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  toggleStockUsage: (id: string) =>
+    request<StockSetupRow>(`/stock/usages/${id}/toggle`, { method: 'PATCH' }),
+
+  listStockLevels: (warehouseId?: string) =>
+    request<StockLevelRow[]>(`/stock/levels${qs({ warehouse_id: warehouseId })}`),
+  listStockMovements: (filters?: { stock_item_id?: string; warehouse_id?: string; limit?: number }) =>
+    request<StockMovementRow[]>(`/stock/movements${qs(filters ?? {})}`),
+
+  listGRNs: () => request<GRNRow[]>('/stock/grn'),
+  createGRN: (data: GRNCreatePayload) =>
+    request<GRNRow>('/stock/grn', { method: 'POST', body: JSON.stringify(data) }),
+  confirmGRN: (id: string) => request<GRNRow>(`/stock/grn/${id}/confirm`, { method: 'POST' }),
+
+  listGTNs: () => request<GTNRow[]>('/stock/gtn'),
+  createGTN: (data: GTNCreatePayload) =>
+    request<GTNRow>('/stock/gtn', { method: 'POST', body: JSON.stringify(data) }),
+  confirmGTN: (id: string) => request<GTNRow>(`/stock/gtn/${id}/confirm`, { method: 'POST' }),
+
+  listGRTNs: () => request<GRTNRow[]>('/stock/grtn'),
+  createGRTN: (data: GRTNCreatePayload) =>
+    request<GRTNRow>('/stock/grtn', { method: 'POST', body: JSON.stringify(data) }),
+  confirmGRTN: (id: string) => request<GRTNRow>(`/stock/grtn/${id}/confirm`, { method: 'POST' }),
+
+  listAdjustments: () => request<AdjustmentRow[]>('/stock/adjustments'),
+  createAdjustment: (data: AdjustmentCreatePayload) =>
+    request<AdjustmentRow>('/stock/adjustments', { method: 'POST', body: JSON.stringify(data) }),
+  submitAdjustment: (id: string) => request<AdjustmentRow>(`/stock/adjustments/${id}/submit`, { method: 'POST' }),
+  approveAdjustment: (id: string) => request<AdjustmentRow>(`/stock/adjustments/${id}/approve`, { method: 'POST' }),
+  rejectAdjustment: (id: string) => request<AdjustmentRow>(`/stock/adjustments/${id}/reject`, { method: 'POST' }),
+
+  stockValuationReport: (warehouseId?: string) =>
+    request<StockValuationReport>(`/stock/reports/valuation${qs({ warehouse_id: warehouseId })}`),
+  reorderReport: () => request<ReorderItem[]>('/stock/reports/reorder'),
 }

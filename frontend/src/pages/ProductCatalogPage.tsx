@@ -17,6 +17,7 @@ export default function ProductCatalogPage() {
   const [salesPrice, setSalesPrice] = useState('')
   const [unitOfMeasure, setUnitOfMeasure] = useState('')
   const [defaultReferenceCodeId, setDefaultReferenceCodeId] = useState('')
+  const [isStock, setIsStock] = useState(false)
 
   function refresh() {
     api.listCatalog(showInactive).then(setItems).catch((e) => setError(e.message))
@@ -39,6 +40,7 @@ export default function ProductCatalogPage() {
         sales_price_sgd: salesPrice === '' ? 0 : parseFloat(salesPrice),
         unit_of_measure: unitOfMeasure || undefined,
         default_reference_code_id: defaultReferenceCodeId || undefined,
+        is_stock: isStock,
       })
       setName('')
       setInternalReference('')
@@ -46,6 +48,7 @@ export default function ProductCatalogPage() {
       setSalesPrice('')
       setUnitOfMeasure('')
       setDefaultReferenceCodeId('')
+      setIsStock(false)
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add catalog item')
@@ -65,6 +68,16 @@ export default function ProductCatalogPage() {
     setError(null)
     try {
       await api.updateCatalogItem(item.id, { is_active: !item.is_active })
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update item')
+    }
+  }
+
+  async function onToggleStock(item: Product) {
+    setError(null)
+    try {
+      await api.updateCatalogItem(item.id, { is_stock: !item.is_stock })
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update item')
@@ -144,6 +157,16 @@ export default function ProductCatalogPage() {
               ))}
             </select>
           </div>
+          <div className="form-row">
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <input type="checkbox" checked={isStock} onChange={(e) => setIsStock(e.target.checked)} />
+              Is Stock item
+            </label>
+            <span className="muted" style={{ fontSize: 12 }}>
+              Flag this product as a stock / inventory item. The full Stock Master module will be
+              linked when the Websoft Stock Distribution ERP is ready.
+            </span>
+          </div>
           <button type="submit" disabled={!name}>
             Add item
           </button>
@@ -176,6 +199,7 @@ export default function ProductCatalogPage() {
               <th>Sales price</th>
               <th>Unit</th>
               <th>Tax</th>
+              <th>Stock</th>
               <th>Default reference code</th>
               <th>Status</th>
               <th></th>
@@ -191,6 +215,14 @@ export default function ProductCatalogPage() {
                 <td>{money(i.sales_price_sgd)}</td>
                 <td className="muted">{i.unit_of_measure ?? '-'}</td>
                 <td className="muted">{i.tax_code}</td>
+                <td style={{ textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={i.is_stock}
+                    onChange={() => onToggleStock(i)}
+                    title={i.is_stock ? 'Stock item — click to unmark' : 'Not a stock item — click to mark'}
+                  />
+                </td>
                 <td>
                   <select
                     value={i.default_reference_code_id ?? ''}
@@ -219,7 +251,7 @@ export default function ProductCatalogPage() {
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={10} className="muted">
+                <td colSpan={11} className="muted">
                   No catalog items yet.
                 </td>
               </tr>

@@ -65,6 +65,14 @@ from app.models.catalog import Product, ProductType
 from app.models.quotations import Quotation, QuotationLine, QuotationStatus
 from app.models.software_tasks import SoftwareTask
 from app.models.ops_tasks import OpsTask, OpsTaskCategory, OpsTaskStatus
+from app.models.inventory import (
+    DocumentStatus as StockDocStatus,
+    GoodsReceiveNote,
+    GoodsReceiveNoteLine,
+    StockItem,
+    Warehouse,
+)
+from app.services import inventory as inv_svc
 from app.services import payables as ap_svc
 from app.services import billing as billing_svc
 from app.services import contracts as contract_svc
@@ -117,6 +125,13 @@ MODULE_CATALOG = [
     ("accounting_reports", "Accounting Reports (AR/AP Aging, Trial Balance)", True, True),
     ("integrations", "Integrations (incl. Odoo migration)", False, False),  # deferred
     ("ai_assistant", "AI Assistant", False, False),
+    # Stock / Inventory sub-modules (confirmed 2026-09-13)
+    ("stock_master", "Stock Master", True, True),
+    ("goods_receive_note", "Goods Receive Note", True, True),
+    ("goods_transfer_note", "Goods Transfer Note", True, True),
+    ("goods_return_note", "Goods Return Note", True, True),
+    ("stock_adjustment", "Stock Adjustment", True, True),
+    ("stock_operation_reports", "Stock Operation Reports", True, True),
     # Personal, freeform task tracker per staff member (confirmed
     # 2026-09-11) -- everyone gets FULL on their own dashboard; see
     # GROUP_CATALOG below and app/routers/ops_dashboard.py for the
@@ -156,6 +171,12 @@ GROUP_CATALOG = {
                 "operations_reports",
                 "accounting_reports",
                 "ops_dashboard",
+                "stock_master",
+                "goods_receive_note",
+                "goods_transfer_note",
+                "goods_return_note",
+                "stock_adjustment",
+                "stock_operation_reports",
             )
         },
     ),
@@ -1174,6 +1195,47 @@ def main():
         db.flush()
         ap_svc.approve_purchase_order(db, po2, actor=dennis)
         db.commit()
+
+        # ── Stock / Inventory demo data ────────────────────────────────
+        wh_main = Warehouse(company_id=company.id, code="WH-01", name="Main Warehouse", address="8 Ubi Road 2, Singapore")
+        wh_site = Warehouse(company_id=company.id, code="WH-02", name="Site Store", address="10 Changi Business Park, Singapore")
+        db.add_all([wh_main, wh_site])
+        db.flush()
+
+        si_cable = StockItem(company_id=company.id, code="CAB-001", name="CAT6 Network Cable (305m)", category="Cabling", unit_of_measure="BOX", reorder_level=5)
+        si_patch = StockItem(company_id=company.id, code="CAB-002", name="CAT6 Patch Panel 24-Port", category="Cabling", unit_of_measure="PCS", reorder_level=3)
+        si_switch = StockItem(company_id=company.id, code="NET-001", name="48-Port Managed Switch", category="Networking", unit_of_measure="PCS", reorder_level=2)
+        si_ssd = StockItem(company_id=company.id, code="HDD-001", name="1TB SSD Enterprise", category="Storage", unit_of_measure="PCS", reorder_level=5)
+        si_ram = StockItem(company_id=company.id, code="MEM-001", name="32GB DDR5 ECC RAM", category="Memory", unit_of_measure="PCS", reorder_level=4)
+        si_ups = StockItem(company_id=company.id, code="PWR-001", name="UPS 3000VA Rackmount", category="Power", unit_of_measure="PCS", reorder_level=1)
+        db.add_all([si_cable, si_patch, si_switch, si_ssd, si_ram, si_ups])
+        db.flush()
+
+        # One confirmed GRN to populate stock levels
+        grn = GoodsReceiveNote(
+            company_id=company.id, grn_number="GRN-00001",
+            warehouse_id=wh_main.id,
+            supplier_id=supplier.id,  # the demo supplier seeded earlier
+            receive_date=datetime.now(timezone.utc) - timedelta(days=7),
+            status=StockDocStatus.draft,
+            created_by=dennis.id,
+        )
+        grn.lines = [
+            GoodsReceiveNoteLine(stock_item_id=si_cable.id, quantity=20, unit_cost=Decimal("85.00"), total_cost=Decimal("1700.00")),
+            GoodsReceiveNoteLine(stock_item_id=si_patch.id, quantity=10, unit_cost=Decimal("120.00"), total_cost=Decimal("1200.00")),
+            GoodsReceiveNoteLine(stock_item_id=si_switch.id, quantity=5, unit_cost=Decimal("1250.00"), total_cost=Decimal("6250.00")),
+            GoodsReceiveNoteLine(stock_item_id=si_ssd.id, quantity=15, unit_cost=Decimal("195.00"), total_cost=Decimal("2925.00")),
+            GoodsReceiveNoteLine(stock_item_id=si_ram.id, quantity=12, unit_cost=Decimal("210.00"), total_cost=Decimal("2520.00")),
+            GoodsReceiveNoteLine(stock_item_id=si_ups.id, quantity=3, unit_cost=Decimal("850.00"), total_cost=Decimal("2550.00")),
+        ]
+        db.add(grn)
+        db.flush()
+        inv_svc.confirm_grn(db, grn, dennis.id)
+        db.commit()
+
+        print(f"Warehouses: {wh_main.code} ({wh_main.name}), {wh_site.code} ({wh_site.name})")
+        print(f"Stock items: {si_cable.code}, {si_patch.code}, {si_switch.code}, {si_ssd.code}, {si_ram.code}, {si_ups.code}")
+        print(f"GRN {grn.grn_number} confirmed -- stock levels populated in {wh_main.code}")
 
         print("\n=== Demo dataset ready ===")
         print(f"Company 1: {company.name} (logo set)")

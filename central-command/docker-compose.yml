@@ -1,0 +1,47 @@
+# Central Command — see DEPLOY.md (Part 3) for the full runbook.
+# Run from the central-command/ directory:
+#   cp .env.example .env   # fill in secrets
+#   docker compose up -d --build
+
+services:
+  cc-db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cc_app
+      POSTGRES_PASSWORD: ${CC_POSTGRES_PASSWORD:?set a real password in .env}
+      POSTGRES_DB: central_command
+    ports:
+      - "5433:5432"
+    volumes:
+      - cc_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cc_app -d central_command"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  cc-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      database_url: postgresql+psycopg://cc_app:${CC_POSTGRES_PASSWORD:?set a real password in .env}@cc-db:5432/central_command
+      jwt_secret_key: ${CC_JWT_SECRET_KEY:?set a real random secret in .env}
+    depends_on:
+      cc-db:
+        condition: service_healthy
+
+  cc-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${CC_HTTP_PORT:-8080}:80"
+    depends_on:
+      - cc-backend
+
+volumes:
+  cc_pgdata:

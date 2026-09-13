@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { EmailIcon, PrintIcon, WhatsAppIcon } from '../components/DocActionIcons'
+import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
+import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type AgingReport, type CompanyIndividual, type CompanyIndividualStatement, type Invoice, type InvoiceStatus } from '../lib/api'
 import { formatMoney as money } from '../lib/format'
 
@@ -23,6 +25,7 @@ export default function InvoicesPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [statementBusy, setStatementBusy] = useState(false)
   const [busyInvoiceId, setBusyInvoiceId] = useState<string | null>(null)
+  const [docPanelId, setDocPanelId] = useState<string | null>(null)
 
   function refresh() {
     api.listInvoices({ customer_id: filterCompanyIndividual || undefined }).then(setInvoices)
@@ -417,7 +420,8 @@ export default function InvoicesPage() {
           </thead>
           <tbody>
             {visible.map((inv) => (
-              <tr key={inv.id}>
+              <Fragment key={inv.id}>
+              <tr>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   {inv.invoice_number}
                   <div className="muted">{new Date(inv.issued_at).toLocaleDateString()}</div>
@@ -452,6 +456,14 @@ export default function InvoicesPage() {
                   )}
                 </td>
                 <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button
+                    className="secondary icon-button"
+                    title="Attachments & Signatures"
+                    aria-label="Attachments & Signatures"
+                    onClick={() => setDocPanelId(docPanelId === inv.id ? null : inv.id)}
+                  >
+                    📎
+                  </button>
                   <Link to={`/invoices/${inv.id}/print`} className="secondary icon-button" title="Print" aria-label="Print">
                     <PrintIcon />
                   </Link>
@@ -491,6 +503,15 @@ export default function InvoicesPage() {
                   )}
                 </td>
               </tr>
+              {docPanelId === inv.id && (
+                <tr>
+                  <td colSpan={10} style={{ padding: 16, background: 'var(--bg-muted, #f9f9f9)' }}>
+                    <DocumentAttachmentsPanel entityType="invoice" entityId={inv.id} />
+                    <SignaturePanel entityType="invoice" entityId={inv.id} />
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
             {visible.length === 0 && (
               <tr>

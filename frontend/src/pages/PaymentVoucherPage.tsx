@@ -1,7 +1,9 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { EmailIcon, PrintIcon, WhatsAppIcon } from '../components/DocActionIcons'
+import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
+import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type CompanyIndividual, type SupplierInvoice, type SupplierPayment } from '../lib/api'
 import { formatMoney as money } from '../lib/format'
 
@@ -12,6 +14,7 @@ export default function PaymentVoucherPage() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [docPanelId, setDocPanelId] = useState<string | null>(null)
 
   const [paySupplier, setPaySupplier] = useState('')
   const [payAmount, setPayAmount] = useState('')
@@ -145,7 +148,8 @@ export default function PaymentVoucherPage() {
               const choice = allocFor[p.id] ?? { billId: '', amount: '' }
               const supplierBills = openBills.filter((b) => b.supplier_id === p.supplier_id)
               return (
-                <tr key={p.id}>
+                <Fragment key={p.id}>
+                <tr>
                   <td>{p.voucher_number}</td>
                   <td>{supplierName(p.supplier_id)}</td>
                   <td>{money(p.amount_sgd)}</td>
@@ -196,6 +200,12 @@ export default function PaymentVoucherPage() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button
+                        className="secondary icon-button"
+                        title="Attachments & Signatures"
+                        aria-label="Attachments & Signatures"
+                        onClick={() => setDocPanelId(docPanelId === p.id ? null : p.id)}
+                      >📎</button>
                       <Link to={`/payment-voucher/${p.id}/print`} className="secondary icon-button" title="Print" aria-label="Print">
                         <PrintIcon />
                       </Link>
@@ -220,6 +230,15 @@ export default function PaymentVoucherPage() {
                     </div>
                   </td>
                 </tr>
+                {docPanelId === p.id && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: 16, background: 'var(--bg-muted, #f9f9f9)' }}>
+                      <DocumentAttachmentsPanel entityType="payment_voucher" entityId={p.id} />
+                      <SignaturePanel entityType="payment_voucher" entityId={p.id} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               )
             })}
             {payments.length === 0 && (

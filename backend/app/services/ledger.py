@@ -197,6 +197,81 @@ def reverse_entry(
     return reversal
 
 
+def account_transactions(
+    db: Session,
+    company_id: uuid.UUID,
+    account_id: uuid.UUID,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> list[dict]:
+    """GL transaction ledger for one account: every posted journal line
+    touching this account, ordered by date then voucher number, with a
+    running balance.
+
+    The running balance is cumulative debit minus credit, starting at
+    zero (or at the brought-forward total when ``date_from`` is set).
+    """
+    account = db.get(Account, account_id)
+    if account is None or account.company_id != company_id:
+        return []
+
+    # ── Opening balance when a date_from filter is set ──
+    opening_balance = Decimal("0.00")
+    if date_from:
+        bf_query = (
+            db.query(JournalLine, JournalEntry)
+            .join(JournalEntry, JournalEntry.id == JournalLine.entry_id)
+            .filter(
+                JournalEntry.company_id == company_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalLine.account_id == account_id,
+                JournalEntry.entry_date < date_from,
+            )
+        )
+        for line, _entry in bf_query.all():
+            opening_balance += Decimal(line.debit_sgd) - Decimal(line.credit_sgd)
+
+    # ── Transaction lines in the date window ──
+    query = (
+        db.query(JournalLine, JournalEntry)
+        .join(JournalEntry, JournalEntry.id == JournalLine.entry_id)
+        .filter(
+            JournalEntry.company_id == company_id,
+            JournalEntry.status == JournalStatus.POSTED,
+            JournalLine.account_id == account_id,
+        )
+    )
+    if date_from:
+        query = query.filter(JournalEntry.entry_date >= date_from)
+    if date_to:
+        query = query.filter(JournalEntry.entry_date <= date_to)
+
+    query = query.order_by(JournalEntry.entry_date, JournalEntry.voucher_number)
+
+    running = opening_balance
+    rows: list[dict] = []
+    for line, entry in query.all():
+        debit = Decimal(line.debit_sgd)
+        credit = Decimal(line.credit_sgd)
+        running += debit - credit
+        rows.append(
+            {
+                "line_id": line.id,
+                "entry_id": entry.id,
+                "voucher_number": entry.voucher_number,
+                "voucher_type": entry.voucher_type.value,
+                "entry_date": entry.entry_date.isoformat(),
+                "narration": entry.narration,
+                "line_description": line.description,
+                "debit_sgd": float(debit),
+                "credit_sgd": float(credit),
+                "balance_sgd": float(running),
+            }
+        )
+
+    return rows
+
+
 def account_balances(db: Session, company_id: uuid.UUID, as_at: date | None = None) -> list[dict]:
     """Trial balance: every account's posted debits and credits.
 

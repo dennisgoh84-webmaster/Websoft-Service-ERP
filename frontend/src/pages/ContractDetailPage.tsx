@@ -9,6 +9,8 @@ import {
   type Product,
   type StaffUser,
 } from '../lib/api'
+import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
+import SignaturePanel from '../components/SignaturePanel'
 import { formatMoney as money } from '../lib/format'
 
 const LICENSE_TYPE_LABEL: Record<LicenseDeploymentType, string> = {
@@ -433,6 +435,13 @@ export default function ContractDetailPage() {
           </tbody>
         </table>
       </div>
+
+      {id && (
+        <div className="card">
+          <DocumentAttachmentsPanel entityType="contract" entityId={id} />
+          <SignaturePanel entityType="contract" entityId={id} />
+        </div>
+      )}
     </div>
   )
 }

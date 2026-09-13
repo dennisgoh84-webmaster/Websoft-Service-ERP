@@ -4,15 +4,19 @@ import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './lib/AuthContext'
 import { ThemeProvider } from './lib/ThemeContext'
 import AccountingPeriodsPage from './pages/AccountingPeriodsPage'
+import ApprovalAuthoritiesPage from './pages/ApprovalAuthoritiesPage'
+import ApprovalCenterPage from './pages/ApprovalCenterPage'
 import AccountingReportsPage from './pages/AccountingReportsPage'
 import AnnouncementsPage from './pages/AnnouncementsPage'
 import AccountsPayablePage from './pages/AccountsPayablePage'
 import BankAccountDetailPage from './pages/BankAccountDetailPage'
 import BankAccountsPage from './pages/BankAccountsPage'
+import CommissionPayoutsPage from './pages/CommissionPayoutsPage'
 import ChartOfAccountsPage from './pages/ChartOfAccountsPage'
 import CurrencyRatesPage from './pages/CurrencyRatesPage'
 import DocumentControlPage from './pages/DocumentControlPage'
 import GeneralLedgerPage from './pages/GeneralLedgerPage'
+import GLTransactionsPage from './pages/GLTransactionsPage'
 import GLTypesPage from './pages/GLTypesPage'
 import CompanySetupPage from './pages/CompanySetupPage'
 import ContractDetailPage from './pages/ContractDetailPage'
@@ -31,7 +35,6 @@ import IncidentsPage from './pages/IncidentsPage'
 import JobOrdersPage from './pages/JobOrdersPage'
 import Login from './pages/Login'
 import MobileApp from './pages/MobileApp'
-import ModulesPage from './pages/ModulesPage'
 import OperationsReportsPage from './pages/OperationsReportsPage'
 import OpsDashboardPage from './pages/OpsDashboardPage'
 import PaymentVoucherPage from './pages/PaymentVoucherPage'
@@ -53,6 +56,18 @@ import StaffDetailPage from './pages/StaffDetailPage'
 import StaffMasterPage from './pages/StaffMasterPage'
 import SupportMonitoringPage from './pages/SupportMonitoringPage'
 import TaxTypesPage from './pages/TaxTypesPage'
+import GoodsReceiveNotePage from './pages/GoodsReceiveNotePage'
+import GoodsReturnNotePage from './pages/GoodsReturnNotePage'
+import GoodsTransferNotePage from './pages/GoodsTransferNotePage'
+import StockAdjustmentPage from './pages/StockAdjustmentPage'
+import StockBrandModelPage from './pages/StockBrandModelPage'
+import StockCategoryPage from './pages/StockCategoryPage'
+import StockGroupPage from './pages/StockGroupPage'
+import StockItemDetailPage from './pages/StockItemDetailPage'
+import StockMasterPage from './pages/StockMasterPage'
+import StockReportsPage from './pages/StockReportsPage'
+import StockUsagePage from './pages/StockUsagePage'
+import WarehousesPage from './pages/WarehousesPage'
 import YearEndClosingPage from './pages/YearEndClosingPage'
 
 function RequireAuth({ children }: { children: ReactElement }) {
@@ -113,9 +128,10 @@ function AppRoutes() {
         <Route path="/accounting-periods" element={<AccountingPeriodsPage />} />
         <Route path="/year-end-closing" element={<YearEndClosingPage />} />
         <Route path="/general-ledger" element={<GeneralLedgerPage />} />
+        <Route path="/gl-transactions" element={<GLTransactionsPage />} />
         <Route path="/accounting-reports" element={<AccountingReportsPage />} />
+        <Route path="/commission-payouts" element={<CommissionPayoutsPage />} />
         <Route path="/company-setup" element={<CompanySetupPage />} />
-        <Route path="/modules" element={<ModulesPage />} />
         <Route path="/announcements" element={<AnnouncementsPage />} />
         <Route path="/staff" element={<StaffMasterPage />} />
         <Route path="/staff/:id" element={<StaffDetailPage />} />
@@ -123,7 +139,21 @@ function AppRoutes() {
         <Route path="/product-catalog" element={<ProductCatalogPage />} />
         <Route path="/setup-lists" element={<SetupListsPage />} />
         <Route path="/document-control" element={<DocumentControlPage />} />
+        <Route path="/approval-authorities" element={<ApprovalAuthoritiesPage />} />
+        <Route path="/approval-center" element={<ApprovalCenterPage />} />
         <Route path="/event-logs" element={<EventLogsPage />} />
+        <Route path="/warehouses" element={<WarehousesPage />} />
+        <Route path="/stock-master" element={<StockMasterPage />} />
+        <Route path="/stock-master/:id" element={<StockItemDetailPage />} />
+        <Route path="/grn" element={<GoodsReceiveNotePage />} />
+        <Route path="/gtn" element={<GoodsTransferNotePage />} />
+        <Route path="/grtn" element={<GoodsReturnNotePage />} />
+        <Route path="/stock-adjustment" element={<StockAdjustmentPage />} />
+        <Route path="/stock-reports" element={<StockReportsPage />} />
+        <Route path="/stock-categories" element={<StockCategoryPage />} />
+        <Route path="/stock-groups" element={<StockGroupPage />} />
+        <Route path="/stock-brands-models" element={<StockBrandModelPage />} />
+        <Route path="/stock-usages" element={<StockUsagePage />} />
       </Route>
     </Routes>
   )

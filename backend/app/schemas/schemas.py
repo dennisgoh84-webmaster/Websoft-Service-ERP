@@ -18,12 +18,14 @@ from app.models.quotations import QuotationStatus
 from app.models.core import UserRole
 from app.models.groups import AccessLevel
 from app.models.incidents import IncidentSource, IncidentStatus
-from app.models.job_orders import JobOrderPriority, JobOrderStatus
+from app.models.job_orders import JobOrderPriority, JobOrderStatus, JobOrderType, MilestoneStatus, MilestoneType
 from app.models.licensing import LicenseType
 from app.models.service_records import ServiceRecordCompletion, ServiceRecordOutcome, ServiceRecordStatus
 from app.models.setup import SetupListType
 from app.models.periods import PeriodDocType, PeriodOperation, PeriodStatus
 from app.models.ops_tasks import OpsTaskStatus
+from app.models.documents import DocumentEntityType
+from app.models.approvals import ApprovalDecisionValue, ApprovalMode, ApprovalStatus
 
 
 # ---- Auth ----
@@ -633,6 +635,7 @@ class JobOrderCreate(BaseModel):
     customer_id: uuid.UUID
     contract_id: uuid.UUID
     subject: str
+    job_order_type: JobOrderType = JobOrderType.SUPPORT
     priority: JobOrderPriority = JobOrderPriority.NORMAL
     # Manual, optional -- set by Sales/Coordinator after discussion with
     # Support. Confirmed 2026-09-10: not derived from priority.
@@ -657,6 +660,55 @@ class JobOrderVoid(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
 
 
+class ProjectMilestoneOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    job_order_id: uuid.UUID
+    milestone_type: MilestoneType
+    label: str
+    sort_order: int
+    planned_start: date | None
+    planned_end: date | None
+    actual_start: date | None
+    actual_end: date | None
+    assigned_user_id: uuid.UUID | None
+    status: MilestoneStatus
+    notes: str | None
+    created_at: datetime
+
+
+class ProjectMilestoneCreate(BaseModel):
+    milestone_type: MilestoneType
+    label: str
+    sort_order: int = 0
+    planned_start: date | None = None
+    planned_end: date | None = None
+    assigned_user_id: uuid.UUID | None = None
+    notes: str | None = None
+
+
+class ProjectMilestoneUpdate(BaseModel):
+    label: str | None = None
+    sort_order: int | None = None
+    planned_start: date | None = None
+    planned_end: date | None = None
+    actual_start: date | None = None
+    actual_end: date | None = None
+    assigned_user_id: uuid.UUID | None = None
+    status: MilestoneStatus | None = None
+    notes: str | None = None
+
+
+class BudgetOverrunStatus(BaseModel):
+    """Computed budget overrun info returned alongside the Job Order."""
+    is_over_hours: bool = False
+    is_over_cost: bool = False
+    consumed_minutes: int = 0
+    contracted_minutes: int = 0
+    consumed_cost_sgd: float = 0
+    contract_value_sgd: float = 0
+
+
 class JobOrderOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
@@ -664,14 +716,20 @@ class JobOrderOut(BaseModel):
     customer_id: uuid.UUID
     contract_id: uuid.UUID | None
     subject: str
+    job_order_type: JobOrderType
     priority: JobOrderPriority
     status: JobOrderStatus
     is_urgent: bool
     assigned_to_user_id: uuid.UUID | None
     due_date: date | None
     void_reason: str | None
+    budget_overrun_approved: bool = False
+    budget_overrun_approved_by: uuid.UUID | None = None
+    budget_overrun_approved_at: datetime | None = None
     created_at: datetime
     closed_at: datetime | None
+    milestones: list[ProjectMilestoneOut] = []
+    budget_overrun: BudgetOverrunStatus | None = None
 
 
 # ---- Service Records (formerly "Timesheets") ----
@@ -1066,6 +1124,34 @@ class TrialBalance(BaseModel):
     is_balanced: bool
 
 
+class GLTransactionRow(BaseModel):
+    """One posted journal line touching a given account."""
+    line_id: uuid.UUID
+    entry_id: uuid.UUID
+    voucher_number: str
+    voucher_type: str
+    entry_date: date
+    narration: str
+    line_description: str | None
+    debit_sgd: float
+    credit_sgd: float
+    balance_sgd: float
+
+
+class GLTransactions(BaseModel):
+    """Account-level GL transaction ledger."""
+    account_id: uuid.UUID
+    account_code: str
+    account_name: str
+    account_type: str
+    date_from: date | None
+    date_to: date | None
+    rows: list[GLTransactionRow]
+    total_debit: float
+    total_credit: float
+    closing_balance: float
+
+
 # ---- Accounts Payable ----
 # Supplier CRUD schemas were removed 2026-09-12: a supplier is a CompanyIndividual
 # (Company/Individual) record flagged is_supplier=True -- see
@@ -1277,6 +1363,7 @@ class ProductCreate(BaseModel):
     unit_of_measure: str | None = None
     tax_code: str = "SR"
     default_reference_code_id: uuid.UUID | None = None
+    is_stock: bool = False
 
 
 class ProductUpdate(BaseModel):
@@ -1290,6 +1377,7 @@ class ProductUpdate(BaseModel):
     unit_of_measure: str | None = None
     tax_code: str | None = None
     default_reference_code_id: uuid.UUID | None = None
+    is_stock: bool | None = None
     is_active: bool | None = None
 
 
@@ -1306,6 +1394,7 @@ class ProductOut(BaseModel):
     unit_of_measure: str | None
     tax_code: str
     default_reference_code_id: uuid.UUID | None
+    is_stock: bool
     is_active: bool
     created_at: datetime
 
@@ -1892,6 +1981,50 @@ class CommissionReport(BaseModel):
     total_commission_sgd: float
 
 
+# ---- Commission Payouts (6.3/6.4/6.5, built 2026-09-12) ----
+
+
+class CommissionPayoutCreate(BaseModel):
+    period_month: str = Field(min_length=7, max_length=7, pattern=r"^\d{4}-\d{2}$")
+
+
+class CommissionPayoutReject(BaseModel):
+    reason: str | None = None
+
+
+class CommissionPayoutMarkPaid(BaseModel):
+    paid_date: date
+    paid_reference: str | None = None
+
+
+class CommissionPayoutOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    company_id: uuid.UUID
+    payout_number: str
+    payout_type: str
+    status: str
+    sales_staff_id: uuid.UUID
+    period_month: str
+    period_start: date
+    period_end: date
+    amount_sgd: float
+    rate_percent: float
+    clawback_invoice_id: uuid.UUID | None = None
+    clawback_reason: str | None = None
+    submitted_by_user_id: uuid.UUID | None = None
+    submitted_at: datetime | None = None
+    approved_by_user_id: uuid.UUID | None = None
+    approved_at: datetime | None = None
+    paid_date: date | None = None
+    paid_reference: str | None = None
+    paid_by_user_id: uuid.UUID | None = None
+    notes: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 # ---- Ops Dashboard (personal task tracker, confirmed 2026-09-11) ----
 class OpsTaskCategoryCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
@@ -2027,3 +2160,461 @@ class PublicAdBanner(BaseModel):
 
     video_url: str | None
     items: list[AnnouncementOut]
+
+
+# ── eDocument Attachments + eSignature ─────────────────────────────
+
+
+class DocumentAttachmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    entity_type: DocumentEntityType
+    entity_id: uuid.UUID
+    uploaded_by_user_id: uuid.UUID
+    original_filename: str
+    content_type: str
+    file_size_bytes: int
+    description: str | None
+    uploaded_at: datetime
+
+
+class DocumentSignatureCreate(BaseModel):
+    entity_type: DocumentEntityType
+    entity_id: uuid.UUID
+    signer_name: str = Field(min_length=1, max_length=255)
+    signature_data_uri: str = Field(min_length=1)
+    role_label: str | None = Field(default=None, max_length=100)
+
+
+class DocumentSignatureOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    entity_type: DocumentEntityType
+    entity_id: uuid.UUID
+    signer_user_id: uuid.UUID
+    signer_name: str
+    role_label: str | None
+    signed_at: datetime
+
+
+# ── eApproval Master ───────────────────────────────────────────────
+
+
+class ApprovalAuthorityMemberOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    authority_id: uuid.UUID
+    user_id: uuid.UUID
+    added_at: datetime
+
+
+class ApprovalRuleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    authority_id: uuid.UUID
+    entity_type: DocumentEntityType
+    threshold_amount: float | None
+    priority: int
+    is_active: bool
+    created_at: datetime
+
+
+class ApprovalAuthorityOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    name: str
+    description: str | None
+    mode: ApprovalMode
+    bank_account_id: uuid.UUID | None
+    is_active: bool
+    created_at: datetime
+    members: list[ApprovalAuthorityMemberOut] = []
+    rules: list[ApprovalRuleOut] = []
+
+
+class ApprovalAuthorityCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=500)
+    mode: ApprovalMode = ApprovalMode.ANY_ONE
+    bank_account_id: uuid.UUID | None = None
+
+
+class ApprovalAuthorityUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=500)
+    mode: ApprovalMode | None = None
+    bank_account_id: uuid.UUID | None = None
+    is_active: bool | None = None
+
+
+class ApprovalAuthorityMemberAdd(BaseModel):
+    user_id: uuid.UUID
+
+
+class ApprovalRuleCreate(BaseModel):
+    authority_id: uuid.UUID
+    entity_type: DocumentEntityType
+    threshold_amount: float | None = None
+    priority: int = 0
+
+
+class ApprovalRuleUpdate(BaseModel):
+    entity_type: DocumentEntityType | None = None
+    threshold_amount: float | None = None
+    priority: int | None = None
+    is_active: bool | None = None
+
+
+class ApprovalDecisionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    request_id: uuid.UUID
+    user_id: uuid.UUID
+    decision: ApprovalDecisionValue
+    comment: str | None
+    decided_at: datetime
+
+
+class ApprovalRequestOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    entity_type: DocumentEntityType
+    entity_id: uuid.UUID
+    rule_id: uuid.UUID
+    authority_id: uuid.UUID
+    status: ApprovalStatus
+    requested_by_user_id: uuid.UUID
+    requested_at: datetime
+    resolved_at: datetime | None
+    decisions: list[ApprovalDecisionOut] = []
+
+
+class ApprovalSubmitRequest(BaseModel):
+    entity_type: DocumentEntityType
+    entity_id: uuid.UUID
+    amount: float | None = None
+
+
+class ApprovalDecisionRequest(BaseModel):
+    decision: ApprovalDecisionValue
+    comment: str | None = Field(default=None, max_length=1000)
+
+
+# ── Stock / Inventory ────────────────────────────────────────────────
+
+class WarehouseCreate(BaseModel):
+    code: str = Field(max_length=20)
+    name: str = Field(max_length=200)
+    address: str | None = None
+
+class WarehouseOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    code: str
+    name: str
+    address: str | None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+class StockItemCreate(BaseModel):
+    code: str = Field(max_length=50)
+    name: str = Field(max_length=255)
+    description: str | None = None
+    category: str | None = Field(default=None, max_length=100)
+    unit_of_measure: str = Field(default="PCS", max_length=30)
+    product_id: uuid.UUID | None = None
+    reorder_level: int = 0
+    # Extended fields
+    category_id: uuid.UUID | None = None
+    group_id: uuid.UUID | None = None
+    brand_id: uuid.UUID | None = None
+    model_id: uuid.UUID | None = None
+    usage_id: uuid.UUID | None = None
+    barcode: str | None = Field(default=None, max_length=100)
+    part_number: str | None = Field(default=None, max_length=100)
+    invoice_description: str | None = None
+    memo: str | None = None
+    notes: str | None = None
+    dimensions: str | None = Field(default=None, max_length=255)
+
+class StockItemAttachmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    stock_item_id: uuid.UUID
+    filename: str
+    content_type: str | None
+    file_size: int | None
+    created_at: datetime
+
+class StockItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    code: str
+    name: str
+    description: str | None
+    category: str | None
+    unit_of_measure: str
+    product_id: uuid.UUID | None
+    reorder_level: int
+    # Extended fields
+    category_id: uuid.UUID | None = None
+    group_id: uuid.UUID | None = None
+    brand_id: uuid.UUID | None = None
+    model_id: uuid.UUID | None = None
+    usage_id: uuid.UUID | None = None
+    barcode: str | None = None
+    part_number: str | None = None
+    invoice_description: str | None = None
+    memo: str | None = None
+    notes: str | None = None
+    dimensions: str | None = None
+    # Joined display names
+    category_name: str | None = None
+    group_name: str | None = None
+    brand_name: str | None = None
+    model_name: str | None = None
+    usage_name: str | None = None
+    attachments: list[StockItemAttachmentOut] = []
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+# ── Stock Setup Master schemas ──────────────────────────────────────
+
+class StockCategoryCreate(BaseModel):
+    code: str = Field(max_length=30)
+    name: str = Field(max_length=200)
+
+class StockCategoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    code: str
+    name: str
+    is_active: bool
+    created_at: datetime
+
+class StockGroupCreate(BaseModel):
+    code: str = Field(max_length=30)
+    name: str = Field(max_length=200)
+
+class StockGroupOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    code: str
+    name: str
+    is_active: bool
+    created_at: datetime
+
+class StockBrandCreate(BaseModel):
+    name: str = Field(max_length=200)
+
+class StockBrandOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    name: str
+    is_active: bool
+    created_at: datetime
+
+class StockModelCreate(BaseModel):
+    brand_id: uuid.UUID
+    name: str = Field(max_length=200)
+
+class StockModelOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    brand_id: uuid.UUID
+    name: str
+    is_active: bool
+    created_at: datetime
+
+class StockUsageCreate(BaseModel):
+    code: str = Field(max_length=30)
+    name: str = Field(max_length=200)
+
+class StockUsageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    code: str
+    name: str
+    is_active: bool
+    created_at: datetime
+
+class StockLevelOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    stock_item_id: uuid.UUID
+    warehouse_id: uuid.UUID
+    quantity: int
+    avg_cost: float
+    # Joined fields for display
+    item_code: str | None = None
+    item_name: str | None = None
+    warehouse_code: str | None = None
+    warehouse_name: str | None = None
+
+class StockMovementOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    stock_item_id: uuid.UUID
+    warehouse_id: uuid.UUID
+    movement_type: str
+    quantity: int
+    unit_cost: float
+    total_cost: float
+    reference_type: str | None
+    reference_id: uuid.UUID | None
+    notes: str | None
+    created_at: datetime
+
+class GRNLineCreate(BaseModel):
+    stock_item_id: uuid.UUID
+    quantity: int = Field(gt=0)
+    unit_cost: float = Field(ge=0)
+    notes: str | None = None
+
+class GRNCreate(BaseModel):
+    warehouse_id: uuid.UUID
+    supplier_id: uuid.UUID | None = None
+    purchase_order_id: uuid.UUID | None = None
+    receive_date: datetime | None = None
+    notes: str | None = None
+    lines: list[GRNLineCreate] = Field(min_length=1)
+
+class GRNLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    stock_item_id: uuid.UUID
+    quantity: int
+    unit_cost: float
+    total_cost: float
+    notes: str | None
+
+class GRNOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    grn_number: str
+    warehouse_id: uuid.UUID
+    supplier_id: uuid.UUID | None
+    purchase_order_id: uuid.UUID | None
+    receive_date: datetime
+    status: str
+    notes: str | None
+    created_by: uuid.UUID | None
+    created_at: datetime
+    lines: list[GRNLineOut] = []
+
+class GTNLineCreate(BaseModel):
+    stock_item_id: uuid.UUID
+    quantity: int = Field(gt=0)
+    notes: str | None = None
+
+class GTNCreate(BaseModel):
+    from_warehouse_id: uuid.UUID
+    to_warehouse_id: uuid.UUID
+    transfer_date: datetime | None = None
+    notes: str | None = None
+    lines: list[GTNLineCreate] = Field(min_length=1)
+
+class GTNLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    stock_item_id: uuid.UUID
+    quantity: int
+    notes: str | None
+
+class GTNOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    gtn_number: str
+    from_warehouse_id: uuid.UUID
+    to_warehouse_id: uuid.UUID
+    transfer_date: datetime
+    status: str
+    notes: str | None
+    created_by: uuid.UUID | None
+    created_at: datetime
+    lines: list[GTNLineOut] = []
+
+class GRTNLineCreate(BaseModel):
+    stock_item_id: uuid.UUID
+    quantity: int = Field(gt=0)
+    unit_cost: float = Field(ge=0, default=0)
+    notes: str | None = None
+
+class GRTNCreate(BaseModel):
+    warehouse_id: uuid.UUID
+    supplier_id: uuid.UUID | None = None
+    return_date: datetime | None = None
+    reason: str | None = None
+    notes: str | None = None
+    lines: list[GRTNLineCreate] = Field(min_length=1)
+
+class GRTNLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    stock_item_id: uuid.UUID
+    quantity: int
+    unit_cost: float
+    total_cost: float
+    notes: str | None
+
+class GRTNOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    grtn_number: str
+    warehouse_id: uuid.UUID
+    supplier_id: uuid.UUID | None
+    return_date: datetime
+    reason: str | None
+    status: str
+    notes: str | None
+    created_by: uuid.UUID | None
+    created_at: datetime
+    lines: list[GRTNLineOut] = []
+
+class AdjustmentLineCreate(BaseModel):
+    stock_item_id: uuid.UUID
+    quantity_change: int  # +ve or -ve
+    notes: str | None = None
+
+class AdjustmentCreate(BaseModel):
+    warehouse_id: uuid.UUID
+    adjustment_date: datetime | None = None
+    reason: str | None = None
+    lines: list[AdjustmentLineCreate] = Field(min_length=1)
+
+class AdjustmentLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    stock_item_id: uuid.UUID
+    quantity_change: int
+    notes: str | None
+
+class AdjustmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    adj_number: str
+    warehouse_id: uuid.UUID
+    adjustment_date: datetime
+    reason: str | None
+    status: str
+    approved_by: uuid.UUID | None
+    approved_at: datetime | None
+    created_by: uuid.UUID | None
+    created_at: datetime
+    lines: list[AdjustmentLineOut] = []

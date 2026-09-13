@@ -18,7 +18,10 @@ from app.core.database import get_db
 from app.models.accounting import JournalEntry, JournalStatus, VoucherType
 from app.models.core import User
 from app.models.groups import AccessLevel
+from app.models.accounting import Account
 from app.schemas.schemas import (
+    GLTransactionRow,
+    GLTransactions,
     JournalEntryCreate,
     JournalEntryOut,
     ReverseRequest,
@@ -31,6 +34,11 @@ from app.services.authority import require_module_access
 
 router = APIRouter(prefix="/api/ledger", tags=["general-ledger"])
 MODULE = "finance_accounting"
+
+GL_TRANSACTION_EXPORT_FIELDS = [
+    "voucher_number", "voucher_type", "entry_date", "narration",
+    "line_description", "debit_sgd", "credit_sgd", "balance_sgd",
+]
 
 VOUCHER_EXPORT_FIELDS = [
     "voucher_number", "voucher_type", "entry_date", "narration", "status",
@@ -326,4 +334,120 @@ def export_trial_balance_excel(
         iter([data]),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=trial-balance.xlsx"},
+    )
+
+
+# ── GL Transaction Ledger (account drill-down) ──
+
+
+def _gl_transactions(
+    db: Session,
+    company_id: uuid.UUID,
+    account_id: uuid.UUID,
+    date_from: date | None,
+    date_to: date | None,
+) -> GLTransactions:
+    account = db.get(Account, account_id)
+    if not account or account.company_id != company_id:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    rows = ledger_svc.account_transactions(
+        db, company_id, account_id, date_from, date_to
+    )
+    total_debit = sum(r["debit_sgd"] for r in rows)
+    total_credit = sum(r["credit_sgd"] for r in rows)
+    closing_balance = rows[-1]["balance_sgd"] if rows else 0.0
+
+    return GLTransactions(
+        account_id=account.id,
+        account_code=account.code,
+        account_name=account.name,
+        account_type=account.account_type.value,
+        date_from=date_from,
+        date_to=date_to,
+        rows=[GLTransactionRow(**r) for r in rows],
+        total_debit=total_debit,
+        total_credit=total_credit,
+        closing_balance=closing_balance,
+    )
+
+
+@router.get("/transactions/{account_id}", response_model=GLTransactions)
+def gl_transactions(
+    account_id: uuid.UUID,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access(MODULE, AccessLevel.VIEW)),
+):
+    """GL transaction ledger for one account -- every posted debit/credit
+    with running balance. Use the account_id from the trial balance or
+    chart of accounts."""
+    return _gl_transactions(db, current_user.company_id, account_id, date_from, date_to)
+
+
+def _gl_transactions_for_export(
+    db: Session,
+    company_id: uuid.UUID,
+    account_id: uuid.UUID,
+    date_from: date | None,
+    date_to: date | None,
+) -> tuple[list[dict], str]:
+    result = _gl_transactions(db, company_id, account_id, date_from, date_to)
+    filename = f"gl-{result.account_code}"
+    return (
+        [
+            {
+                "voucher_number": r.voucher_number,
+                "voucher_type": r.voucher_type,
+                "entry_date": r.entry_date.isoformat(),
+                "narration": r.narration,
+                "line_description": r.line_description or "",
+                "debit_sgd": f"{r.debit_sgd:.2f}",
+                "credit_sgd": f"{r.credit_sgd:.2f}",
+                "balance_sgd": f"{r.balance_sgd:.2f}",
+            }
+            for r in result.rows
+        ],
+        filename,
+    )
+
+
+@router.get("/transactions/{account_id}/export.csv")
+def export_gl_transactions_csv(
+    account_id: uuid.UUID,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access(MODULE, AccessLevel.VIEW)),
+):
+    rows, filename = _gl_transactions_for_export(
+        db, current_user.company_id, account_id, date_from, date_to
+    )
+    csv_text = exports.rows_to_csv(GL_TRANSACTION_EXPORT_FIELDS, rows)
+    return StreamingResponse(
+        iter([csv_text]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}.csv"},
+    )
+
+
+@router.get("/transactions/{account_id}/export.xlsx")
+def export_gl_transactions_excel(
+    account_id: uuid.UUID,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access(MODULE, AccessLevel.VIEW)),
+):
+    rows, filename = _gl_transactions_for_export(
+        db, current_user.company_id, account_id, date_from, date_to
+    )
+    data = exports.rows_to_excel(
+        GL_TRANSACTION_EXPORT_FIELDS, rows, sheet_name="GL Transactions"
+    )
+    return StreamingResponse(
+        iter([data]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}.xlsx"},
     )

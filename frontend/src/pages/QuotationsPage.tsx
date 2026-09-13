@@ -1,7 +1,9 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { EmailIcon, PrintIcon, WhatsAppIcon } from '../components/DocActionIcons'
+import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
+import SignaturePanel from '../components/SignaturePanel'
 import {
   api,
   downloadBlob,
@@ -62,6 +64,7 @@ export default function QuotationsPage() {
 
   const [filterStatus, setFilterStatus] = useState('')
   const [filterCompanyIndividual, setFilterCompanyIndividual] = useState('')
+  const [docPanelId, setDocPanelId] = useState<string | null>(null)
 
   // New quotation form
   const [customerId, setCustomerId] = useState('')
@@ -447,7 +450,8 @@ export default function QuotationsPage() {
             </thead>
             <tbody>
               {quotations.map((q) => (
-                <tr key={q.id}>
+                <Fragment key={q.id}>
+                <tr>
                   <td>
                     {q.quotation_number}
                     <div className="muted">
@@ -472,6 +476,14 @@ export default function QuotationsPage() {
                     )}
                   </td>
                   <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <button
+                      className="secondary icon-button"
+                      title="Attachments & Signatures"
+                      aria-label="Attachments & Signatures"
+                      onClick={() => setDocPanelId(docPanelId === q.id ? null : q.id)}
+                    >
+                      📎
+                    </button>
                     <Link to={`/quotations/${q.id}/print`} className="secondary icon-button" title="Print" aria-label="Print">
                       <PrintIcon />
                     </Link>
@@ -508,6 +520,15 @@ export default function QuotationsPage() {
                     )}
                   </td>
                 </tr>
+                {docPanelId === q.id && (
+                  <tr>
+                    <td colSpan={7} style={{ padding: 16, background: 'var(--bg-muted, #f9f9f9)' }}>
+                      <DocumentAttachmentsPanel entityType="quotation" entityId={q.id} />
+                      <SignaturePanel entityType="quotation" entityId={q.id} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
               {quotations.length === 0 && (
                 <tr>
