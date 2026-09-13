@@ -62,6 +62,90 @@ class DocumentStatus(str, enum.Enum):
     cancelled = "cancelled"
 
 
+# ── Stock Setup Master Files ────────────────────────────────────────
+
+class StockCategory(Base):
+    """Setup master: stock item categories (e.g. Hardware, Software, Consumable)."""
+    __tablename__ = "stock_categories"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("companies.id"), nullable=False)
+    code: Mapped[str] = mapped_column(String(30), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class StockGroup(Base):
+    """Setup master: stock item groups (e.g. Networking, Printers, Cables)."""
+    __tablename__ = "stock_groups"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("companies.id"), nullable=False)
+    code: Mapped[str] = mapped_column(String(30), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class StockBrand(Base):
+    """Setup master: brand (e.g. Cisco, HP, Dell). Models are children."""
+    __tablename__ = "stock_brands"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("companies.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    models = relationship("StockModel", back_populates="brand", cascade="all, delete-orphan")
+
+
+class StockModel(Base):
+    """Setup master: model under a brand (e.g. Cisco Catalyst 9300)."""
+    __tablename__ = "stock_models"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("stock_brands.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    brand = relationship("StockBrand", back_populates="models")
+
+
+class StockUsage(Base):
+    """Setup master: intended usage (e.g. Resale, Internal, Project)."""
+    __tablename__ = "stock_usages"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("companies.id"), nullable=False)
+    code: Mapped[str] = mapped_column(String(30), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# ── Stock Item Attachment ──────────────────────────────────────────
+
+class StockItemAttachment(Base):
+    """Picture / document attachment on a stock item."""
+    __tablename__ = "stock_item_attachments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    stock_item_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("stock_items.id"), nullable=False)
+    filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    stored_filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 # ── Warehouse / Location ────────────────────────────────────────────
 
 class Warehouse(Base):
@@ -97,9 +181,33 @@ class StockItem(Base):
     product_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("products.id"), nullable=True)
     # Reorder level — when total stock drops below this, flag for reorder
     reorder_level: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # ── Extended fields (2026-09-13) ───────────────────────────────
+    # FK links to setup master tables (nullable -- optional lookups)
+    category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("stock_categories.id"), nullable=True)
+    group_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("stock_groups.id"), nullable=True)
+    brand_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("stock_brands.id"), nullable=True)
+    model_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("stock_models.id"), nullable=True)
+    usage_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("stock_usages.id"), nullable=True)
+    barcode: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    part_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    invoice_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    memo: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Dimensions stored as free text (e.g. "300 x 200 x 100 mm, 2.5 kg")
+    dimensions: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships for joined loading
+    stock_category = relationship("StockCategory", foreign_keys=[category_id], lazy="joined")
+    stock_group = relationship("StockGroup", foreign_keys=[group_id], lazy="joined")
+    stock_brand = relationship("StockBrand", foreign_keys=[brand_id], lazy="joined")
+    stock_model = relationship("StockModel", foreign_keys=[model_id], lazy="joined")
+    stock_usage = relationship("StockUsage", foreign_keys=[usage_id], lazy="joined")
+    attachments = relationship("StockItemAttachment", cascade="all, delete-orphan", order_by="StockItemAttachment.created_at")
 
 
 # ── Stock Level (per item per warehouse) ────────────────────────────

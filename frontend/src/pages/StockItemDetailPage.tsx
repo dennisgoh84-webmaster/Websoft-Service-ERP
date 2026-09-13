@@ -1,10 +1,13 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, useRef, type FormEvent, type ChangeEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   api,
   type StockItemRow,
+  type StockItemAttachmentRow,
   type StockLevelRow,
   type StockMovementRow,
+  type StockSetupRow,
+  type StockBrandRow,
   type Warehouse,
 } from '../lib/api'
 import { formatMoney as money } from '../lib/format'
@@ -20,13 +23,37 @@ export default function StockItemDetailPage() {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  /* edit form state */
+  /* setup-master dropdown options */
+  const [categories, setCategories] = useState<StockSetupRow[]>([])
+  const [groups, setGroups] = useState<StockSetupRow[]>([])
+  const [brands, setBrands] = useState<StockBrandRow[]>([])
+  const [brandModels, setBrandModels] = useState<StockSetupRow[]>([])
+  const [usages, setUsages] = useState<StockSetupRow[]>([])
+
+  /* attachment upload */
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+
+  /* edit form state — original fields */
   const [editCode, setEditCode] = useState('')
   const [editName, setEditName] = useState('')
   const [editDesc, setEditDesc] = useState('')
   const [editCategory, setEditCategory] = useState('')
   const [editUom, setEditUom] = useState('')
   const [editReorder, setEditReorder] = useState('')
+
+  /* edit form state — new fields */
+  const [editCategoryId, setEditCategoryId] = useState('')
+  const [editGroupId, setEditGroupId] = useState('')
+  const [editBrandId, setEditBrandId] = useState('')
+  const [editModelId, setEditModelId] = useState('')
+  const [editUsageId, setEditUsageId] = useState('')
+  const [editBarcode, setEditBarcode] = useState('')
+  const [editPartNumber, setEditPartNumber] = useState('')
+  const [editInvoiceDesc, setEditInvoiceDesc] = useState('')
+  const [editMemo, setEditMemo] = useState('')
+  const [editNotes, setEditNotes] = useState('')
+  const [editDimensions, setEditDimensions] = useState('')
 
   function refresh() {
     if (!id) return
@@ -35,7 +62,26 @@ export default function StockItemDetailPage() {
     api.listStockMovements({ stock_item_id: id, limit: 20 }).then(setMovements).catch(() => {})
     api.listWarehouses().then(setWarehouses).catch(() => {})
   }
+
+  function loadSetupData() {
+    api.listStockCategories().then(setCategories).catch(() => {})
+    api.listStockGroups().then(setGroups).catch(() => {})
+    api.listStockBrands().then(setBrands).catch(() => {})
+    api.listStockUsages().then(setUsages).catch(() => {})
+  }
+
   useEffect(refresh, [id])
+  useEffect(loadSetupData, [])
+
+  /* When brand changes, load that brand's models */
+  useEffect(() => {
+    if (editBrandId) {
+      api.listStockModels(editBrandId).then(setBrandModels).catch(() => {})
+    } else {
+      setBrandModels([])
+      setEditModelId('')
+    }
+  }, [editBrandId])
 
   function populateForm(d: StockItemRow) {
     setEditCode(d.code)
@@ -44,6 +90,17 @@ export default function StockItemDetailPage() {
     setEditCategory(d.category || '')
     setEditUom(d.unit_of_measure)
     setEditReorder(String(d.reorder_level))
+    setEditCategoryId(d.category_id || '')
+    setEditGroupId(d.group_id || '')
+    setEditBrandId(d.brand_id || '')
+    setEditModelId(d.model_id || '')
+    setEditUsageId(d.usage_id || '')
+    setEditBarcode(d.barcode || '')
+    setEditPartNumber(d.part_number || '')
+    setEditInvoiceDesc(d.invoice_description || '')
+    setEditMemo(d.memo || '')
+    setEditNotes(d.notes || '')
+    setEditDimensions(d.dimensions || '')
   }
 
   async function onSave(e: FormEvent) {
@@ -52,12 +109,24 @@ export default function StockItemDetailPage() {
       const updated = await api.updateStockItem(id!, {
         code: editCode,
         name: editName,
-        description: editDesc || undefined,
-        category: editCategory || undefined,
+        description: editDesc || null,
+        category: editCategory || null,
         unit_of_measure: editUom || 'PCS',
         reorder_level: parseInt(editReorder) || 0,
+        category_id: editCategoryId || null,
+        group_id: editGroupId || null,
+        brand_id: editBrandId || null,
+        model_id: editModelId || null,
+        usage_id: editUsageId || null,
+        barcode: editBarcode || null,
+        part_number: editPartNumber || null,
+        invoice_description: editInvoiceDesc || null,
+        memo: editMemo || null,
+        notes: editNotes || null,
+        dimensions: editDimensions || null,
       })
       setItem(updated)
+      populateForm(updated)
       setEditing(false)
     } catch (err) { setError(err instanceof Error ? err.message : 'Failed') }
     finally { setSaving(false) }
@@ -72,13 +141,38 @@ export default function StockItemDetailPage() {
     } catch (err) { setError(err instanceof Error ? err.message : 'Failed') }
   }
 
+  async function handleFileUpload(e: ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files?.length || !id) return
+    setUploading(true); setError(null)
+    try {
+      for (const file of Array.from(e.target.files)) {
+        await api.uploadStockItemAttachment(id, file)
+      }
+      refresh()
+    } catch (err) { setError(err instanceof Error ? err.message : 'Upload failed') }
+    finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function deleteAttachment(att: StockItemAttachmentRow) {
+    if (!id) return
+    setError(null)
+    try {
+      await api.deleteStockItemAttachment(id, att.id)
+      refresh()
+    } catch (err) { setError(err instanceof Error ? err.message : 'Delete failed') }
+  }
+
   const whMap = Object.fromEntries(warehouses.map((w) => [w.id, w]))
 
   if (!item) return <div style={{ padding: 24 }}><p>Loading...</p></div>
 
-  /* total stock across all warehouses */
   const totalQty = levels.reduce((s, l) => s + l.quantity, 0)
   const totalValue = levels.reduce((s, l) => s + l.quantity * l.avg_cost, 0)
+
+  const fieldStyle: React.CSSProperties = { fontSize: '0.8em', color: 'var(--muted)' }
 
   return (
     <div style={{ padding: 24 }}>
@@ -107,32 +201,186 @@ export default function StockItemDetailPage() {
       {editing ? (
         <form onSubmit={onSave} style={{ border: '1px solid var(--border)', padding: 16, borderRadius: 8, marginBottom: 24 }}>
           <h3 style={{ marginTop: 0 }}>Edit Stock Item</h3>
+
+          {/* Row 1: Basic fields */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 12 }}>
             <div><label>Code *</label><input value={editCode} onChange={(e) => setEditCode(e.target.value)} required /></div>
             <div><label>Name *</label><input value={editName} onChange={(e) => setEditName(e.target.value)} required /></div>
-            <div><label>Category</label><input value={editCategory} onChange={(e) => setEditCategory(e.target.value)} /></div>
             <div><label>Unit of Measure</label><input value={editUom} onChange={(e) => setEditUom(e.target.value)} /></div>
             <div><label>Reorder Level</label><input type="number" value={editReorder} onChange={(e) => setEditReorder(e.target.value)} /></div>
           </div>
-          <div>
-            <label>Description</label>
-            <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={3} style={{ width: '100%' }} />
+
+          {/* Row 2: Setup master dropdowns */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 12 }}>
+            <div>
+              <label>Category</label>
+              <select value={editCategoryId} onChange={(e) => setEditCategoryId(e.target.value)}>
+                <option value="">— None —</option>
+                {categories.filter((c) => c.is_active || c.id === item.category_id).map((c) => (
+                  <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label>Group</label>
+              <select value={editGroupId} onChange={(e) => setEditGroupId(e.target.value)}>
+                <option value="">— None —</option>
+                {groups.filter((g) => g.is_active || g.id === item.group_id).map((g) => (
+                  <option key={g.id} value={g.id}>{g.code} — {g.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label>Brand</label>
+              <select value={editBrandId} onChange={(e) => { setEditBrandId(e.target.value); setEditModelId('') }}>
+                <option value="">— None —</option>
+                {brands.filter((b) => b.is_active || b.id === item.brand_id).map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label>Model</label>
+              <select value={editModelId} onChange={(e) => setEditModelId(e.target.value)} disabled={!editBrandId}>
+                <option value="">— None —</option>
+                {brandModels.filter((m) => m.is_active || m.id === item.model_id).map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label>Usage</label>
+              <select value={editUsageId} onChange={(e) => setEditUsageId(e.target.value)}>
+                <option value="">— None —</option>
+                {usages.filter((u) => u.is_active || u.id === item.usage_id).map((u) => (
+                  <option key={u.id} value={u.id}>{u.code} — {u.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          {/* Row 3: Text fields */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 12 }}>
+            <div><label>Barcode</label><input value={editBarcode} onChange={(e) => setEditBarcode(e.target.value)} /></div>
+            <div><label>Part Number</label><input value={editPartNumber} onChange={(e) => setEditPartNumber(e.target.value)} /></div>
+            <div><label>Dimensions</label><input value={editDimensions} onChange={(e) => setEditDimensions(e.target.value)} placeholder="e.g. 100x50x25 mm" /></div>
+          </div>
+
+          {/* Row 4: Textarea fields */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div>
+              <label>Description</label>
+              <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={3} style={{ width: '100%' }} />
+            </div>
+            <div>
+              <label>Invoice Description</label>
+              <textarea value={editInvoiceDesc} onChange={(e) => setEditInvoiceDesc(e.target.value)} rows={3} style={{ width: '100%' }} />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div>
+              <label>Memo</label>
+              <textarea value={editMemo} onChange={(e) => setEditMemo(e.target.value)} rows={3} style={{ width: '100%' }} />
+            </div>
+            <div>
+              <label>Notes</label>
+              <textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={3} style={{ width: '100%' }} />
+            </div>
+          </div>
+
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
             <button type="button" className="secondary" onClick={() => { setEditing(false); populateForm(item) }}>Cancel</button>
           </div>
         </form>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 24, border: '1px solid var(--border)', padding: 16, borderRadius: 8 }}>
-          <div><label style={{ fontSize: '0.8em', color: 'var(--muted)' }}>Code</label><div><strong>{item.code}</strong></div></div>
-          <div><label style={{ fontSize: '0.8em', color: 'var(--muted)' }}>Name</label><div>{item.name}</div></div>
-          <div><label style={{ fontSize: '0.8em', color: 'var(--muted)' }}>Category</label><div>{item.category || '—'}</div></div>
-          <div><label style={{ fontSize: '0.8em', color: 'var(--muted)' }}>Unit of Measure</label><div>{item.unit_of_measure}</div></div>
-          <div><label style={{ fontSize: '0.8em', color: 'var(--muted)' }}>Reorder Level</label><div>{item.reorder_level}</div></div>
-          <div><label style={{ fontSize: '0.8em', color: 'var(--muted)' }}>Description</label><div>{item.description || '—'}</div></div>
+        <div style={{ border: '1px solid var(--border)', padding: 16, borderRadius: 8, marginBottom: 24 }}>
+          {/* View mode: all fields displayed */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
+            <div><label style={fieldStyle}>Code</label><div><strong>{item.code}</strong></div></div>
+            <div><label style={fieldStyle}>Name</label><div>{item.name}</div></div>
+            <div><label style={fieldStyle}>Unit of Measure</label><div>{item.unit_of_measure}</div></div>
+            <div><label style={fieldStyle}>Reorder Level</label><div>{item.reorder_level}</div></div>
+            <div><label style={fieldStyle}>Category</label><div>{item.category_name || '—'}</div></div>
+            <div><label style={fieldStyle}>Group</label><div>{item.group_name || '—'}</div></div>
+            <div><label style={fieldStyle}>Brand</label><div>{item.brand_name || '—'}</div></div>
+            <div><label style={fieldStyle}>Model</label><div>{item.model_name || '—'}</div></div>
+            <div><label style={fieldStyle}>Usage</label><div>{item.usage_name || '—'}</div></div>
+            <div><label style={fieldStyle}>Barcode</label><div>{item.barcode || '—'}</div></div>
+            <div><label style={fieldStyle}>Part Number</label><div>{item.part_number || '—'}</div></div>
+            <div><label style={fieldStyle}>Dimensions</label><div>{item.dimensions || '—'}</div></div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div><label style={fieldStyle}>Description</label><div style={{ whiteSpace: 'pre-wrap' }}>{item.description || '—'}</div></div>
+            <div><label style={fieldStyle}>Invoice Description</label><div style={{ whiteSpace: 'pre-wrap' }}>{item.invoice_description || '—'}</div></div>
+            <div><label style={fieldStyle}>Memo</label><div style={{ whiteSpace: 'pre-wrap' }}>{item.memo || '—'}</div></div>
+            <div><label style={fieldStyle}>Notes</label><div style={{ whiteSpace: 'pre-wrap' }}>{item.notes || '—'}</div></div>
+          </div>
         </div>
       )}
+
+      {/* ── Attachments ──────────────────────────────────────────── */}
+      <div style={{ border: '1px solid var(--border)', padding: 16, borderRadius: 8, marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <h3 style={{ margin: 0 }}>Attachments</h3>
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileUpload}
+              style={{ display: 'none' }}
+            />
+            <button onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+              {uploading ? 'Uploading...' : '📎 Upload File'}
+            </button>
+          </div>
+        </div>
+        {item.attachments && item.attachments.length > 0 ? (
+          <table>
+            <thead>
+              <tr>
+                <th>Filename</th>
+                <th>Type</th>
+                <th style={{ textAlign: 'right' }}>Size</th>
+                <th>Uploaded</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {item.attachments.map((att) => (
+                <tr key={att.id}>
+                  <td>
+                    <a
+                      href={`/api/stock/items/${item.id}/attachments/${att.id}/download`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {att.filename}
+                    </a>
+                  </td>
+                  <td>{att.content_type || '—'}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    {att.file_size ? `${(att.file_size / 1024).toFixed(1)} KB` : '—'}
+                  </td>
+                  <td>{new Date(att.created_at).toLocaleDateString()}</td>
+                  <td>
+                    <button
+                      className="secondary"
+                      style={{ color: 'red', fontSize: '0.85em' }}
+                      onClick={() => deleteAttachment(att)}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p style={{ color: 'var(--muted)', margin: 0 }}>No attachments yet.</p>
+        )}
+      </div>
 
       {/* ── Summary Tiles ────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>

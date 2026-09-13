@@ -10,11 +10,13 @@ adjustment-approval access.
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.core import User
 from app.models.groups import AccessLevel
@@ -29,9 +31,15 @@ from app.models.inventory import (
     GoodsTransferNoteLine,
     StockAdjustment,
     StockAdjustmentLine,
+    StockBrand,
+    StockCategory,
+    StockGroup,
     StockItem,
+    StockItemAttachment,
     StockLevel,
+    StockModel,
     StockMovement,
+    StockUsage,
     Warehouse,
 )
 from app.schemas.schemas import (
@@ -43,10 +51,21 @@ from app.schemas.schemas import (
     GRTNOut,
     GTNCreate,
     GTNOut,
+    StockBrandCreate,
+    StockBrandOut,
+    StockCategoryCreate,
+    StockCategoryOut,
+    StockGroupCreate,
+    StockGroupOut,
+    StockItemAttachmentOut,
     StockItemCreate,
     StockItemOut,
     StockLevelOut,
+    StockModelCreate,
+    StockModelOut,
     StockMovementOut,
+    StockUsageCreate,
+    StockUsageOut,
     WarehouseCreate,
     WarehouseOut,
 )
@@ -54,6 +73,326 @@ from app.services.authority import require_module_access
 from app.services import inventory as inv_svc
 
 router = APIRouter(prefix="/api/stock", tags=["stock"])
+
+
+def _enrich_item(item: StockItem) -> StockItemOut:
+    """Build StockItemOut with joined display names from relationships."""
+    out = StockItemOut.model_validate(item)
+    out.category_name = item.stock_category.name if item.stock_category else None
+    out.group_name = item.stock_group.name if item.stock_group else None
+    out.brand_name = item.stock_brand.name if item.stock_brand else None
+    out.model_name = item.stock_model.name if item.stock_model else None
+    out.usage_name = item.stock_usage.name if item.stock_usage else None
+    out.attachments = [StockItemAttachmentOut.model_validate(a) for a in (item.attachments or [])]
+    return out
+
+
+# ━━ Stock Setup Masters ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# ── Categories ─────────────────────────────────────────────────────
+
+@router.get("/categories", response_model=list[StockCategoryOut])
+def list_categories(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.VIEW)),
+):
+    return db.query(StockCategory).filter(StockCategory.company_id == current_user.company_id).order_by(StockCategory.code).all()
+
+
+@router.post("/categories", response_model=StockCategoryOut, status_code=201)
+def create_category(
+    body: StockCategoryCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.FULL)),
+):
+    obj = StockCategory(company_id=current_user.company_id, **body.model_dump())
+    db.add(obj); db.commit(); db.refresh(obj)
+    return obj
+
+
+@router.patch("/categories/{cat_id}", response_model=StockCategoryOut)
+def update_category(
+    cat_id: uuid.UUID, body: StockCategoryCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.FULL)),
+):
+    obj = db.query(StockCategory).filter(StockCategory.id == cat_id, StockCategory.company_id == current_user.company_id).first()
+    if not obj: raise HTTPException(404, "Category not found")
+    for k, v in body.model_dump(exclude_unset=True).items(): setattr(obj, k, v)
+    db.commit(); db.refresh(obj)
+    return obj
+
+
+@router.patch("/categories/{cat_id}/toggle", response_model=StockCategoryOut)
+def toggle_category(
+    cat_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.FULL)),
+):
+    obj = db.query(StockCategory).filter(StockCategory.id == cat_id, StockCategory.company_id == current_user.company_id).first()
+    if not obj: raise HTTPException(404, "Category not found")
+    obj.is_active = not obj.is_active
+    db.commit(); db.refresh(obj)
+    return obj
+
+
+# ── Groups ─────────────────────────────────────────────────────────
+
+@router.get("/groups", response_model=list[StockGroupOut])
+def list_groups(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.VIEW)),
+):
+    return db.query(StockGroup).filter(StockGroup.company_id == current_user.company_id).order_by(StockGroup.code).all()
+
+
+@router.post("/groups", response_model=StockGroupOut, status_code=201)
+def create_group(
+    body: StockGroupCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.FULL)),
+):
+    obj = StockGroup(company_id=current_user.company_id, **body.model_dump())
+    db.add(obj); db.commit(); db.refresh(obj)
+    return obj
+
+
+@router.patch("/groups/{grp_id}", response_model=StockGroupOut)
+def update_group(
+    grp_id: uuid.UUID, body: StockGroupCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.FULL)),
+):
+    obj = db.query(StockGroup).filter(StockGroup.id == grp_id, StockGroup.company_id == current_user.company_id).first()
+    if not obj: raise HTTPException(404, "Group not found")
+    for k, v in body.model_dump(exclude_unset=True).items(): setattr(obj, k, v)
+    db.commit(); db.refresh(obj)
+    return obj
+
+
+@router.patch("/groups/{grp_id}/toggle", response_model=StockGroupOut)
+def toggle_group(
+    grp_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.FULL)),
+):
+    obj = db.query(StockGroup).filter(StockGroup.id == grp_id, StockGroup.company_id == current_user.company_id).first()
+    if not obj: raise HTTPException(404, "Group not found")
+    obj.is_active = not obj.is_active
+    db.commit(); db.refresh(obj)
+    return obj
+
+
+# ── Brands & Models ────────────────────────────────────────────────
+
+@router.get("/brands", response_model=list[StockBrandOut])
+def list_brands(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.VIEW)),
+):
+    return db.query(StockBrand).filter(StockBrand.company_id == current_user.company_id).order_by(StockBrand.name).all()
+
+
+@router.post("/brands", response_model=StockBrandOut, status_code=201)
+def create_brand(
+    body: StockBrandCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.FULL)),
+):
+    obj = StockBrand(company_id=current_user.company_id, **body.model_dump())
+    db.add(obj); db.commit(); db.refresh(obj)
+    return obj
+
+
+@router.patch("/brands/{brand_id}", response_model=StockBrandOut)
+def update_brand(
+    brand_id: uuid.UUID, body: StockBrandCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.FULL)),
+):
+    obj = db.query(StockBrand).filter(StockBrand.id == brand_id, StockBrand.company_id == current_user.company_id).first()
+    if not obj: raise HTTPException(404, "Brand not found")
+    for k, v in body.model_dump(exclude_unset=True).items(): setattr(obj, k, v)
+    db.commit(); db.refresh(obj)
+    return obj
+
+
+@router.patch("/brands/{brand_id}/toggle", response_model=StockBrandOut)
+def toggle_brand(
+    brand_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.FULL)),
+):
+    obj = db.query(StockBrand).filter(StockBrand.id == brand_id, StockBrand.company_id == current_user.company_id).first()
+    if not obj: raise HTTPException(404, "Brand not found")
+    obj.is_active = not obj.is_active
+    db.commit(); db.refresh(obj)
+    return obj
+
+
+@router.get("/brands/{brand_id}/models", response_model=list[StockModelOut])
+def list_models(
+    brand_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.VIEW)),
+):
+    # Verify brand belongs to company
+    brand = db.query(StockBrand).filter(StockBrand.id == brand_id, StockBrand.company_id == current_user.company_id).first()
+    if not brand: raise HTTPException(404, "Brand not found")
+    return db.query(StockModel).filter(StockModel.brand_id == brand_id).order_by(StockModel.name).all()
+
+
+@router.post("/models", response_model=StockModelOut, status_code=201)
+def create_model(
+    body: StockModelCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.FULL)),
+):
+    # Verify brand belongs to company
+    brand = db.query(StockBrand).filter(StockBrand.id == body.brand_id, StockBrand.company_id == current_user.company_id).first()
+    if not brand: raise HTTPException(404, "Brand not found")
+    obj = StockModel(**body.model_dump())
+    db.add(obj); db.commit(); db.refresh(obj)
+    return obj
+
+
+@router.patch("/models/{model_id}", response_model=StockModelOut)
+def update_model(
+    model_id: uuid.UUID, body: StockModelCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.FULL)),
+):
+    obj = db.query(StockModel).join(StockBrand).filter(StockModel.id == model_id, StockBrand.company_id == current_user.company_id).first()
+    if not obj: raise HTTPException(404, "Model not found")
+    for k, v in body.model_dump(exclude_unset=True).items(): setattr(obj, k, v)
+    db.commit(); db.refresh(obj)
+    return obj
+
+
+@router.patch("/models/{model_id}/toggle", response_model=StockModelOut)
+def toggle_model(
+    model_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.FULL)),
+):
+    obj = db.query(StockModel).join(StockBrand).filter(StockModel.id == model_id, StockBrand.company_id == current_user.company_id).first()
+    if not obj: raise HTTPException(404, "Model not found")
+    obj.is_active = not obj.is_active
+    db.commit(); db.refresh(obj)
+    return obj
+
+
+# ── Usages ─────────────────────────────────────────────────────────
+
+@router.get("/usages", response_model=list[StockUsageOut])
+def list_usages(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.VIEW)),
+):
+    return db.query(StockUsage).filter(StockUsage.company_id == current_user.company_id).order_by(StockUsage.code).all()
+
+
+@router.post("/usages", response_model=StockUsageOut, status_code=201)
+def create_usage(
+    body: StockUsageCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.FULL)),
+):
+    obj = StockUsage(company_id=current_user.company_id, **body.model_dump())
+    db.add(obj); db.commit(); db.refresh(obj)
+    return obj
+
+
+@router.patch("/usages/{usage_id}", response_model=StockUsageOut)
+def update_usage(
+    usage_id: uuid.UUID, body: StockUsageCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.FULL)),
+):
+    obj = db.query(StockUsage).filter(StockUsage.id == usage_id, StockUsage.company_id == current_user.company_id).first()
+    if not obj: raise HTTPException(404, "Usage not found")
+    for k, v in body.model_dump(exclude_unset=True).items(): setattr(obj, k, v)
+    db.commit(); db.refresh(obj)
+    return obj
+
+
+@router.patch("/usages/{usage_id}/toggle", response_model=StockUsageOut)
+def toggle_usage(
+    usage_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.FULL)),
+):
+    obj = db.query(StockUsage).filter(StockUsage.id == usage_id, StockUsage.company_id == current_user.company_id).first()
+    if not obj: raise HTTPException(404, "Usage not found")
+    obj.is_active = not obj.is_active
+    db.commit(); db.refresh(obj)
+    return obj
+
+
+# ━━ Stock Item Attachments ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def _attachment_dir(company_id: uuid.UUID, item_id: uuid.UUID) -> Path:
+    d = Path(settings.uploads_dir) / "stock" / str(company_id) / str(item_id)
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+@router.post("/items/{item_id}/attachments", response_model=StockItemAttachmentOut, status_code=201)
+async def upload_attachment(
+    item_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.FULL)),
+):
+    item = db.query(StockItem).filter(StockItem.id == item_id, StockItem.company_id == current_user.company_id).first()
+    if not item:
+        raise HTTPException(404, "Stock item not found")
+    data = await file.read()
+    att_id = uuid.uuid4()
+    ext = Path(file.filename or "").suffix.lower()
+    stored = f"{att_id}{ext}"
+    dest = _attachment_dir(current_user.company_id, item_id) / stored
+    dest.write_bytes(data)
+    att = StockItemAttachment(
+        id=att_id, stock_item_id=item_id,
+        filename=file.filename or "file", stored_filename=stored,
+        content_type=file.content_type, file_size=len(data),
+    )
+    db.add(att); db.commit(); db.refresh(att)
+    return att
+
+
+@router.delete("/items/{item_id}/attachments/{att_id}", status_code=204)
+def delete_attachment(
+    item_id: uuid.UUID, att_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.FULL)),
+):
+    att = db.query(StockItemAttachment).filter(
+        StockItemAttachment.id == att_id, StockItemAttachment.stock_item_id == item_id
+    ).first()
+    if not att: raise HTTPException(404, "Attachment not found")
+    # Delete file from disk
+    fp = _attachment_dir(current_user.company_id, item_id) / att.stored_filename
+    try: fp.unlink(missing_ok=True)
+    except OSError: pass
+    db.delete(att); db.commit()
+
+
+@router.get("/items/{item_id}/attachments/{att_id}/download")
+def download_attachment(
+    item_id: uuid.UUID, att_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access("stock_master", AccessLevel.VIEW)),
+):
+    att = db.query(StockItemAttachment).filter(
+        StockItemAttachment.id == att_id, StockItemAttachment.stock_item_id == item_id
+    ).first()
+    if not att: raise HTTPException(404, "Attachment not found")
+    fp = _attachment_dir(current_user.company_id, item_id) / att.stored_filename
+    if not fp.is_file(): raise HTTPException(404, "File not found on disk")
+    from fastapi.responses import FileResponse
+    return FileResponse(fp, filename=att.filename, media_type=att.content_type or "application/octet-stream")
 
 
 # ━━ Warehouses ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -108,12 +447,13 @@ def list_stock_items(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module_access("stock_master", AccessLevel.VIEW)),
 ):
-    return (
+    items = (
         db.query(StockItem)
         .filter(StockItem.company_id == current_user.company_id)
         .order_by(StockItem.code)
         .all()
     )
+    return [_enrich_item(i) for i in items]
 
 
 @router.post("/items", response_model=StockItemOut, status_code=201)
@@ -126,7 +466,7 @@ def create_stock_item(
     db.add(item)
     db.commit()
     db.refresh(item)
-    return item
+    return _enrich_item(item)
 
 
 @router.patch("/items/{item_id}", response_model=StockItemOut)
@@ -143,7 +483,7 @@ def update_stock_item(
         setattr(item, k, v)
     db.commit()
     db.refresh(item)
-    return item
+    return _enrich_item(item)
 
 
 @router.get("/items/{item_id}", response_model=StockItemOut)
@@ -155,7 +495,7 @@ def get_stock_item(
     item = db.query(StockItem).filter(StockItem.id == item_id, StockItem.company_id == current_user.company_id).first()
     if not item:
         raise HTTPException(404, "Stock item not found")
-    return item
+    return _enrich_item(item)
 
 
 # ━━ Stock Levels ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

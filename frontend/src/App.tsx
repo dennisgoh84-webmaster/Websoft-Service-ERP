@@ -60,9 +60,13 @@ import GoodsReceiveNotePage from './pages/GoodsReceiveNotePage'
 import GoodsReturnNotePage from './pages/GoodsReturnNotePage'
 import GoodsTransferNotePage from './pages/GoodsTransferNotePage'
 import StockAdjustmentPage from './pages/StockAdjustmentPage'
+import StockBrandModelPage from './pages/StockBrandModelPage'
+import StockCategoryPage from './pages/StockCategoryPage'
+import StockGroupPage from './pages/StockGroupPage'
 import StockItemDetailPage from './pages/StockItemDetailPage'
 import StockMasterPage from './pages/StockMasterPage'
 import StockReportsPage from './pages/StockReportsPage'
+import StockUsagePage from './pages/StockUsagePage'
 import WarehousesPage from './pages/WarehousesPage'
 import YearEndClosingPage from './pages/YearEndClosingPage'
 
@@ -146,6 +150,10 @@ function AppRoutes() {
         <Route path="/grtn" element={<GoodsReturnNotePage />} />
         <Route path="/stock-adjustment" element={<StockAdjustmentPage />} />
         <Route path="/stock-reports" element={<StockReportsPage />} />
+        <Route path="/stock-categories" element={<StockCategoryPage />} />
+        <Route path="/stock-groups" element={<StockGroupPage />} />
+        <Route path="/stock-brands-models" element={<StockBrandModelPage />} />
+        <Route path="/stock-usages" element={<StockUsagePage />} />
       </Route>
     </Routes>
   )

@@ -2330,6 +2330,27 @@ class StockItemCreate(BaseModel):
     unit_of_measure: str = Field(default="PCS", max_length=30)
     product_id: uuid.UUID | None = None
     reorder_level: int = 0
+    # Extended fields
+    category_id: uuid.UUID | None = None
+    group_id: uuid.UUID | None = None
+    brand_id: uuid.UUID | None = None
+    model_id: uuid.UUID | None = None
+    usage_id: uuid.UUID | None = None
+    barcode: str | None = Field(default=None, max_length=100)
+    part_number: str | None = Field(default=None, max_length=100)
+    invoice_description: str | None = None
+    memo: str | None = None
+    notes: str | None = None
+    dimensions: str | None = Field(default=None, max_length=255)
+
+class StockItemAttachmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    stock_item_id: uuid.UUID
+    filename: str
+    content_type: str | None
+    file_size: int | None
+    created_at: datetime
 
 class StockItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -2342,9 +2363,92 @@ class StockItemOut(BaseModel):
     unit_of_measure: str
     product_id: uuid.UUID | None
     reorder_level: int
+    # Extended fields
+    category_id: uuid.UUID | None = None
+    group_id: uuid.UUID | None = None
+    brand_id: uuid.UUID | None = None
+    model_id: uuid.UUID | None = None
+    usage_id: uuid.UUID | None = None
+    barcode: str | None = None
+    part_number: str | None = None
+    invoice_description: str | None = None
+    memo: str | None = None
+    notes: str | None = None
+    dimensions: str | None = None
+    # Joined display names
+    category_name: str | None = None
+    group_name: str | None = None
+    brand_name: str | None = None
+    model_name: str | None = None
+    usage_name: str | None = None
+    attachments: list[StockItemAttachmentOut] = []
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+# ── Stock Setup Master schemas ──────────────────────────────────────
+
+class StockCategoryCreate(BaseModel):
+    code: str = Field(max_length=30)
+    name: str = Field(max_length=200)
+
+class StockCategoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    code: str
+    name: str
+    is_active: bool
+    created_at: datetime
+
+class StockGroupCreate(BaseModel):
+    code: str = Field(max_length=30)
+    name: str = Field(max_length=200)
+
+class StockGroupOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    code: str
+    name: str
+    is_active: bool
+    created_at: datetime
+
+class StockBrandCreate(BaseModel):
+    name: str = Field(max_length=200)
+
+class StockBrandOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    name: str
+    is_active: bool
+    created_at: datetime
+
+class StockModelCreate(BaseModel):
+    brand_id: uuid.UUID
+    name: str = Field(max_length=200)
+
+class StockModelOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    brand_id: uuid.UUID
+    name: str
+    is_active: bool
+    created_at: datetime
+
+class StockUsageCreate(BaseModel):
+    code: str = Field(max_length=30)
+    name: str = Field(max_length=200)
+
+class StockUsageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    code: str
+    name: str
+    is_active: bool
+    created_at: datetime
 
 class StockLevelOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)

@@ -1482,12 +1482,34 @@ export interface Warehouse {
   address: string | null; is_active: boolean
   created_at: string; updated_at: string
 }
+export interface StockItemAttachmentRow {
+  id: string; stock_item_id: string; filename: string
+  content_type: string | null; file_size: number | null
+  created_at: string
+}
 export interface StockItemRow {
   id: string; company_id: string; code: string; name: string
   description: string | null; category: string | null
   unit_of_measure: string; product_id: string | null
   reorder_level: number; is_active: boolean
+  // extended fields
+  category_id: string | null; group_id: string | null
+  brand_id: string | null; model_id: string | null; usage_id: string | null
+  barcode: string | null; part_number: string | null
+  invoice_description: string | null; memo: string | null; notes: string | null
+  dimensions: string | null
+  // joined names
+  category_name: string | null; group_name: string | null
+  brand_name: string | null; model_name: string | null; usage_name: string | null
+  attachments: StockItemAttachmentRow[]
   created_at: string; updated_at: string
+}
+export interface StockSetupRow {
+  id: string; code?: string; name: string; is_active: boolean; created_at: string
+  company_id?: string; brand_id?: string
+}
+export interface StockBrandRow {
+  id: string; company_id: string; name: string; is_active: boolean; created_at: string
 }
 export interface StockLevelRow {
   id: string; stock_item_id: string; warehouse_id: string
@@ -2770,8 +2792,62 @@ export const api = {
   getStockItem: (id: string) => request<StockItemRow>(`/stock/items/${id}`),
   createStockItem: (data: { code: string; name: string; description?: string; category?: string; unit_of_measure?: string; reorder_level?: number }) =>
     request<StockItemRow>('/stock/items', { method: 'POST', body: JSON.stringify(data) }),
-  updateStockItem: (id: string, data: Partial<{ code: string; name: string; description: string; category: string; unit_of_measure: string; reorder_level: number; is_active: boolean }>) =>
+  updateStockItem: (id: string, data: Record<string, unknown>) =>
     request<StockItemRow>(`/stock/items/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  // Stock item attachments
+  uploadStockItemAttachment: async (itemId: string, file: File) => {
+    const fd = new FormData(); fd.append('file', file)
+    const token = getToken()
+    const res = await fetch(`/api/stock/items/${itemId}/attachments`, {
+      method: 'POST', body: fd, headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error(await res.text())
+    return res.json() as Promise<StockItemAttachmentRow>
+  },
+  deleteStockItemAttachment: (itemId: string, attId: string) =>
+    request<void>(`/stock/items/${itemId}/attachments/${attId}`, { method: 'DELETE' }),
+
+  // Stock setup masters
+  listStockCategories: () => request<StockSetupRow[]>('/stock/categories'),
+  createStockCategory: (data: { code: string; name: string }) =>
+    request<StockSetupRow>('/stock/categories', { method: 'POST', body: JSON.stringify(data) }),
+  updateStockCategory: (id: string, data: { code: string; name: string }) =>
+    request<StockSetupRow>(`/stock/categories/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  toggleStockCategory: (id: string) =>
+    request<StockSetupRow>(`/stock/categories/${id}/toggle`, { method: 'PATCH' }),
+
+  listStockGroups: () => request<StockSetupRow[]>('/stock/groups'),
+  createStockGroup: (data: { code: string; name: string }) =>
+    request<StockSetupRow>('/stock/groups', { method: 'POST', body: JSON.stringify(data) }),
+  updateStockGroup: (id: string, data: { code: string; name: string }) =>
+    request<StockSetupRow>(`/stock/groups/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  toggleStockGroup: (id: string) =>
+    request<StockSetupRow>(`/stock/groups/${id}/toggle`, { method: 'PATCH' }),
+
+  listStockBrands: () => request<StockBrandRow[]>('/stock/brands'),
+  createStockBrand: (data: { name: string }) =>
+    request<StockBrandRow>('/stock/brands', { method: 'POST', body: JSON.stringify(data) }),
+  updateStockBrand: (id: string, data: { name: string }) =>
+    request<StockBrandRow>(`/stock/brands/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  toggleStockBrand: (id: string) =>
+    request<StockBrandRow>(`/stock/brands/${id}/toggle`, { method: 'PATCH' }),
+
+  listStockModels: (brandId: string) => request<StockSetupRow[]>(`/stock/brands/${brandId}/models`),
+  createStockModel: (data: { brand_id: string; name: string }) =>
+    request<StockSetupRow>('/stock/models', { method: 'POST', body: JSON.stringify(data) }),
+  updateStockModel: (id: string, data: { brand_id: string; name: string }) =>
+    request<StockSetupRow>(`/stock/models/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  toggleStockModel: (id: string) =>
+    request<StockSetupRow>(`/stock/models/${id}/toggle`, { method: 'PATCH' }),
+
+  listStockUsages: () => request<StockSetupRow[]>('/stock/usages'),
+  createStockUsage: (data: { code: string; name: string }) =>
+    request<StockSetupRow>('/stock/usages', { method: 'POST', body: JSON.stringify(data) }),
+  updateStockUsage: (id: string, data: { code: string; name: string }) =>
+    request<StockSetupRow>(`/stock/usages/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  toggleStockUsage: (id: string) =>
+    request<StockSetupRow>(`/stock/usages/${id}/toggle`, { method: 'PATCH' }),
 
   listStockLevels: (warehouseId?: string) =>
     request<StockLevelRow[]>(`/stock/levels${qs({ warehouse_id: warehouseId })}`),

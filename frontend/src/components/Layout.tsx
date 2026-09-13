@@ -143,6 +143,10 @@ export default function Layout() {
     { key: 'currency-rates', path: '/currency-rates', label: 'Currency Rate Table', visible: can('finance_accounting') },
     { key: 'document-control', path: '/document-control', label: 'Document Control', visible: can('core_administration') },
     { key: 'warehouses', path: '/warehouses', label: 'Warehouses', visible: can('stock_master') },
+    { key: 'stock-categories', path: '/stock-categories', label: 'Stock Categories', visible: can('stock_master') },
+    { key: 'stock-groups', path: '/stock-groups', label: 'Stock Groups', visible: can('stock_master') },
+    { key: 'stock-brands-models', path: '/stock-brands-models', label: 'Brands / Models', visible: can('stock_master') },
+    { key: 'stock-usages', path: '/stock-usages', label: 'Stock Usages', visible: can('stock_master') },
     { key: 'approval-authorities', path: '/approval-authorities', label: 'Approval Authority', visible: can('core_administration') },
     { key: 'event-logs', path: '/event-logs', label: 'Event Logs', visible: can('event_logs') },
   ]
