@@ -34,6 +34,11 @@ export default function StockItemDetailPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
+  /* picture upload (images only, max 10) */
+  const picInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingPic, setUploadingPic] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
   /* edit form state — original fields */
   const [editCode, setEditCode] = useState('')
   const [editName, setEditName] = useState('')
@@ -141,6 +146,10 @@ export default function StockItemDetailPage() {
     } catch (err) { setError(err instanceof Error ? err.message : 'Failed') }
   }
 
+  function isImage(att: StockItemAttachmentRow) {
+    return att.content_type?.startsWith('image/')
+  }
+
   async function handleFileUpload(e: ChangeEvent<HTMLInputElement>) {
     if (!e.target.files?.length || !id) return
     setUploading(true); setError(null)
@@ -153,6 +162,26 @@ export default function StockItemDetailPage() {
     finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handlePictureUpload(e: ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files?.length || !id) return
+    const pictures = item?.attachments?.filter(isImage) || []
+    const remaining = 10 - pictures.length
+    const files = Array.from(e.target.files).slice(0, remaining)
+    if (!files.length) { setError('Maximum 10 pictures reached'); return }
+
+    setUploadingPic(true); setError(null)
+    try {
+      for (const file of files) {
+        await api.uploadStockItemAttachment(id, file)
+      }
+      refresh()
+    } catch (err) { setError(err instanceof Error ? err.message : 'Upload failed') }
+    finally {
+      setUploadingPic(false)
+      if (picInputRef.current) picInputRef.current.value = ''
     }
   }
 
@@ -319,68 +348,207 @@ export default function StockItemDetailPage() {
         </div>
       )}
 
-      {/* ── Attachments ──────────────────────────────────────────── */}
-      <div style={{ border: '1px solid var(--border)', padding: 16, borderRadius: 8, marginBottom: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <h3 style={{ margin: 0 }}>Attachments</h3>
-          <div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              onChange={handleFileUpload}
-              style={{ display: 'none' }}
-            />
-            <button onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-              {uploading ? 'Uploading...' : '📎 Upload File'}
-            </button>
-          </div>
-        </div>
-        {item.attachments && item.attachments.length > 0 ? (
-          <table>
-            <thead>
-              <tr>
-                <th>Filename</th>
-                <th>Type</th>
-                <th style={{ textAlign: 'right' }}>Size</th>
-                <th>Uploaded</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {item.attachments.map((att) => (
-                <tr key={att.id}>
-                  <td>
-                    <a
-                      href={`/api/stock/items/${item.id}/attachments/${att.id}/download`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {att.filename}
-                    </a>
-                  </td>
-                  <td>{att.content_type || '—'}</td>
-                  <td style={{ textAlign: 'right' }}>
-                    {att.file_size ? `${(att.file_size / 1024).toFixed(1)} KB` : '—'}
-                  </td>
-                  <td>{new Date(att.created_at).toLocaleDateString()}</td>
-                  <td>
+      {/* ── Pictures (images only, max 10) ─────────────────────── */}
+      {(() => {
+        const pictures = item.attachments?.filter(isImage) || []
+        const picCount = pictures.length
+        return (
+          <div style={{ border: '1px solid var(--border)', padding: 16, borderRadius: 8, marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ margin: 0 }}>Pictures ({picCount}/10)</h3>
+              <div>
+                <input
+                  ref={picInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={handlePictureUpload}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  onClick={() => picInputRef.current?.click()}
+                  disabled={uploadingPic || picCount >= 10}
+                >
+                  {uploadingPic ? 'Uploading...' : '🖼️ Add Picture'}
+                </button>
+              </div>
+            </div>
+            {picCount > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 }}>
+                {pictures.map((att) => (
+                  <div
+                    key={att.id}
+                    style={{
+                      position: 'relative',
+                      border: '1px solid var(--border)',
+                      borderRadius: 6,
+                      overflow: 'hidden',
+                      aspectRatio: '1',
+                      cursor: 'pointer',
+                      background: 'var(--surface)',
+                    }}
+                    onClick={() => setPreviewUrl(`/api/stock/items/${item.id}/attachments/${att.id}/download`)}
+                  >
+                    <img
+                      src={`/api/stock/items/${item.id}/attachments/${att.id}/download`}
+                      alt={att.filename}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    />
                     <button
                       className="secondary"
-                      style={{ color: 'red', fontSize: '0.85em' }}
-                      onClick={() => deleteAttachment(att)}
+                      style={{
+                        position: 'absolute',
+                        top: 4,
+                        right: 4,
+                        padding: '2px 6px',
+                        fontSize: '0.75em',
+                        background: 'rgba(0,0,0,0.6)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                      }}
+                      onClick={(e) => { e.stopPropagation(); deleteAttachment(att) }}
+                      title="Delete picture"
                     >
-                      Delete
+                      ✕
                     </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p style={{ color: 'var(--muted)', margin: 0 }}>No attachments yet.</p>
-        )}
-      </div>
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        padding: '4px 6px',
+                        background: 'rgba(0,0,0,0.55)',
+                        color: '#fff',
+                        fontSize: '0.7em',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {att.filename}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ color: 'var(--muted)', margin: 0 }}>No pictures yet. Upload up to 10 images.</p>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* ── Preview Modal ───────────────────────────────────────── */}
+      {previewUrl && (
+        <div
+          onClick={() => setPreviewUrl(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            background: 'rgba(0,0,0,0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          <img
+            src={previewUrl}
+            alt="Preview"
+            style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 8, objectFit: 'contain' }}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            style={{
+              position: 'absolute',
+              top: 20,
+              right: 20,
+              background: 'rgba(255,255,255,0.2)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '50%',
+              width: 36,
+              height: 36,
+              fontSize: '1.2em',
+              cursor: 'pointer',
+            }}
+            onClick={() => setPreviewUrl(null)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* ── Attachments (non-image files) ───────────────────────── */}
+      {(() => {
+        const nonImageAtts = item.attachments?.filter((a) => !isImage(a)) || []
+        return (
+          <div style={{ border: '1px solid var(--border)', padding: 16, borderRadius: 8, marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ margin: 0 }}>Attachments</h3>
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleFileUpload}
+                  style={{ display: 'none' }}
+                />
+                <button onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                  {uploading ? 'Uploading...' : '📎 Upload File'}
+                </button>
+              </div>
+            </div>
+            {nonImageAtts.length > 0 ? (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Filename</th>
+                    <th>Type</th>
+                    <th style={{ textAlign: 'right' }}>Size</th>
+                    <th>Uploaded</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {nonImageAtts.map((att) => (
+                    <tr key={att.id}>
+                      <td>
+                        <a
+                          href={`/api/stock/items/${item.id}/attachments/${att.id}/download`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {att.filename}
+                        </a>
+                      </td>
+                      <td>{att.content_type || '—'}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        {att.file_size ? `${(att.file_size / 1024).toFixed(1)} KB` : '—'}
+                      </td>
+                      <td>{new Date(att.created_at).toLocaleDateString()}</td>
+                      <td>
+                        <button
+                          className="secondary"
+                          style={{ color: 'red', fontSize: '0.85em' }}
+                          onClick={() => deleteAttachment(att)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p style={{ color: 'var(--muted)', margin: 0 }}>No attachments yet.</p>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── Summary Tiles ────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
