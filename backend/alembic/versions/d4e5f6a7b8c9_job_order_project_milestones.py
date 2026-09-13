@@ -5,8 +5,8 @@ Revises: c3d4e5f6a7b8
 Create Date: 2026-09-12
 
 Adds:
-- job_order_type enum (support, project)
-- job_order_type column on job_orders (default 'support')
+- job_order_type enum (SUPPORT, PROJECT)
+- job_order_type column on job_orders (default 'SUPPORT')
 - milestone_type enum
 - milestone_status enum
 - project_milestones table
@@ -22,12 +22,19 @@ down_revision = "c3d4e5f6a7b8"
 branch_labels = None
 depends_on = None
 
-JOB_ORDER_TYPES = ["support", "project"]
+# These must be the Python enum MEMBER NAMES (uppercase), not their
+# values. The models declare these columns as `Enum(JobOrderType,
+# name="job_order_type")` etc. (see app/models/job_orders.py), and
+# SQLAlchemy's default for a native enum is to persist the member NAME
+# -- so it writes "SUPPORT", not "support". Creating the Postgres type
+# with lowercase labels makes every insert fail on a fresh database
+# with `invalid input value for enum job_order_type: "SUPPORT"`.
+JOB_ORDER_TYPES = ["SUPPORT", "PROJECT"]
 MILESTONE_TYPES = [
-    "installation", "training", "repeat_training",
-    "handover", "completion_signoff",
+    "INSTALLATION", "TRAINING", "REPEAT_TRAINING",
+    "HANDOVER", "COMPLETION_SIGNOFF",
 ]
-MILESTONE_STATUSES = ["pending", "in_progress", "completed", "skipped"]
+MILESTONE_STATUSES = ["PENDING", "IN_PROGRESS", "COMPLETED", "SKIPPED"]
 
 
 def upgrade() -> None:
@@ -35,7 +42,7 @@ def upgrade() -> None:
     op.execute("""
         DO $$ BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'job_order_type') THEN
-                CREATE TYPE job_order_type AS ENUM ('support', 'project');
+                CREATE TYPE job_order_type AS ENUM ('SUPPORT', 'PROJECT');
             END IF;
         END $$;
     """)
@@ -43,8 +50,8 @@ def upgrade() -> None:
         DO $$ BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'milestone_type') THEN
                 CREATE TYPE milestone_type AS ENUM (
-                    'installation', 'training', 'repeat_training',
-                    'handover', 'completion_signoff'
+                    'INSTALLATION', 'TRAINING', 'REPEAT_TRAINING',
+                    'HANDOVER', 'COMPLETION_SIGNOFF'
                 );
             END IF;
         END $$;
@@ -53,7 +60,7 @@ def upgrade() -> None:
         DO $$ BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'milestone_status') THEN
                 CREATE TYPE milestone_status AS ENUM (
-                    'pending', 'in_progress', 'completed', 'skipped'
+                    'PENDING', 'IN_PROGRESS', 'COMPLETED', 'SKIPPED'
                 );
             END IF;
         END $$;
@@ -66,7 +73,7 @@ def upgrade() -> None:
     # ── Add job_order_type column to job_orders ───────────────────
     op.add_column(
         "job_orders",
-        sa.Column("job_order_type", jot, nullable=False, server_default="support"),
+        sa.Column("job_order_type", jot, nullable=False, server_default="SUPPORT"),
     )
 
     # ── project_milestones ────────────────────────────────────────
@@ -88,7 +95,7 @@ def upgrade() -> None:
             "assigned_user_id", UUID(as_uuid=True),
             sa.ForeignKey("users.id"), nullable=True,
         ),
-        sa.Column("status", ms, nullable=False, server_default="pending"),
+        sa.Column("status", ms, nullable=False, server_default="PENDING"),
         sa.Column("notes", sa.Text, nullable=True),
         sa.Column(
             "created_at", sa.DateTime(timezone=True),

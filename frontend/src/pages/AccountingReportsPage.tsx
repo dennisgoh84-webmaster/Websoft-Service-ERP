@@ -31,6 +31,7 @@ type ReportType =
   | 'ap-aging'
   | 'bank-accounts'
   | 'trial-balance'
+  | 'account-ledger'
   | 'chart-of-accounts'
   | 'tax-types'
   | 'gst-return'

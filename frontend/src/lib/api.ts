@@ -1391,6 +1391,7 @@ export type DocumentEntityType =
   | 'service_record'
   | 'contract'
   | 'incident'
+  | 'commission_payout'
 
 export interface DocumentAttachment {
   id: string

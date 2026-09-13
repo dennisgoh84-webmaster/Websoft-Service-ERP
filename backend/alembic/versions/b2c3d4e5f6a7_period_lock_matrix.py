@@ -7,6 +7,7 @@ Create Date: 2026-09-12 16:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import UUID
 
 
@@ -36,24 +37,34 @@ VALID_COMBOS = [
 
 def upgrade() -> None:
     # Create enums first
-    period_doc_type = sa.Enum(
-        "SALES_INVOICE", "RECEIPT_VOUCHER", "PAYMENT_VOUCHER",
-        "PURCHASE_BILL", "JOURNAL_VOUCHER",
-        name="period_doc_type",
-    )
-    period_operation = sa.Enum(
-        "UPDATE", "REVERSE", "BANK", "UNBANK", "GL", "UNGL",
-        name="period_operation",
-    )
-    period_doc_type.create(op.get_bind(), checkfirst=True)
-    period_operation.create(op.get_bind(), checkfirst=True)
+    # Use raw SQL to create enums so SQLAlchemy's create_table
+    # doesn't try to re-create them via before_create events.
+    op.execute("""
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'period_doc_type') THEN
+                CREATE TYPE period_doc_type AS ENUM (
+                    'SALES_INVOICE', 'RECEIPT_VOUCHER', 'PAYMENT_VOUCHER',
+                    'PURCHASE_BILL', 'JOURNAL_VOUCHER'
+                );
+            END IF;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'period_operation') THEN
+                CREATE TYPE period_operation AS ENUM (
+                    'UPDATE', 'REVERSE', 'BANK', 'UNBANK', 'GL', 'UNGL'
+                );
+            END IF;
+        END $$;
+    """)
 
     op.create_table(
         "period_locks",
         sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("period_id", UUID(as_uuid=True), sa.ForeignKey("accounting_periods.id"), nullable=False),
-        sa.Column("doc_type", period_doc_type, nullable=False),
-        sa.Column("operation", period_operation, nullable=False),
+        sa.Column("doc_type", postgresql.ENUM("SALES_INVOICE", "RECEIPT_VOUCHER", "PAYMENT_VOUCHER", "PURCHASE_BILL", "JOURNAL_VOUCHER", name="period_doc_type", create_type=False), nullable=False),
+        sa.Column("operation", postgresql.ENUM("UPDATE", "REVERSE", "BANK", "UNBANK", "GL", "UNGL", name="period_operation", create_type=False), nullable=False),
         sa.Column("is_locked", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("locked_by_user_id", UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=True),
         sa.Column("locked_at", sa.DateTime(timezone=True), nullable=True),

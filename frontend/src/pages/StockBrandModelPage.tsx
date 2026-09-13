@@ -89,9 +89,12 @@ export default function StockBrandModelPage() {
   }
 
   async function saveEditModel() {
-    if (!editModelId) return; setError(null)
+    if (!editModelId || !selectedBrandId) return; setError(null)
     try {
-      await api.updateStockModel(editModelId, { name: editModelName })
+      // brand_id is required by StockModelCreate on the backend -- a
+      // rename that omits it is rejected with a 422, so send the brand
+      // the model already belongs to.
+      await api.updateStockModel(editModelId, { brand_id: selectedBrandId, name: editModelName })
       setEditModelId(null)
       if (selectedBrandId) refreshModels(selectedBrandId)
     } catch (err) { setError(err instanceof Error ? err.message : 'Failed') }

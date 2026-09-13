@@ -27,6 +27,7 @@ const DOC_TYPE_LABELS: Record<DocumentEntityType, string> = {
   service_record: 'Service Record',
   contract: 'Contract',
   incident: 'Incident',
+  commission_payout: 'Commission Payout',
 }
 
 const MODE_LABELS: Record<ApprovalMode, string> = {

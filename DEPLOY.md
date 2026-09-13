@@ -12,6 +12,33 @@ guide covers running everything on one server.
 
 ---
 
+## 0. Before you deploy
+
+Run these from a clean checkout of the commit you intend to ship. Both
+failures below are invisible in a running dev session and only surface
+on the server.
+
+```bash
+# 1. The frontend image runs this -- if it fails, the build fails.
+cd frontend && npm run build && cd ..
+
+# 2. Migrations must apply to an EMPTY database, not just your dev one.
+cd backend
+createdb migration_check -O websoft_app
+database_url="postgresql+psycopg://websoft_app:<pw>@localhost:5432/migration_check" \
+  uv run alembic upgrade head
+database_url="postgresql+psycopg://websoft_app:<pw>@localhost:5432/migration_check" \
+  uv run python scripts/seed_demo.py
+dropdb migration_check
+cd ..
+```
+
+See [DEV_SETUP.md](DEV_SETUP.md#verifying-before-you-push-or-deploy) for
+why `npx tsc --noEmit` does **not** substitute for step 1, and why a
+fresh database catches enum bugs an incremental migration never will.
+
+---
+
 ## 1. Get a VPS
 
 Any small Linux VPS with Docker works — DigitalOcean, Linode, AWS

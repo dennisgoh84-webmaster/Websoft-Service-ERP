@@ -177,6 +177,55 @@ docs/open-business-decisions.md #23).
 
 ---
 
+## Verifying before you push or deploy
+
+Two checks catch things a normal dev session does not. Both are worth
+running before a deploy.
+
+### 1. The frontend build -- `npm run build`, never `tsc --noEmit`
+
+```bash
+cd frontend && npm run build
+```
+
+⚠️ **`npx tsc --noEmit` proves nothing in this repo.** The root
+`tsconfig.json` is a solution file: `"files": []` plus references to
+`tsconfig.app.json` / `tsconfig.node.json`. Invoking `tsc` against it
+directly type-checks **zero files** and exits 0 no matter how broken
+the code is. `npm run build` runs `tsc -b`, which follows the project
+references and checks `src/` for real -- and it is what the frontend
+Docker image runs, so a failure here is a failed deploy.
+
+### 2. Migrations from an *empty* database
+
+`alembic upgrade head` against your existing dev database only replays
+the migrations added since you last ran it. A fresh server applies
+**every** migration to an empty database, which is a different code
+path -- and the only one that catches a migration that disagrees with
+the models.
+
+```bash
+createdb migration_check -O websoft_app
+database_url="postgresql+psycopg://websoft_app:websoft_dev_local@localhost:5432/migration_check" \
+  uv run alembic upgrade head
+database_url="postgresql+psycopg://websoft_app:websoft_dev_local@localhost:5432/migration_check" \
+  uv run python scripts/seed_demo.py
+dropdb migration_check
+```
+
+**Native enums are the usual culprit.** A column declared as
+`Enum(SomePyEnum, name="some_type")` persists the member **NAME**
+(`SUPPORT`), not its value (`support`) -- SQLAlchemy's default for
+native enums. A migration that does `CREATE TYPE some_type AS ENUM
+('support', ...)` therefore builds a type the application can never
+write to, and every insert fails on a fresh database with
+`invalid input value for enum some_type: "SUPPORT"`. Existing databases
+are unaffected (the type already has the right labels), so this only
+ever shows up on a brand-new deploy. Create enum types with the
+uppercase member names unless the model passes `values_callable`.
+
+---
+
 ## Demo video
 
 `frontend/record_demo.cjs` uses Playwright to script and record a
