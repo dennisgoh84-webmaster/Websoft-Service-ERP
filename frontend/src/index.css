@@ -114,17 +114,6 @@ a {
   overflow: hidden;
 }
 
-/* Company Dashboard and My Ops Dashboard hide the sidebar by default so
-   their content can use the full screen width (2026-09-11: "hide the menu
-   bar, so we can display more wider on the screen"). Layout.tsx toggles
-   this class per-route; the "Menu" button in main-topbar lets you peek the
-   sidebar back open without leaving the page. */
-.app-shell.sidebar-hidden .sidebar {
-  display: none;
-}
-.app-shell.sidebar-hidden .main {
-  max-width: none;
-}
 
 /* Sidebar is a fixed-height column with three regions: brand-block
    (top, fixed), .sidebar-nav (middle, scrolls independently once the

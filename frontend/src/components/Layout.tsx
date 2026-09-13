@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useState } from 'react'
+import { NavLink, Outlet } from 'react-router-dom'
 import CompanySwitcher from './CompanySwitcher'
 import NavSection, { type NavItem } from './NavSection'
 import PromoVideoPanel from './PromoVideoPanel'
@@ -43,27 +43,12 @@ function loadCollapsed(): Record<string, boolean> {
     reveals or hides anything. */
 export default function Layout() {
   const { user, logout, activeCompany, moduleAccess } = useAuth()
-  const location = useLocation()
   const can = (moduleKey: string) => moduleAccess[moduleKey] === true
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed)
-  const [sidebarPeek, setSidebarPeek] = useState(false)
-
-  // "After login successfully, all modules, hide menu bar" (2026-09-12)
-  // -- extends what started 2026-09-11 as a special case for just the
-  // two dashboards ("for the first 2 dashboard, when we go in ... hide
-  // the menu bar, so we can display more wider on the screen") to every
-  // page: the sidebar is hidden by default everywhere now, with the
-  // "☰ Menu" button in the topbar below letting you peek it back open
-  // without leaving the page.
-  const sidebarHidden = !sidebarPeek
-
-  // Re-hides the menu every time you land on a new page -- "peek" is a
-  // per-visit override (so you can still reach the rest of the nav from
-  // wherever you are) rather than a remembered preference, so leaving
-  // and coming back always re-hides it.
-  useEffect(() => {
-    setSidebarPeek(false)
-  }, [location.pathname])
+  // "Menu bar should always be able to see this fixed: OPERATIONS /
+  // STOCK INVENTORY / ACCOUNTS / MAINTENANCE" (2026-09-13) -- sidebar is
+  // always visible so the 4 section headers are permanently on screen.
+  // Supersedes the 2026-09-12 auto-hide behaviour.
 
   function toggleSection(key: string) {
     setCollapsed((prev) => {
@@ -163,7 +148,7 @@ export default function Layout() {
   ]
 
   return (
-    <div className={`app-shell${sidebarHidden ? ' sidebar-hidden' : ''}`}>
+    <div className="app-shell">
       <nav className="sidebar">
         {/* Company logo sits above the product name -- it does not
             replace it. Set it in Company Setup. */}
@@ -235,15 +220,7 @@ export default function Layout() {
       </nav>
       <main className="main">
         <div className="main-topbar">
-          <div className="main-topbar-left">
-            <button
-              type="button"
-              className="secondary sidebar-peek-toggle"
-              onClick={() => setSidebarPeek((v) => !v)}
-            >
-              {sidebarPeek ? '✕ Hide menu' : '☰ Menu'}
-            </button>
-          </div>
+          <div className="main-topbar-left"></div>
           <div className="main-topbar-right">
             <CompanySwitcher />
             <ThemeToggle />
