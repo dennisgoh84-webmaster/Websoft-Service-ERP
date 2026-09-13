@@ -1476,6 +1476,103 @@ export interface ApprovalRequest {
 }
 
 
+// ---- Stock / Inventory types ----
+export interface Warehouse {
+  id: string; company_id: string; code: string; name: string
+  address: string | null; is_active: boolean
+  created_at: string; updated_at: string
+}
+export interface StockItemRow {
+  id: string; company_id: string; code: string; name: string
+  description: string | null; category: string | null
+  unit_of_measure: string; product_id: string | null
+  reorder_level: number; is_active: boolean
+  created_at: string; updated_at: string
+}
+export interface StockLevelRow {
+  id: string; stock_item_id: string; warehouse_id: string
+  quantity: number; avg_cost: number
+  item_code: string; item_name: string
+  warehouse_code: string; warehouse_name: string
+}
+export interface StockMovementRow {
+  id: string; stock_item_id: string; warehouse_id: string
+  movement_type: string; quantity: number
+  unit_cost: number; total_cost: number
+  reference_type: string | null; reference_id: string | null
+  notes: string | null; created_at: string
+}
+export interface GRNLineRow {
+  id: string; stock_item_id: string; quantity: number
+  unit_cost: number; total_cost: number; notes: string | null
+}
+export interface GRNRow {
+  id: string; grn_number: string; warehouse_id: string
+  supplier_id: string | null; purchase_order_id: string | null
+  receive_date: string; status: string
+  notes: string | null; lines: GRNLineRow[]
+  created_at: string
+}
+export interface GRNCreatePayload {
+  warehouse_id: string; supplier_id?: string; purchase_order_id?: string
+  receive_date?: string; notes?: string
+  lines: { stock_item_id: string; quantity: number; unit_cost: number }[]
+}
+export interface GTNLineRow {
+  id: string; stock_item_id: string; quantity: number; notes: string | null
+}
+export interface GTNRow {
+  id: string; gtn_number: string
+  from_warehouse_id: string; to_warehouse_id: string
+  transfer_date: string; status: string
+  notes: string | null; lines: GTNLineRow[]
+  created_at: string
+}
+export interface GTNCreatePayload {
+  from_warehouse_id: string; to_warehouse_id: string
+  transfer_date?: string; notes?: string
+  lines: { stock_item_id: string; quantity: number; notes?: string }[]
+}
+export interface GRTNLineRow {
+  id: string; stock_item_id: string; quantity: number
+  unit_cost: number; total_cost: number; notes: string | null
+}
+export interface GRTNRow {
+  id: string; grtn_number: string; warehouse_id: string
+  supplier_id: string | null; return_date: string
+  reason: string | null; status: string
+  notes: string | null; lines: GRTNLineRow[]
+  created_at: string
+}
+export interface GRTNCreatePayload {
+  warehouse_id: string; supplier_id?: string
+  return_date?: string; reason?: string; notes?: string
+  lines: { stock_item_id: string; quantity: number; unit_cost: number }[]
+}
+export interface AdjustmentLineRow {
+  id: string; stock_item_id: string; quantity_change: number; notes: string | null
+}
+export interface AdjustmentRow {
+  id: string; adj_number: string; warehouse_id: string
+  adjustment_date: string; reason: string | null
+  status: string; approved_by: string | null
+  approved_at: string | null; lines: AdjustmentLineRow[]
+  created_at: string
+}
+export interface AdjustmentCreatePayload {
+  warehouse_id: string; adjustment_date?: string; reason?: string
+  lines: { stock_item_id: string; quantity_change: number; notes?: string }[]
+}
+export interface StockValuationReport {
+  items: { item_code: string; item_name: string; warehouse_code: string; warehouse_name: string; quantity: number; avg_cost: number; total_value: number }[]
+  total_value: number
+}
+export interface ReorderItem {
+  item_code: string; item_name: string; unit_of_measure: string
+  reorder_level: number; current_stock: number; shortfall: number
+}
+
+
 export const api = {
   me: () => request<CurrentUser>('/auth/me'),
   listUsers: () => request<CurrentUser[]>('/users'),
@@ -2661,4 +2758,48 @@ export const api = {
   listPendingApprovals: () => request<ApprovalRequest[]>('/approvals/pending'),
   listApprovalsForEntity: (entityType: DocumentEntityType, entityId: string) =>
     request<ApprovalRequest[]>(`/approvals/entity/${entityType}/${entityId}`),
+
+  // ---- Stock / Inventory ----
+  listWarehouses: () => request<Warehouse[]>('/stock/warehouses'),
+  createWarehouse: (data: { code: string; name: string; address?: string }) =>
+    request<Warehouse>('/stock/warehouses', { method: 'POST', body: JSON.stringify(data) }),
+  updateWarehouse: (id: string, data: Partial<{ code: string; name: string; address: string; is_active: boolean }>) =>
+    request<Warehouse>(`/stock/warehouses/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  listStockItems: () => request<StockItemRow[]>('/stock/items'),
+  createStockItem: (data: { code: string; name: string; description?: string; category?: string; unit_of_measure?: string; reorder_level?: number }) =>
+    request<StockItemRow>('/stock/items', { method: 'POST', body: JSON.stringify(data) }),
+  updateStockItem: (id: string, data: Partial<{ code: string; name: string; description: string; category: string; unit_of_measure: string; reorder_level: number; is_active: boolean }>) =>
+    request<StockItemRow>(`/stock/items/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  listStockLevels: (warehouseId?: string) =>
+    request<StockLevelRow[]>(`/stock/levels${qs({ warehouse_id: warehouseId })}`),
+  listStockMovements: (filters?: { stock_item_id?: string; warehouse_id?: string; limit?: number }) =>
+    request<StockMovementRow[]>(`/stock/movements${qs(filters ?? {})}`),
+
+  listGRNs: () => request<GRNRow[]>('/stock/grn'),
+  createGRN: (data: GRNCreatePayload) =>
+    request<GRNRow>('/stock/grn', { method: 'POST', body: JSON.stringify(data) }),
+  confirmGRN: (id: string) => request<GRNRow>(`/stock/grn/${id}/confirm`, { method: 'POST' }),
+
+  listGTNs: () => request<GTNRow[]>('/stock/gtn'),
+  createGTN: (data: GTNCreatePayload) =>
+    request<GTNRow>('/stock/gtn', { method: 'POST', body: JSON.stringify(data) }),
+  confirmGTN: (id: string) => request<GTNRow>(`/stock/gtn/${id}/confirm`, { method: 'POST' }),
+
+  listGRTNs: () => request<GRTNRow[]>('/stock/grtn'),
+  createGRTN: (data: GRTNCreatePayload) =>
+    request<GRTNRow>('/stock/grtn', { method: 'POST', body: JSON.stringify(data) }),
+  confirmGRTN: (id: string) => request<GRTNRow>(`/stock/grtn/${id}/confirm`, { method: 'POST' }),
+
+  listAdjustments: () => request<AdjustmentRow[]>('/stock/adjustments'),
+  createAdjustment: (data: AdjustmentCreatePayload) =>
+    request<AdjustmentRow>('/stock/adjustments', { method: 'POST', body: JSON.stringify(data) }),
+  submitAdjustment: (id: string) => request<AdjustmentRow>(`/stock/adjustments/${id}/submit`, { method: 'POST' }),
+  approveAdjustment: (id: string) => request<AdjustmentRow>(`/stock/adjustments/${id}/approve`, { method: 'POST' }),
+  rejectAdjustment: (id: string) => request<AdjustmentRow>(`/stock/adjustments/${id}/reject`, { method: 'POST' }),
+
+  stockValuationReport: (warehouseId?: string) =>
+    request<StockValuationReport>(`/stock/reports/valuation${qs({ warehouse_id: warehouseId })}`),
+  reorderReport: () => request<ReorderItem[]>('/stock/reports/reorder'),
 }

@@ -131,6 +131,15 @@ export default function Layout() {
     { key: 'commission-payouts', path: '/commission-payouts', label: 'Commission Payouts', visible: can('accounting_reports') },
   ]
 
+  const stockItems: NavItem[] = [
+    { key: 'stock-master', path: '/stock-master', label: 'Stock Master', visible: can('stock_master') },
+    { key: 'grn', path: '/grn', label: 'Goods Receive Note', visible: can('goods_receive_note') },
+    { key: 'gtn', path: '/gtn', label: 'Goods Transfer Note', visible: can('goods_transfer_note') },
+    { key: 'grtn', path: '/grtn', label: 'Goods Return Note', visible: can('goods_return_note') },
+    { key: 'stock-adjustment', path: '/stock-adjustment', label: 'Stock Adjustment', visible: can('stock_adjustment') },
+    { key: 'stock-reports', path: '/stock-reports', label: 'Stock Reports', visible: can('stock_operation_reports') },
+  ]
+
   const maintenanceItems: NavItem[] = [
     { key: 'company-setup', path: '/company-setup', label: 'Company Setup', visible: can('core_administration') },
     {
@@ -194,6 +203,14 @@ export default function Layout() {
             items={accountsItems}
             collapsed={!!collapsed.accounts}
             onToggle={() => toggleSection('accounts')}
+          />
+
+          <NavSection
+            sectionKey="stock"
+            title="Stock"
+            items={stockItems}
+            collapsed={!!collapsed.stock}
+            onToggle={() => toggleSection('stock')}
           />
 
           <NavSection

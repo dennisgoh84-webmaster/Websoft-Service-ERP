@@ -56,6 +56,12 @@ import StaffDetailPage from './pages/StaffDetailPage'
 import StaffMasterPage from './pages/StaffMasterPage'
 import SupportMonitoringPage from './pages/SupportMonitoringPage'
 import TaxTypesPage from './pages/TaxTypesPage'
+import GoodsReceiveNotePage from './pages/GoodsReceiveNotePage'
+import GoodsReturnNotePage from './pages/GoodsReturnNotePage'
+import GoodsTransferNotePage from './pages/GoodsTransferNotePage'
+import StockAdjustmentPage from './pages/StockAdjustmentPage'
+import StockMasterPage from './pages/StockMasterPage'
+import StockReportsPage from './pages/StockReportsPage'
 import YearEndClosingPage from './pages/YearEndClosingPage'
 
 function RequireAuth({ children }: { children: ReactElement }) {
@@ -130,6 +136,12 @@ function AppRoutes() {
         <Route path="/approval-authorities" element={<ApprovalAuthoritiesPage />} />
         <Route path="/approval-center" element={<ApprovalCenterPage />} />
         <Route path="/event-logs" element={<EventLogsPage />} />
+        <Route path="/stock-master" element={<StockMasterPage />} />
+        <Route path="/grn" element={<GoodsReceiveNotePage />} />
+        <Route path="/gtn" element={<GoodsTransferNotePage />} />
+        <Route path="/grtn" element={<GoodsReturnNotePage />} />
+        <Route path="/stock-adjustment" element={<StockAdjustmentPage />} />
+        <Route path="/stock-reports" element={<StockReportsPage />} />
       </Route>
     </Routes>
   )

@@ -4,3 +4,4 @@ demo/
 
 # docker-compose deploy secrets (see .env.example) -- never commit real values.
 .env
+frontend/test-results/

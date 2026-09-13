@@ -51,6 +51,7 @@ from app.routers import (
     service_records,
     setup_lists,
     software_tasks,
+    stock,
     tax_codes,
     users,
 )
@@ -122,6 +123,7 @@ app.include_router(mobile.router)
 app.include_router(documents.router)
 app.include_router(approvals.router)
 app.include_router(commissions.router)
+app.include_router(stock.router)
 
 
 @app.get("/api/health")

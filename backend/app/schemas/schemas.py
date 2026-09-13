@@ -2302,3 +2302,215 @@ class ApprovalSubmitRequest(BaseModel):
 class ApprovalDecisionRequest(BaseModel):
     decision: ApprovalDecisionValue
     comment: str | None = Field(default=None, max_length=1000)
+
+
+# ── Stock / Inventory ────────────────────────────────────────────────
+
+class WarehouseCreate(BaseModel):
+    code: str = Field(max_length=20)
+    name: str = Field(max_length=200)
+    address: str | None = None
+
+class WarehouseOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    code: str
+    name: str
+    address: str | None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+class StockItemCreate(BaseModel):
+    code: str = Field(max_length=50)
+    name: str = Field(max_length=255)
+    description: str | None = None
+    category: str | None = Field(default=None, max_length=100)
+    unit_of_measure: str = Field(default="PCS", max_length=30)
+    product_id: uuid.UUID | None = None
+    reorder_level: int = 0
+
+class StockItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    code: str
+    name: str
+    description: str | None
+    category: str | None
+    unit_of_measure: str
+    product_id: uuid.UUID | None
+    reorder_level: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+class StockLevelOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    stock_item_id: uuid.UUID
+    warehouse_id: uuid.UUID
+    quantity: int
+    avg_cost: float
+    # Joined fields for display
+    item_code: str | None = None
+    item_name: str | None = None
+    warehouse_code: str | None = None
+    warehouse_name: str | None = None
+
+class StockMovementOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    stock_item_id: uuid.UUID
+    warehouse_id: uuid.UUID
+    movement_type: str
+    quantity: int
+    unit_cost: float
+    total_cost: float
+    reference_type: str | None
+    reference_id: uuid.UUID | None
+    notes: str | None
+    created_at: datetime
+
+class GRNLineCreate(BaseModel):
+    stock_item_id: uuid.UUID
+    quantity: int = Field(gt=0)
+    unit_cost: float = Field(ge=0)
+    notes: str | None = None
+
+class GRNCreate(BaseModel):
+    warehouse_id: uuid.UUID
+    supplier_id: uuid.UUID | None = None
+    purchase_order_id: uuid.UUID | None = None
+    receive_date: datetime | None = None
+    notes: str | None = None
+    lines: list[GRNLineCreate] = Field(min_length=1)
+
+class GRNLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    stock_item_id: uuid.UUID
+    quantity: int
+    unit_cost: float
+    total_cost: float
+    notes: str | None
+
+class GRNOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    grn_number: str
+    warehouse_id: uuid.UUID
+    supplier_id: uuid.UUID | None
+    purchase_order_id: uuid.UUID | None
+    receive_date: datetime
+    status: str
+    notes: str | None
+    created_by: uuid.UUID | None
+    created_at: datetime
+    lines: list[GRNLineOut] = []
+
+class GTNLineCreate(BaseModel):
+    stock_item_id: uuid.UUID
+    quantity: int = Field(gt=0)
+    notes: str | None = None
+
+class GTNCreate(BaseModel):
+    from_warehouse_id: uuid.UUID
+    to_warehouse_id: uuid.UUID
+    transfer_date: datetime | None = None
+    notes: str | None = None
+    lines: list[GTNLineCreate] = Field(min_length=1)
+
+class GTNLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    stock_item_id: uuid.UUID
+    quantity: int
+    notes: str | None
+
+class GTNOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    gtn_number: str
+    from_warehouse_id: uuid.UUID
+    to_warehouse_id: uuid.UUID
+    transfer_date: datetime
+    status: str
+    notes: str | None
+    created_by: uuid.UUID | None
+    created_at: datetime
+    lines: list[GTNLineOut] = []
+
+class GRTNLineCreate(BaseModel):
+    stock_item_id: uuid.UUID
+    quantity: int = Field(gt=0)
+    unit_cost: float = Field(ge=0, default=0)
+    notes: str | None = None
+
+class GRTNCreate(BaseModel):
+    warehouse_id: uuid.UUID
+    supplier_id: uuid.UUID | None = None
+    return_date: datetime | None = None
+    reason: str | None = None
+    notes: str | None = None
+    lines: list[GRTNLineCreate] = Field(min_length=1)
+
+class GRTNLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    stock_item_id: uuid.UUID
+    quantity: int
+    unit_cost: float
+    total_cost: float
+    notes: str | None
+
+class GRTNOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    grtn_number: str
+    warehouse_id: uuid.UUID
+    supplier_id: uuid.UUID | None
+    return_date: datetime
+    reason: str | None
+    status: str
+    notes: str | None
+    created_by: uuid.UUID | None
+    created_at: datetime
+    lines: list[GRTNLineOut] = []
+
+class AdjustmentLineCreate(BaseModel):
+    stock_item_id: uuid.UUID
+    quantity_change: int  # +ve or -ve
+    notes: str | None = None
+
+class AdjustmentCreate(BaseModel):
+    warehouse_id: uuid.UUID
+    adjustment_date: datetime | None = None
+    reason: str | None = None
+    lines: list[AdjustmentLineCreate] = Field(min_length=1)
+
+class AdjustmentLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    stock_item_id: uuid.UUID
+    quantity_change: int
+    notes: str | None
+
+class AdjustmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    company_id: uuid.UUID
+    adj_number: str
+    warehouse_id: uuid.UUID
+    adjustment_date: datetime
+    reason: str | None
+    status: str
+    approved_by: uuid.UUID | None
+    approved_at: datetime | None
+    created_by: uuid.UUID | None
+    created_at: datetime
+    lines: list[AdjustmentLineOut] = []
