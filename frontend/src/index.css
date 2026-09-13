@@ -114,6 +114,14 @@ a {
   overflow: hidden;
 }
 
+/* Sidebar hidden by default; "☰ Menu" button peeks it open per-page.
+   (2026-09-12: "After login successfully, all modules, hide menu bar") */
+.app-shell.sidebar-hidden .sidebar {
+  display: none;
+}
+.app-shell.sidebar-hidden .main {
+  max-width: none;
+}
 
 /* Sidebar is a fixed-height column with three regions: brand-block
    (top, fixed), .sidebar-nav (middle, scrolls independently once the
@@ -215,10 +223,17 @@ a {
   color: var(--accent);
   /* It's a <button> (collapsible section) but should read exactly like
      the plain heading it used to be. */
-  background: none;
+  background: var(--surface);
   border: none;
   cursor: pointer;
   font-family: inherit;
+  /* "Menu bar should always be able to see this fixed: OPERATIONS /
+     STOCK INVENTORY / ACCOUNTS / MAINTENANCE" (2026-09-13) -- sticky
+     within the scrolling .sidebar-nav so section titles never scroll
+     off-screen; you can always see which section you're in. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 .sidebar .nav-section-label:hover {
   background: var(--bg);
