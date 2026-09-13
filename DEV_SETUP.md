@@ -3,11 +3,11 @@
 This covers running the full Websoft Service ERP ecosystem on your own
 machine for development and testing. The system has **three parts**:
 
-| # | Part | Description | Default Port |
-|---|------|-------------|--------------|
-| 1 | **ERP (Client App)** | The main ERP system — desktop web + mobile web | Frontend `:5173`, Backend `:8000` |
-| 2 | **Mobile Web App** | Runs inside the ERP frontend at `/mobile` | Same as ERP (`:5173`) |
-| 3 | **Central Command** | Admin portal for managing all client ERP instances | Frontend `:5174`, Backend `:8001` |
+| # | Part | Repo | Default Port |
+|---|------|------|--------------|
+| 1 | **ERP (Client App)** — desktop web + mobile web | this repo | Frontend `:5173`, Backend `:8000` |
+| 2 | **Mobile Web App** — runs inside the ERP frontend at `/mobile` | this repo | Same as ERP (`:5173`) |
+| 3 | **Central Command** — admin portal for managing all client ERP instances | [websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command) | Frontend `:5174`, Backend `:8001` |
 
 For standing up a shared server so other staff can test it, see
 [DEPLOY.md](DEPLOY.md) instead.
@@ -99,51 +99,28 @@ server needed. Once Part 1 is running:
 ## Part 3: Central Command (Admin Portal)
 
 Central Command is a **completely separate application** with its own
-database, backend, and frontend. It manages all client ERP instances:
-licenses, concurrent login limits, advertisements, config pushes, and
-version control.
+repository, database, backend, and frontend. It manages all client ERP
+instances: licenses, concurrent login limits, advertisements, config
+pushes, and version control.
 
-### 3a. Database
-
-```bash
-createuser cc_app --pwprompt   # password: cc_dev_local (or your own — update central-command/backend/.env)
-createdb central_command -O cc_app
-```
-
-### 3b. Backend (FastAPI)
+**It lives in its own repository** —
+[dennisgoh84-webmaster/websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command).
+Clone it next to this one and follow the setup instructions in that
+repo's `README.md`:
 
 ```bash
-cd central-command/backend
-uv sync
-uv run python seed.py                # create default admin user + tables
-uv run uvicorn app.main:app --reload --port 8001
+git clone https://github.com/dennisgoh84-webmaster/websoft-central-command
 ```
 
-API docs: http://127.0.0.1:8001/docs
-
-Config is in `app/core/config.py` — defaults match the database setup
-above.
-
-### 3c. Frontend (React + TypeScript)
-
-```bash
-cd central-command/frontend
-npm install
-npm run dev -- --port 5174
-```
-
-Open http://127.0.0.1:5174 — the dev server proxies `/api` to the CC
-backend on port 8001 (see `vite.config.ts`).
-
-### Central Command login
-
-| Username | Password | Role |
-|---|---|---|
-| admin | Admin123 | super_admin |
+Central Command talks to this ERP by writing **directly into each
+client's PostgreSQL database**. The tables it writes to are a schema
+contract this repo must honour — see
+[docs/central-command-schema-contract.md](docs/central-command-schema-contract.md)
+before changing `module_controls` or `announcements`.
 
 ---
 
-## Quick Start — All 3 Parts at Once
+## Quick Start — This Repo
 
 Run each command in a separate terminal (or use `&` / tmux / screen):
 
@@ -153,18 +130,15 @@ cd backend && uv run uvicorn app.main:app --reload --port 8000
 
 # Terminal 2: ERP Frontend (includes Mobile at /mobile)
 cd frontend && npm run dev -- --port 5173
-
-# Terminal 3: Central Command Backend
-cd central-command/backend && uv run uvicorn app.main:app --reload --port 8001
-
-# Terminal 4: Central Command Frontend
-cd central-command/frontend && npm run dev -- --port 5174
 ```
 
 Then open:
 - **ERP Desktop:** http://127.0.0.1:5173
 - **Mobile Web App:** http://127.0.0.1:5173/mobile
-- **Central Command:** http://127.0.0.1:5174
+
+Central Command runs from its
+[own repository](https://github.com/dennisgoh84-webmaster/websoft-central-command)
+on ports 8001/5174 — see that repo's `README.md`.
 
 ---
 

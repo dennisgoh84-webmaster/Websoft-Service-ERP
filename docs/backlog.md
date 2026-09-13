@@ -61,9 +61,11 @@ shipped and when.
   provisioning a WhatsApp Business API account (Twilio/Meta); email OTP
   already works today.
   → [planned-work.md #7](planned-work.md#7-whatsapp-otp-as-a-second-login-factor-raised-2026-09-12-deferred)
-- [x] **Server Company Central Command** -- built 2026-09-12. Separate
-  app scaffolded in `central-command/` directory with its own FastAPI
-  backend (port 8001) + React frontend (port 5174) + Docker Compose.
+- [x] **Server Company Central Command** -- built 2026-09-12, moved to
+  its own repository 2026-09-13:
+  [websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command).
+  Separate app with its own FastAPI backend (port 8001) + React
+  frontend (port 5174) + Docker Compose.
   All 6 open questions settled. Features: client registry with DB
   connection testing + Alembic version check, advertisement creation +
   per-client targeting + push, video banner push, module license

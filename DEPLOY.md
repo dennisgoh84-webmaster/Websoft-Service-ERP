@@ -4,11 +4,11 @@ A single-VPS Docker Compose deploy for all three parts of the Websoft
 Service ERP ecosystem. Each part is independently deployable, but this
 guide covers running everything on one server.
 
-| # | Part | Container(s) | Exposed Port |
-|---|------|-------------|-------------|
-| 1 | **ERP (Client App)** — desktop + mobile web | `frontend` (nginx) → `backend` (FastAPI) → `db` (Postgres) | `:80` (HTTP_PORT) |
-| 2 | **Mobile Web App** | Built into ERP frontend at `/mobile` | Same as ERP |
-| 3 | **Central Command** | `cc-frontend` (nginx) → `cc-backend` (FastAPI) → `cc-db` (Postgres) | `:8080` (CC_HTTP_PORT) |
+| # | Part | Repo | Container(s) | Exposed Port |
+|---|------|------|-------------|-------------|
+| 1 | **ERP (Client App)** — desktop + mobile web | this repo | `frontend` (nginx) → `backend` (FastAPI) → `db` (Postgres) | `:80` (HTTP_PORT) |
+| 2 | **Mobile Web App** | this repo | Built into ERP frontend at `/mobile` | Same as ERP |
+| 3 | **Central Command** | [websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command) | `cc-frontend` (nginx) → `cc-backend` (FastAPI) → `cc-db` (Postgres) | `:8080` (CC_HTTP_PORT) |
 
 ---
 
@@ -102,43 +102,20 @@ separate deploy needed.
 
 ## Part 3: Central Command
 
-### 3b. Configure secrets
+Central Command is deployed from its **own repository** —
+[dennisgoh84-webmaster/websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command)
+— with its own Docker Compose stack (`cc-db`, `cc-backend`,
+`cc-frontend` on `CC_HTTP_PORT`, default `8080`).
 
 ```bash
-cp central-command/.env.example central-command/.env
+git clone https://github.com/dennisgoh84-webmaster/websoft-central-command
+cd websoft-central-command
 ```
 
-Edit `central-command/.env` and fill in:
-- `CC_POSTGRES_PASSWORD` — any strong password for the CC database.
-- `CC_JWT_SECRET_KEY` — generate with `openssl rand -hex 32`.
-- `CC_HTTP_PORT` — default `8080`. Change if that port is taken.
-
-### 4b. Bring it up
-
-```bash
-cd central-command
-docker compose up -d --build
-```
-
-This starts the CC database (Postgres on internal port 5432, mapped to
-host port 5433 to avoid conflicts), backend (port 8001), and frontend
-(nginx on `CC_HTTP_PORT`).
-
-```bash
-docker compose ps
-docker compose logs cc-backend   # confirm seed ran
-```
-
-Visit `http://<vps-ip>:8080` (or whichever `CC_HTTP_PORT` you set).
-
-### Central Command login
-
-| Username | Password | Role |
-|---|---|---|
-| admin | Admin123 | super_admin |
-
-The default admin user is created automatically by the seed script that
-runs on first startup.
+Full deployment steps (secrets, bring-up, login, backups) are in that
+repo's `README.md`. It can run on the same VPS as this ERP — its
+Postgres maps to host port 5433 to avoid clashing with the ERP database
+on 5432.
 
 ---
 
@@ -172,8 +149,9 @@ domains pointed at the VPS.
 git pull
 docker compose up -d --build
 
-# Central Command
-cd central-command
+# Central Command (separate repo)
+cd ../websoft-central-command
+git pull
 docker compose up -d --build
 ```
 
@@ -190,8 +168,8 @@ Both Postgres databases use named volumes. Back them up regularly
 # ERP database
 docker compose exec db pg_dump -U websoft_app websoft_service_erp | gzip > backup-erp-$(date +%F).sql.gz
 
-# Central Command database
-cd central-command
+# Central Command database (separate repo)
+cd ../websoft-central-command
 docker compose exec cc-db pg_dump -U cc_app central_command | gzip > backup-cc-$(date +%F).sql.gz
 ```
 
@@ -200,8 +178,8 @@ Restore into a fresh volume:
 # ERP
 gunzip -c backup-erp-*.sql.gz | docker compose exec -T db psql -U websoft_app websoft_service_erp
 
-# Central Command
-cd central-command
+# Central Command (separate repo)
+cd ../websoft-central-command
 gunzip -c backup-cc-*.sql.gz | docker compose exec -T cc-db psql -U cc_app central_command
 ```
 

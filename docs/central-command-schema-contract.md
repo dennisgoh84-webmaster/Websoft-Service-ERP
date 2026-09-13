@@ -2,11 +2,14 @@
 
 This document defines the tables in each client ERP database that
 **Server Company Central Command** reads from and writes to.  Central
-Command is a separate application (its own repo and deployment) that Web
-Master Consultancy operates to manage all client company ERP instances
-from one place.  The tables listed here are the API boundary between the
-two systems; breaking changes to these tables must be coordinated with
-Central Command.
+Command is a separate application that Web Master Consultancy operates
+to manage all client company ERP instances from one place; it lives in
+its own repository:
+[dennisgoh84-webmaster/websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command).
+
+The tables listed here are the API boundary between the two systems.
+**This doc is kept in both repos** — breaking changes to these tables
+must be coordinated with Central Command and mirrored in its copy.
 
 See [planned-work.md §8](planned-work.md#8-server-company-central-command----remote-adbanner-push--license-enforcement-raised-2026-09-12)
 for full context and open questions.
@@ -146,8 +149,9 @@ migration file.
 
 ## 6. Settled decisions (resolved 2026-09-12)
 
-All 6 open questions resolved — Central Command is now built in
-`central-command/` directory.
+All 6 open questions resolved — Central Command is now built, in its own
+repository
+([websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command)).
 
 1. **Client DB connection registry** → DECIDED: Central Command's own
    database has a `clients` table with host, port, db_name, username,

@@ -365,7 +365,9 @@ already has `is_active` and `expires_at` fields per module per company).
    push other things (system announcements, configuration updates,
    software update notifications)?
 
-**Not yet started.** This is a separate repo to be built; no code
-changes needed in this ERP repo at this stage. Recorded here because the
-client-side schema contract (the tables Central Command writes to) lives
-in this codebase.
+**Built 2026-09-12; moved to its own repository 2026-09-13** —
+[websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command),
+as the original request intended. No Central Command code lives in this
+ERP repo. This section stays here because the client-side schema
+contract (the tables Central Command writes to) lives in this codebase —
+see [central-command-schema-contract.md](central-command-schema-contract.md).
