@@ -7,10 +7,10 @@ import {
 } from '../lib/api'
 import { formatMoney as money } from '../lib/format'
 
-type Tab = 'warehouses' | 'items' | 'levels'
+type Tab = 'items' | 'levels'
 
 export default function StockMasterPage() {
-  const [tab, setTab] = useState<Tab>('warehouses')
+  const [tab, setTab] = useState<Tab>('items')
   const [error, setError] = useState<string | null>(null)
 
   return (
@@ -18,79 +18,19 @@ export default function StockMasterPage() {
       <h2>Stock Master</h2>
       {error && <p className="error">{error}</p>}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        {(['warehouses', 'items', 'levels'] as Tab[]).map((t) => (
+        {(['items', 'levels'] as Tab[]).map((t) => (
           <button
             key={t}
             className={tab === t ? '' : 'secondary'}
             onClick={() => setTab(t)}
           >
-            {t === 'warehouses' ? 'Warehouses' : t === 'items' ? 'Stock Items' : 'Stock Levels'}
+            {t === 'items' ? 'Stock Items' : 'Stock Levels'}
           </button>
         ))}
       </div>
-      {tab === 'warehouses' && <WarehouseTab onError={setError} />}
       {tab === 'items' && <StockItemTab onError={setError} />}
       {tab === 'levels' && <StockLevelTab onError={setError} />}
     </div>
-  )
-}
-
-/* ── Warehouses ─────────────────────────────────────────────────── */
-function WarehouseTab({ onError }: { onError: (e: string | null) => void }) {
-  const [rows, setRows] = useState<Warehouse[]>([])
-  const [code, setCode] = useState('')
-  const [name, setName] = useState('')
-  const [address, setAddress] = useState('')
-
-  function refresh() {
-    api.listWarehouses().then(setRows).catch((e) => onError(e.message))
-  }
-  useEffect(refresh, [])
-
-  async function onCreate(e: FormEvent) {
-    e.preventDefault()
-    onError(null)
-    try {
-      await api.createWarehouse({ code, name, address: address || undefined })
-      setCode(''); setName(''); setAddress('')
-      refresh()
-    } catch (err) { onError(err instanceof Error ? err.message : 'Failed') }
-  }
-
-  async function toggle(w: Warehouse) {
-    onError(null)
-    try {
-      await api.updateWarehouse(w.id, { is_active: !w.is_active })
-      refresh()
-    } catch (err) { onError(err instanceof Error ? err.message : 'Failed') }
-  }
-
-  return (
-    <>
-      <form onSubmit={onCreate} style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <input placeholder="Code" value={code} onChange={(e) => setCode(e.target.value)} required style={{ width: 100 }} />
-        <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required style={{ width: 200 }} />
-        <input placeholder="Address" value={address} onChange={(e) => setAddress(e.target.value)} style={{ width: 250 }} />
-        <button type="submit">Add Warehouse</button>
-      </form>
-      <div style={{ overflowX: 'auto' }}>
-        <table>
-          <thead>
-            <tr><th>Code</th><th>Name</th><th>Address</th><th>Active</th><th></th></tr>
-          </thead>
-          <tbody>
-            {rows.map((w) => (
-              <tr key={w.id}>
-                <td>{w.code}</td><td>{w.name}</td><td>{w.address || '—'}</td>
-                <td>{w.is_active ? '✅' : '❌'}</td>
-                <td><button className="secondary" onClick={() => toggle(w)}>{w.is_active ? 'Deactivate' : 'Activate'}</button></td>
-              </tr>
-            ))}
-            {!rows.length && <tr><td colSpan={5} style={{ textAlign: 'center' }}>No warehouses yet</td></tr>}
-          </tbody>
-        </table>
-      </div>
-    </>
   )
 }
 

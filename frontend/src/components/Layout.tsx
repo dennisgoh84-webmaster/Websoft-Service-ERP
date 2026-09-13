@@ -133,9 +133,9 @@ export default function Layout() {
 
   const stockItems: NavItem[] = [
     { key: 'stock-master', path: '/stock-master', label: 'Stock Master', visible: can('stock_master') },
-    { key: 'grn', path: '/grn', label: 'Goods Receive Note', visible: can('goods_receive_note') },
-    { key: 'gtn', path: '/gtn', label: 'Goods Transfer Note', visible: can('goods_transfer_note') },
-    { key: 'grtn', path: '/grtn', label: 'Goods Return Note', visible: can('goods_return_note') },
+    { key: 'grn', path: '/grn', label: 'Goods Receive', visible: can('goods_receive_note') },
+    { key: 'gtn', path: '/gtn', label: 'Goods Transfer', visible: can('goods_transfer_note') },
+    { key: 'grtn', path: '/grtn', label: 'Goods Return', visible: can('goods_return_note') },
     { key: 'stock-adjustment', path: '/stock-adjustment', label: 'Stock Adjustment', visible: can('stock_adjustment') },
     { key: 'stock-reports', path: '/stock-reports', label: 'Stock Reports', visible: can('stock_operation_reports') },
   ]
@@ -157,6 +157,7 @@ export default function Layout() {
     { key: 'tax-types', path: '/tax-types', label: 'Tax Types', visible: can('finance_accounting') },
     { key: 'currency-rates', path: '/currency-rates', label: 'Currency Rate Table', visible: can('finance_accounting') },
     { key: 'document-control', path: '/document-control', label: 'Document Control', visible: can('core_administration') },
+    { key: 'warehouses', path: '/warehouses', label: 'Warehouses', visible: can('stock_master') },
     { key: 'approval-authorities', path: '/approval-authorities', label: 'Approval Authority', visible: can('core_administration') },
     { key: 'event-logs', path: '/event-logs', label: 'Event Logs', visible: can('event_logs') },
   ]
@@ -207,7 +208,7 @@ export default function Layout() {
 
           <NavSection
             sectionKey="stock"
-            title="Stock"
+            title="Stock Inventory"
             items={stockItems}
             collapsed={!!collapsed.stock}
             onToggle={() => toggleSection('stock')}
