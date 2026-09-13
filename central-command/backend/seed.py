@@ -11,6 +11,7 @@ from app.models.config_updates import ConfigUpdate, ConfigPushLog  # noqa: F401
 from app.models.push_logs import PushLog  # noqa: F401
 from app.models.versions import ERPVersion, ClientUpgradeLog  # noqa: F401
 from app.models.staff import SupportLogin  # noqa: F401
+from app.models.login_otp import LoginOTP  # noqa: F401
 from app.services.auth import hash_password
 
 

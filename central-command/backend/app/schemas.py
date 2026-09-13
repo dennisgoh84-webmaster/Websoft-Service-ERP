@@ -17,6 +17,36 @@ class TokenResponse(BaseModel):
     full_name: str
 
 
+class LoginResponse(BaseModel):
+    """Returned by /auth/login — may be a token (dev bypass) or OTP-required."""
+    status: str  # "ok" | "otp_required"
+    access_token: str | None = None
+    token_type: str = "bearer"
+    full_name: str | None = None
+    otp_session: str | None = None  # opaque session id for verify-otp
+    # Dev mode only: the OTP code itself, so testing works without email
+    _dev_otp: str | None = None
+
+
+class VerifyOTPRequest(BaseModel):
+    otp_session: str
+    otp_code: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    username: str
+
+
+class ResetPasswordRequest(BaseModel):
+    username: str
+    otp_code: str
+    new_password: str
+
+
+class ForgotUsernameRequest(BaseModel):
+    email: str
+
+
 class AdminUserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID

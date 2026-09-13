@@ -117,6 +117,15 @@ MODULE_CATALOG = [
     ("accounting_reports", "Accounting Reports (AR/AP Aging, Trial Balance)", True, True),
     ("integrations", "Integrations (incl. Odoo migration)", False, False),  # deferred
     ("ai_assistant", "AI Assistant", False, False),
+    # Stock / Inventory sub-modules (confirmed 2026-09-13) -- not yet
+    # built; listed so Module Control / Client Control can license them
+    # and Group Authority can gate access once they are implemented.
+    ("stock_master", "Stock Master", False, False),
+    ("goods_receive_note", "Goods Receive Note", False, False),
+    ("goods_transfer_note", "Goods Transfer Note", False, False),
+    ("goods_return_note", "Goods Return Note", False, False),
+    ("stock_adjustment", "Stock Adjustment", False, False),
+    ("stock_operation_reports", "Stock Operation Reports", False, False),
     # Personal, freeform task tracker per staff member (confirmed
     # 2026-09-11) -- everyone gets FULL on their own dashboard; see
     # GROUP_CATALOG below and app/routers/ops_dashboard.py for the

@@ -11,6 +11,9 @@ from app.models.clients import Client  # noqa: F401
 from app.models.advertisements import Advertisement, AdAssignment, VideoSetting, VideoAssignment  # noqa: F401
 from app.models.config_updates import ConfigUpdate, ConfigPushLog  # noqa: F401
 from app.models.push_logs import PushLog  # noqa: F401
+from app.models.versions import ERPVersion, ClientUpgradeLog  # noqa: F401
+from app.models.staff import SupportLogin  # noqa: F401
+from app.models.login_otp import LoginOTP  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

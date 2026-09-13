@@ -197,12 +197,62 @@ export interface SupportLogin {
 
 // ── API methods ──────────────────────────────────────────────────────
 
+// ── Auth response types ─────────────────────────────────────────────
+export interface LoginResponse {
+  status: 'ok' | 'otp_required'
+  access_token?: string
+  full_name?: string
+  otp_session?: string
+  email_sent?: boolean
+  email_hint?: string | null
+  _dev_otp?: string
+}
+
+export interface VerifyOTPResponse {
+  status: 'ok'
+  access_token: string
+  full_name: string
+}
+
+export interface ForgotPasswordResponse {
+  status: string
+  message: string
+  email_hint?: string | null
+  _dev_otp?: string
+}
+
+export interface ForgotUsernameResponse {
+  status: string
+  message: string
+  _dev_username?: string
+}
+
 export const api = {
   // Auth
   login: (username: string, password: string) =>
-    request<{ access_token: string; full_name: string }>('/auth/login', {
+    request<LoginResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
+    }),
+  verifyOtp: (otp_session: string, otp_code: string) =>
+    request<VerifyOTPResponse>('/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ otp_session, otp_code }),
+    }),
+  forgotPassword: (username: string) =>
+    request<ForgotPasswordResponse>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ username }),
+    }),
+  resetPassword: (username: string, otp_code: string, new_password: string) =>
+    request<{ status: string; message: string }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ username, otp_code, new_password }),
+    }),
+  forgotUsername: (email: string) =>
+    request<ForgotUsernameResponse>('/auth/forgot-username', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
     }),
   me: () => request<AdminUser>('/auth/me'),
 
