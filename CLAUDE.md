@@ -194,9 +194,15 @@ rather than a permanent no-op, since no endpoint had ever created an
 `AccountingPeriod` row before now. **Known gap:** the manual Journal
 Voucher CRUD endpoints (raising/posting/reversing a voucher from the
 General Ledger screen) were outside this pass's scope and remain
-unconverted -- see docs/php-conversion-plan.md. `backend/` (Python) is
-untouched and keeps running as the system of record until each
-remaining module is converted, module by module, the same way.
+unconverted -- see docs/php-conversion-plan.md. Also converted:
+Quotations (create/list/get/send/accept/reject, single-rate GST
+totals, and the confirmed 2026-09-10 accept-to-auto-Contract
+conversion -- lines split by unit of measure, "Hours"/"Hour" lines
+summing into one Service Support contract and every other line into
+one Annual contract, a quotation mixing both never blending them into
+one). `backend/` (Python) is untouched and keeps running as the
+system of record until each remaining module is converted, module by
+module, the same way.
 
 **Sales module enhancements landed directly in `backend-php/` +
 `frontend/`, not as part of the conversion above** (`backend/` has no

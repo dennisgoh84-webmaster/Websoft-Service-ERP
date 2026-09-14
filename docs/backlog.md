@@ -65,7 +65,12 @@ shipped and when.
   `accounting_reports` module key, 16 dedicated tests) -- this makes
   `App\Services\Periods::requireAllows()`, wired into every posting/
   bank/reversal path since the GL posting + Bank module, a real check
-  for the first time rather than a permanent no-op.
+  for the first time rather than a permanent no-op. Also converted:
+  Quotations (create/list/get/send/accept/reject, single-rate GST
+  totals, and the confirmed 2026-09-10 accept -> auto-Contract
+  conversion -- hourly lines become one Service Support contract,
+  every other line one Annual contract, a mix becoming two separate
+  contracts never one blend, 19 dedicated tests).
   Still pending: everything else -- converted module by module, same
   pattern as the Odoo replacement strategy.
   → [php-conversion-plan.md](php-conversion-plan.md)

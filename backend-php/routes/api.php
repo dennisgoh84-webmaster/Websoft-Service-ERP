@@ -23,6 +23,7 @@ require __DIR__.'/api/modules.php';
 require __DIR__.'/api/company_individuals.php';
 require __DIR__.'/api/company_individual_groups.php';
 require __DIR__.'/api/catalog.php';
+require __DIR__.'/api/quotations.php';
 require __DIR__.'/api/contracts.php';
 require __DIR__.'/api/job_orders.php';
 require __DIR__.'/api/service_records.php';

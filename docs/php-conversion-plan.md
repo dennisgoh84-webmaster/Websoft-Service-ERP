@@ -710,6 +710,70 @@ noted above, and AR Aging under Accounting Reports -- that report's
 own route, distinct from the trial-balance one just converted, is
 part of the still-unconverted `reports.py` module).
 
+- **Quotations** (`app/models/quotations.py`,
+  `app/services/quotations.py`, `app/routers/quotations.py` (partial) →
+  `App\Models\Quotation`/`QuotationLine`, `App\Services\QuotationService`,
+  `App\Http\Controllers\Api\QuotationController`): the full document
+  (create/list/get/send/accept/reject), single-GST-rate-per-document
+  totals (`recomputeTotals()`, reusing `App\Services\Tax::applyGst()`
+  exactly like Billing), and the confirmed 2026-09-10 accept -> auto-
+  Contract conversion -- a quotation's lines split by unit of measure:
+  "Hours"/"Hour" lines sum into one SERVICE_SUPPORT contract (SRV-002's
+  10-hour minimum still applies with no override, so this half can
+  legitimately fail to convert -- the quotation still accepts, the
+  failure reason is appended to the response `message` instead), every
+  other line sums into one ANNUAL contract (12-month term, no minimum).
+  A quotation mixing both line kinds converts to **two** separate
+  contracts, never one blend -- `converted_contract_id` and
+  `converted_annual_contract_id` are independent, either/both/neither
+  may be set. Each line defaults its `reference_code_id`/`cost_sgd`
+  from the chosen catalog `Product`'s own defaults when not given
+  explicitly on the line, same Reference Monitor/Costing pattern as
+  Billing and Purchase Orders; a free-text (non-product) line has no
+  default to fall back on, matching the Python router exactly --
+  including that a `product_id` referencing another company's catalog
+  item is still stored on the line as given (only the *default-filling*
+  use of that product is skipped), which is how `app/routers/
+  quotations.py`'s own `create_quotation` behaves, not a bug introduced
+  here. `reference_code_id` has no FK constraint yet, same reason as
+  `Product::default_reference_code_id` (Reference Codes isn't
+  converted). Numbered via the already-ported `App\Services\Numbering`
+  (`QUO-2026-0001`, prefix already present in `Numbering::PREFIXES`).
+  Gated by the `sales` module, matching the Python router's own
+  `MODULE` constant (same gate `Product` uses). 7 business-logic tests
+  (`tests/Feature/QuotationServiceTest.php` -- the totals/GST math,
+  hourly-only/non-hourly-only/mixed conversion, the SRV-002 partial-
+  failure message, the neither-converts edge case) + 12 API-level
+  tests (`tests/Feature/QuotationTest.php`).
+  **KNOWN GAP (not silently papered over):** CSV/Excel export, the
+  `.docx` export, and the "Email Quotation" endpoint are not converted
+  -- same Documents-module-mailer-wiring gap already flagged for
+  Service Records/Invoices/Purchase Orders. `QuotationsPage.tsx`'s
+  Export/Email/WhatsApp buttons and `QuotationPrintPage.tsx`'s Word
+  export therefore still 404 if clicked against `backend-php/` (the
+  PDF/Print option uses the browser's own print dialog, not an API
+  call, so it works); every other control on both pages works
+  end-to-end. `Invoice`'s existing GP-costing `KNOWN GAP` (tracing a
+  CONTRACT_ANNUAL invoice's cost back to the quotation that converted
+  into it) is **not** closed by this conversion -- `Quotation` and
+  `Contract` carry no link back to each other in either direction (the
+  Python schema doesn't have one either: `converted_contract_id` only
+  points forward, quotation -> contract), so `BillingService::
+  costBasisForContract()` is unchanged and still always returns null.
+
+Verified end-to-end against the real React frontend (screenshots in
+the PR/commit history): creating a quotation with a 10-hour "Hours"
+line correctly totalling $3,000.00 net / $270.00 GST / $3,270.00 (the
+demo company's seeded 9% SR tax code), the Quotation Print page
+rendering the identical breakdown on Webmaster's own letterhead
+format, and Accept converting it end-to-end into a real Service
+Support contract -- the quotation's status flipping to "accepted" and
+a "Service Support contract" link appearing in the list, both driven
+through the actual create -> send -> accept UI flow. The only 404s
+seen were the expected not-yet-converted ones (Announcements,
+Dashboard summary, and Reference Codes -- the last also already a
+known gap for Product/Service Catalog's `default_reference_code_id`).
+
 ## New feature work landed directly in `backend-php/` (not a conversion)
 
 2026-09-22: Dennis asked for a set of new Sales-area features (Job
@@ -726,7 +790,16 @@ built), so if a route or model there looks unfamiliar against
 [planned-work.md #11](planned-work.md#11-sales-module-enhancements-job-implementation-template-multi-product-job-orders-contract-hour-sharing-contract-filters-contract-operation-report-contractquotation-reference-sales-dashboard-raised-earlier-built-2026-09-22)
 before assuming it was missed in the conversion -- it was never in
 `backend/` to convert. Does not change this document's own "Converted
-so far" / "Not yet converted" tracking below.
+so far" / "Not yet converted" tracking above. **Note (added when
+Quotations was converted below):** that work's own KNOWN GAP recorded
+the Contract–Quotation reference as free text only "because Quotations
+isn't converted to `backend-php/` yet" -- Quotations *is* now
+converted (see above), so a real `Quotation` model exists to link
+against. Reconciling the free-text field into a real reference is
+left to that feature work's own follow-up, not done here -- this
+conversion pass was scoped to Quotations only, per its own
+instructions, and does not touch `Contract`/`ContractController` or
+any file that new feature work owns.
 
 ## Not yet converted (pending, in rough priority order)
 
@@ -736,12 +809,12 @@ Management above -- model(s) + migration(s) + controller + routes +
 smoke test:
 
 1. Everything else in `backend/app/routers/` not listed above
-   (Quotations, Incidents, Inventory/Stock, Reporting/dashboards,
-   Event Logs, Document Control, Announcements, Software Tasks, Ops
-   Dashboard, Customer Helpdesk Portal, Mobile Web App, Commissions
-   [deferred, per CLAUDE.md]) -- lower priority than the Service
-   Operations core above, since that core is what CLAUDE.md's Status
-   section calls out as the one working slice today.
+   (Incidents, Inventory/Stock, Reporting/dashboards, Event Logs,
+   Document Control, Announcements, Software Tasks, Ops Dashboard,
+   Customer Helpdesk Portal, Mobile Web App, Commissions [deferred,
+   per CLAUDE.md]) -- lower priority than the Service Operations core
+   above, since that core is what CLAUDE.md's Status section calls out
+   as the one working slice today.
 
 ## Running the PHP backend locally
 
