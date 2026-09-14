@@ -24,6 +24,7 @@ import ContractsPage from './pages/ContractsPage'
 import CompanyIndividualDetailPage from './pages/CompanyIndividualDetailPage'
 import CompanyIndividualsPage from './pages/CompanyIndividualsPage'
 import DashboardPage from './pages/DashboardPage'
+import SalesDashboardPage from './pages/SalesDashboardPage'
 import EventLogsPage from './pages/EventLogsPage'
 import ExcessReviewPage from './pages/ExcessReviewPage'
 import GroupsPage from './pages/GroupsPage'
@@ -99,6 +100,7 @@ function AppRoutes() {
         }
       >
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/sales-dashboard" element={<SalesDashboardPage />} />
         <Route path="/ops-dashboard" element={<OpsDashboardPage />} />
         <Route path="/company-individuals" element={<CompanyIndividualsPage />} />
         <Route path="/company-individuals/:id" element={<CompanyIndividualDetailPage />} />

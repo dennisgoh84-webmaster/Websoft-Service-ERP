@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { api, type DashboardSummary } from '../lib/api'
 import { formatMoney as money } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
-import SalesDashboardSection from '../components/SalesDashboardSection'
 
 function Stat({
   label,
@@ -45,9 +44,7 @@ export default function DashboardPage() {
   const { activeCompany } = useAuth()
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   // Company Dashboard's own /dashboard/summary endpoint is not yet
-  // converted to backend-php (a pre-existing, separate gap -- not part
-  // of this feature set) -- caught here so a failure there never
-  // blocks the Sales Dashboard section below from rendering.
+  // converted to backend-php (a pre-existing, separate gap).
   const [summaryError, setSummaryError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -78,8 +75,6 @@ export default function DashboardPage() {
       {summaryError && <p className="muted">Company Dashboard summary unavailable: {summaryError}</p>}
       {!summary && !summaryError && <p>Loading...</p>}
       {summary && <CompanyDashboardSummary summary={summary} />}
-
-      <SalesDashboardSection />
     </div>
   )
 }

@@ -108,21 +108,26 @@ shipped and when.
   Listing, Renewal Due Listing -- reusing SRV-014's window exactly)
   with CSV/Excel export. Contract gained a free-text `quotation_reference`
   field, settable once Renewed/Expired (KNOWN GAP -- see below). New
-  Sales Dashboard section below the Company Dashboard: Contracts Due
-  for Renewal, Total/2‑/3‑month AR Outstanding (reusing the AR Aging
-  report's own bucket logic), each drilling into its underlying rows,
-  plus Top 10 Sales Billing Customer and Bottom 10 Non-Active Customer
-  listings for "this Financial Year" with CSV/Excel export.
+  New Sales Dashboard: Contracts Due for Renewal, Total/2‑/3‑month AR
+  Outstanding (reusing the AR Aging report's own bucket logic), each
+  drilling into its underlying rows, plus Top 10 Sales Billing Customer
+  and Bottom 10 Non-Active Customer listings for "this Financial Year"
+  with CSV/Excel export. **Update 2026-09-14, per Dennis's request:**
+  moved to its own standalone Main Menu page/route (`/sales-dashboard`,
+  gated on the `reporting` module), between Company Dashboard and My
+  Ops Dashboard -- not merged into the Company Dashboard as originally
+  built.
   **Two pragmatic defaults, flagged for Dennis to confirm, not silently
   assumed:** "this Financial Year" = the calendar year (no
   fiscal-year-start field exists yet), and the Contract–Quotation link
-  is free text only (Quotations exists in `backend/` Python but isn't
-  converted to `backend-php/` yet, and this work can't touch
-  `backend/`) -- both recorded in
+  is free text only, not a real linked record -- both recorded in
   [open-business-decisions.md #40](open-business-decisions.md#40-sales-module-enhancements-financial-year-definition-and-contractquotation-link-raised-2026-09-22).
-  Two Quotations-dependent Sales Dashboard KPIs ("Pending Approval" /
-  "Pending Confirmation by Client") always report not-available rather
-  than fabricated, for the same reason.
+  (Quotations has since been converted to `backend-php/`, which
+  unblocks a real link; the free-text field itself hasn't been swapped
+  out for one yet.) Two Quotations-dependent Sales Dashboard KPIs
+  ("Pending Approval" / "Pending Confirmation by Client") still always
+  report not-available -- not because Quotations is unconverted, but
+  because its status model has no state distinguishing those two cases.
   → [planned-work.md #11](planned-work.md#11-sales-module-enhancements-job-implementation-template-multi-product-job-orders-contract-hour-sharing-contract-filters-contract-operation-report-contractquotation-reference-sales-dashboard-raised-earlier-built-2026-09-22),
   rules SALES-001..007
 - [x] **Sub-ledger → GL posting + Bank step** -- settled and built 2026-09-14.

@@ -190,6 +190,7 @@ export default function Layout() {
           <NavLink to="/" end>
             Company Dashboard
           </NavLink>
+          {can('reporting') && <NavLink to="/sales-dashboard">Sales Dashboard</NavLink>}
           {can('ops_dashboard') && <NavLink to="/ops-dashboard">My Ops Dashboard</NavLink>}
 
           <NavSection

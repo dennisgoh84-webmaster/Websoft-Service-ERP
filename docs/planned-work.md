@@ -470,11 +470,17 @@ Built, in dependency order:
    GAP, not fabricated) plus drill-down endpoints
    (`ar-breakdown`, `top-billing-customers`,
    `bottom-non-active-customers`) each with CSV/Excel export, a new
-   `SalesDashboardSection` component mounted below the existing Company
-   Dashboard (rendered independently of that dashboard's own summary
-   state, since `/dashboard/summary` itself is not yet converted to
+   `SalesDashboardSection` component. **Update 2026-09-14, per Dennis's
+   explicit request:** this is its own standalone page
+   (`SalesDashboardPage.tsx`, route `/sales-dashboard`), not merged
+   into the Company Dashboard — originally built embedded in
+   `DashboardPage.tsx`, moved out. Its own Main Menu entry sits between
+   Company Dashboard and My Ops Dashboard, gated on the same
+   `reporting` module the controller itself uses. The section still
+   renders independently of the Company Dashboard's own summary state,
+   since `/dashboard/summary` itself is not yet converted to
    `backend-php/` — a separate, pre-existing gap this work does not
-   attempt to close).
+   attempt to close.
 
 Tests: business-logic coverage for every worked example above
 (`ContractServiceTest`, `SalesDashboardServiceTest` — the financial-

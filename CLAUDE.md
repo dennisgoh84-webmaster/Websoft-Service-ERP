@@ -217,11 +217,14 @@ Job Order is opened against it; the Contracts list gained a
 remaining-hours-less-than filter and an expiry-date-range filter; a new
 Contract Operation Report (Expiry Listing, Renewal Due Listing --
 reusing SRV-014's pre-expiry window exactly) with CSV/Excel export; and
-a new Sales Dashboard section below the Company Dashboard (Contracts
-Due for Renewal, Total/2-/3-month AR Outstanding reusing the AR Aging
-report's own bucket logic, each drilling into its underlying rows,
-plus Top 10 Sales Billing Customer / Bottom 10 Non-Active Customer
-listings for "this Financial Year"). **Two pragmatic defaults, flagged
+a new Sales Dashboard (Contracts Due for Renewal, Total/2-/3-month AR
+Outstanding reusing the AR Aging report's own bucket logic, each
+drilling into its underlying rows, plus Top 10 Sales Billing Customer
+/ Bottom 10 Non-Active Customer listings for "this Financial Year") --
+its own standalone Main Menu page/route (`/sales-dashboard`, gated on
+the `reporting` module), between Company Dashboard and My Ops
+Dashboard, per Dennis's explicit request that it not be merged into
+the Company Dashboard as originally built. **Two pragmatic defaults, flagged
 for Dennis to confirm rather than silently assumed:** "this Financial
 Year" is taken as the calendar year (no fiscal-year-start field exists
 anywhere in the system yet), and the Contract-Quotation link is a
