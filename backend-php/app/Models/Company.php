@@ -29,11 +29,20 @@ class Company extends Model
         'po_approval_threshold_sgd', 'is_active',
     ];
 
+    // Money fields: the Postgres column is `numeric(12,2)` (set in the
+    // migration) so on-disk storage is always exact -- never a float.
+    // These three are stored config values only (never computed on),
+    // so -- like Python's CompanyOut schema, which types them as plain
+    // `float | None` -- they're cast straight to float here too, so
+    // the JSON wire format matches (a bare number, not a numeric
+    // string). A field a *service* computes with (rates, totals,
+    // allocations) instead uses 'decimal:2' + App\Support\Money -- see
+    // docs/php-conversion-plan.md's Decimal/money handling convention.
     protected $casts = [
         'is_active' => 'boolean',
         'created_at' => 'datetime',
-        'write_off_approval_threshold_sgd' => 'decimal:2',
-        'credit_note_approval_threshold_sgd' => 'decimal:2',
-        'po_approval_threshold_sgd' => 'decimal:2',
+        'write_off_approval_threshold_sgd' => 'float',
+        'credit_note_approval_threshold_sgd' => 'float',
+        'po_approval_threshold_sgd' => 'float',
     ];
 }

@@ -2,8 +2,7 @@
 
 // Mirrors backend/app/routers/company_individuals.py. NOT yet
 // converted from the Python router (see docs/php-conversion-plan.md):
-// CSV/Excel export, Customer Helpdesk Portal access endpoints, and
-// company/individual Relationships.
+// CSV/Excel export and Customer Helpdesk Portal access endpoints.
 
 use App\Http\Controllers\Api\CompanyIndividualController;
 use Illuminate\Support\Facades\Route;
@@ -32,4 +31,8 @@ Route::middleware('auth.jwt')->prefix('company-individuals')->group(function () 
     Route::patch('/{customer}/branches/{branch}', [CompanyIndividualController::class, 'updateBranch']);
     Route::post('/{customer}/branches/{branch}/deactivate', [CompanyIndividualController::class, 'deactivateBranch']);
     Route::post('/{customer}/branches/{branch}/reactivate', [CompanyIndividualController::class, 'reactivateBranch']);
+
+    Route::get('/{customer}/relationships', [CompanyIndividualController::class, 'listRelationships']);
+    Route::post('/{customer}/relationships', [CompanyIndividualController::class, 'createRelationship']);
+    Route::post('/{customer}/relationships/{relationship}/deactivate', [CompanyIndividualController::class, 'deactivateRelationship']);
 });

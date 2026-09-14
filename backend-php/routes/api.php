@@ -20,6 +20,7 @@ require __DIR__.'/api/companies.php';
 require __DIR__.'/api/groups.php';
 require __DIR__.'/api/modules.php';
 require __DIR__.'/api/company_individuals.php';
+require __DIR__.'/api/company_individual_groups.php';
 
 // Mirrors backend/app/main.py's GET /api/health.
 Route::get('/health', function () {

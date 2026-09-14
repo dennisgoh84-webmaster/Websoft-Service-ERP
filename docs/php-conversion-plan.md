@@ -73,6 +73,117 @@ stateless (a JWT bearer token per request), matching
 for the Python backend -- every request still opens and closes its own
 database connection rather than sharing server-side state.
 
+## Conventions
+
+Rules every converted module follows, so the codebase stays
+predictable and diffable against `backend/` rather than each module
+reinventing its own approach.
+
+### Decimal / money handling
+
+The Python backend stores money as SQLAlchemy `Numeric(12, 2)`
+(exact, DB-native decimal), computes with Python's `decimal.Decimal`
+quantized to 2dp with `ROUND_HALF_UP` (see
+`backend/app/services/billing.py`'s `blended_rate_per_hour` /
+`issue_excess_usage_invoice` -- SRV-008's blended-rate billing), and
+only converts to a plain `float` at the very last step, when a Pydantic
+schema builds the JSON response. PHP has no built-in arbitrary-precision
+decimal type and native float arithmetic (`0.1 + 0.2`) is unsafe for
+money, so the equivalent here is:
+
+- **DB column:** `$table->decimal('amount_sgd', 12, 2)` -- matches
+  `Numeric(12, 2)` exactly.
+- **Eloquent cast:** `'amount_sgd' => 'decimal:2'` for any field a
+  service *computes with* -- keeps the exact on-disk value as a string
+  for persistence/comparison. A field that is only ever stored
+  configuration, never computed on (e.g. `Company`'s approval
+  thresholds), is cast straight to `'float'` instead, matching
+  Python's own choice to type those specific fields as plain
+  `float | None` in `CompanyOut` rather than `Decimal`.
+- **Arithmetic:** always through `App\Support\Money` (wraps
+  `brick/math`'s `BigDecimal`), never raw `+ - * /` on a decimal
+  attribute. `Money::quantize()` rounds to 2dp `HALF_UP` -- the exact
+  same precision and rounding mode as every `.quantize(Decimal("0.01"),
+  rounding=ROUND_HALF_UP)` call in `billing.py`. See
+  `tests/Unit/MoneyTest.php`, which pins this against the SRV-008
+  worked example (a SGD 3,000 / 10-hour contract's blended rate) and a
+  recurring-decimal case, so a rounding regression fails a test rather
+  than silently mis-billing a customer.
+- **JSON response boundary:** cast the finished computation to float
+  (`Money::toFloat()`) before it goes into a response array -- mirrors
+  Python's `float(Decimal(...))` conversion at the schema boundary, so
+  the wire format (a bare JSON number, e.g. `300.0`, not the string
+  `"300.00"`) matches between the two backends and the existing
+  frontend's `number` typing/arithmetic keeps working unchanged
+  against either one. `brick/math` was added as a dependency for
+  exactly this reason (PHP has nothing built in for it) -- not "do not
+  introduce unnecessary dependencies" territory, since it is required
+  for money arithmetic to be correct at all, the same justification as
+  choosing Laravel itself.
+
+### Naming rules
+
+To keep `backend/` and `backend-php/` diffable side by side:
+
+- **DB tables/columns:** identical snake_case names to the SQLAlchemy
+  model (e.g. `company_individuals.legacy_customer_code`).
+- **Model classes:** the PascalCase form of the Python class name
+  (`CompanyIndividual`, `GroupModuleAuthority`), except where a Python
+  name collides with something PHP-specific -- called out in the
+  model's own docstring when it happens (e.g. `Module` → `ModuleCatalog`,
+  since a PHP-legal `Module` class name reads as a framework concept,
+  not this catalog).
+- **Routes:** identical kebab-case paths to the FastAPI router's
+  `prefix` and route strings (`/api/company-individuals/{id}/pdpa-consent`
+  matches exactly).
+- **JSON field names, request bodies, and enum string values:**
+  identical to the Pydantic schema/SQLAlchemy enum (snake_case fields,
+  lowercase enum values like `"view"`/`"full"`, `"individual"`/`"company"`)
+  -- this is the actual API contract the existing frontend already
+  codes against.
+- **Audit `entity_type`/`action` strings:** identical to the Python
+  call site (`"customer"`/`"pdpa_consent_recorded"`, etc.) -- Event
+  Logs and any future reporting over the audit trail depend on these
+  strings being stable regardless of which backend wrote the entry.
+- **Controller methods:** camelCase, named after the Python route
+  function (`deactivate_customer` → `deactivate()`); RESTful CRUD uses
+  Laravel's own `index`/`store`/`show`/`update`/`destroy` where the
+  Python function is a plain list/create/get/update/delete.
+
+### After converting each module, check
+
+1. `php artisan migrate` runs clean against a fresh dev DB (and
+   `php artisan migrate:fresh --seed` still works end to end).
+2. Every route the Python router exposes for this module either has a
+   PHP equivalent registered in `routes/api/<module>.php`, or is
+   listed here under "Not yet converted" with a reason -- never
+   silently dropped.
+3. Same RBAC on every route: the same `module_key` and minimum
+   `AccessLevel` as the Python route's `require_module_access(...)`.
+4. Same audit trail: same `entity_type`/`action` strings, same
+   old-value/new-value diff shape, on every create/update/state-change
+   route.
+5. Any money/decimal field follows the Decimal/money handling
+   convention above -- and if the module does real arithmetic on one
+   (a rate, a total, a proration), a unit test pins the result against
+   a worked example from `business-requirements.md`, the way
+   `tests/Unit/MoneyTest.php` does for SRV-008.
+6. Feature tests cover: the happy-path CRUD, a 403 for a user with no
+   Group, a 403 for a VIEW-only Group attempting a write, a 403 when
+   Group Authority is FULL but Module Control has the module disabled
+   (fail-closed), and a 404 for another company's record (multi-company
+   scoping) -- see `tests/Feature/CompanyIndividualTest.php` as the
+   template every module's test file follows.
+7. `./vendor/bin/pint` and `php artisan test` are both clean.
+8. This doc's "Converted so far" / "Not yet converted" lists and
+   `docs/backlog.md`'s entry are updated in the same commit as the code.
+9. Where the module has an existing frontend page, a manual or
+   Playwright smoke pass against `backend-php/` (proxy the frontend's
+   `/api` dev-server target at `backend-php/`'s port) confirms no
+   console/network errors -- the frontend was built against the Python
+   contract, so this is the real end-to-end check that the PHP
+   contract actually matches it, not just that PHP's own tests pass.
+
 ## Converted so far
 
 Foundational layer (Core / Administration), faithfully mirroring the
@@ -112,26 +223,30 @@ and code comments carried across:
   `App\Http\Controllers\Api\ModuleController`): `my-access` (nav
   visibility) and the read-only catalog.
 - **CompanyIndividual Management** (`app/models/company_individuals.py`,
-  `app/routers/company_individuals.py` →
+  `app/routers/company_individuals.py`,
+  `app/routers/company_individual_groups.py` →
   `App\Models\CompanyIndividual`/`Contact`/`Branch`/
-  `CompanyIndividualGroup`, `App\Http\Controllers\Api\CompanyIndividualController`):
-  full customer/supplier master CRUD, deactivate/reactivate,
-  archive/unarchive (soft-archive-in-place, never deleted), PDPA
-  consent + signed-agreement-document upload (server-stamped
-  timestamp, audit-logged without the file content), audit-log
-  read-back, and nested Contacts/Branches CRUD.
+  `CompanyIndividualGroup`/`CompanyIndividualRelationship`,
+  `App\Http\Controllers\Api\CompanyIndividualController`/
+  `CompanyIndividualGroupController`): full customer/supplier master
+  CRUD, deactivate/reactivate, archive/unarchive (soft-archive-in-place,
+  never deleted), PDPA consent + signed-agreement-document upload
+  (server-stamped timestamp, audit-logged without the file content),
+  audit-log read-back, nested Contacts/Branches CRUD, company/
+  individual/contact Relationships, and the CompanyIndividual Groups
+  tag CRUD used by the module's own group filter.
 
-Verified end-to-end (migrate → seed → boot → curl): login issuing a
-`purpose=access` JWT, `/auth/me`, RBAC 403 for a user with no Group,
-customer create/list, nested contact create, PDPA consent, archive,
-and the resulting audit trail entries (including IP/User-Agent
-capture) -- see `database/seeders/DatabaseSeeder.php` for the demo
-dataset used.
+Verified end-to-end (migrate → seed → boot → curl, plus the existing
+React frontend proxied at `backend-php/` instead of `backend/` --
+screenshot in the PR/commit history): login issuing a `purpose=access`
+JWT, `/auth/me`, RBAC 403 for a user with no Group, customer
+create/list, nested contact create, PDPA consent, archive, and the
+resulting audit trail entries (including IP/User-Agent capture) -- see
+`database/seeders/DatabaseSeeder.php` for the demo dataset used.
 
 **Not yet converted from `app/routers/company_individuals.py`:**
-CSV/Excel export endpoints, the Customer Helpdesk Portal access
-sub-resource (depends on the Portal module below), and
-company/individual Relationships.
+CSV/Excel export endpoints and the Customer Helpdesk Portal access
+sub-resource (depends on the Portal module below).
 
 ## Not yet converted (pending, in rough priority order)
 

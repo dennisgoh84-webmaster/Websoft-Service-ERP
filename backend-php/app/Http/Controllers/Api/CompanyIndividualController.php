@@ -8,6 +8,7 @@ use App\Http\Middleware\Authenticate;
 use App\Models\AuditLogEntry;
 use App\Models\Branch;
 use App\Models\CompanyIndividual;
+use App\Models\CompanyIndividualRelationship;
 use App\Models\Contact;
 use App\Models\User;
 use App\Services\Audit;
@@ -24,9 +25,9 @@ use Illuminate\Support\Str;
  * audit-action.
  *
  * NOT yet converted from the Python router (tracked in
- * docs/php-conversion-plan.md): CSV/Excel export, the Customer
+ * docs/php-conversion-plan.md): CSV/Excel export and the Customer
  * Helpdesk Portal access endpoints (portal.py itself is still
- * pending), and company/individual Relationships.
+ * pending).
  */
 class CompanyIndividualController extends Controller
 {
@@ -72,6 +73,42 @@ class CompanyIndividualController extends Controller
         }
 
         return $branch;
+    }
+
+    /**
+     * Unlike branchOrFail/contactOrFail above, a relationship's target
+     * Contact can belong to ANY CompanyIndividual in this company --
+     * not necessarily the one the relationship is being added from.
+     */
+    private function companyContactOrFail(string $companyId, string $contactId): Contact
+    {
+        $contact = Contact::with('customer')->find($contactId);
+        if (! $contact || $contact->customer?->company_id !== $companyId) {
+            throw new ApiException(404, 'Contact not found');
+        }
+
+        return $contact;
+    }
+
+    private function presentRelationship(CompanyIndividualRelationship $rel): array
+    {
+        $rel->loadMissing(['toCustomer', 'toContact.customer']);
+
+        return [
+            'id' => $rel->id,
+            'from_customer_id' => $rel->from_customer_id,
+            'to_customer_id' => $rel->to_customer_id,
+            'to_customer_name' => $rel->toCustomer?->name,
+            'to_customer_type' => $rel->toCustomer?->customer_type,
+            'to_contact_id' => $rel->to_contact_id,
+            'to_contact_name' => $rel->toContact?->name,
+            'to_contact_customer_id' => $rel->toContact?->customer_id,
+            'to_contact_customer_name' => $rel->toContact?->customer?->name,
+            'relationship_type' => $rel->relationship_type,
+            'note' => $rel->note,
+            'is_active' => $rel->is_active,
+            'created_at' => $rel->created_at,
+        ];
     }
 
     // ---- CompanyIndividual CRUD -----------------------------------------
@@ -498,6 +535,95 @@ class CompanyIndividualController extends Controller
         $branch->save();
 
         return response()->json($branch->fresh());
+    }
+
+    // ---- Relationships (company/individual/contact links) --------------
+    // See CompanyIndividualRelationship's own docstring for why there's
+    // no separate "level" field and why this is undirected.
+
+    public function listRelationships(Request $request, string $customerId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        $customer = $this->customerOrFail($user, $customerId);
+        $rels = CompanyIndividualRelationship::where('from_customer_id', $customer->id)
+            ->where('is_active', true)
+            ->orderByDesc('created_at')
+            ->get();
+
+        return $rels->map(fn ($r) => $this->presentRelationship($r))->values();
+    }
+
+    public function createRelationship(Request $request, string $customerId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $customer = $this->customerOrFail($user, $customerId);
+        $data = $request->validate([
+            'to_customer_id' => 'sometimes|nullable|uuid',
+            'to_contact_id' => 'sometimes|nullable|uuid',
+            'relationship_type' => 'required|string',
+            'note' => 'sometimes|nullable|string',
+        ]);
+        $toCustomerId = $data['to_customer_id'] ?? null;
+        $toContactId = $data['to_contact_id'] ?? null;
+        if (($toCustomerId !== null) === ($toContactId !== null)) {
+            throw new ApiException(422, 'Link to exactly one of another Company/Individual or a Contact.');
+        }
+        if ($toCustomerId) {
+            $target = $this->customerOrFail($user, $toCustomerId);
+            if ($target->id === $customer->id) {
+                throw new ApiException(422, 'A record cannot be related to itself.');
+            }
+        }
+        if ($toContactId) {
+            $this->companyContactOrFail($user->company_id, $toContactId);
+        }
+
+        $rel = CompanyIndividualRelationship::create([
+            'company_id' => $user->company_id,
+            'from_customer_id' => $customer->id,
+            'to_customer_id' => $toCustomerId,
+            'to_contact_id' => $toContactId,
+            'relationship_type' => $data['relationship_type'],
+            'note' => $data['note'] ?? null,
+            'created_by_user_id' => $user->id,
+        ]);
+
+        Audit::record(
+            'customer_relationship', $rel->id, 'created', $user->id,
+            details: "from={$customer->name}, type={$data['relationship_type']}",
+            newValue: [
+                'to_customer_id' => $toCustomerId,
+                'to_contact_id' => $toContactId,
+                'relationship_type' => $data['relationship_type'],
+            ],
+        );
+
+        return response()->json($this->presentRelationship($rel->fresh()));
+    }
+
+    public function deactivateRelationship(Request $request, string $customerId, string $relationshipId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $customer = $this->customerOrFail($user, $customerId);
+        $rel = CompanyIndividualRelationship::find($relationshipId);
+        if (! $rel || $rel->from_customer_id !== $customer->id) {
+            throw new ApiException(404, 'Relationship not found');
+        }
+
+        $rel->is_active = false;
+        Audit::record(
+            'customer_relationship', $rel->id, 'deactivated', $user->id,
+            oldValue: ['is_active' => true], newValue: ['is_active' => false],
+        );
+        $rel->save();
+
+        return response()->json($this->presentRelationship($rel->fresh()));
     }
 
     // ---- Shared helpers --------------------------------------------------
