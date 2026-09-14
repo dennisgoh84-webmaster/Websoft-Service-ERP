@@ -1167,11 +1167,20 @@ def main():
         db.flush()
         ap_svc.match_bill_to_po(db, bill)  # PUR-002 match -> PUR-003 auto-approves
 
+        # ACC-001: a payment voucher names the bank account it went out of;
+        # the GL posting debits AP and credits that account's GL code.
+        seed_bank = (
+            db.query(BankAccount)
+            .filter(BankAccount.company_id == company.id)
+            .order_by(BankAccount.created_at)
+            .first()
+        )
         payment_voucher = SupplierPayment(
             company_id=company.id, supplier_id=supplier.id,
             voucher_number=next_document_number(db, company_id=company.id, doc_kind="payment"),
             payment_date=date.today(), amount_sgd=po_total,
             method="bank_transfer", reference="DBS-TT-55231",
+            bank_account_id=seed_bank.id if seed_bank else None,
             paid_by_user_id=dennis.id,
         )
         db.add(payment_voucher)

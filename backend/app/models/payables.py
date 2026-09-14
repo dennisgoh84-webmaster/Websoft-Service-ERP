@@ -130,6 +130,14 @@ class SupplierInvoice(Base):
     total_amount_sgd: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     amount_paid_sgd: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
 
+    # Expense account the net amount posts to (gl-posting-design.md
+    # §4.2). Optional: when unset the posting service uses the company's
+    # default, 5000 Cost of services -- a pragmatic default called out in
+    # ACC-001's design, not a decided rule.
+    expense_account_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("accounts.id"), nullable=True
+    )
+
     match_status: Mapped[BillMatchStatus] = mapped_column(
         Enum(BillMatchStatus, name="bill_match_status"), default=BillMatchStatus.NOT_MATCHED
     )
@@ -167,6 +175,13 @@ class SupplierPayment(Base):
     method: Mapped[str] = mapped_column(String(30), default="bank_transfer")
     reference: Mapped[str | None] = mapped_column(String(200), nullable=True)
     notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Which bank account the payment went out of (ACC-001, gl-posting-
+    # design.md §4.4). Same nullable-for-backfill / required-at-API
+    # posture as Payment.bank_account_id.
+    bank_account_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("bank_accounts.id"), nullable=True
+    )
 
     paid_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id"), nullable=True

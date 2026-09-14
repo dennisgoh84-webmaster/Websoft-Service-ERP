@@ -4,7 +4,7 @@ import { EmailIcon, PrintIcon, WhatsAppIcon } from '../components/DocActionIcons
 import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
-import { api, downloadBlob, type CompanyIndividual, type Invoice, type Payment } from '../lib/api'
+import { api, downloadBlob, type BankAccount, type CompanyIndividual, type Invoice, type Payment } from '../lib/api'
 import { formatMoney as money } from '../lib/format'
 
 const METHODS = [
@@ -31,6 +31,9 @@ export default function ReceiptsPage() {
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState('bank_transfer')
   const [reference, setReference] = useState('')
+  // ACC-001: every receipt names the bank account the money landed in.
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([])
+  const [bankAccountId, setBankAccountId] = useState('')
   const [saving, setSaving] = useState(false)
 
   // Allocation: which invoice a given unallocated payment settles
@@ -40,6 +43,10 @@ export default function ReceiptsPage() {
     api.listPayments().then(setPayments).catch((e) => setError(e.message))
     api.listInvoices().then(setInvoices).catch((e) => setError(e.message))
     api.listCompanyIndividuals().then(setCustomers).catch((e) => setError(e.message))
+    api.listBankAccounts().then((rows) => {
+      setBankAccounts(rows)
+      setBankAccountId((cur) => cur || rows[0]?.id || '')
+    }).catch((e) => setError(e.message))
   }
 
   useEffect(refresh, [])
@@ -57,6 +64,7 @@ export default function ReceiptsPage() {
         customer_id: customerId,
         payment_date: paymentDate,
         amount_sgd: parseFloat(amount),
+        bank_account_id: bankAccountId,
         method,
         reference: reference || undefined,
       })
@@ -98,6 +106,40 @@ export default function ReceiptsPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to allocate payment')
     }
+  }
+
+  // GL posting + Bank step (ACC-001..004). Posting happens automatically
+  // when the receipt is recorded; these are the explicit reversible actions.
+  async function onBank(p: Payment) {
+    setBusyId(p.id); setError(null); setMessage(null)
+    try {
+      const r = await api.bankReceipt(p.id)
+      setMessage(`${p.voucher_number} entered in the bank book as ${r.transaction_number}.`)
+      refresh()
+    } catch (err) { setError(err instanceof Error ? err.message : 'Bank step failed') }
+    finally { setBusyId(null) }
+  }
+  async function onUnbank(p: Payment) {
+    const reason = window.prompt(`Unbank ${p.voucher_number} — void its bank book line ${p.bank_transaction_number ?? ''}?\n\nReason (required):`)
+    if (!reason?.trim()) return
+    setBusyId(p.id); setError(null); setMessage(null)
+    try {
+      await api.unbankReceipt(p.id, reason.trim())
+      setMessage(`${p.voucher_number} removed from the bank book.`)
+      refresh()
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unbank failed') }
+    finally { setBusyId(null) }
+  }
+  async function onUngl(p: Payment) {
+    const reason = window.prompt(`Reverse the GL posting of ${p.voucher_number}?\n\nA mirror-image voucher is posted; nothing is deleted.\nReason (required):`)
+    if (!reason?.trim()) return
+    setBusyId(p.id); setError(null); setMessage(null)
+    try {
+      const r = await api.unglReceipt(p.id, reason.trim())
+      setMessage(`${p.voucher_number} reversed in the GL by ${r.reversal_voucher}.`)
+      refresh()
+    } catch (err) { setError(err instanceof Error ? err.message : 'UNGL failed') }
+    finally { setBusyId(null) }
   }
 
   async function onEmail(p: Payment) {
@@ -173,6 +215,17 @@ export default function ReceiptsPage() {
               onChange={(e) => setAmount(e.target.value)}
               required
             />
+          </div>
+          <div className="form-row">
+            <label>Bank account</label>
+            <select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)} required>
+              {bankAccounts.length === 0 && <option value="">Add a bank account under Bank first</option>}
+              {bankAccounts.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.bank_name} — {b.account_number}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="form-row">
             <label>Method</label>
@@ -283,7 +336,27 @@ export default function ReceiptsPage() {
                     )}
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span
+                        className={`badge badge-${p.gl_status === 'posted' ? 'success' : p.gl_status === 'reversed' ? 'warning' : 'neutral'}`}
+                        title={p.gl_voucher_number ? `GL voucher ${p.gl_voucher_number}` : 'Not posted to the General Ledger'}
+                      >
+                        GL {p.gl_status === 'posted' ? 'posted' : p.gl_status === 'reversed' ? 'reversed' : 'not posted'}
+                      </span>
+                      <span
+                        className={`badge badge-${p.bank_status === 'banked' ? 'success' : 'neutral'}`}
+                        title={p.bank_transaction_number ? `Bank book ${p.bank_transaction_number}` : 'Not yet confirmed in the bank book'}
+                      >
+                        {p.bank_status === 'banked' ? 'Banked' : 'Not banked'}
+                      </span>
+                      {p.bank_status === 'banked' ? (
+                        <button className="secondary" disabled={busyId === p.id} onClick={() => onUnbank(p)} title="Void this receipt's bank book line (needs a reason)">Unbank</button>
+                      ) : (
+                        <button disabled={busyId === p.id || !p.bank_account_id} onClick={() => onBank(p)} title="Confirm the money reached the bank — writes the bank book line">Bank</button>
+                      )}
+                      {p.gl_status === 'posted' && (
+                        <button className="secondary" disabled={busyId === p.id} onClick={() => onUngl(p)} title="Reverse the GL posting (needs a reason)">UNGL</button>
+                      )}
                       <button
                         className="secondary icon-button"
                         title="Attachments & Signatures"

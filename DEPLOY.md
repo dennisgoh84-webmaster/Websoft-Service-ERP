@@ -186,6 +186,19 @@ docker compose up -d --build
 applies migrations not already recorded as run), so this is always
 safe — it will never re-truncate or re-seed data.
 
+**One-off after the GL-posting upgrade (2026-09-14):** a database that
+already held invoices, bills, receipts or payments before this version
+needs them posted to the General Ledger once. New documents post
+automatically; existing ones don't until you run:
+
+```bash
+docker compose exec backend uv run python scripts/post_backlog.py --dry-run   # see what it would do
+docker compose exec backend uv run python scripts/post_backlog.py             # do it
+```
+
+Safe to re-run — documents already posted are skipped. A fresh database
+seeded with `seed_demo.py` does not need this.
+
 ## 8. Backups
 
 Both Postgres databases use named volumes. Back them up regularly

@@ -19,7 +19,7 @@ from app.models.billing import Invoice, InvoiceType
 from app.models.contracts import Contract, ExcessUsageRecord
 from app.models.company_individuals import CompanyIndividual
 from app.models.quotations import Quotation
-from app.services import audit
+from app.services import audit, posting
 from app.services.numbering import next_document_number
 from app.services.tax import apply_gst
 
@@ -114,6 +114,11 @@ def issue_contract_annual_invoice(
     db.add(invoice)
     db.flush()
 
+    # ACC-001/003 + BILL-005: issuing the invoice is the accounting event
+    # (revenue recognised on invoice) -- post it now: Dr AR / Cr revenue /
+    # Cr GST output. See app/services/posting.py.
+    posting.post_invoice(db, invoice, actor_user_id=actor_user_id)
+
     audit.record(
         db,
         entity_type="invoice",
@@ -172,6 +177,10 @@ def issue_excess_usage_invoice(
     db.add(invoice)
     excess_record.invoiced = True
     db.flush()
+
+    # ACC-001/003 + BILL-005: post on issue -- Dr AR / Cr 4010 excess
+    # usage revenue / Cr GST output.
+    posting.post_invoice(db, invoice, actor_user_id=actor_user_id)
 
     audit.record(
         db,

@@ -51,21 +51,30 @@ def create_journal_entry(
     created_by_user_id: uuid.UUID | None = None,
     source_type: str | None = None,
     source_id: uuid.UUID | None = None,
+    voucher_number: str | None = None,
 ) -> JournalEntry:
     """Create a DRAFT voucher. `lines` are dicts of account_id, debit_sgd,
-    credit_sgd and an optional description."""
+    credit_sgd and an optional description.
+
+    `voucher_number`: normally allocated here from the document counter.
+    Auto-posted entries (app/services/posting.py) pass their source
+    document's own number instead -- an RV's GL entry is numbered like
+    the RV -- so the ledger reads back to the document and the
+    RECEIPT/PAYMENT counters are not consumed twice per voucher."""
     if not lines:
         raise LedgerRuleViolation("A voucher needs at least one line.")
 
-    doc_kind = {
-        VoucherType.JOURNAL: "journal",
-        VoucherType.RECEIPT: "receipt",
-        VoucherType.PAYMENT: "payment",
-    }.get(voucher_type, "journal")
+    if voucher_number is None:
+        doc_kind = {
+            VoucherType.JOURNAL: "journal",
+            VoucherType.RECEIPT: "receipt",
+            VoucherType.PAYMENT: "payment",
+        }.get(voucher_type, "journal")
+        voucher_number = next_document_number(db, company_id=company_id, doc_kind=doc_kind)
 
     entry = JournalEntry(
         company_id=company_id,
-        voucher_number=next_document_number(db, company_id=company_id, doc_kind=doc_kind),
+        voucher_number=voucher_number,
         voucher_type=voucher_type,
         entry_date=entry_date,
         narration=narration,
@@ -150,7 +159,12 @@ def post_entry(
 
 
 def reverse_entry(
-    db: Session, entry: JournalEntry, *, actor_user_id: uuid.UUID, reason: str
+    db: Session,
+    entry: JournalEntry,
+    *,
+    actor_user_id: uuid.UUID,
+    reason: str,
+    voucher_number: str | None = None,
 ) -> JournalEntry:
     """Reverse a posted voucher by writing its mirror image.
 
@@ -176,9 +190,19 @@ def reverse_entry(
         entry_date=date.today(),
         narration=f"Reversal of {entry.voucher_number}: {reason}",
         voucher_type=entry.voucher_type,
+        # Auto-posted vouchers (RECEIPT/PAYMENT/...) pass an explicit label
+        # such as "RV-2026-0003-REV"; without it a receipt's reversal would
+        # be allocated from the Receipt Voucher counter and burn an RV
+        # number. Manual JVs leave it None and number from "journal".
+        voucher_number=voucher_number,
         created_by_user_id=actor_user_id,
-        source_type=entry.source_type,
-        source_id=entry.source_id,
+        # The reversal is linked to its document through reverses_entry_id
+        # -> original -> source, NOT by copying source_type/source_id: a
+        # reversal carrying the source would count as the document's live
+        # posting under uq_journal_entries_live_source and block the
+        # re-post that UNGL allows (gl-posting-design.md §4.6).
+        source_type=None,
+        source_id=None,
         lines=[
             {
                 "account_id": line.account_id,

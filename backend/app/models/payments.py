@@ -56,6 +56,16 @@ class Payment(Base):
     reference: Mapped[str | None] = mapped_column(String(200), nullable=True)
     notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
+    # Which of the company's bank accounts the money landed in (ACC-001,
+    # docs/gl-posting-design.md §4.3). Drives both the GL debit (via
+    # BankAccount.gl_account_id) and the explicit Bank step (ACC-002).
+    # Nullable at the DB level only so the migration can back-fill
+    # existing rows without inventing bank accounts for a company that
+    # has none; the API requires it on every new receipt.
+    bank_account_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("bank_accounts.id"), nullable=True
+    )
+
     recorded_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id"), nullable=True
     )

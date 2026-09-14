@@ -201,7 +201,20 @@ export default function BankAccountDetailPage() {
               {ledger.rows.map((r) => (
                 <tr key={r.id} style={r.is_voided ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>
                   <td>{r.transaction_date}</td>
-                  <td>{r.transaction_number}</td>
+                  <td>
+                    {r.transaction_number}
+                    {r.source_type && (
+                      <>
+                        {' '}
+                        <span
+                          className="badge badge-neutral"
+                          title="Created by the Bank step on this voucher (ACC-002); void it from the voucher, not here"
+                        >
+                          from {r.source_type === 'payment' ? 'Receipt Voucher' : 'Payment Voucher'}
+                        </span>
+                      </>
+                    )}
+                  </td>
                   <td>
                     {r.description}
                     {r.is_voided && r.void_reason && (

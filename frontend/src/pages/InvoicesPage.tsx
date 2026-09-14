@@ -100,6 +100,20 @@ export default function InvoicesPage() {
     }
   }
 
+  // ACC-004: reverse an invoice's GL posting. A mirror-image voucher is
+  // posted; the invoice itself and its original entry are untouched.
+  async function onUngl(invoice: Invoice) {
+    const reason = window.prompt(`Reverse the GL posting of ${invoice.invoice_number}?\n\nA mirror-image voucher is posted; nothing is deleted.\nReason (required):`)
+    if (!reason?.trim()) return
+    setBusyInvoiceId(invoice.id); setError(null); setMessage(null)
+    try {
+      const r = await api.unglInvoice(invoice.id, reason.trim())
+      setMessage(`${invoice.invoice_number} reversed in the GL by ${r.reversal_voucher}.`)
+      refresh()
+    } catch (err) { setError(err instanceof Error ? err.message : 'UNGL failed') }
+    finally { setBusyInvoiceId(null) }
+  }
+
   async function onWriteOff(invoice: Invoice) {
     const reason = window.prompt(
       `Write off ${money(invoice.outstanding_sgd)} on ${invoice.invoice_number}?\n\n` +
@@ -455,7 +469,16 @@ export default function InvoicesPage() {
                     </div>
                   )}
                 </td>
-                <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span
+                    className={`badge badge-${inv.gl_status === 'posted' ? 'success' : inv.gl_status === 'reversed' ? 'warning' : 'neutral'}`}
+                    title={inv.gl_voucher_number ? `GL voucher ${inv.gl_voucher_number}` : 'Not posted to the General Ledger'}
+                  >
+                    GL {inv.gl_status === 'posted' ? 'posted' : inv.gl_status === 'reversed' ? 'reversed' : 'not posted'}
+                  </span>
+                  {inv.gl_status === 'posted' && (
+                    <button className="secondary" disabled={busyInvoiceId === inv.id} onClick={() => onUngl(inv)} title="Reverse the GL posting (needs a reason)">UNGL</button>
+                  )}
                   <button
                     className="secondary icon-button"
                     title="Attachments & Signatures"

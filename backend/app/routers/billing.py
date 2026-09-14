@@ -10,7 +10,7 @@ from app.models.core import Company, User
 from app.models.company_individuals import CompanyIndividual
 from app.models.groups import AccessLevel
 from app.schemas.schemas import InvoiceOut
-from app.services import audit, docx_forms, document_email
+from app.services import audit, docx_forms, document_email, posting
 from app.services import exports
 from app.services.authority import require_module_access
 
@@ -65,7 +65,11 @@ def list_invoices(
         query = query.filter(Invoice.customer_id == customer_id)
     if contract_id:
         query = query.filter(Invoice.contract_id == contract_id)
-    return query.order_by(Invoice.issued_at.desc()).all()
+    invoices = query.order_by(Invoice.issued_at.desc()).all()
+    # GL status chips (ACC-001): one lookup for the whole list.
+    return posting.decorate(
+        db, current_user.company_id, [InvoiceOut.model_validate(i) for i in invoices], posting.SOURCE_INVOICE
+    )
 
 
 @router.get("/export.csv")
@@ -109,7 +113,7 @@ def get_invoice(
     invoice = db.get(Invoice, invoice_id)
     if not invoice or invoice.company_id != current_user.company_id:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    return invoice
+    return posting.decorate(db, current_user.company_id, [InvoiceOut.model_validate(invoice)], posting.SOURCE_INVOICE)[0]
 
 
 @router.get("/{invoice_id}/export.docx")

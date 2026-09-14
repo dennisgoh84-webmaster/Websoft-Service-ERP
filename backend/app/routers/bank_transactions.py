@@ -61,6 +61,8 @@ def _transaction_out(txn: BankTransaction, running_balance_sgd: Decimal) -> Bank
         voided_at=txn.voided_at,
         created_at=txn.created_at,
         running_balance_sgd=float(running_balance_sgd),
+        source_type=txn.source_type,
+        source_id=txn.source_id,
     )
 
 

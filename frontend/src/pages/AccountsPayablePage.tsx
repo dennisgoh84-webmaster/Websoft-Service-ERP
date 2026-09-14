@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
-import { api, downloadBlob, type APAgingReport, type CompanyIndividual, type PurchaseOrder, type SupplierInvoice } from '../lib/api'
+import { api, downloadBlob, type Account, type APAgingReport, type CompanyIndividual, type PurchaseOrder, type SupplierInvoice } from '../lib/api'
 import { formatMoney as money } from '../lib/format'
 
 const BILL_BADGE: Record<string, string> = {
@@ -29,7 +29,26 @@ export default function AccountsPayablePage() {
   const [billDesc, setBillDesc] = useState('')
   const [billAmount, setBillAmount] = useState('')
   const [billGst, setBillGst] = useState('')
+  // GL posting (ACC-001): optional expense account per bill; the posting
+  // service defaults to 5000 Cost of services when left blank.
+  const [expenseAccounts, setExpenseAccounts] = useState<Account[]>([])
+  const [billExpenseAccountId, setBillExpenseAccountId] = useState('')
+  const [busyBillId, setBusyBillId] = useState<string | null>(null)
   const [billRef, setBillRef] = useState('')
+
+  // ACC-004: reverse a bill's GL posting. A mirror-image voucher is posted;
+  // the bill and its original entry are untouched.
+  async function onUnglBill(b: SupplierInvoice) {
+    const reason = window.prompt(`Reverse the GL posting of ${b.bill_number}?\n\nA mirror-image voucher is posted; nothing is deleted.\nReason (required):`)
+    if (!reason?.trim()) return
+    setBusyBillId(b.id); setError(null); setMessage(null)
+    try {
+      const r = await api.unglBill(b.id, reason.trim())
+      setMessage(`${b.bill_number} reversed in the GL by ${r.reversal_voucher}.`)
+      refresh()
+    } catch (err) { setError(err instanceof Error ? err.message : 'UNGL failed') }
+    finally { setBusyBillId(null) }
+  }
 
   function refresh() {
     // 2026-09-12: a supplier is a Company/Individual record flagged
@@ -38,6 +57,8 @@ export default function AccountsPayablePage() {
     api.listPurchaseOrders().then(setPos).catch((e) => setError(e.message))
     api.listBills().then(setBills).catch((e) => setError(e.message))
     api.apAging().then(setAging).catch((e) => setError(e.message))
+    // AccountType is sent as its lowercase value, not the enum name.
+    api.listAccounts({ account_type: 'expense' }).then(setExpenseAccounts).catch((e) => setError(e.message))
   }
 
   useEffect(refresh, [])
@@ -57,6 +78,7 @@ export default function AccountsPayablePage() {
         description: billDesc,
         amount_sgd: parseFloat(billAmount),
         gst_amount_sgd: billGst === '' ? 0 : parseFloat(billGst),
+        expense_account_id: billExpenseAccountId || null,
       })
       setBillDesc('')
       setBillAmount('')
@@ -250,7 +272,16 @@ export default function AccountsPayablePage() {
                   <td>
                     <span className={`badge ${BILL_BADGE[b.status] ?? 'draft'}`}>
                       {b.status.replace('_', ' ')}
+                    </span>{' '}
+                    <span
+                      className={`badge badge-${b.gl_status === 'posted' ? 'success' : b.gl_status === 'reversed' ? 'warning' : 'neutral'}`}
+                      title={b.gl_voucher_number ? `GL voucher ${b.gl_voucher_number}` : 'Posts to the GL when the bill reaches approved'}
+                    >
+                      GL {b.gl_status === 'posted' ? 'posted' : b.gl_status === 'reversed' ? 'reversed' : 'not posted'}
                     </span>
+                    {b.gl_status === 'posted' && (
+                      <>{' '}<button className="secondary" disabled={busyBillId === b.id} onClick={() => onUnglBill(b)} title="Reverse the GL posting (needs a reason)">UNGL</button></>
+                    )}
                   </td>
                   <td>
                     <button
@@ -315,6 +346,17 @@ export default function AccountsPayablePage() {
           <div className="form-row">
             <label>Supplier's invoice number</label>
             <input value={billRef} onChange={(e) => setBillRef(e.target.value)} />
+          </div>
+          <div className="form-row">
+            <label>Expense account (optional — defaults to 5000 Cost of services)</label>
+            <select value={billExpenseAccountId} onChange={(e) => setBillExpenseAccountId(e.target.value)}>
+              <option value="">5000 Cost of services (default)</option>
+              {expenseAccounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.code} {a.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="form-row">
             <label>Description</label>

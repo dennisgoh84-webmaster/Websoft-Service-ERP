@@ -37,7 +37,8 @@ from app.schemas.schemas import (
     SupplierPaymentCreate,
     SupplierPaymentOut,
 )
-from app.services import audit, docx_forms, document_email, exports
+from app.services import audit, docx_forms, document_email, exports, posting
+from app.schemas.schemas import ReverseRequest
 from app.services import payables as ap_svc
 from app.services.accounts_receivable import aging_bucket_for
 from app.services.authority import require_module_access
@@ -294,7 +295,7 @@ def import_purchase_order_to_ap(
     )
     db.add(bill)
     db.flush()
-    ap_svc.match_bill_to_po(db, bill)
+    ap_svc.match_bill_to_po(db, bill, actor_user_id=current_user.id)
 
     audit.record(
         db,
@@ -307,7 +308,8 @@ def import_purchase_order_to_ap(
     )
     db.commit()
     db.refresh(bill)
-    return bill
+    # Posted at import (match_bill_to_po -> approved), so return it decorated.
+    return posting.decorate(db, current_user.company_id, [SupplierInvoiceOut.model_validate(bill)], posting.SOURCE_SUPPLIER_INVOICE)[0]
 
 
 @router.get("/purchase-orders/{po_id}/export.docx")
@@ -400,7 +402,11 @@ def list_bills(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module_access(MODULE, AccessLevel.VIEW)),
 ):
-    return _filter_bills(db, current_user.company_id, supplier_id, status)
+    bills = _filter_bills(db, current_user.company_id, supplier_id, status)
+    # GL status chips (ACC-001): one lookup for the whole list.
+    return posting.decorate(
+        db, current_user.company_id, [SupplierInvoiceOut.model_validate(b) for b in bills], posting.SOURCE_SUPPLIER_INVOICE
+    )
 
 
 def _bill_row(b: SupplierInvoice, supplier_name: str) -> dict:
@@ -491,12 +497,13 @@ def create_bill(
         amount_sgd=net,
         gst_amount_sgd=gst,
         total_amount_sgd=net + gst,
+        expense_account_id=payload.expense_account_id,
     )
     db.add(bill)
     db.flush()
 
     try:
-        ap_svc.match_bill_to_po(db, bill)
+        ap_svc.match_bill_to_po(db, bill, actor_user_id=current_user.id)
     except ap_svc.PayablesRuleViolation as e:
         raise HTTPException(status_code=422, detail=str(e))
 
@@ -516,7 +523,7 @@ def create_bill(
     )
     db.commit()
     db.refresh(bill)
-    return bill
+    return posting.decorate(db, current_user.company_id, [SupplierInvoiceOut.model_validate(bill)], posting.SOURCE_SUPPLIER_INVOICE)[0]
 
 
 # ---- Payment vouchers -----------------------------------------------
@@ -550,7 +557,11 @@ def list_supplier_payments(
 ):
     payments = _filter_supplier_payments(db, current_user.company_id, supplier_id)
     numbers = _bill_numbers(db, current_user.company_id)
-    return [SupplierPaymentOut.from_model(p, numbers) for p in payments]
+    return posting.decorate(
+        db, current_user.company_id,
+        [SupplierPaymentOut.from_model(p, numbers) for p in payments],
+        posting.SOURCE_SUPPLIER_PAYMENT, with_bank=True,
+    )
 
 
 def _payment_row(p: SupplierPayment, supplier_name: str) -> dict:
@@ -618,7 +629,10 @@ def get_supplier_payment(
     if not payment:
         raise HTTPException(status_code=404, detail="Payment voucher not found")
     numbers = _bill_numbers(db, current_user.company_id)
-    return SupplierPaymentOut.from_model(payment, numbers)
+    return posting.decorate(
+        db, current_user.company_id, [SupplierPaymentOut.from_model(payment, numbers)],
+        posting.SOURCE_SUPPLIER_PAYMENT, with_bank=True,
+    )[0]
 
 
 @router.get("/payments/{payment_id}/export.docx")
@@ -735,10 +749,18 @@ def create_payment_voucher(
         method=payload.method,
         reference=payload.reference,
         notes=payload.notes,
+        bank_account_id=payload.bank_account_id,
         paid_by_user_id=current_user.id,
     )
     db.add(payment)
     db.flush()
+
+    # ACC-001/003: the payment is an accounting event -- post it now
+    # (Dr AP / Cr bank). The explicit Bank step (ACC-002) is separate.
+    try:
+        posting.post_supplier_payment(db, payment, actor_user_id=current_user.id)
+    except posting.PostingError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
     for entry in payload.allocations:
         bill = _bill_or_404(db, entry.supplier_invoice_id, current_user.company_id)
@@ -762,7 +784,10 @@ def create_payment_voucher(
     )
     db.commit()
     db.refresh(payment)
-    return SupplierPaymentOut.from_model(payment)
+    return posting.decorate(
+        db, current_user.company_id, [SupplierPaymentOut.from_model(payment)],
+        posting.SOURCE_SUPPLIER_PAYMENT, with_bank=True,
+    )[0]
 
 
 @router.post("/payments/{payment_id}/allocate", response_model=SupplierPaymentOut)
@@ -804,7 +829,10 @@ def allocate_supplier_payment(
     )
     db.commit()
     db.refresh(payment)
-    return SupplierPaymentOut.from_model(payment)
+    return posting.decorate(
+        db, current_user.company_id, [SupplierPaymentOut.from_model(payment)],
+        posting.SOURCE_SUPPLIER_PAYMENT, with_bank=True,
+    )[0]
 
 
 def _ap_aging_rows(db: Session, company_id: uuid.UUID, as_at: date | None) -> tuple[date, list[APAgingRow]]:
@@ -906,3 +934,96 @@ def export_ap_aging_excel(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=ap-aging.xlsx"},
     )
+
+
+# ── GL posting + Bank step (ACC-001..004, docs/gl-posting-design.md) ─────
+# Bills post automatically when they reach `approved` (match_bill_to_po);
+# payment vouchers post when saved. These are the explicit, reversible
+# actions on top: UNGL reverses a posting; Bank / Unbank enter or void the
+# payment's line in the bank book.
+
+
+def _supplier_payment_or_404(db: Session, payment_id: uuid.UUID, company_id: uuid.UUID) -> SupplierPayment:
+    payment = (
+        db.query(SupplierPayment)
+        .filter(SupplierPayment.id == payment_id, SupplierPayment.company_id == company_id)
+        .first()
+    )
+    if payment is None:
+        raise HTTPException(status_code=404, detail="Payment voucher not found")
+    return payment
+
+
+@router.post("/bills/{bill_id}/ungl")
+def ungl_bill(
+    bill_id: uuid.UUID,
+    payload: ReverseRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access(MODULE, AccessLevel.EDIT)),
+):
+    bill = _bill_or_404(db, bill_id, current_user.company_id)
+    try:
+        reversal = posting.unpost(
+            db, source_type=posting.SOURCE_SUPPLIER_INVOICE, source_id=bill.id,
+            actor_user_id=current_user.id, reason=payload.reason, audit_entity_type="supplier_invoice",
+        )
+    except posting.PostingError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    db.commit()
+    return {"status": "reversed", "reversal_voucher": reversal.voucher_number}
+
+
+@router.post("/payments/{payment_id}/ungl")
+def ungl_payment_voucher(
+    payment_id: uuid.UUID,
+    payload: ReverseRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access(MODULE, AccessLevel.EDIT)),
+):
+    payment = _supplier_payment_or_404(db, payment_id, current_user.company_id)
+    try:
+        reversal = posting.unpost(
+            db, source_type=posting.SOURCE_SUPPLIER_PAYMENT, source_id=payment.id,
+            actor_user_id=current_user.id, reason=payload.reason, audit_entity_type="supplier_payment",
+        )
+    except posting.PostingError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    db.commit()
+    return {"status": "reversed", "reversal_voucher": reversal.voucher_number}
+
+
+@router.post("/payments/{payment_id}/bank")
+def bank_payment_voucher(
+    payment_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access(MODULE, AccessLevel.EDIT)),
+):
+    """ACC-002: Finance confirms the money left the bank -- writes the
+    payment into the bank book as one credit line."""
+    payment = _supplier_payment_or_404(db, payment_id, current_user.company_id)
+    try:
+        txn = posting.bank_supplier_payment(db, payment, actor_user_id=current_user.id)
+    except posting.PostingError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    db.commit()
+    return {"status": "banked", "transaction_number": txn.transaction_number}
+
+
+@router.post("/payments/{payment_id}/unbank")
+def unbank_payment_voucher(
+    payment_id: uuid.UUID,
+    payload: ReverseRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access(MODULE, AccessLevel.EDIT)),
+):
+    payment = _supplier_payment_or_404(db, payment_id, current_user.company_id)
+    try:
+        txn = posting.unbank(
+            db, source_type=posting.SOURCE_SUPPLIER_PAYMENT, source_id=payment.id,
+            doc_type=PeriodDocType.PAYMENT_VOUCHER, actor_user_id=current_user.id,
+            reason=payload.reason, audit_entity_type="supplier_payment",
+        )
+    except posting.PostingError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    db.commit()
+    return {"status": "unbanked", "transaction_number": txn.transaction_number}

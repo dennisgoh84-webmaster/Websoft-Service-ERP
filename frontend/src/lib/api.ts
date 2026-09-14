@@ -735,6 +735,9 @@ export interface Invoice {
   is_disputed: boolean
   dispute_note: string | null
   issued_at: string
+  // GL posting (ACC-001)
+  gl_status: 'posted' | 'reversed' | 'not_posted'
+  gl_voucher_number: string | null
 }
 
 // ---- Accounts Receivable ----
@@ -757,6 +760,12 @@ export interface Payment {
   reference: string | null
   notes: string | null
   allocations: PaymentAllocation[]
+  // GL posting + Bank step (ACC-001..004)
+  bank_account_id: string | null
+  gl_status: 'posted' | 'reversed' | 'not_posted'
+  gl_voucher_number: string | null
+  bank_status: 'banked' | 'not_banked'
+  bank_transaction_number: string | null
 }
 
 export interface AgingRow {
@@ -897,6 +906,9 @@ export interface BankTransaction {
   voided_at: string | null
   created_at: string
   running_balance_sgd: number
+  // Set when the Bank step (ACC-002) created this line from a voucher.
+  source_type: 'payment' | 'supplier_payment' | null
+  source_id: string | null
 }
 
 export interface BankLedger {
@@ -1253,6 +1265,10 @@ export interface SupplierInvoice {
   match_status: BillMatchStatus
   match_note: string | null
   status: BillStatus
+  // GL posting (ACC-001)
+  expense_account_id: string | null
+  gl_status: 'posted' | 'reversed' | 'not_posted'
+  gl_voucher_number: string | null
 }
 
 export interface SupplierPaymentAllocation {
@@ -1273,6 +1289,12 @@ export interface SupplierPayment {
   method: string
   reference: string | null
   allocations: SupplierPaymentAllocation[]
+  // GL posting + Bank step (ACC-001..004)
+  bank_account_id: string | null
+  gl_status: 'posted' | 'reversed' | 'not_posted'
+  gl_voucher_number: string | null
+  bank_status: 'banked' | 'not_banked'
+  bank_transaction_number: string | null
 }
 
 export interface APAgingRow {
@@ -2134,6 +2156,7 @@ export const api = {
     customer_id: string
     payment_date: string
     amount_sgd: number
+    bank_account_id: string
     method?: string
     reference?: string
     notes?: string
@@ -2235,6 +2258,7 @@ export const api = {
     description: string
     amount_sgd: number
     gst_amount_sgd?: number
+    expense_account_id?: string | null
   }) => request<SupplierInvoice>('/accounts-payable/bills', { method: 'POST', body: JSON.stringify(payload) }),
 
   listSupplierPayments: (supplierId?: string) =>
@@ -2251,6 +2275,7 @@ export const api = {
     supplier_id: string
     payment_date: string
     amount_sgd: number
+    bank_account_id: string
     method?: string
     reference?: string
     notes?: string
@@ -2331,6 +2356,37 @@ export const api = {
     requestBlob(`/accounts-receivable/statement/${customerId}/export.docx`),
   emailCompanyIndividualStatement: (customerId: string) =>
     request<{ sent: boolean; to: string }>(`/accounts-receivable/statement/${customerId}/email`, { method: 'POST' }),
+  // GL posting + Bank step (ACC-001..004, docs/gl-posting-design.md).
+  // Posting is automatic on create; these are the explicit reversible actions.
+  unglInvoice: (invoiceId: string, reason: string) =>
+    request<{ status: string; reversal_voucher: string }>(`/accounts-receivable/invoices/${invoiceId}/ungl`, {
+      method: 'POST', body: JSON.stringify({ reason }),
+    }),
+  bankReceipt: (paymentId: string) =>
+    request<{ status: string; transaction_number: string }>(`/accounts-receivable/payments/${paymentId}/bank`, { method: 'POST' }),
+  unbankReceipt: (paymentId: string, reason: string) =>
+    request<{ status: string; transaction_number: string }>(`/accounts-receivable/payments/${paymentId}/unbank`, {
+      method: 'POST', body: JSON.stringify({ reason }),
+    }),
+  unglReceipt: (paymentId: string, reason: string) =>
+    request<{ status: string; reversal_voucher: string }>(`/accounts-receivable/payments/${paymentId}/ungl`, {
+      method: 'POST', body: JSON.stringify({ reason }),
+    }),
+  unglBill: (billId: string, reason: string) =>
+    request<{ status: string; reversal_voucher: string }>(`/accounts-payable/bills/${billId}/ungl`, {
+      method: 'POST', body: JSON.stringify({ reason }),
+    }),
+  bankSupplierPayment: (paymentId: string) =>
+    request<{ status: string; transaction_number: string }>(`/accounts-payable/payments/${paymentId}/bank`, { method: 'POST' }),
+  unbankSupplierPayment: (paymentId: string, reason: string) =>
+    request<{ status: string; transaction_number: string }>(`/accounts-payable/payments/${paymentId}/unbank`, {
+      method: 'POST', body: JSON.stringify({ reason }),
+    }),
+  unglSupplierPayment: (paymentId: string, reason: string) =>
+    request<{ status: string; reversal_voucher: string }>(`/accounts-payable/payments/${paymentId}/ungl`, {
+      method: 'POST', body: JSON.stringify({ reason }),
+    }),
+
   writeOffInvoice: (invoiceId: string, reason: string) =>
     request<Invoice>(`/accounts-receivable/invoices/${invoiceId}/write-off`, {
       method: 'POST',

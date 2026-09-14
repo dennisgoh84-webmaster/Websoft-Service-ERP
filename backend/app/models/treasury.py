@@ -91,6 +91,12 @@ class BankTransaction(Base):
     # Cheque number / transfer reference / counterparty -- free text,
     # whatever the bank statement itself shows for matching.
     reference: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Set when the Bank step (ACC-002) created this line from a Receipt
+    # or Payment Voucher -- mirrors JournalEntry.source_type/source_id so
+    # a voucher can be banked at most once and the line links back to
+    # its document. Hand-keyed lines leave both null.
+    source_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    source_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     debit_sgd: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     credit_sgd: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     # Ticked off against a bank statement -- see Bank Reconciliation

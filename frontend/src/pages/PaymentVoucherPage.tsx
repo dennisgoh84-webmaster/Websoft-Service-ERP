@@ -4,7 +4,7 @@ import { EmailIcon, PrintIcon, WhatsAppIcon } from '../components/DocActionIcons
 import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
-import { api, downloadBlob, type CompanyIndividual, type SupplierInvoice, type SupplierPayment } from '../lib/api'
+import { api, downloadBlob, type BankAccount, type CompanyIndividual, type SupplierInvoice, type SupplierPayment } from '../lib/api'
 import { formatMoney as money } from '../lib/format'
 
 export default function PaymentVoucherPage() {
@@ -19,6 +19,9 @@ export default function PaymentVoucherPage() {
   const [paySupplier, setPaySupplier] = useState('')
   const [payAmount, setPayAmount] = useState('')
   const [payRef, setPayRef] = useState('')
+  // ACC-001: every payment names the bank account the money left from.
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([])
+  const [bankAccountId, setBankAccountId] = useState('')
 
   const [allocFor, setAllocFor] = useState<Record<string, { billId: string; amount: string }>>({})
 
@@ -26,6 +29,10 @@ export default function PaymentVoucherPage() {
     api.listCompanyIndividuals({ is_supplier: true }).then(setSuppliers).catch((e) => setError(e.message))
     api.listBills().then(setBills).catch((e) => setError(e.message))
     api.listSupplierPayments().then(setPayments).catch((e) => setError(e.message))
+    api.listBankAccounts().then((rows) => {
+      setBankAccounts(rows)
+      setBankAccountId((cur) => cur || rows[0]?.id || '')
+    }).catch((e) => setError(e.message))
   }
 
   useEffect(refresh, [])
@@ -43,6 +50,7 @@ export default function PaymentVoucherPage() {
         supplier_id: paySupplier,
         payment_date: new Date().toISOString().slice(0, 10),
         amount_sgd: parseFloat(payAmount),
+        bank_account_id: bankAccountId,
         reference: payRef || undefined,
       })
       setPayAmount('')
@@ -79,6 +87,40 @@ export default function PaymentVoucherPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to allocate payment')
     }
+  }
+
+  // GL posting + Bank step (ACC-001..004). Posting happens automatically
+  // when the voucher is recorded; these are the explicit reversible actions.
+  async function onBank(p: SupplierPayment) {
+    setBusyId(p.id); setError(null); setMessage(null)
+    try {
+      const r = await api.bankSupplierPayment(p.id)
+      setMessage(`${p.voucher_number} entered in the bank book as ${r.transaction_number}.`)
+      refresh()
+    } catch (err) { setError(err instanceof Error ? err.message : 'Bank step failed') }
+    finally { setBusyId(null) }
+  }
+  async function onUnbank(p: SupplierPayment) {
+    const reason = window.prompt(`Unbank ${p.voucher_number} — void its bank book line ${p.bank_transaction_number ?? ''}?\n\nReason (required):`)
+    if (!reason?.trim()) return
+    setBusyId(p.id); setError(null); setMessage(null)
+    try {
+      await api.unbankSupplierPayment(p.id, reason.trim())
+      setMessage(`${p.voucher_number} removed from the bank book.`)
+      refresh()
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unbank failed') }
+    finally { setBusyId(null) }
+  }
+  async function onUngl(p: SupplierPayment) {
+    const reason = window.prompt(`Reverse the GL posting of ${p.voucher_number}?\n\nA mirror-image voucher is posted; nothing is deleted.\nReason (required):`)
+    if (!reason?.trim()) return
+    setBusyId(p.id); setError(null); setMessage(null)
+    try {
+      const r = await api.unglSupplierPayment(p.id, reason.trim())
+      setMessage(`${p.voucher_number} reversed in the GL by ${r.reversal_voucher}.`)
+      refresh()
+    } catch (err) { setError(err instanceof Error ? err.message : 'UNGL failed') }
+    finally { setBusyId(null) }
   }
 
   async function onEmail(p: SupplierPayment) {
@@ -206,6 +248,26 @@ export default function PaymentVoucherPage() {
                         aria-label="Attachments & Signatures"
                         onClick={() => setDocPanelId(docPanelId === p.id ? null : p.id)}
                       >📎</button>
+                      <span
+                        className={`badge badge-${p.gl_status === 'posted' ? 'success' : p.gl_status === 'reversed' ? 'warning' : 'neutral'}`}
+                        title={p.gl_voucher_number ? `GL voucher ${p.gl_voucher_number}` : 'Not posted to the General Ledger'}
+                      >
+                        GL {p.gl_status === 'posted' ? 'posted' : p.gl_status === 'reversed' ? 'reversed' : 'not posted'}
+                      </span>
+                      <span
+                        className={`badge badge-${p.bank_status === 'banked' ? 'success' : 'neutral'}`}
+                        title={p.bank_transaction_number ? `Bank book ${p.bank_transaction_number}` : 'Not yet confirmed in the bank book'}
+                      >
+                        {p.bank_status === 'banked' ? 'Banked' : 'Not banked'}
+                      </span>
+                      {p.bank_status === 'banked' ? (
+                        <button className="secondary" disabled={busyId === p.id} onClick={() => onUnbank(p)} title="Void this payment's bank book line (needs a reason)">Unbank</button>
+                      ) : (
+                        <button disabled={busyId === p.id || !p.bank_account_id} onClick={() => onBank(p)} title="Confirm the money left the bank — writes the bank book line">Bank</button>
+                      )}
+                      {p.gl_status === 'posted' && (
+                        <button className="secondary" disabled={busyId === p.id} onClick={() => onUngl(p)} title="Reverse the GL posting (needs a reason)">UNGL</button>
+                      )}
                       <Link to={`/payment-voucher/${p.id}/print`} className="secondary icon-button" title="Print" aria-label="Print">
                         <PrintIcon />
                       </Link>
@@ -273,6 +335,17 @@ export default function PaymentVoucherPage() {
               onChange={(e) => setPayAmount(e.target.value)}
               required
             />
+          </div>
+          <div className="form-row">
+            <label>Bank account</label>
+            <select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)} required>
+              {bankAccounts.length === 0 && <option value="">Add a bank account under Bank first</option>}
+              {bankAccounts.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.bank_name} — {b.account_number}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="form-row">
             <label>Reference</label>

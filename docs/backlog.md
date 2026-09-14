@@ -22,10 +22,14 @@ shipped and when.
 
 ## Confirmed scope, not yet built
 
-- [ ] **Sub-ledger → GL posting + Bank step** -- settled 2026-09-14.
+- [x] **Sub-ledger → GL posting + Bank step** -- settled and built 2026-09-14.
   Invoices, bills, receipts and payments post to the GL; receipts and
   payments get an explicit Bank / Unbank step into the bank book.
   Closes the gap that the Trial Balance was only ever trivially balanced.
+  Built: posting service + account map, auto-post on invoice issue / bill
+  approval / RV+PV save, Bank/Unbank and UNGL endpoints with period
+  guards, `scripts/post_backlog.py` back-fill, GL/Bank chips on the four
+  screens, bank-account and expense-account selects.
   → [gl-posting-design.md](gl-posting-design.md), rules ACC-001..004
 - [ ] **Customer Helpdesk Portal** -- settled 2026-09-14. Per-Contact
   logins (email + password + OTP, own table, purpose-tagged token);
@@ -100,4 +104,4 @@ shipped and when.
   → [open-business-decisions.md #7-8](open-business-decisions.md#7-projects)
 
 ---
-Last updated: 2026-09-14 (GL posting + Bank step and Customer Portal designed and confirmed; both not yet built)
+Last updated: 2026-09-14 (GL posting + Bank step built and verified; Customer Portal designed, not yet built)

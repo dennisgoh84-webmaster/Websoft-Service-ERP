@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.models.core import Company, User, UserRole
 from app.models.company_individuals import CompanyIndividual
+from app.services import posting
 from app.models.payables import (
     BillMatchStatus,
     BillStatus,
@@ -94,7 +95,9 @@ def assert_po_importable_to_ap(po: PurchaseOrder) -> None:
         )
 
 
-def match_bill_to_po(db: Session, bill: SupplierInvoice) -> SupplierInvoice:
+def match_bill_to_po(
+    db: Session, bill: SupplierInvoice, *, actor_user_id: uuid.UUID | None = None
+) -> SupplierInvoice:
     """PUR-002 2-way match, and PUR-003's consequence.
 
     Compares the bill to its purchase order. Agreement auto-approves it
@@ -134,6 +137,16 @@ def match_bill_to_po(db: Session, bill: SupplierInvoice) -> SupplierInvoice:
     bill.match_status = BillMatchStatus.MATCHED
     bill.match_note = f"Matched to {po.po_number} (2-way, PUR-002); auto-approved (PUR-003)."
     bill.status = BillStatus.APPROVED
+
+    # ACC-001/003: reaching `approved` is the bill's accounting event --
+    # post it now (Dr expense / Dr GST input / Cr AP). A bill still in
+    # awaiting_match or exception never gets here, so an unresolved
+    # mismatch never sits in AP (gl-posting-design.md §4.2).
+    db.flush()
+    try:
+        posting.post_supplier_invoice(db, bill, actor_user_id=actor_user_id)
+    except posting.PostingError as e:
+        raise PayablesRuleViolation(str(e)) from e
     return bill
 
 

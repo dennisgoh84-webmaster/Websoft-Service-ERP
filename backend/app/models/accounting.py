@@ -23,11 +23,13 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Numeric,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -135,6 +137,22 @@ class JournalEntry(Base):
     narration: Mapped[str] = mapped_column(String(500), nullable=False)
     status: Mapped[JournalStatus] = mapped_column(
         Enum(JournalStatus, name="journal_status"), default=JournalStatus.DRAFT
+    )
+
+    # A document has at most one *live* posting: the (source_type,
+    # source_id) pair is unique among non-reversed entries, so the
+    # posting service cannot double-post and an UNGL'd document can be
+    # posted again (gl-posting-design.md §4.7). The literal is the enum
+    # member NAME because journal_status is a native enum that stores
+    # names, not values.
+    __table_args__ = (
+        Index(
+            "uq_journal_entries_live_source",
+            "source_type",
+            "source_id",
+            unique=True,
+            postgresql_where=text("status <> 'REVERSED' AND source_type IS NOT NULL"),
+        ),
     )
 
     # Where this entry came from, when it wasn't keyed by hand (e.g. the

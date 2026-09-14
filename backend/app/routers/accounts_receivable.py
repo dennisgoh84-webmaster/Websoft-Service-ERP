@@ -31,7 +31,8 @@ from app.schemas.schemas import (
     StatementLine,
 )
 from app.services import accounts_receivable as ar_svc
-from app.services import audit, docx_forms, document_email, exports
+from app.services import audit, docx_forms, document_email, exports, posting
+from app.schemas.schemas import ReverseRequest
 from app.services.authority import require_module_access
 from app.services.numbering import next_document_number
 from app.models.periods import PeriodDocType, PeriodOperation
@@ -115,10 +116,18 @@ def record_payment(
         method=method,
         reference=payload.reference,
         notes=payload.notes,
+        bank_account_id=payload.bank_account_id,
         recorded_by_user_id=current_user.id,
     )
     db.add(payment)
     db.flush()
+
+    # ACC-001/003: the receipt is an accounting event -- post it now
+    # (Dr bank / Cr AR). The explicit Bank step (ACC-002) is separate.
+    try:
+        posting.post_receipt(db, payment, actor_user_id=current_user.id)
+    except posting.PostingError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
     for entry in payload.allocations:
         invoice = _invoice_or_404(db, entry.invoice_id, current_user.company_id)
@@ -145,7 +154,11 @@ def record_payment(
     )
     db.commit()
     db.refresh(payment)
-    return PaymentOut.from_model(payment, _invoice_numbers(db, current_user.company_id))
+    return posting.decorate(
+        db, current_user.company_id,
+        [PaymentOut.from_model(payment, _invoice_numbers(db, current_user.company_id))],
+        posting.SOURCE_RECEIPT, with_bank=True,
+    )[0]
 
 
 def _filter_payments(
@@ -173,7 +186,11 @@ def list_payments(
 ):
     payments = _filter_payments(db, current_user.company_id, customer_id, unallocated_only)
     numbers = _invoice_numbers(db, current_user.company_id)
-    return [PaymentOut.from_model(p, numbers) for p in payments]
+    return posting.decorate(
+        db, current_user.company_id,
+        [PaymentOut.from_model(p, numbers) for p in payments],
+        posting.SOURCE_RECEIPT, with_bank=True,
+    )
 
 
 def _payment_row(p: Payment, customer_name: str) -> dict:
@@ -232,7 +249,11 @@ def get_payment(
     current_user: User = Depends(require_module_access(MODULE, AccessLevel.VIEW)),
 ):
     payment = _payment_or_404(db, payment_id, current_user.company_id)
-    return PaymentOut.from_model(payment, _invoice_numbers(db, current_user.company_id))
+    return posting.decorate(
+        db, current_user.company_id,
+        [PaymentOut.from_model(payment, _invoice_numbers(db, current_user.company_id))],
+        posting.SOURCE_RECEIPT, with_bank=True,
+    )[0]
 
 
 @router.get("/payments/{payment_id}/export.docx")
@@ -328,7 +349,11 @@ def allocate_payment(
     )
     db.commit()
     db.refresh(payment)
-    return PaymentOut.from_model(payment, _invoice_numbers(db, current_user.company_id))
+    return posting.decorate(
+        db, current_user.company_id,
+        [PaymentOut.from_model(payment, _invoice_numbers(db, current_user.company_id))],
+        posting.SOURCE_RECEIPT, with_bank=True,
+    )[0]
 
 
 # ---- Invoice actions ------------------------------------------------
@@ -678,3 +703,85 @@ def email_customer_statement(
     )
     db.commit()
     return {"sent": True, "to": customer.billing_email}
+
+
+# ── GL posting + Bank step (ACC-001..004, docs/gl-posting-design.md) ─────
+# Posting itself happens automatically when the document is created (see
+# posting.post_invoice / post_receipt). These are the explicit, reversible
+# actions on top: UNGL reverses a posting; Bank / Unbank enter or void the
+# receipt's line in the bank book.
+
+
+@router.post("/invoices/{invoice_id}/ungl")
+def ungl_invoice(
+    invoice_id: uuid.UUID,
+    payload: ReverseRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access(MODULE, AccessLevel.EDIT)),
+):
+    invoice = _invoice_or_404(db, invoice_id, current_user.company_id)
+    try:
+        reversal = posting.unpost(
+            db, source_type=posting.SOURCE_INVOICE, source_id=invoice.id,
+            actor_user_id=current_user.id, reason=payload.reason, audit_entity_type="invoice",
+        )
+    except posting.PostingError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    db.commit()
+    return {"status": "reversed", "reversal_voucher": reversal.voucher_number}
+
+
+@router.post("/payments/{payment_id}/ungl")
+def ungl_receipt(
+    payment_id: uuid.UUID,
+    payload: ReverseRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access(MODULE, AccessLevel.EDIT)),
+):
+    payment = _payment_or_404(db, payment_id, current_user.company_id)
+    try:
+        reversal = posting.unpost(
+            db, source_type=posting.SOURCE_RECEIPT, source_id=payment.id,
+            actor_user_id=current_user.id, reason=payload.reason, audit_entity_type="payment",
+        )
+    except posting.PostingError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    db.commit()
+    return {"status": "reversed", "reversal_voucher": reversal.voucher_number}
+
+
+@router.post("/payments/{payment_id}/bank")
+def bank_receipt(
+    payment_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access(MODULE, AccessLevel.EDIT)),
+):
+    """ACC-002: Finance confirms the money reached the bank -- writes the
+    receipt into the bank book as one debit line."""
+    payment = _payment_or_404(db, payment_id, current_user.company_id)
+    try:
+        txn = posting.bank_receipt(db, payment, actor_user_id=current_user.id)
+    except posting.PostingError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    db.commit()
+    return {"status": "banked", "transaction_number": txn.transaction_number}
+
+
+@router.post("/payments/{payment_id}/unbank")
+def unbank_receipt(
+    payment_id: uuid.UUID,
+    payload: ReverseRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access(MODULE, AccessLevel.EDIT)),
+):
+    payment = _payment_or_404(db, payment_id, current_user.company_id)
+    try:
+        txn = posting.unbank(
+            db, source_type=posting.SOURCE_RECEIPT, source_id=payment.id,
+            doc_type=PeriodDocType.RECEIPT_VOUCHER, actor_user_id=current_user.id,
+            reason=payload.reason, audit_entity_type="payment",
+        )
+    except posting.PostingError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    db.commit()
+    return {"status": "unbanked", "transaction_number": txn.transaction_number}

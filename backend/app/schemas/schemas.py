@@ -853,6 +853,9 @@ class InvoiceOut(BaseModel):
     is_disputed: bool
     dispute_note: str | None
     issued_at: datetime
+    # GL posting (ACC-001); stamped by posting.decorate.
+    gl_status: str = "not_posted"
+    gl_voucher_number: str | None = None
 
 
 # ---- Accounts Receivable ----
@@ -877,6 +880,12 @@ class PaymentOut(BaseModel):
     reference: str | None
     notes: str | None
     allocations: list[PaymentAllocationOut] = []
+    # GL posting + Bank step (ACC-001..004); stamped by posting.decorate.
+    bank_account_id: uuid.UUID | None = None
+    gl_status: str = "not_posted"
+    gl_voucher_number: str | None = None
+    bank_status: str = "not_banked"
+    bank_transaction_number: str | None = None
 
     @classmethod
     def from_model(cls, payment, invoice_numbers: dict | None = None) -> "PaymentOut":
@@ -916,6 +925,9 @@ class PaymentCreate(BaseModel):
     method: str = "bank_transfer"
     reference: str | None = None
     notes: str | None = None
+    # ACC-001: which bank account the money landed in. Required on every
+    # new receipt (the DB column is nullable only for the back-fill).
+    bank_account_id: uuid.UUID
     # AR-001: allocation is manual, so it is optional here -- a receipt
     # can be recorded first and allocated later.
     allocations: list[PaymentAllocationEntry] = []
@@ -1217,6 +1229,10 @@ class SupplierInvoiceOut(BaseModel):
     match_status: BillMatchStatus
     match_note: str | None
     status: BillStatus
+    # GL posting (ACC-001); stamped by posting.decorate.
+    expense_account_id: uuid.UUID | None = None
+    gl_status: str = "not_posted"
+    gl_voucher_number: str | None = None
 
 
 class SupplierInvoiceCreate(BaseModel):
@@ -1227,6 +1243,9 @@ class SupplierInvoiceCreate(BaseModel):
     description: str = Field(min_length=1)
     amount_sgd: float = Field(gt=0)
     gst_amount_sgd: float = Field(default=0, ge=0)
+    # Optional expense account for the GL posting (gl-posting-design.md
+    # §4.2); the posting service defaults to 5000 Cost of services.
+    expense_account_id: uuid.UUID | None = None
 
 
 class SupplierPaymentAllocationOut(BaseModel):
@@ -1249,6 +1268,12 @@ class SupplierPaymentOut(BaseModel):
     method: str
     reference: str | None
     allocations: list[SupplierPaymentAllocationOut] = []
+    # GL posting + Bank step (ACC-001..004); stamped by posting.decorate.
+    bank_account_id: uuid.UUID | None = None
+    gl_status: str = "not_posted"
+    gl_voucher_number: str | None = None
+    bank_status: str = "not_banked"
+    bank_transaction_number: str | None = None
 
     @classmethod
     def from_model(cls, payment, bill_numbers: dict | None = None) -> "SupplierPaymentOut":
@@ -1287,6 +1312,8 @@ class SupplierPaymentCreate(BaseModel):
     method: str = "bank_transfer"
     reference: str | None = None
     notes: str | None = None
+    # ACC-001: which bank account the payment went out of. Required.
+    bank_account_id: uuid.UUID
     allocations: list[SupplierPaymentAllocationEntry] = []
 
 
@@ -1747,6 +1774,9 @@ class BankTransactionOut(BaseModel):
     void_reason: str | None
     voided_at: datetime | None
     created_at: datetime
+    # Set when the Bank step created this line from a voucher (ACC-002).
+    source_type: str | None = None
+    source_id: uuid.UUID | None = None
     # Running balance as at this line -- computed by the router in
     # ledger (date/creation) order, not a stored column.
     running_balance_sgd: float = 0
