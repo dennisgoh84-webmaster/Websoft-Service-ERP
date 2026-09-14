@@ -710,6 +710,24 @@ noted above, and AR Aging under Accounting Reports -- that report's
 own route, distinct from the trial-balance one just converted, is
 part of the still-unconverted `reports.py` module).
 
+## New feature work landed directly in `backend-php/` (not a conversion)
+
+2026-09-22: Dennis asked for a set of new Sales-area features (Job
+Implementation Template, multi-Product Job Orders, Contract
+hour-sharing, Contract filters, a Contract Operation Report, a
+Contract–Quotation reference field, and a Sales Dashboard) with **no
+`backend/` (Python) equivalent** -- built directly and only in
+`backend-php/` + `frontend/`, not converted from anywhere. This
+touched `ContractController`/`ContractService`, `JobOrderController`,
+and `ProductController` (the same files the conversion work above
+built), so if a route or model there looks unfamiliar against
+`backend/`, check
+[backlog.md](backlog.md#confirmed-scope-not-yet-built) /
+[planned-work.md #11](planned-work.md#11-sales-module-enhancements-job-implementation-template-multi-product-job-orders-contract-hour-sharing-contract-filters-contract-operation-report-contractquotation-reference-sales-dashboard-raised-earlier-built-2026-09-22)
+before assuming it was missed in the conversion -- it was never in
+`backend/` to convert. Does not change this document's own "Converted
+so far" / "Not yet converted" tracking below.
+
 ## Not yet converted (pending, in rough priority order)
 
 Everything below still only exists in `backend/` (Python). Each is a

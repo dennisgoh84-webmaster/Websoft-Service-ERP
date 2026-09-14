@@ -519,6 +519,85 @@ Status: **CONFIRMED / DECIDED** (2026-09-14). Full design in
   company-wide list. Explains where the consumed hours on a
   SERVICE_SUPPORT contract actually went.
 
+## Sales Module Enhancements Business Rules (CONFIRMED)
+
+Status: **CONFIRMED / DECIDED**, clarified with Dennis prior to this
+build and implemented directly in `backend-php/` (new feature work, not
+part of the Python→PHP conversion tracked in
+[php-conversion-plan.md](php-conversion-plan.md) — see that doc's "not a
+conversion" note on this set of rules). Decision record:
+[open-business-decisions.md #40](open-business-decisions.md#40-sales-module-enhancements-financial-year-definition-and-contractquotation-link-raised-2026-09-22).
+
+### SALES-001 — Job Implementation Template — CONFIRMED
+
+- A Product/Service Catalog item carries an optional, reusable, ordered
+  task checklist (its "Job Implementation Template"). One template per
+  product.
+
+### SALES-002 — Job Order Multi-Product Selection + Template Import — CONFIRMED
+
+- A Job Order may select **more than one** Product (previously zero/one
+  via Contract-level product coverage only).
+- Selecting a product copies that product's Job Implementation Template
+  onto the Job Order as tasks, ordered, with completion tracking gated
+  to Sales Manager/Owner (same reviewer gate as PROJECT-type Job Order
+  milestone completion, 7.3).
+- **Pragmatic default** (dedupe, not separately confirmed): when more
+  than one selected product's template names the same task, it is
+  copied onto the Job Order only once (first-selected product wins) —
+  see `App\Services\JobOrderImplementationTaskService` in `backend-php/`.
+
+### SALES-003 — Contract Hour-Sharing List — CONFIRMED
+
+- A Service Contract keeps its own list of Company/Individual customers
+  allowed to draw down its pooled hours, independent of that
+  Company/Individual's `CompanyIndividual` Relationships records — a
+  shared-hours customer need not have any other relationship on file.
+- Opening a Job Order against a contract is validated against the
+  contract's own primary customer **or** this shared-hours list; neither
+  match is rejected.
+
+### SALES-004 — Contract List Filters — CONFIRMED
+
+- The Contracts list can filter by remaining hours less than a flexible,
+  caller-supplied number, and by an expiry date range on the contract's
+  own end date (distinct from the pre-existing coverage-window filter,
+  which finds contracts *covering* a period rather than *expiring*
+  within one).
+
+### SALES-005 — Contract Operation Report — CONFIRMED
+
+- Two report views: **Contract Expiry Listing** (contracts expiring
+  within a date range, or already expired, regardless of range) and
+  **Contract due for Renewal Listing**, which reuses SRV-014's 30-day
+  pre-expiry window exactly (never a second, disagreeing window).
+
+### SALES-006 — Contract–Quotation Reference — pragmatic default / KNOWN GAP
+
+- A contract can record a free-text Sales Quotation reference, settable
+  once it has transitioned to Renewed or Expired. This is **not** a real
+  linked record — the Quotations module exists in `backend/` (Python)
+  but has not been converted to `backend-php/`, and this work is scoped
+  to `backend-php/` only. Replace with a real foreign key once
+  Quotations is converted.
+
+### SALES-007 — Sales Dashboard KPIs — CONFIRMED, with two pragmatic defaults
+
+- Below the Company Dashboard: Contracts Due for Renewal (reuses
+  SALES-005's renewal-due logic), Total/2-month/3-month AR Outstanding
+  (reuses the AR Aging report's own bucket logic exactly), and a Top 10
+  Sales Billing Customer / Bottom 10 Non-Active Customer listing for
+  "this Financial Year", each figure drilling into its underlying rows.
+- **Pragmatic default (flagged for Dennis's confirmation, not silently
+  assumed):** "this Financial Year" = the **calendar year** (1 Jan – 31
+  Dec) — no fiscal-year-start field exists anywhere in the system yet.
+- **Known gap, not fabricated:** "Quotations Pending Approval" and
+  "Quotations Pending Confirmation by Client" always report
+  not-available — the Quotations module isn't converted to
+  `backend-php/`, and even in `backend/`, `Quotation` has no status
+  distinguishing those two cases from its existing draft/sent/accepted/
+  rejected/expired states.
+
 ## Conceptual Business Entities
 
 This section lists the major business entities Websoft Service ERP Solution is expected

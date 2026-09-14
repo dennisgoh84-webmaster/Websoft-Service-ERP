@@ -401,3 +401,88 @@ decision record in [open-business-decisions.md #39](open-business-decisions.md#3
 Built in order: models + migration → auth + token boundary (boundary
 tests written and run first) → staff enable/disable on Contacts →
 portal endpoints → `/portal` frontend → verified.
+
+## 11. Sales module enhancements: Job Implementation Template, multi-Product Job Orders, Contract hour-sharing, Contract filters, Contract Operation Report, Contract–Quotation reference, Sales Dashboard (raised earlier, built 2026-09-22)
+
+**Built 2026-09-22.** Dennis's feature list, clarified with him in an
+earlier conversation and taken as settled here (not re-derived) — see
+rules SALES-001..007 in
+[business-requirements.md](business-requirements.md#sales-module-enhancements-business-rules-confirmed)
+and the two open pragmatic defaults recorded in
+[open-business-decisions.md #40](open-business-decisions.md#40-sales-module-enhancements-financial-year-definition-and-contractquotation-link-raised-2026-09-22).
+
+**NOT a Python→PHP conversion** — unlike every other entry in this
+document and in [php-conversion-plan.md](php-conversion-plan.md), this
+is new business scope with no `backend/` (Python) equivalent, built
+directly and only in `backend-php/` + `frontend/`, per Dennis's
+request. `backend/` was not touched.
+
+Built, in dependency order:
+
+1. **Product Job Implementation Template** — `ProductImplementationTemplate`
+   + `ProductImplementationTemplateTask` models/migration,
+   `ProductController::getImplementationTemplate`/`setImplementationTemplate`
+   (`PUT` replaces the whole ordered list, mirroring how Contract
+   product coverage is edited), a frontend editor on Product/Service
+   Catalog.
+2. **Job Order multi-Product selection + template import** —
+   `job_order_products` pivot + `JobOrderImplementationTask` (mirrors
+   `ProjectMilestone`'s completion-tracking spirit with a simpler
+   pending/completed lifecycle, gated to Sales Manager/Owner per 7.3),
+   `App\Services\JobOrderImplementationTaskService` (documented dedupe
+   rule: an identically-named task from a second selected product's
+   template is not copied twice), new `POST /job-orders/{id}/products`
+   to add products after creation, new
+   `.../implementation-tasks/{id}/complete|reopen` endpoints, frontend
+   multi-select on the create form + a Products & Implementation Tasks
+   card on the Job Order detail page.
+3. **Contract hour-sharing list** — `ContractSharedCustomer`
+   model/migration, `Contract::allowsCustomer()`, `POST`/`DELETE
+   /contracts/{id}/shared-customers`, `JobOrderController::store()` now
+   validates the requesting customer against the contract's own
+   customer or this list (422 `ContractRuleViolation` otherwise), a
+   Sharing of Hours card on the Contract detail page.
+4. **Contract filters** — `remaining_hours_lt` and
+   `expiry_from`/`expiry_to` added to `ContractController::index()`
+   (distinct from the pre-existing coverage-window overlap filter), two
+   new controls on the Contracts list page's filter bar.
+5. **Contract Operation Report** — `ContractService::expiryListing()`
+   (default 90-day-forward window when no range given, always includes
+   already-expired contracts regardless of range) and
+   `::dueForRenewal()` (reuses `needsPreExpiryCheck()`'s SRV-014 window
+   exactly), new `ContractReportController` + `/reports/operations/
+   contracts/{expiry-listing,renewal-due-listing}` endpoints with
+   CSV/Excel export (`App\Services\ExportService`, a small new shared
+   CSV/HTML-table-as-.xls writer — see its docblock for why this avoids
+   adding a real XLSX library as a dependency), two new report types on
+   the existing Operations Reports page.
+6. **Contract–Quotation reference** — `quotation_reference` +
+   set_at/set_by columns on `contracts`, `ContractService::setQuotationReference()`
+   (only while Renewed or Expired, always audit-logged),
+   settable inline on `renew()` or via its own endpoint, shown/edited
+   on the Contract detail page. KNOWN GAP / pragmatic default — see
+   open item 40.
+7. **Sales Dashboard** — `App\Services\SalesDashboardService` +
+   `SalesDashboardController`, `/sales-dashboard/summary` (contracts
+   due for renewal, total/2-month/3-month AR outstanding via the same
+   `AccountsReceivableService::agingBucketFor()` bucketing the AR Aging
+   report uses, Quotations-pending KPIs always `not_available` — KNOWN
+   GAP, not fabricated) plus drill-down endpoints
+   (`ar-breakdown`, `top-billing-customers`,
+   `bottom-non-active-customers`) each with CSV/Excel export, a new
+   `SalesDashboardSection` component mounted below the existing Company
+   Dashboard (rendered independently of that dashboard's own summary
+   state, since `/dashboard/summary` itself is not yet converted to
+   `backend-php/` — a separate, pre-existing gap this work does not
+   attempt to close).
+
+Tests: business-logic coverage for every worked example above
+(`ContractServiceTest`, `SalesDashboardServiceTest` — the financial-
+year boundary, the AR bucket figures, the Top 10/Bottom 10 ranking) plus
+API-level RBAC/multi-company/audit coverage per module
+(`ProductImplementationTemplateTest`, `ContractSharedCustomerTest`,
+`ContractReportTest`, `SalesDashboardTest`), following the same
+template `CompanyIndividualTest.php` set for the PHP conversion work —
+happy path, 403 no-Group, 403 VIEW-only on a write, 403 Module Control
+disabled, 404 cross-company. `./vendor/bin/pint` and the full
+`php artisan test` suite stayed green throughout.

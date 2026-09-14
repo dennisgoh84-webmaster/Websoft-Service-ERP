@@ -1860,3 +1860,36 @@ Deferred to a later version: invoices/statements/payments in the portal
 (after item 38 is live), customer-side attachments, one person across
 several customers, SSO. Design:
 [customer-portal-design.md](customer-portal-design.md).
+
+## 40. Sales module enhancements: Financial Year definition, and Contract–Quotation link (raised 2026-09-22)
+
+Dennis's feature list ("Product - To add in Job Implementation
+Template", "Job Order - To allow choosing of multiple Products...",
+"Service Contract - To have selection of Sharing of Hours...", "Service
+Contract - To be able to link to Sales Quotation upon Renewal or
+Expired", "Service Contract Operation Report...", "Sales Dashboard...")
+was clarified with Dennis before this build and mostly settled — see
+SALES-001..005/007 in
+[business-requirements.md](business-requirements.md#sales-module-enhancements-business-rules-confirmed).
+Two points inside it are pragmatic defaults, not decisions, and are
+recorded here per CLAUDE.md's "never assume a business rule when
+requirements have not been provided":
+
+| Open point | Pragmatic default applied | Status |
+|---|---|---|
+| What counts as "this Financial Year" for the Sales Dashboard's Top 10 / Bottom 10 listings? | Calendar year (1 Jan – 31 Dec) — no fiscal-year-start field exists anywhere in the system. | **OPEN** — needs Dennis to confirm the real FY start, or that calendar-year is fine. |
+| How does a Contract link to the Sales Quotation that renewed it? | A plain free-text `quotation_reference` field on Contract, settable once Renewed/Expired — **not** a real linked record. | **OPEN** — Quotations exists in `backend/` (Python) but is not converted to `backend-php/` yet, so a real foreign-key link isn't reachable from this work; revisit once it is converted. |
+
+Also corrects an imprecise premise this feature set's build brief
+carried: "the Quotations module does not exist in either backend" is
+only true of `backend-php/` — `backend/app/routers/quotations.py` (and
+its model/service) is real and working in the Python backend, just not
+yet converted (see
+[php-conversion-plan.md](php-conversion-plan.md)'s "Not yet converted"
+list). The practical conclusion (free-text stand-in, since this work is
+scoped to `backend-php/` only and cannot touch `backend/`) is unaffected
+by the correction.
+
+Everything else in the feature list (SALES-001..005) was implemented as
+clarified, directly in `backend-php/` + `frontend/` (new feature work,
+not part of the Python→PHP conversion). → [planned-work.md #11](planned-work.md#11-sales-module-enhancements-job-implementation-template-multi-product-job-orders-contract-hour-sharing-contract-filters-contract-operation-report-contractquotation-reference-sales-dashboard-raised-earlier-built-2026-09-22).

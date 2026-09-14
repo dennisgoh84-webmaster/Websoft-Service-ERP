@@ -84,6 +84,42 @@ shipped and when.
 
 ## Confirmed scope, not yet built
 
+- [x] **Sales module enhancements (Job Implementation Template,
+  multi-Product Job Orders, Contract hour-sharing, Contract filters,
+  Contract Operation Report, Contract–Quotation reference, Sales
+  Dashboard)** -- built 2026-09-22, directly in `backend-php/` +
+  `frontend/`. **Not a Python→PHP conversion** -- new business scope
+  Dennis asked for, with no `backend/` (Python) equivalent; distinct
+  from the conversion work tracked in
+  [php-conversion-plan.md](php-conversion-plan.md). Product now carries
+  a reusable Job Implementation Template (ordered task checklist); a
+  Job Order can select multiple Products, each importing its template's
+  tasks (deduped by name across products, first selection wins), with
+  completion gated to Sales Manager/Owner. A Contract keeps its own
+  independent hour-sharing customer list (separate from
+  CompanyIndividual Relationships), enforced when a Job Order is
+  opened. Contracts list gained a remaining-hours-less-than filter and
+  an expiry-date-range filter. New Contract Operation Report (Expiry
+  Listing, Renewal Due Listing -- reusing SRV-014's window exactly)
+  with CSV/Excel export. Contract gained a free-text `quotation_reference`
+  field, settable once Renewed/Expired (KNOWN GAP -- see below). New
+  Sales Dashboard section below the Company Dashboard: Contracts Due
+  for Renewal, Total/2‑/3‑month AR Outstanding (reusing the AR Aging
+  report's own bucket logic), each drilling into its underlying rows,
+  plus Top 10 Sales Billing Customer and Bottom 10 Non-Active Customer
+  listings for "this Financial Year" with CSV/Excel export.
+  **Two pragmatic defaults, flagged for Dennis to confirm, not silently
+  assumed:** "this Financial Year" = the calendar year (no
+  fiscal-year-start field exists yet), and the Contract–Quotation link
+  is free text only (Quotations exists in `backend/` Python but isn't
+  converted to `backend-php/` yet, and this work can't touch
+  `backend/`) -- both recorded in
+  [open-business-decisions.md #40](open-business-decisions.md#40-sales-module-enhancements-financial-year-definition-and-contractquotation-link-raised-2026-09-22).
+  Two Quotations-dependent Sales Dashboard KPIs ("Pending Approval" /
+  "Pending Confirmation by Client") always report not-available rather
+  than fabricated, for the same reason.
+  → [planned-work.md #11](planned-work.md#11-sales-module-enhancements-job-implementation-template-multi-product-job-orders-contract-hour-sharing-contract-filters-contract-operation-report-contractquotation-reference-sales-dashboard-raised-earlier-built-2026-09-22),
+  rules SALES-001..007
 - [x] **Sub-ledger → GL posting + Bank step** -- settled and built 2026-09-14.
   Invoices, bills, receipts and payments post to the GL; receipts and
   payments get an explicit Bank / Unbank step into the bank book.
