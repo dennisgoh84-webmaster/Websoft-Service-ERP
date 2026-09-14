@@ -122,6 +122,8 @@ export interface PortalJobOrder {
   status: string
   assigned_engineer_name: string | null
   due_date: string | null
+  contract_id: string | null
+  contract_number: string | null
 }
 
 export interface PortalServiceRecord {
@@ -134,6 +136,8 @@ export interface PortalServiceRecord {
   minutes: number
   completion_status: string
   status: string
+  contract_id: string | null
+  contract_number: string | null
 }
 
 export interface PortalJobOrderDetail extends PortalJobOrder {
@@ -147,18 +151,58 @@ export interface PortalIncident {
   description: string | null
   status: 'open' | 'pending_callback' | 'converted' | 'closed'
   created_at: string
+  converted_job_order_number: string | null
+}
+
+// PORTAL-005 (confirmed 2026-09-14): a customer's own Invoices and
+// Payments -- same figures as the PDF copy, never GP/cost internals.
+export interface PortalInvoice {
+  id: string
+  invoice_number: string
+  invoice_type: 'contract_annual' | 'excess_usage'
+  description: string
+  contract_id: string | null
+  contract_number: string | null
+  amount_sgd: number
+  gst_amount_sgd: number
+  total_amount_sgd: number
+  amount_paid_sgd: number
+  outstanding_sgd: number
+  status: 'outstanding' | 'partially_paid' | 'paid' | 'written_off'
+  due_date: string | null
+  issued_at: string
+}
+
+export interface PortalPaymentAllocation {
+  invoice_id: string
+  invoice_number: string | null
+  amount_sgd: number
+}
+
+export interface PortalPayment {
+  id: string
+  voucher_number: string
+  payment_date: string
+  amount_sgd: number
+  method: string
+  reference: string | null
+  allocations: PortalPaymentAllocation[]
 }
 
 export const portalApi = {
   me: () => request<PortalMe>('/me'),
   contracts: () => request<PortalContract[]>('/contracts'),
-  jobOrders: () => request<PortalJobOrder[]>('/job-orders'),
+  jobOrders: (contractId?: string) =>
+    request<PortalJobOrder[]>(`/job-orders${contractId ? `?contract_id=${contractId}` : ''}`),
   jobOrderDetail: (id: string) => request<PortalJobOrderDetail>(`/job-orders/${id}`),
-  serviceRecords: () => request<PortalServiceRecord[]>('/service-records'),
+  serviceRecords: (contractId?: string) =>
+    request<PortalServiceRecord[]>(`/service-records${contractId ? `?contract_id=${contractId}` : ''}`),
   incidents: () => request<PortalIncident[]>('/incidents'),
   createIncident: (subject: string, description: string) =>
     request<PortalIncident>('/incidents', {
       method: 'POST',
       body: JSON.stringify({ subject, description: description || null }),
     }),
+  invoices: () => request<PortalInvoice[]>('/invoices'),
+  payments: () => request<PortalPayment[]>('/payments'),
 }

@@ -1,5 +1,5 @@
 """Customer Helpdesk Portal -- customer-side auth + data endpoints
-(PORTAL-001..004). Design: docs/customer-portal-design.md.
+(PORTAL-001..006). Design: docs/customer-portal-design.md.
 
 Auth sequence (deliberately simpler than staff's -- see schemas.py's
 Portal* docstring and design doc §4):
@@ -35,10 +35,12 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_portal_user
+from app.models.billing import Invoice
 from app.models.contracts import Contract
 from app.models.core import LoginOtp, User
 from app.models.incidents import Incident, IncidentSource
 from app.models.job_orders import JobOrder
+from app.models.payments import Payment
 from app.models.portal import PortalUser
 from app.models.service_records import ServiceRecord
 from app.schemas.schemas import (
@@ -48,11 +50,13 @@ from app.schemas.schemas import (
     PortalForgotPasswordRequest,
     PortalIncidentCreate,
     PortalIncidentOut,
+    PortalInvoiceOut,
     PortalJobOrderDetailOut,
     PortalJobOrderOut,
     PortalLoginRequest,
     PortalLoginResult,
     PortalMeOut,
+    PortalPaymentOut,
     PortalResetPasswordWithOtpRequest,
     PortalServiceRecordOut,
     PortalVerifyOtpRequest,
@@ -354,7 +358,20 @@ def _engineer_name(db: Session, user_id: uuid.UUID | None) -> str | None:
     return user.full_name if user else None
 
 
-def _job_order_out(db: Session, job_order: JobOrder) -> PortalJobOrderOut:
+def _contract_number_map(db: Session, contract_ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+    """Batches the Contract lookup for a list of job orders/invoices in
+    one query instead of one per row -- contract_ids may contain None,
+    which the filter below simply never matches."""
+    if not contract_ids:
+        return {}
+    rows = db.query(Contract.id, Contract.contract_number).filter(Contract.id.in_(contract_ids)).all()
+    return {row[0]: row[1] for row in rows}
+
+
+def _job_order_out(
+    db: Session, job_order: JobOrder, contract_numbers: dict[uuid.UUID, str] | None = None
+) -> PortalJobOrderOut:
+    numbers = contract_numbers or {}
     return PortalJobOrderOut(
         id=job_order.id,
         job_order_number=job_order.job_order_number,
@@ -363,22 +380,28 @@ def _job_order_out(db: Session, job_order: JobOrder) -> PortalJobOrderOut:
         status=job_order.status,
         assigned_engineer_name=_engineer_name(db, job_order.assigned_to_user_id),
         due_date=job_order.due_date,
+        contract_id=job_order.contract_id,
+        contract_number=numbers.get(job_order.contract_id) if job_order.contract_id else None,
     )
 
 
 @router.get("/job-orders", response_model=list[PortalJobOrderOut])
 def portal_job_orders(
+    contract_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
     portal_user: PortalUser = Depends(get_current_portal_user),
 ):
     customer_id = portal_user.contact.customer_id
-    job_orders = (
-        db.query(JobOrder)
-        .filter(JobOrder.customer_id == customer_id)
-        .order_by(JobOrder.created_at.desc())
-        .all()
-    )
-    return [_job_order_out(db, jo) for jo in job_orders]
+    query = db.query(JobOrder).filter(JobOrder.customer_id == customer_id)
+    if contract_id is not None:
+        # PORTAL-006: scope job orders (and via them, service records)
+        # to one contract -- still customer-filtered above first, so a
+        # contract_id belonging to another customer just returns empty,
+        # not another customer's job orders.
+        query = query.filter(JobOrder.contract_id == contract_id)
+    job_orders = query.order_by(JobOrder.created_at.desc()).all()
+    numbers = _contract_number_map(db, {jo.contract_id for jo in job_orders if jo.contract_id})
+    return [_job_order_out(db, jo, numbers) for jo in job_orders]
 
 
 @router.get("/job-orders/{job_order_id}", response_model=PortalJobOrderDetailOut)
@@ -400,7 +423,8 @@ def portal_job_order_detail(
         .order_by(ServiceRecord.work_date.desc())
         .all()
     )
-    base = _job_order_out(db, job_order)
+    numbers = _contract_number_map(db, {job_order.contract_id} if job_order.contract_id else set())
+    base = _job_order_out(db, job_order, numbers)
     return PortalJobOrderDetailOut(
         **base.model_dump(),
         service_records=[
@@ -414,6 +438,8 @@ def portal_job_order_detail(
                 minutes=r.rounded_minutes,
                 completion_status=r.completion_status,
                 status=r.status,
+                contract_id=base.contract_id,
+                contract_number=base.contract_number,
             )
             for r in records
         ],
@@ -422,17 +448,20 @@ def portal_job_order_detail(
 
 @router.get("/service-records", response_model=list[PortalServiceRecordOut])
 def portal_service_records(
+    contract_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
     portal_user: PortalUser = Depends(get_current_portal_user),
 ):
     customer_id = portal_user.contact.customer_id
-    rows = (
+    query = (
         db.query(ServiceRecord, JobOrder)
         .join(JobOrder, ServiceRecord.job_order_id == JobOrder.id)
         .filter(JobOrder.customer_id == customer_id)
-        .order_by(ServiceRecord.work_date.desc())
-        .all()
     )
+    if contract_id is not None:
+        query = query.filter(JobOrder.contract_id == contract_id)  # PORTAL-006
+    rows = query.order_by(ServiceRecord.work_date.desc()).all()
+    numbers = _contract_number_map(db, {jo.contract_id for _, jo in rows if jo.contract_id})
     return [
         PortalServiceRecordOut(
             id=r.id,
@@ -444,9 +473,55 @@ def portal_service_records(
             minutes=r.rounded_minutes,
             completion_status=r.completion_status,
             status=r.status,
+            contract_id=jo.contract_id,
+            contract_number=numbers.get(jo.contract_id) if jo.contract_id else None,
         )
         for r, jo in rows
     ]
+
+
+@router.get("/invoices", response_model=list[PortalInvoiceOut])
+def portal_invoices(
+    db: Session = Depends(get_db),
+    portal_user: PortalUser = Depends(get_current_portal_user),
+):
+    """PORTAL-005: a customer's own Invoices, same figures as their PDF
+    copy -- net, GST, total, amount paid, outstanding, status. Never the
+    GP/cost fields on Invoice (those are staff-only)."""
+    customer_id = portal_user.contact.customer_id
+    invoices = (
+        db.query(Invoice)
+        .filter(Invoice.customer_id == customer_id)
+        .order_by(Invoice.issued_at.desc())
+        .all()
+    )
+    numbers = _contract_number_map(db, {inv.contract_id for inv in invoices if inv.contract_id})
+    return [
+        PortalInvoiceOut.from_model(inv, contract_number=numbers.get(inv.contract_id) if inv.contract_id else None)
+        for inv in invoices
+    ]
+
+
+@router.get("/payments", response_model=list[PortalPaymentOut])
+def portal_payments(
+    db: Session = Depends(get_db),
+    portal_user: PortalUser = Depends(get_current_portal_user),
+):
+    """PORTAL-005: a customer's own Payments (receipts) and which of
+    their own invoices each one was allocated against."""
+    customer_id = portal_user.contact.customer_id
+    payments = (
+        db.query(Payment)
+        .filter(Payment.customer_id == customer_id)
+        .order_by(Payment.payment_date.desc())
+        .all()
+    )
+    invoice_ids = {a.invoice_id for p in payments for a in p.allocations}
+    invoice_numbers = {}
+    if invoice_ids:
+        rows = db.query(Invoice.id, Invoice.invoice_number).filter(Invoice.id.in_(invoice_ids)).all()
+        invoice_numbers = {row[0]: row[1] for row in rows}
+    return [PortalPaymentOut.from_model(p, invoice_numbers=invoice_numbers) for p in payments]
 
 
 @router.get("/incidents", response_model=list[PortalIncidentOut])
@@ -455,12 +530,31 @@ def portal_incidents(
     portal_user: PortalUser = Depends(get_current_portal_user),
 ):
     customer_id = portal_user.contact.customer_id
-    return (
+    incidents = (
         db.query(Incident)
         .filter(Incident.customer_id == customer_id)
         .order_by(Incident.created_at.desc())
         .all()
     )
+    job_order_ids = {i.converted_job_order_id for i in incidents if i.converted_job_order_id}
+    job_order_numbers: dict[uuid.UUID, str] = {}
+    if job_order_ids:
+        rows = db.query(JobOrder.id, JobOrder.job_order_number).filter(JobOrder.id.in_(job_order_ids)).all()
+        job_order_numbers = {row[0]: row[1] for row in rows}
+    return [
+        PortalIncidentOut(
+            id=i.id,
+            incident_number=i.incident_number,
+            subject=i.subject,
+            description=i.description,
+            status=i.status,
+            created_at=i.created_at,
+            converted_job_order_number=(
+                job_order_numbers.get(i.converted_job_order_id) if i.converted_job_order_id else None
+            ),
+        )
+        for i in incidents
+    ]
 
 
 @router.post("/incidents", response_model=PortalIncidentOut)

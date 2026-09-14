@@ -490,7 +490,7 @@ Status: **CONFIRMED / DECIDED** (2026-09-14). Full design in
 
 - Customers can **view** their contracts and hour balance, job orders,
   service records and incidents, and **raise Incidents** into the
-  existing Helpdesk queue. Nothing financial in this version.
+  existing Helpdesk queue.
 
 ### PORTAL-003 — Identity Separation — pragmatic default
 
@@ -502,6 +502,22 @@ Status: **CONFIRMED / DECIDED** (2026-09-14). Full design in
 - Access can be enabled only for a contact whose Company/Individual has
   given PDPA consent and is not archived; archiving a customer disables
   every portal login under it.
+
+### PORTAL-005 — Invoices and Payments — CONFIRMED (2026-09-14)
+
+- Customers can **view their own Invoices** (net, GST, total, amount
+  paid, outstanding, status) and their own **Payments** (receipts) with
+  which invoice(s) each one settled — the same figures as their PDF
+  copy. This reverses the original PORTAL-002 "nothing financial" call,
+  once Dennis asked for it explicitly. Still never shown: GST-code/rate
+  internals, GP/cost figures, or anything on another customer's account.
+
+### PORTAL-006 — Service Records by Contract — CONFIRMED (2026-09-14)
+
+- Customers can drill from a Contract into the Service Records logged
+  against it (via that contract's Job Orders) — not just the flat,
+  company-wide list. Explains where the consumed hours on a
+  SERVICE_SUPPORT contract actually went.
 
 ## Conceptual Business Entities
 

@@ -198,6 +198,10 @@ class PortalJobOrderOut(BaseModel):
     status: JobOrderStatus
     assigned_engineer_name: str | None
     due_date: date | None
+    # Which Contract this work was logged against, if any -- lets the
+    # portal show "service records for this contract" (PORTAL-006).
+    contract_id: uuid.UUID | None = None
+    contract_number: str | None = None
 
 
 class PortalServiceRecordOut(BaseModel):
@@ -210,6 +214,8 @@ class PortalServiceRecordOut(BaseModel):
     minutes: int  # rounded_minutes (SRV-007) -- never raw or deducted, see module docstring
     completion_status: ServiceRecordCompletion
     status: ServiceRecordStatus
+    contract_id: uuid.UUID | None = None
+    contract_number: str | None = None
 
 
 class PortalJobOrderDetailOut(PortalJobOrderOut):
@@ -217,18 +223,102 @@ class PortalJobOrderDetailOut(PortalJobOrderOut):
 
 
 class PortalIncidentOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
     incident_number: str
     subject: str
     description: str | None
     status: IncidentStatus
     created_at: datetime
+    # A friendlier status than the bare enum once routed -- which Job
+    # Order to follow for progress (PORTAL-002's "see their own
+    # incidents status"). None until/unless status becomes CONVERTED
+    # and it was routed to a Job Order specifically (not every
+    # conversion target -- Quotation/Software Task carry no money-free
+    # customer-facing detail worth exposing here).
+    converted_job_order_number: str | None = None
 
 
 class PortalIncidentCreate(BaseModel):
     subject: str = Field(min_length=1, max_length=255)
     description: str | None = None
+
+
+# PORTAL-005 (confirmed 2026-09-14): customers see their own Invoices
+# and their own Payments (receipts) -- reversing the original "no money"
+# design call once Dennis asked for it explicitly. Never GST-code/rate
+# internals or GP/cost figures (those stay staff-only); the amounts a
+# customer already receives on their own PDF invoice are fine to show
+# here, since it's the same document, just online.
+class PortalInvoiceOut(BaseModel):
+    id: uuid.UUID
+    invoice_number: str
+    invoice_type: str
+    description: str
+    contract_id: uuid.UUID | None
+    contract_number: str | None = None
+    amount_sgd: float
+    gst_amount_sgd: float
+    total_amount_sgd: float
+    amount_paid_sgd: float
+    outstanding_sgd: float
+    status: str
+    due_date: date | None
+    issued_at: datetime
+
+    @classmethod
+    def from_model(cls, invoice, contract_number: str | None = None) -> "PortalInvoiceOut":
+        return cls(
+            id=invoice.id,
+            invoice_number=invoice.invoice_number,
+            invoice_type=invoice.invoice_type.value,
+            description=invoice.description,
+            contract_id=invoice.contract_id,
+            contract_number=contract_number,
+            amount_sgd=float(invoice.amount_sgd),
+            gst_amount_sgd=float(invoice.gst_amount_sgd),
+            total_amount_sgd=float(invoice.total_amount_sgd),
+            amount_paid_sgd=float(invoice.amount_paid_sgd),
+            outstanding_sgd=float(invoice.outstanding_sgd),
+            status=invoice.status.value,
+            due_date=invoice.due_date,
+            issued_at=invoice.issued_at,
+        )
+
+
+class PortalPaymentAllocationOut(BaseModel):
+    invoice_id: uuid.UUID
+    invoice_number: str | None = None
+    amount_sgd: float
+
+
+class PortalPaymentOut(BaseModel):
+    id: uuid.UUID
+    voucher_number: str
+    payment_date: date
+    amount_sgd: float
+    method: str
+    reference: str | None
+    allocations: list[PortalPaymentAllocationOut] = Field(default_factory=list)
+
+    @classmethod
+    def from_model(cls, payment, invoice_numbers: dict | None = None) -> "PortalPaymentOut":
+        numbers = invoice_numbers or {}
+        return cls(
+            id=payment.id,
+            voucher_number=payment.voucher_number,
+            payment_date=payment.payment_date,
+            amount_sgd=float(payment.amount_sgd),
+            method=payment.method.value,
+            reference=payment.reference,
+            allocations=[
+                PortalPaymentAllocationOut(
+                    invoice_id=a.invoice_id,
+                    invoice_number=numbers.get(a.invoice_id),
+                    amount_sgd=float(a.amount_sgd),
+                )
+                for a in payment.allocations
+            ],
+        )
 
 
 class CurrentUser(BaseModel):

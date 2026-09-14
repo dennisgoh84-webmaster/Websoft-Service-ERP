@@ -6,9 +6,12 @@
  * styles) the same way src/pages/MobileApp.tsx is for staff. A customer
  * signs in with email + password, then (if SMTP is configured) a
  * 6-digit email code, then sets their own password on first sign-in.
- * From there: hour balance + open incidents on Home, their Contracts,
- * their Job Orders (+ service records), and Incidents (+ raise a new
- * one) -- deliberately nothing about money (design §6).
+ * From there: hour balance + account balance + open incidents on Home,
+ * their Contracts (+ service records logged against each), their Job
+ * Orders (+ service records), their Invoices and Payments (PORTAL-005,
+ * confirmed 2026-09-14 -- reverses the original "no money" design call
+ * once Dennis asked for it explicitly), and Incidents (+ raise a new
+ * one, with a friendlier status once routed to a Job Order).
  */
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react'
 import { api } from '../lib/api'
@@ -23,9 +26,11 @@ import {
   portalVerifyOtp,
   type PortalContract,
   type PortalIncident,
+  type PortalInvoice,
   type PortalJobOrder,
   type PortalJobOrderDetail,
   type PortalLoginResult,
+  type PortalPayment,
   type PortalServiceRecord,
 } from '../lib/portalApi'
 
@@ -138,6 +143,17 @@ function incidentBadgeKind(status: string): 'ok' | 'warn' | 'danger' | 'neutral'
   if (status === 'closed' || status === 'converted') return 'ok'
   if (status === 'pending_callback') return 'warn'
   return 'neutral'
+}
+
+function invoiceBadgeKind(status: string): 'ok' | 'warn' | 'danger' | 'neutral' {
+  if (status === 'paid') return 'ok'
+  if (status === 'partially_paid') return 'warn'
+  if (status === 'written_off') return 'neutral'
+  return 'danger' // outstanding
+}
+
+function fmtMoney(n: number): string {
+  return n.toLocaleString('en-SG', { style: 'currency', currency: 'SGD', minimumFractionDigits: 2 })
 }
 
 function fmtDate(iso: string | null): string {
@@ -438,7 +454,7 @@ function PortalLogin() {
 
 // ── Signed-in shell: header + bottom nav ────────────────────────────
 
-type Tab = 'home' | 'contracts' | 'jobOrders' | 'incidents'
+type Tab = 'home' | 'contracts' | 'jobOrders' | 'billing' | 'incidents'
 
 function PortalHeader({ title }: { title: string }) {
   const { portalUser, logout } = usePortalAuth()
@@ -458,6 +474,7 @@ function BottomNav({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) 
     { key: 'home', label: 'Home', icon: '⌂' },
     { key: 'contracts', label: 'Contracts', icon: '⌗' },
     { key: 'jobOrders', label: 'Job Orders', icon: '⚙' },
+    { key: 'billing', label: 'Billing', icon: '$' },
     { key: 'incidents', label: 'Incidents', icon: '⚠' },
   ]
   return (
@@ -482,17 +499,21 @@ function PortalHome({ onGoTab }: { onGoTab: (t: Tab) => void }) {
   const [contracts, setContracts] = useState<PortalContract[] | null>(null)
   const [incidents, setIncidents] = useState<PortalIncident[] | null>(null)
   const [jobOrders, setJobOrders] = useState<PortalJobOrder[] | null>(null)
+  const [invoices, setInvoices] = useState<PortalInvoice[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    Promise.all([portalApi.contracts(), portalApi.incidents(), portalApi.jobOrders()])
-      .then(([c, i, j]) => { setContracts(c); setIncidents(i); setJobOrders(j) })
+    Promise.all([portalApi.contracts(), portalApi.incidents(), portalApi.jobOrders(), portalApi.invoices()])
+      .then(([c, i, j, inv]) => { setContracts(c); setIncidents(i); setJobOrders(j); setInvoices(inv) })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load'))
   }, [])
 
   const activeHourContracts = (contracts ?? []).filter((c) => c.contract_kind === 'service_support')
   const openIncidents = (incidents ?? []).filter((i) => i.status === 'open' || i.status === 'pending_callback')
   const recentJobOrders = (jobOrders ?? []).slice(0, 3)
+  const outstandingBalance = (invoices ?? [])
+    .filter((inv) => inv.status !== 'written_off')
+    .reduce((sum, inv) => sum + inv.outstanding_sgd, 0)
 
   return (
     <div>
@@ -519,6 +540,19 @@ function PortalHome({ onGoTab }: { onGoTab: (t: Tab) => void }) {
           <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>Expires {fmtDate(c.end_date)}</div>
         </div>
       ))}
+
+      <div style={styles.card}>
+        <div style={{ fontSize: 12, color: MUTED, fontWeight: 600, textTransform: 'uppercase' }}>Account balance</div>
+        <div style={{ fontSize: 28, fontWeight: 700, marginTop: 4, color: outstandingBalance > 0 ? INK : OK }}>
+          {fmtMoney(outstandingBalance)}
+        </div>
+        <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>
+          {outstandingBalance > 0 ? 'Outstanding across all invoices' : 'Nothing outstanding'}
+        </div>
+        <button onClick={() => onGoTab('billing')} style={{ ...styles.btn, ...styles.btnSecondary, marginTop: 12 }}>
+          View invoices &amp; payments
+        </button>
+      </div>
 
       <div style={styles.card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -552,7 +586,7 @@ function PortalHome({ onGoTab }: { onGoTab: (t: Tab) => void }) {
 
 // ── Contracts ────────────────────────────────────────────────────────
 
-function PortalContracts() {
+function PortalContracts({ onViewServiceRecords }: { onViewServiceRecords: (contractId: string, contractNumber: string) => void }) {
   const [contracts, setContracts] = useState<PortalContract[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -595,8 +629,45 @@ function PortalContracts() {
           <div style={{ fontSize: 12, color: MUTED, marginTop: 10 }}>
             {fmtDate(c.start_date)} — {fmtDate(c.end_date)}
           </div>
+          <button
+            onClick={() => onViewServiceRecords(c.id, c.contract_number)}
+            style={{ ...styles.btn, ...styles.btnSecondary, marginTop: 12 }}
+          >
+            View service records
+          </button>
         </div>
       ))}
+    </div>
+  )
+}
+
+// PORTAL-006: the service records logged against one specific contract
+// -- reached from a contract card above, not its own bottom-nav tab.
+function PortalContractServiceRecords({
+  contractId, contractNumber, onBack,
+}: { contractId: string; contractNumber: string; onBack: () => void }) {
+  const [records, setRecords] = useState<PortalServiceRecord[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    portalApi.serviceRecords(contractId).then(setRecords).catch((e) => setError(e instanceof Error ? e.message : 'Failed to load'))
+  }, [contractId])
+
+  return (
+    <div>
+      <div style={{ padding: '12px 16px 0' }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', color: MAROON, fontSize: 14, cursor: 'pointer', padding: 0 }}>
+          &larr; Back to contracts
+        </button>
+      </div>
+      {error && <div style={styles.errorBox}>{error}</div>}
+      <div style={styles.card}>
+        <div style={{ fontSize: 12, color: MUTED, fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>
+          Service records for {contractNumber}
+        </div>
+        {records?.length === 0 && <div style={{ fontSize: 14, color: MUTED, padding: '8px 0' }}>No service records logged against this contract yet.</div>}
+        {records?.map((r) => <ServiceRecordRow key={r.id} r={r} />)}
+      </div>
     </div>
   )
 }
@@ -694,6 +765,115 @@ function PortalJobOrderDetailView({ id, onBack }: { id: string; onBack: () => vo
   )
 }
 
+// ── Billing: Invoices + Payments (PORTAL-005) ───────────────────────
+
+function InvoiceCard({ inv }: { inv: PortalInvoice }) {
+  return (
+    <div style={styles.card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>{inv.invoice_number}</div>
+          <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>{inv.description}</div>
+          {inv.contract_number && <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{inv.contract_number}</div>}
+        </div>
+        <span style={badgeStyle(invoiceBadgeKind(inv.status))}>{label(inv.status)}</span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginTop: 12 }}>
+        <span style={{ color: MUTED }}>Net</span>
+        <span>{fmtMoney(inv.amount_sgd)}</span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginTop: 4 }}>
+        <span style={{ color: MUTED }}>GST</span>
+        <span>{fmtMoney(inv.gst_amount_sgd)}</span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginTop: 4, fontWeight: 700 }}>
+        <span style={{ color: MUTED, fontWeight: 400 }}>Total</span>
+        <span>{fmtMoney(inv.total_amount_sgd)}</span>
+      </div>
+      {inv.outstanding_sgd > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginTop: 4, fontWeight: 700 }}>
+          <span style={{ color: MUTED, fontWeight: 400 }}>Outstanding</span>
+          <span style={{ color: DANGER }}>{fmtMoney(inv.outstanding_sgd)}</span>
+        </div>
+      )}
+      <div style={{ fontSize: 12, color: MUTED, marginTop: 10 }}>
+        Issued {fmtDate(inv.issued_at)}{inv.due_date && ` · Due ${fmtDate(inv.due_date)}`}
+      </div>
+    </div>
+  )
+}
+
+function PaymentCard({ p }: { p: PortalPayment }) {
+  return (
+    <div style={styles.card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>{p.voucher_number}</div>
+          <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>{label(p.method)}{p.reference ? ` · ${p.reference}` : ''}</div>
+        </div>
+        <span style={{ fontSize: 18, fontWeight: 700, color: OK }}>{fmtMoney(p.amount_sgd)}</span>
+      </div>
+      {p.allocations.length > 0 ? (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 12, color: MUTED, fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Applied to</div>
+          {p.allocations.map((a) => (
+            <div key={a.invoice_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '2px 0' }}>
+              <span>{a.invoice_number ?? 'Invoice'}</span>
+              <span>{fmtMoney(a.amount_sgd)}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ fontSize: 13, color: MUTED, marginTop: 10 }}>Not yet applied to an invoice.</div>
+      )}
+      <div style={{ fontSize: 12, color: MUTED, marginTop: 10 }}>{fmtDate(p.payment_date)}</div>
+    </div>
+  )
+}
+
+function PortalBilling() {
+  const [view, setView] = useState<'invoices' | 'payments'>('invoices')
+  const [invoices, setInvoices] = useState<PortalInvoice[] | null>(null)
+  const [payments, setPayments] = useState<PortalPayment[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    Promise.all([portalApi.invoices(), portalApi.payments()])
+      .then(([inv, pay]) => { setInvoices(inv); setPayments(pay) })
+      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load'))
+  }, [])
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, padding: '12px 16px 0' }}>
+        <button
+          onClick={() => setView('invoices')}
+          style={{ ...styles.btn, flex: 1, padding: '10px', ...(view === 'invoices' ? styles.btnPrimary : styles.btnSecondary) }}
+        >
+          Invoices
+        </button>
+        <button
+          onClick={() => setView('payments')}
+          style={{ ...styles.btn, flex: 1, padding: '10px', ...(view === 'payments' ? styles.btnPrimary : styles.btnSecondary) }}
+        >
+          Payments
+        </button>
+      </div>
+      {error && <div style={styles.errorBox}>{error}</div>}
+      {view === 'invoices' && (
+        invoices?.length === 0
+          ? <div style={{ padding: '20px 16px', color: MUTED, fontSize: 14 }}>No invoices yet.</div>
+          : invoices?.map((inv) => <InvoiceCard key={inv.id} inv={inv} />)
+      )}
+      {view === 'payments' && (
+        payments?.length === 0
+          ? <div style={{ padding: '20px 16px', color: MUTED, fontSize: 14 }}>No payments recorded yet.</div>
+          : payments?.map((p) => <PaymentCard key={p.id} p={p} />)
+      )}
+    </div>
+  )
+}
+
 // ── Incidents ────────────────────────────────────────────────────────
 
 function PortalIncidents({ onNew }: { onNew: () => void }) {
@@ -721,6 +901,11 @@ function PortalIncidents({ onNew }: { onNew: () => void }) {
             </div>
             <span style={badgeStyle(incidentBadgeKind(i.status))}>{label(i.status)}</span>
           </div>
+          {i.converted_job_order_number && (
+            <div style={{ fontSize: 13, color: MAROON, fontWeight: 600, marginTop: 8 }}>
+              Routed to Job Order {i.converted_job_order_number}
+            </div>
+          )}
           {i.description && <div style={{ fontSize: 13, color: MUTED, marginTop: 8 }}>{i.description}</div>}
           <div style={{ fontSize: 12, color: MUTED, marginTop: 8 }}>{fmtDateTime(i.created_at)}</div>
         </div>
@@ -779,17 +964,20 @@ function PortalSignedInApp() {
   const [tab, setTab] = useState<Tab>('home')
   const [selectedJobOrderId, setSelectedJobOrderId] = useState<string | null>(null)
   const [showNewIncident, setShowNewIncident] = useState(false)
+  const [contractDrilldown, setContractDrilldown] = useState<{ id: string; number: string } | null>(null)
 
   function goTab(t: Tab) {
     setSelectedJobOrderId(null)
     setShowNewIncident(false)
+    setContractDrilldown(null)
     setTab(t)
   }
 
   const titles: Record<Tab, string> = {
     home: 'Home',
-    contracts: 'Contracts',
+    contracts: contractDrilldown ? 'Service Records' : 'Contracts',
     jobOrders: selectedJobOrderId ? 'Job Order' : 'Job Orders',
+    billing: 'Billing',
     incidents: showNewIncident ? 'New Incident' : 'Incidents',
   }
 
@@ -798,12 +986,23 @@ function PortalSignedInApp() {
       <PortalHeader title={titles[tab]} />
       <div style={styles.content}>
         {tab === 'home' && <PortalHome onGoTab={goTab} />}
-        {tab === 'contracts' && <PortalContracts />}
+        {tab === 'contracts' && (
+          contractDrilldown
+            ? (
+              <PortalContractServiceRecords
+                contractId={contractDrilldown.id}
+                contractNumber={contractDrilldown.number}
+                onBack={() => setContractDrilldown(null)}
+              />
+            )
+            : <PortalContracts onViewServiceRecords={(id, number) => setContractDrilldown({ id, number })} />
+        )}
         {tab === 'jobOrders' && (
           selectedJobOrderId
             ? <PortalJobOrderDetailView id={selectedJobOrderId} onBack={() => setSelectedJobOrderId(null)} />
             : <PortalJobOrders onSelect={setSelectedJobOrderId} />
         )}
+        {tab === 'billing' && <PortalBilling />}
         {tab === 'incidents' && (
           showNewIncident
             ? <PortalNewIncident onDone={() => setShowNewIncident(false)} />

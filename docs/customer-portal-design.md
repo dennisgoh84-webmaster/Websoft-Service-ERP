@@ -116,16 +116,19 @@ accepted as input; the customer comes from the token.
 |---|---|---|
 | GET | `/me` | contact name, customer name, must_change_password |
 | GET | `/contracts` | the customer's contracts with contracted / consumed / remaining hours and expiry |
-| GET | `/job-orders` | their job orders: number, subject, type, status, assigned engineer name, due date |
+| GET | `/job-orders` | their job orders: number, subject, type, status, assigned engineer name, due date, contract link. Optional `?contract_id=` filter (PORTAL-006) |
 | GET | `/job-orders/{id}` | plus its service records (date, engineer, minutes rounded, completion) |
-| GET | `/service-records` | flat list, newest first |
-| GET | `/incidents` | their incidents with status |
+| GET | `/service-records` | flat list, newest first. Optional `?contract_id=` filter (PORTAL-006) — the customer-filter is applied first, so a contract_id belonging to another customer just returns empty, never another customer's records |
+| GET | `/invoices` | the customer's own Invoices — net, GST, total, amount paid, outstanding, status, contract link (PORTAL-005) |
+| GET | `/payments` | the customer's own Payments (receipts) — amount, method, reference, and which invoice(s) each was allocated against (PORTAL-005) |
+| GET | `/incidents` | their incidents with status, plus the Job Order number once routed (`converted_job_order_number`) |
 | POST | `/incidents` | `{subject, description}` → creates `Incident` with `customer_id` from the token, `source = PORTAL`, `sender_name/email/phone` from the contact, `raised_by_portal_user_id` set |
 
-Deliberately **not** exposed: anything with money (invoice, quotation,
-rate, cost), internal notes, deduction minutes vs raw (customers see
-the rounded, approved figure only), other contacts, staff names beyond
-the assigned engineer.
+Deliberately **not** exposed even now: quotation/rate internals, GP/cost
+figures on an Invoice (`cost_sgd`/`gp_sgd` — staff-only), internal
+notes, deduction minutes vs raw (customers see the rounded, approved
+figure only), other contacts, staff names beyond the assigned engineer,
+or anything on another customer's account.
 
 Each endpoint reuses the existing service-layer queries with a customer
 filter — no duplicated business logic.
@@ -139,9 +142,11 @@ outside `Layout`, so it has no staff sidebar.
   token key (`websoft_portal_token`) so staff and portal sessions never
   collide in one browser.
 - `src/portal/` pages: Login (email/password → OTP → change password),
-  Home (contract hour balance front and centre, open incidents, recent
-  job orders), Contracts, Job Orders (+ detail with service records),
-  Incidents (+ New Incident form).
+  Home (contract hour balance, account balance, open incidents, recent
+  job orders), Contracts (+ drill into that contract's service
+  records — PORTAL-006), Job Orders (+ detail with service records),
+  Billing (Invoices / Payments toggle — PORTAL-005), Incidents (+ New
+  Incident form, showing the routed Job Order once converted).
 - Company logo and name from the public branding endpoint the staff
   login already uses.
 - Phone-first layout; it will mostly be opened from a phone.
@@ -170,11 +175,21 @@ the portal per client like any other module.
 5. Disable access → next request refused. Archive the customer → same.
 6. Wrong password ×5 → locked 15 minutes.
 7. `npm run build` and empty-DB migration pass.
+8. **PORTAL-005/006 (2026-09-14):** Invoices/Payments show the same
+   figures as staff's own AR screens for that customer, never another
+   customer's; a contract's "View service records" only ever returns
+   records from that contract's own Job Orders (bogus/other-customer
+   contract_id → empty, not an error); converting an Incident to a Job
+   Order updates its portal status to show the routed Job Order number.
 
 ## 10. Out of scope (recorded)
 
-- Invoices / statements / online payment in the portal — a later
-  version, once BILL/AR posting (gl-posting-design.md) is live.
+- **Online payment** in the portal — customers can view Invoices and
+  Payments (PORTAL-005, built 2026-09-14) but cannot pay through the
+  portal itself; that stays a later version.
+- Statements of account (a formatted PDF/export) in the portal — the
+  Invoices/Payments lists cover the same data today, just not as one
+  printable document.
 - Customer-side attachments on incidents.
 - Multiple customers per contact (a person who works for two clients).
 - SSO / social login.

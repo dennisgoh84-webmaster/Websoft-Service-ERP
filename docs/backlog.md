@@ -31,15 +31,18 @@ shipped and when.
   guards, `scripts/post_backlog.py` back-fill, GL/Bank chips on the four
   screens, bank-account and expense-account selects.
   → [gl-posting-design.md](gl-posting-design.md), rules ACC-001..004
-- [x] **Customer Helpdesk Portal** -- settled and built 2026-09-14.
-  Per-Contact logins (email + password + OTP, own `portal_users` table,
-  purpose="portal" token -- never accepted by any staff endpoint and
-  vice versa, tested explicitly). Staff enable/disable/reset access
-  from the Contacts tab, gated by PDPA consent. Customers sign in at
-  `/portal` to view their contracts/hours, job orders + service
-  records, and incidents, and to raise a new Incident (source=portal,
-  visible to staff same as any other Incident). Deliberately no money
-  anywhere in the portal.
+- [x] **Customer Helpdesk Portal** -- settled and built 2026-09-14,
+  extended same day with Invoices/Payments and contract-scoped service
+  records. Per-Contact logins (email + password + OTP, own
+  `portal_users` table, purpose="portal" token -- never accepted by any
+  staff endpoint and vice versa, tested explicitly). Staff
+  enable/disable/reset access from the Contacts tab, gated by PDPA
+  consent. Customers sign in at `/portal` to view their contracts/hours
+  (+ drill into a contract's own service records, PORTAL-006), job
+  orders + service records, their own Invoices and Payments
+  (PORTAL-005 -- reverses the original "no money" call), and incidents
+  (with the routed Job Order shown once converted), and to raise a new
+  Incident (source=portal, visible to staff same as any other Incident).
   → [customer-portal-design.md](customer-portal-design.md), rules PORTAL-001..004
 - [x] **Mobile web app for Support Staff** -- built 2026-09-12. Time
   in/out, work description, camera photo/video attachments, finger-drawn
