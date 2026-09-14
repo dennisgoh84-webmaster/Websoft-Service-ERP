@@ -248,6 +248,17 @@ resulting audit trail entries (including IP/User-Agent capture) -- see
 CSV/Excel export endpoints and the Customer Helpdesk Portal access
 sub-resource (depends on the Portal module below).
 
+- **Users / Staff Master** (`app/routers/users.py` →
+  `App\Http\Controllers\Api\UserController`): staff directory
+  (ungated read, per the Python route's own comment -- used by
+  pickers across other modules), create/update/deactivate/reactivate,
+  admin password reset (forces a change on next sign-in, same as a
+  new account), photo upload, per-module audit log, and
+  company-access & Groups management (a Group only ever applies
+  within its own company; revoking the company a staff member is
+  currently working in is blocked, matching the Python version
+  exactly). **Not yet converted:** CSV/Excel export.
+
 ## Not yet converted (pending, in rough priority order)
 
 Everything below still only exists in `backend/` (Python). Each is a
@@ -255,28 +266,26 @@ phase of its own, following the same pattern as CompanyIndividual
 Management above -- model(s) + migration(s) + controller + routes +
 smoke test:
 
-1. **Users / Staff Master** (`app/routers/users.py`) -- needed before
-   Group/Company admin can be driven from the UI instead of a seeder.
-2. **Catalog** (`app/models/catalog.py`, `app/routers/catalog.py`) --
+1. **Catalog** (`app/models/catalog.py`, `app/routers/catalog.py`) --
    Product/Service master, referenced by Contracts and Quotations.
-3. **Service Contracts** (`app/models/contracts.py`,
+2. **Service Contracts** (`app/models/contracts.py`,
    `app/services/contracts.py`, `app/routers/contracts.py`) -- SRV-001,
    002, 003, 005, 010, 012, 016, 017, 018.
-4. **Job Orders** (`app/models/job_orders.py`, `app/routers/job_orders.py`).
-5. **Service Records** (`app/models/service_records.py`,
+3. **Job Orders** (`app/models/job_orders.py`, `app/routers/job_orders.py`).
+4. **Service Records** (`app/models/service_records.py`,
    `app/services/service_records.py`, `app/routers/service_records.py`)
    -- SRV-007 (hour rounding), SRV-015 (submission timeframe).
-6. **Excess Usage** (`app/services/excess_usage.py`,
+5. **Excess Usage** (`app/services/excess_usage.py`,
    `app/routers/excess_usage.py`) -- SRV-004, 008, 011, 013 (Nico/
    Cherish review, blended-rate billing, treatment categories); the
    business logic here has the most riding on getting the rounding/
    balance-never-negative arithmetic exactly right, so it should get a
    dedicated test suite before being trusted, not just a smoke test.
-7. **Billing / Invoicing** (`app/services/billing.py`,
+6. **Billing / Invoicing** (`app/services/billing.py`,
    `app/routers/billing.py`) -- BILL-001..006.
-8. **Accounts Receivable** (`app/services/accounts_receivable.py`,
+7. **Accounts Receivable** (`app/services/accounts_receivable.py`,
    `app/routers/accounts_receivable.py`) -- AR-001..003.
-9. Everything else in `backend/app/routers/` not listed above
+8. Everything else in `backend/app/routers/` not listed above
    (Quotations, Incidents, Accounts Payable/Purchasing, Inventory/
    Stock, GL posting + Bank step, Reporting/dashboards, Event Logs,
    Document Control, Periods, Announcements, Software Tasks, Ops
