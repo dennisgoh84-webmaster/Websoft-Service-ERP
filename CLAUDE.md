@@ -198,6 +198,35 @@ unconverted -- see docs/php-conversion-plan.md. `backend/` (Python) is
 untouched and keeps running as the system of record until each
 remaining module is converted, module by module, the same way.
 
+**Sales module enhancements landed directly in `backend-php/` +
+`frontend/`, not as part of the conversion above** (`backend/` has no
+equivalent for any of these -- new business scope Dennis asked for; see
+[docs/planned-work.md #11](docs/planned-work.md#11-sales-module-enhancements-job-implementation-template-multi-product-job-orders-contract-hour-sharing-contract-filters-contract-operation-report-contractquotation-reference-sales-dashboard-raised-earlier-built-2026-09-22)):
+Product now carries a reusable Job Implementation Template (an ordered
+task checklist); a Job Order can select multiple Products, each
+importing its template's tasks onto the Job Order (deduped by name
+across products, completion gated to Sales Manager/Owner); a Contract
+keeps its own independent hour-sharing customer list, enforced when a
+Job Order is opened against it; the Contracts list gained a
+remaining-hours-less-than filter and an expiry-date-range filter; a new
+Contract Operation Report (Expiry Listing, Renewal Due Listing --
+reusing SRV-014's pre-expiry window exactly) with CSV/Excel export; and
+a new Sales Dashboard section below the Company Dashboard (Contracts
+Due for Renewal, Total/2-/3-month AR Outstanding reusing the AR Aging
+report's own bucket logic, each drilling into its underlying rows,
+plus Top 10 Sales Billing Customer / Bottom 10 Non-Active Customer
+listings for "this Financial Year"). **Two pragmatic defaults, flagged
+for Dennis to confirm rather than silently assumed:** "this Financial
+Year" is taken as the calendar year (no fiscal-year-start field exists
+anywhere in the system yet), and the Contract-Quotation link is a
+free-text `quotation_reference` field, not a real linked record (the
+Quotations module exists in `backend/` Python but has not been
+converted to `backend-php/`, and this work is scoped to `backend-php/`
+only) -- both recorded in
+[docs/open-business-decisions.md #40](docs/open-business-decisions.md#40-sales-module-enhancements-financial-year-definition-and-contractquotation-link-raised-2026-09-22).
+The Sales Dashboard's two Quotations-pending KPIs report not-available
+for the same reason, rather than fabricated.
+
 No other business area has application code yet. **Commission
 Management, further Service Record business-rule decisions (open item
 9.1), and Odoo migration planning are deferred for now at Dennis's
