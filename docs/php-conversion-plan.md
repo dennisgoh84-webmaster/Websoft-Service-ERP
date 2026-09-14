@@ -436,10 +436,47 @@ Record with 15-minute rounding visible, the Service Record Approval
 queue showing the suggested deduction, the Excess Usage Review page
 showing a real 2.00-hr excess record end to end, and the Invoices
 page rendering the activation invoice with the correct net/GST/total
-breakdown. The only 404s seen were for not-yet-converted modules
-(Announcements, Dashboard, Accounts Receivable aging, Documents) --
-none from Contracts, Job Orders, Service Records, Excess Usage, or
-Billing's own endpoints.
+breakdown.
+- **Accounts Receivable** (`app/services/accounts_receivable.py`,
+  `app/routers/accounts_receivable.py` (partial) →
+  `App\Services\AccountsReceivableService`,
+  `App\Http\Controllers\Api\AccountsReceivableController`): AR-002
+  (write off an invoice's outstanding balance -- owner always allowed,
+  anyone else only below the company's configured
+  `write_off_approval_threshold_sgd`, and *nobody* but the owner while
+  that threshold is unset, per the safe reading of an undecided rule)
+  and AR-003 (flag/clear a dispute -- collections continue regardless,
+  nothing is put on hold) and its aging report (5 buckets: current,
+  1-30, 31-60, 61-90, over 90 days past due, grouped by customer). An
+  invoice with no due date is treated as current, never invented-late.
+  10 business-logic tests (`tests/Feature/AccountsReceivableServiceTest.php`
+  -- every threshold/role combination, the exact bucket boundaries,
+  written-off invoices excluded from aging) + 6 API-level tests
+  (`tests/Feature/AccountsReceivableTest.php`).
+  **KNOWN GAP (not silently papered over):** AR-001 (recording a
+  customer Payment and manually allocating it against invoices) is
+  NOT converted. `Payment.bank_account_id` is a required foreign key
+  into `bank_accounts` (the GL posting + Bank module's own table,
+  `docs/gl-posting-design.md`), which doesn't exist in `backend-php/`
+  yet -- so a receipt can't be recorded at all through this backend
+  today, and no invoice's `amount_paid_sgd`/status here reflects a
+  real payment. This is why AR needed real scoping, not just a
+  smaller endpoint list: about half of the Python router (payments,
+  allocation, statements, un-GL/un-bank) is genuinely blocked on a
+  module that hasn't been converted yet, not merely deferred for
+  time. Also not converted: the commission clawback the Python
+  write-off endpoint triggers (Commission Management is deferred, per
+  CLAUDE.md) and CSV/Excel/.docx export.
+
+Verified end-to-end for all six modules against the real React
+frontend (screenshots in the PR/commit history), including the
+Invoices page's Aging widget -- which previously 404'd (a confirmed
+gap noted when Billing shipped) -- now rendering all 5 buckets with
+the real activation invoice correctly showing as "Current / not yet
+due" ($3,270.00). The only 404s seen were for not-yet-converted
+modules (Announcements, Dashboard, Documents) -- none from Contracts,
+Job Orders, Service Records, Excess Usage, Billing, or Accounts
+Receivable's own endpoints.
 
 ## Not yet converted (pending, in rough priority order)
 
@@ -448,16 +485,19 @@ phase of its own, following the same pattern as CompanyIndividual
 Management above -- model(s) + migration(s) + controller + routes +
 smoke test:
 
-1. **Accounts Receivable** (`app/services/accounts_receivable.py`,
-   `app/routers/accounts_receivable.py`) -- AR-001..003.
+1. **GL posting + Bank step** (`app/services/posting.py`,
+   `docs/gl-posting-design.md`) -- Chart of Accounts, journal entries,
+   period locking, bank reconciliation. Bumped up in priority: it now
+   blocks two real gaps (invoices aren't posted to the GL; AR-001
+   payment recording can't happen at all without `bank_accounts`).
 2. Everything else in `backend/app/routers/` not listed above
    (Quotations, Incidents, Accounts Payable/Purchasing, Inventory/
-   Stock, GL posting + Bank step, Reporting/dashboards, Event Logs,
-   Document Control, Periods, Announcements, Software Tasks, Ops
-   Dashboard, Customer Helpdesk Portal, Mobile Web App, Commissions
-   [deferred, per CLAUDE.md]) -- lower priority than the Service
-   Operations core above, since that core is what CLAUDE.md's Status
-   section calls out as the one working slice today.
+   Stock, Reporting/dashboards, Event Logs, Document Control, Periods,
+   Announcements, Software Tasks, Ops Dashboard, Customer Helpdesk
+   Portal, Mobile Web App, Commissions [deferred, per CLAUDE.md]) --
+   lower priority than the Service Operations core above, since that
+   core is what CLAUDE.md's Status section calls out as the one
+   working slice today.
 
 ## Running the PHP backend locally
 

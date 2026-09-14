@@ -147,14 +147,21 @@ due dates from customer payment terms, serial invoice numbering).
 Billing closes the two known gaps flagged by earlier modules:
 contract activation now issues its annual invoice (except Ad Hoc,
 which has no upfront value), and a Billable excess-usage decision now
-issues its own invoice at the contract's blended rate. **Known gap:**
-invoices aren't posted to the General Ledger yet -- GL posting
-(`docs/gl-posting-design.md`) is its own module, not converted, so
-every invoice reports as not yet posted; don't treat an invoice
-issued via `backend-php/` as posted to the books. `backend/` (Python)
-is untouched and keeps running as the system of record until each
-remaining module (Accounts Receivable, GL posting, and everything
-else) is converted, module by module, the same way.
+issues its own invoice at the contract's blended rate. Also converted:
+Accounts Receivable (AR-002 write-offs -- the owner always may, anyone
+else only below a configured threshold, nobody but the owner while
+that threshold is unset; AR-003 dispute flagging, which never holds
+collections; the 5-bucket aging report). **Known gaps:** invoices
+aren't posted to the General Ledger yet, and recording a customer
+payment (AR-001) isn't possible at all yet -- both genuinely blocked
+on the still-unconverted GL posting + Bank module
+(`docs/gl-posting-design.md`), since a payment record requires a real
+bank account row from that module; don't treat an invoice issued via
+`backend-php/` as posted to the books, or its status as reflecting
+real payments received. `backend/` (Python) is untouched and keeps
+running as the system of record until each remaining module (GL
+posting + Bank, and everything else) is converted, module by module,
+the same way.
 
 No other business area has application code yet. **Commission
 Management, further Service Record business-rule decisions (open item

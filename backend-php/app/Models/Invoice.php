@@ -36,6 +36,17 @@ class Invoice extends Model
 
     public const STATUS_WRITTEN_OFF = 'written_off';
 
+    // Mirrors the DB column defaults (see the migration) so a freshly
+    // constructed, not-yet-saved/refreshed Invoice (e.g. the one
+    // BillingService returns) behaves the same as one just reloaded
+    // from the database -- outstandingSgd() below would otherwise see
+    // a null amount_paid_sgd rather than zero.
+    protected $attributes = [
+        'status' => self::STATUS_OUTSTANDING,
+        'amount_paid_sgd' => '0.00',
+        'is_disputed' => false,
+    ];
+
     protected $fillable = [
         'company_id', 'customer_id', 'contract_id', 'excess_usage_record_id',
         'invoice_number', 'invoice_type', 'description', 'amount_sgd', 'tax_code',
@@ -76,7 +87,7 @@ class Invoice extends Model
         if ($this->status === self::STATUS_WRITTEN_OFF) {
             return Money::of(0);
         }
-        $remaining = Money::of($this->total_amount_sgd)->minus(Money::of($this->amount_paid_sgd));
+        $remaining = Money::of($this->total_amount_sgd ?? 0)->minus(Money::of($this->amount_paid_sgd ?? 0));
 
         return $remaining->toFloat() < 0 ? Money::of(0) : $remaining;
     }
