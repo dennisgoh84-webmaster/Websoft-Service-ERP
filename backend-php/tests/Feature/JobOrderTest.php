@@ -10,6 +10,7 @@ use App\Models\Group;
 use App\Models\GroupModuleAuthority;
 use App\Models\JobOrder;
 use App\Models\ModuleCatalog;
+use App\Models\ServiceRecord;
 use App\Models\User;
 use App\Models\UserCompanyAccess;
 use App\Services\PasswordPolicy;
@@ -187,6 +188,38 @@ class JobOrderTest extends TestCase
 
         $this->postJson("/api/job-orders/{$jobOrder->id}/reopen", [], $this->headers($login->json('access_token')))
             ->assertStatus(403);
+    }
+
+    public function test_budget_overrun_sums_approved_service_record_minutes(): void
+    {
+        $company = Company::factory()->create();
+        [$customer, $contract] = $this->customerAndContract($company);
+        $contract->update([
+            'contracted_minutes' => 60, 'contract_value_sgd' => 300,
+            'status' => Contract::STATUS_ACTIVE, 'contract_kind' => Contract::KIND_ANNUAL,
+        ]);
+        $token = $this->ownerToken($company);
+        $employee = User::factory()->for($company)->create();
+        $jobOrder = JobOrder::factory()->for($company)->create([
+            'customer_id' => $customer->id, 'contract_id' => $contract->id, 'job_order_type' => JobOrder::TYPE_PROJECT,
+        ]);
+        // An approved record counts; a submitted (unapproved) one doesn't.
+        ServiceRecord::factory()->for($company)->create([
+            'job_order_id' => $jobOrder->id, 'employee_user_id' => $employee->id,
+            'rounded_minutes' => 90, 'status' => ServiceRecord::STATUS_APPROVED,
+        ]);
+        ServiceRecord::factory()->for($company)->create([
+            'job_order_id' => $jobOrder->id, 'employee_user_id' => $employee->id,
+            'rounded_minutes' => 999, 'status' => ServiceRecord::STATUS_SUBMITTED,
+        ]);
+
+        $response = $this->getJson("/api/job-orders/{$jobOrder->id}", $this->headers($token));
+
+        $response->assertOk();
+        $overrun = $response->json('budget_overrun');
+        $this->assertSame(90, $overrun['consumed_minutes']);
+        $this->assertTrue($overrun['is_over_hours']); // 90 > 60 contracted
+        $this->assertEqualsWithDelta(450.0, $overrun['consumed_cost_sgd'], 0.001); // 90/60 * (300/1hr blended rate)
     }
 
     public function test_budget_overrun_approval_requires_sales_manager_or_owner(): void

@@ -317,24 +317,55 @@ sub-resource (depends on the Portal module below).
   owner-only reopen, budget-overrun approval (7.1, Sales Manager/Owner
   only) and PROJECT milestone CRUD + re-init template, with milestone
   completion gated to Sales Manager/Owner (7.3).
-  **Stub, not a silent gap:** `computeBudgetOverrun()` always reports 0
-  consumed minutes -- the real figure sums approved Service Record
-  minutes, and Service Records isn't converted yet; see that method's
-  docblock. Nothing in this backend ever auto-closes a Job Order yet
-  either (that's driven by Service Record approval) -- VOID and the
-  other manual states work fully.
+  `computeBudgetOverrun()` now does the real query (sums approved
+  Service Record `rounded_minutes` for the Job Order, blended against
+  the contract's rate) now that Service Records exists -- see
+  `JobOrderTest::test_budget_overrun_sums_approved_service_record_minutes`.
   **Not yet converted:** CSV/Excel export.
+- **Service Records** (`app/models/service_records.py`,
+  `app/services/service_records.py`, `app/routers/service_records.py`
+  → `App\Models\ServiceRecord`/`ExcessUsageRecord`,
+  `App\Services\ServiceRecordService`,
+  `App\Http\Controllers\Api\ServiceRecordController`): SRV-007 (round
+  up to the nearest 15 minutes), SRV-015 (3-day submission deadline,
+  `isLate()`), submission against an open Job Order, the Service
+  Record Approval queue (`GET /pending-approval`, joining job order +
+  employee names, computing `suggested_deducted_minutes` from the
+  urgent/after-hours multiplier and `contract_remaining_minutes`), and
+  approval itself (SRV-003/004): role-gated to Service Lead/Sales
+  Manager/Owner, ANNUAL/AD_HOC contracts marked
+  `not_hour_metered` (no deduction), otherwise a straightforward
+  `ContractService::deductMinutes()` when the contract balance covers
+  it, or a split into a real deduction (whatever remains, possibly 0)
+  plus an `ExcessUsageRecord` for the shortfall when it doesn't --
+  balance never goes negative. Approval also drives Job Order
+  auto-close (closes when the *latest* record for the Job Order is
+  Approved + Completed; an earlier Uncompleted visit doesn't block it
+  once the final one is done). 17 dedicated business-logic tests
+  (`tests/Feature/ServiceRecordServiceTest.php`) pin the rounding
+  table, the multiplier logic, the exact excess-minutes split
+  arithmetic, and every auto-close case; 7 API-level tests
+  (`tests/Feature/ServiceRecordTest.php`) cover RBAC (Group Authority
+  *and* the named-role approver check are independently enforced),
+  multi-company isolation, and the approval-queue shape.
+  **Not yet converted:** CSV/Excel export, the `.docx`/email endpoints
+  (need the Documents module's mailer wiring). The Excess Usage
+  *treatment-decision* endpoints (approve/write-off/bill an
+  `ExcessUsageRecord`) are still pending -- see below; this module only
+  creates those rows.
 
-Verified end-to-end for both modules against the real React frontend
-(screenshots in the PR/commit history): contract creation blocked
-below the 10-hour minimum with the SRV-002 message, activation,
+Verified end-to-end for all three modules against the real React
+frontend (screenshots in the PR/commit history): contract creation
+blocked below the 10-hour minimum with the SRV-002 message, activation,
 renewal (both the seamless-backdated case and the SRV-018
 force-start-date case), the contract detail page showing the exact
-$300.00/hr blended rate, and a PROJECT-type Job Order with all 5
-milestones auto-created in order. The only 404s seen were for
+$300.00/hr blended rate, a PROJECT-type Job Order with all 5
+milestones auto-created in order, submitting a Service Record with
+15-minute rounding visible, and the Service Record Approval queue
+showing the suggested deduction. The only 404s seen were for
 not-yet-converted modules (Announcements, Dashboard, Excess Usage,
-Invoices/Billing, Documents, Service Records) -- none from Contracts
-or Job Orders' own endpoints.
+Invoices/Billing, Documents) -- none from Contracts, Job Orders, or
+Service Records' own endpoints.
 
 ## Not yet converted (pending, in rough priority order)
 
@@ -343,23 +374,18 @@ phase of its own, following the same pattern as CompanyIndividual
 Management above -- model(s) + migration(s) + controller + routes +
 smoke test:
 
-1. **Service Records** (`app/models/service_records.py`,
-   `app/services/service_records.py`, `app/routers/service_records.py`)
-   -- SRV-007 (hour rounding), SRV-015 (submission timeframe). Next in
-   line: `Contract::deductMinutes()`/`ContractService` are already
-   ported and waiting for this module's approval flow to call them.
-2. **Excess Usage** (`app/services/excess_usage.py`,
+1. **Excess Usage** (`app/services/excess_usage.py`,
    `app/routers/excess_usage.py`) -- SRV-004, 008, 011, 013 (Nico/
    Cherish review, blended-rate billing, treatment categories); the
    business logic here has the most riding on getting the rounding/
    balance-never-negative arithmetic exactly right, so it should get a
    dedicated test suite before being trusted, not just a smoke test.
-3. **Billing / Invoicing** (`app/services/billing.py`,
+2. **Billing / Invoicing** (`app/services/billing.py`,
    `app/routers/billing.py`) -- BILL-001..006. Bumped up in priority:
    Contract activation's known gap (see above) depends on this.
-4. **Accounts Receivable** (`app/services/accounts_receivable.py`,
+3. **Accounts Receivable** (`app/services/accounts_receivable.py`,
    `app/routers/accounts_receivable.py`) -- AR-001..003.
-5. Everything else in `backend/app/routers/` not listed above
+4. Everything else in `backend/app/routers/` not listed above
    (Quotations, Incidents, Accounts Payable/Purchasing, Inventory/
    Stock, GL posting + Bank step, Reporting/dashboards, Event Logs,
    Document Control, Periods, Announcements, Software Tasks, Ops

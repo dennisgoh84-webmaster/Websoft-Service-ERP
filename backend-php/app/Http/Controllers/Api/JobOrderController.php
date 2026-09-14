@@ -8,6 +8,7 @@ use App\Http\Middleware\Authenticate;
 use App\Models\Contract;
 use App\Models\JobOrder;
 use App\Models\ProjectMilestone;
+use App\Models\ServiceRecord;
 use App\Models\User;
 use App\Services\Audit;
 use App\Services\Authority;
@@ -20,12 +21,7 @@ use Illuminate\Support\Facades\DB;
  * Job Orders (formerly "Helpdesk Tickets") -- Service Operations.
  * Mirrors backend/app/routers/job_orders.py.
  *
- * NOT yet converted from the Python router: CSV/Excel export. Budget-
- * overrun consumed-hours/cost is a stub (always 0) until Service
- * Records is converted -- see computeBudgetOverrun()'s docblock and
- * docs/php-conversion-plan.md. Auto-close on Service Record approval
- * also isn't wired up yet, so nothing in this backend ever sets a Job
- * Order to CLOSED -- VOID and manual states work fully.
+ * NOT yet converted from the Python router: CSV/Excel export.
  */
 class JobOrderController extends Controller
 {
@@ -58,12 +54,7 @@ class JobOrderController extends Controller
     /**
      * Check if a PROJECT-type Job Order has exceeded its contract's
      * hours or cost. Returns null for SUPPORT-type or no-contract JOs
-     * (matching the Python version exactly) -- and, as a stub until
-     * Service Records is converted, also whenever it WOULD need to sum
-     * approved Service Record minutes: there are none in this backend
-     * yet (the table doesn't exist), so consumed is reported as 0
-     * rather than the query failing. Replace this stub with the real
-     * sum once Service Records lands.
+     * (matching the Python version exactly).
      */
     private function computeBudgetOverrun(JobOrder $jobOrder): ?array
     {
@@ -75,8 +66,12 @@ class JobOrderController extends Controller
             return null;
         }
 
-        $totalMinutes = 0; // STUB -- see method docblock.
+        // Sum approved Service Record minutes for this Job Order.
+        $totalMinutes = (int) ServiceRecord::where('job_order_id', $jobOrder->id)
+            ->where('status', ServiceRecord::STATUS_APPROVED)
+            ->sum('rounded_minutes');
 
+        // Compute cost: use the contract's blended rate (value / hours).
         $contractedHours = $contract->contracted_minutes > 0 ? $contract->contracted_minutes / 60 : 0;
         $contractValue = (float) $contract->contract_value_sgd;
         $blendedRate = $contractedHours > 0 ? $contractValue / $contractedHours : 0;

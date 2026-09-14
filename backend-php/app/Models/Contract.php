@@ -90,6 +90,11 @@ class Contract extends Model
         return $this->hasMany(ContractProduct::class);
     }
 
+    public function excessUsageRecords(): HasMany
+    {
+        return $this->hasMany(ExcessUsageRecord::class);
+    }
+
     public function renewedFrom(): BelongsTo
     {
         return $this->belongsTo(self::class, 'renewed_from_contract_id');

@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Contract;
 use App\Models\ContractProduct;
+use App\Models\ExcessUsageRecord;
 use App\Models\Product;
 use App\Services\Audit;
 use App\Services\Authority;
@@ -21,9 +22,7 @@ use Illuminate\Support\Facades\DB;
  * this only orchestrates.
  *
  * NOT yet converted from the Python router (tracked in
- * docs/php-conversion-plan.md): CSV/Excel export, and
- * GET /{contract}/excess-usage (needs ExcessUsageRecord, which needs
- * Service Records first).
+ * docs/php-conversion-plan.md): CSV/Excel export.
  *
  * KNOWN GAP, deliberately not silently papered over: the Python
  * router's POST /{contract}/activate also issues the contract's
@@ -291,5 +290,24 @@ class ContractController extends Controller
         }
 
         return response()->json($this->present($newContract->fresh('products.product')));
+    }
+
+    public function excessUsage(Request $request, string $contractId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        $this->contractOrFail($user->company_id, $contractId);
+
+        return ExcessUsageRecord::where('contract_id', $contractId)->get()->map(fn (ExcessUsageRecord $r) => [
+            'id' => $r->id,
+            'contract_id' => $r->contract_id,
+            'service_record_id' => $r->service_record_id,
+            'excess_hours' => $r->excess_minutes / 60,
+            'treatment' => $r->treatment,
+            'reason' => $r->reason,
+            'decided_by_user_id' => $r->decided_by_user_id,
+            'invoiced' => $r->invoiced,
+        ])->values();
     }
 }

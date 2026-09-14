@@ -76,4 +76,9 @@ class JobOrder extends Model
     {
         return $this->hasMany(ProjectMilestone::class)->orderBy('sort_order');
     }
+
+    public function serviceRecords(): HasMany
+    {
+        return $this->hasMany(ServiceRecord::class);
+    }
 }

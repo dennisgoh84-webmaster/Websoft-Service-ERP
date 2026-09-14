@@ -132,14 +132,19 @@ reason, approach, and status. Converted and verified so far: Core /
 Administration (auth, audit logging, Group Authority, Module Control,
 Company Setup, Users/Staff Master), CompanyIndividual Management
 (Customer/Supplier master, Contacts, Branches, Relationships, PDPA
-consent/archive), Product/Service Catalog, and Service Contracts + Job
+consent/archive), Product/Service Catalog, Service Contracts + Job
 Orders (the SRV-001..018 contract lifecycle, PROJECT milestone
-scheduling). **Known gap:** contract activation doesn't yet issue the
-annual invoice (Billing isn't converted) -- a contract activated via
-`backend-php/` is not yet billed. `backend/` (Python) is untouched and
-keeps running as the system of record until each remaining module
-(Service Records, Excess Usage, Billing, AR, and everything else) is
-converted, module by module, the same way.
+scheduling), and Service Records (SRV-003/004/007/015: hour rounding,
+submission deadline, the approval queue with suggested-deduction
+multipliers, the contract-deduction vs. excess-usage split, and Job
+Order auto-close -- Job Orders' budget-overrun figure is now a real
+query against approved Service Records rather than a stub). **Known
+gap:** contract activation doesn't yet issue the annual invoice
+(Billing isn't converted) -- a contract activated via `backend-php/`
+is not yet billed. `backend/` (Python) is untouched and keeps running
+as the system of record until each remaining module (Excess Usage
+treatment decisions, Billing, AR, and everything else) is converted,
+module by module, the same way.
 
 No other business area has application code yet. **Commission
 Management, further Service Record business-rule decisions (open item
