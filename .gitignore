@@ -2,6 +2,11 @@
 # artifacts) -- never application source, so never tracked.
 demo/
 
+# Claude Code session/agent tooling state (e.g. isolated worktree
+# checkouts spawned for background subagents) -- never application
+# source, so never tracked.
+.claude/
+
 # docker-compose deploy secrets (see .env.example) -- never commit real values.
 .env
 frontend/test-results/
