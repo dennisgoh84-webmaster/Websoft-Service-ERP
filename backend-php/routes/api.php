@@ -37,6 +37,7 @@ require __DIR__.'/api/ledger.php';
 require __DIR__.'/api/reports.php';
 require __DIR__.'/api/bank_accounts.php';
 require __DIR__.'/api/periods.php';
+require __DIR__.'/api/dashboard.php';
 
 // NEW FEATURES (not Python->PHP conversions -- built directly in
 // backend-php per Dennis's request; backend/ has no equivalent for

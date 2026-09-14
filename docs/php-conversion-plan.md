@@ -877,6 +877,67 @@ against the same routes/middleware stack, just not a real running
 server) cover the RBAC/multi-company-404 cases this pass didn't
 re-drive manually.
 
+- **Company Dashboard** (`app/routers/dashboard.py` →
+  `App\Http\Controllers\Api\DashboardController`): the single
+  aggregated `GET /dashboard/summary` endpoint behind
+  `frontend/src/pages/DashboardPage.tsx` -- the app's landing page,
+  which until now showed "Company Dashboard summary unavailable: Not
+  Found" on every login against `backend-php/`, since this was the one
+  route the frontend calls before anything else. No new model or
+  migration: every figure is an aggregate over modules already
+  converted, and each is taken from the service that owns it rather
+  than re-queried by hand -- AR/AP outstanding + overdue via
+  `AccountsReceivableService::agingRows()` /
+  `PayablesService::agingRows()` (Python reads
+  `app/services/reports.py`'s `ar_aging_rows`/`ap_aging_rows`, whose
+  own docstrings state they are "the same bucketing as" those two
+  modules' aging reports), and `gl_is_balanced` via
+  `Ledger::accountBalances()`, the identical call Python's line ~91
+  makes. Contracts/hours (SRV-014's 30-day pre-expiry window), open
+  Job Orders, undecided Excess Usage records, SRV-015 late Service
+  Records, and the invoice count/total are straight queries, matching
+  the Python handler statement for statement.
+  **No module gate, deliberately:** the Python route depends only on
+  `get_current_user`, with no `require_module_access(...)`, so any
+  authenticated user sees the summary for the company they are
+  currently working in. Kept identical rather than "tightened" -- the
+  tiles all link to screens that are themselves gated. Pinned by
+  `DashboardTest::test_user_with_no_group_still_sees_the_summary_no_module_gate`,
+  which asserts 200 where every other module's equivalent test asserts
+  403, so the difference reads as a decision rather than an oversight.
+  **Money handling:** all four AR/AP figures and `invoices_total_sgd`
+  are accumulated through `App\Support\Money` and converted to float
+  only in the response array; `gl_is_balanced` compares the two
+  quantized totals as strings, so the comparison never goes through a
+  float at all (Python compares `round(float(x), 2)`).
+  `total_*_hours` stay plain float division by 60 -- hours, not money,
+  same as Python.
+  **NO KNOWN GAPS:** every module this endpoint aggregates over
+  (Contracts, Job Orders, Service Records, Excess Usage, Billing,
+  Accounts Receivable, Accounts Payable, GL posting) is already
+  converted, so no tile reports a placeholder or invented figure.
+  9 tests (`tests/Feature/DashboardTest.php` -- each tile's arithmetic
+  including the SRV-014 window's already-expired edge case, the
+  SRV-015 late/on-time/already-approved split, the AR outstanding vs.
+  overdue split for an invoice with no due date, multi-company
+  scoping, the no-module-gate decision, and 401 when unauthenticated).
+
+Verified end-to-end against the real React frontend (Playwright
+against `backend-php/` on port 8004, screenshot in the PR/commit
+history): the **Company Dashboard** landing page rendering a full
+summary instead of "Company Dashboard summary unavailable: Not Found"
+-- AR outstanding $3,270.00 (incl. $0.00 overdue), AP outstanding
+$0.00, net receivable position $3,270.00, invoiced to date $3,000.00,
+the GL Trial Balance tile correctly badged "Balanced", 1 active
+contract, 0 expiring soon, 0 open job orders, 0 excess awaiting
+review, 0 late service records, 1 invoice issued, and the
+contracted-hours bar reading "0.0 used / 10.0 contracted -- 10.0 hrs
+remaining" -- every figure from a real activated contract and its
+BILL-001 invoice, with no failed requests on the page. The only 404s
+still seen in the pass were the expected not-yet-converted ones
+(`/api/announcements/public`, the Documents attachments/signatures
+panels, Document Control).
+
 ## New feature work landed directly in `backend-php/` (not a conversion)
 
 2026-09-22: Dennis asked for a set of new Sales-area features (Job
@@ -912,12 +973,14 @@ Management above -- model(s) + migration(s) + controller + routes +
 smoke test:
 
 1. Everything else in `backend/app/routers/` not listed above
-   (Inventory/Stock, Reporting/dashboards, Event Logs,
-   Document Control, Announcements, Software Tasks, Ops Dashboard,
-   Customer Helpdesk Portal, Mobile Web App, Commissions [deferred,
-   per CLAUDE.md]) -- lower priority than the Service Operations core
-   above, since that core is what CLAUDE.md's Status section calls out
-   as the one working slice today.
+   (Inventory/Stock, the rest of `reports.py` (AR/AP aging duplicates,
+   GST Return, Sales GP, Operations Reports) and its CSV/Excel
+   exports, Event Logs, Documents, Document Control, Announcements,
+   Software Tasks, Ops Dashboard, Customer Helpdesk Portal, Mobile Web
+   App, Commissions [deferred, per CLAUDE.md]) -- lower priority than
+   the Service Operations core above, since that core is what
+   CLAUDE.md's Status section calls out as the one working slice
+   today.
 
 ## Running the PHP backend locally
 

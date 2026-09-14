@@ -79,7 +79,13 @@ shipped and when.
   including the confirmed fallback-to-plain-Incident rule; 35
   dedicated tests). KNOWN GAPS: no convert-to-software-task route
   (Software Tasks isn't converted) and no Portal-sourced Incidents
-  (the Customer Helpdesk Portal isn't converted).
+  (the Customer Helpdesk Portal isn't converted). Also converted: the
+  **Company Dashboard** summary (`/dashboard/summary`, 9 dedicated
+  tests) -- the app's landing page, which until now showed "Company
+  Dashboard summary unavailable: Not Found" on every login against
+  `backend-php/`; it aggregates only over modules already converted,
+  reusing each owning service (AR/AP aging, the GL trial balance)
+  rather than re-querying, so no tile reports a placeholder figure.
   Still pending: everything else -- converted module by module, same
   pattern as the Odoo replacement strategy.
   → [php-conversion-plan.md](php-conversion-plan.md)

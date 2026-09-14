@@ -210,9 +210,18 @@ Add-in endpoints including the confirmed fallback-to-plain-Incident
 rule). **Known gaps:** no convert-to-software-task route (the
 Software Tasks module isn't converted) and no Portal-sourced
 Incidents (the Customer Helpdesk Portal isn't converted either).
-`backend/` (Python) is untouched and keeps running as the
-system of record until each remaining module is converted, module by
-module, the same way.
+Also converted: the **Company Dashboard** summary -- the app's landing
+page, which until now reported "Company Dashboard summary
+unavailable" on every login against `backend-php/`. It aggregates
+only over modules already converted (contracts/hours, open Job
+Orders, undecided Excess Usage, SRV-015 late Service Records,
+invoices, AR/AP outstanding + overdue, and whether the GL trial
+balance balances), reusing each owning service rather than
+re-querying, so no tile reports a placeholder figure; it is
+deliberately ungated by Module Control, matching the Python route,
+which has no `require_module_access` either. `backend/` (Python) is
+untouched and keeps running as the system of record until each
+remaining module is converted, module by module, the same way.
 
 **Sales module enhancements landed directly in `backend-php/` +
 `frontend/`, not as part of the conversion above** (`backend/` has no
