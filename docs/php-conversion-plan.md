@@ -1022,6 +1022,55 @@ re-drive manually.
   cross-company isolation on list/download/delete, and the full RBAC
   matrix; plus `tests/Feature/DocumentControlTest.php`, 10, above).
 
+- **Announcements + Ad Banner** (`app/models/announcements.py`,
+  `app/routers/announcements.py` → `App\Models\Announcement`/
+  `AdBannerSettings`, `App\Http\Controllers\Api\AnnouncementController`):
+  the platform announcements and promo video URL shown on the ad
+  banner (Login page and, smaller, every page after signing in --
+  `frontend/src/components/PromoVideoPanel.tsx`), plus the
+  "Announcements & Ad Banner" admin screen
+  (`frontend/src/pages/AnnouncementsPage.tsx`).
+  `GET /announcements/public` is the one **unauthenticated** route
+  here -- registered outside the `auth.jwt` group, the same way
+  `companies.php` registers `GET /companies/public-branding` -- and is
+  called on every page load by the app layout, which is why it was the
+  single most frequently 404'd request in every prior smoke test
+  against `backend-php/`. It now returns 200 everywhere.
+  Deliberately **not company-scoped** (no `company_id` column):
+  these are announcements about the software itself, and the Login
+  page shows them before any company has been selected. Pinned by
+  `AnnouncementTest::test_announcements_are_global_not_company_scoped`,
+  which asserts a second company sees the *same* announcements -- the
+  inverse of every other module's "another company's record is a 404"
+  test, and deliberate.
+  `AdBannerSettings` is a singleton row with an **integer** primary
+  key (id = 1), not a UUID -- the only model here that does not use
+  `HasUuidPrimaryKey` -- matching the Python model exactly; the row is
+  created on first read, so a fresh install never 404s. Confirmed
+  2026-09-12: Save = live immediately, no separate draft/publish step.
+  Deleting an announcement is a **genuine delete**, not a soft-delete
+  -- the Python router records the reasoning at its own handler
+  (a marketing blurb with no downstream references, unlike the
+  business/financial records CLAUDE.md's "never permanently delete"
+  rule covers; `is_active` is the way to hide one without losing it),
+  and that comment is carried across verbatim.
+  **Python quirks preserved, not "improved":** reading the settings is
+  FULL-only, not VIEW (unusual against every other read in the system,
+  and pinned by a test); and `PATCH /settings` with no `video_url`
+  clears the URL rather than leaving it alone, because
+  `AdBannerSettingsUpdate` defaults the field to `None` -- so it is a
+  full replace, not a partial update. Both have their own assertions.
+  **Schema-contract note:** `docs/planned-work.md` #8a records that
+  the future, separate "Server Company Central Command" application is
+  planned to push advertisements by writing **straight into the
+  `announcements` table** of each client database. The migration here
+  therefore keeps column names, types and nullability identical to the
+  SQLAlchemy model on purpose, and says so in its own comment. Nothing
+  is built for Central Command in this repo -- this is only the
+  receiving end, and it already works the moment a row appears,
+  because `GET /public` reads the table directly with no cache.
+  10 tests (`tests/Feature/AnnouncementTest.php`).
+
 Verified end-to-end against the real React frontend (Playwright
 against `backend-php/` on port 8004, screenshot in the PR/commit
 history): the **Company Dashboard** landing page rendering a full
@@ -1036,13 +1085,19 @@ remaining" -- every figure from a real activated contract and its
 BILL-001 invoice, with no failed requests on the page; the **Document
 Control** page listing all 12 built-in document kinds with their
 default prefixes and examples plus the live contract counter
-previewing `CON-2026-0002` as its next number; and the **Attachments /
+previewing `CON-2026-0002` as its next number; the **Attachments /
 Signatures** panel on a Contract detail page, with a real file
 uploaded through the actual file input (listed with its type, size and
 upload date, plus working download/delete buttons) and a real drawn
 signature saved through the canvas ("Authorized signatory / Dennis
-Goh", timestamped). The only 404 still seen in the pass was the
-expected not-yet-converted `/api/announcements/public`.
+Goh", timestamped); and finally the **Announcements & Ad Banner**
+page saving a promo video URL and adding a "What's New" item, with
+that item then appearing in the app-wide ad banner on every other
+page. **Zero failed
+API requests and zero console errors across the whole pass** -- the
+`/api/announcements/public` 404 that appeared in every earlier
+verification run is gone, and no 404s remained for the Company
+Dashboard, Documents or Document Control either.
 
 ## New feature work landed directly in `backend-php/` (not a conversion)
 
@@ -1081,9 +1136,9 @@ smoke test:
 1. Everything else in `backend/app/routers/` not listed above
    (Inventory/Stock, the rest of `reports.py` (AR/AP aging duplicates,
    GST Return, Sales GP, Operations Reports) and its CSV/Excel
-   exports, Event Logs, Announcements, Software Tasks, Ops Dashboard,
-   Customer Helpdesk Portal, Mobile Web App, Commissions [deferred,
-   per CLAUDE.md]) -- lower priority than the Service Operations core
+   exports, Event Logs, Software Tasks, Ops Dashboard, Customer
+   Helpdesk Portal, Mobile Web App, Commissions [deferred, per
+   CLAUDE.md]) -- lower priority than the Service Operations core
    above, since that core is what CLAUDE.md's Status section calls out
    as the one working slice today.
 2. The shared document mailer stack -- `app/services/mailer.py` (66

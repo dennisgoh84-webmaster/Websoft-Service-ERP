@@ -234,8 +234,20 @@ Records, Invoices, Purchase Orders and Quotations are **not** closed
 by the Documents conversion -- that wiring is a separate,
 still-unconverted stack of Python services (`mailer.py`,
 `pdf_convert.py`, `docx_forms.py`, `document_email.py`), now tracked
-as its own pending item in docs/php-conversion-plan.md.
-`backend/` (Python) is
+as its own pending item in docs/php-conversion-plan.md. Also
+converted: **Announcements + Ad Banner** (the platform announcements
+and promo video URL shown on the Login page and, smaller, on every
+page after signing in, plus the admin screen behind them) --
+`/announcements/public` is unauthenticated and is called on every
+page load by the app layout, which made it the most frequently 404'd
+request against `backend-php/` until now. These are deliberately
+global rather than company-scoped (they describe the software itself,
+and the Login page shows them before any company is selected), and
+the table's shape is kept identical to the Python model on purpose:
+[docs/planned-work.md #8a](docs/planned-work.md) has the future,
+separate Server Company Central Command application pushing
+advertisements by writing straight into it, which makes that shape a
+schema contract. `backend/` (Python) is
 untouched and keeps running as the system of record until each
 remaining module is converted, module by module, the same way.
 

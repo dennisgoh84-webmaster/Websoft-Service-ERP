@@ -39,6 +39,7 @@ require __DIR__.'/api/bank_accounts.php';
 require __DIR__.'/api/periods.php';
 require __DIR__.'/api/dashboard.php';
 require __DIR__.'/api/documents.php';
+require __DIR__.'/api/announcements.php';
 
 // NEW FEATURES (not Python->PHP conversions -- built directly in
 // backend-php per Dennis's request; backend/ has no equivalent for

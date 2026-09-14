@@ -99,6 +99,16 @@ shipped and when.
   closed by this -- that wiring is a separate, still-unconverted stack
   (`mailer.py`, `pdf_convert.py`, `docx_forms.py`,
   `document_email.py`), now listed as its own pending item.
+  Also converted: **Announcements + Ad Banner** (the platform
+  announcements and promo video URL behind the app-wide ad banner,
+  plus its admin screen, 10 dedicated tests) --
+  `GET /announcements/public` is unauthenticated and called on every
+  page load by the app layout, which made it the single most
+  frequently 404'd request in every prior smoke test against
+  `backend-php/`. Deliberately global rather than company-scoped, and
+  its table shape is kept identical to the Python model because
+  [planned-work.md #8a](planned-work.md) has the future Server Company
+  Central Command app writing advertisements straight into it.
   Still pending: everything else -- converted module by module, same
   pattern as the Odoo replacement strategy.
   → [php-conversion-plan.md](php-conversion-plan.md)
