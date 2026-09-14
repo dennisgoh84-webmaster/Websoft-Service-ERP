@@ -35,6 +35,7 @@ import IncidentsPage from './pages/IncidentsPage'
 import JobOrdersPage from './pages/JobOrdersPage'
 import Login from './pages/Login'
 import MobileApp from './pages/MobileApp'
+import PortalApp from './portal/PortalApp'
 import OperationsReportsPage from './pages/OperationsReportsPage'
 import OpsDashboardPage from './pages/OpsDashboardPage'
 import PaymentVoucherPage from './pages/PaymentVoucherPage'
@@ -83,6 +84,13 @@ function AppRoutes() {
       <Route path="/login" element={<Login />} />
       {/* Mobile web app: separate entry point, no sidebar/desktop layout */}
       <Route path="/mobile" element={<MobileApp />} />
+      {/* Customer Helpdesk Portal (PORTAL-001..004): its own auth entirely
+          (own token, own login/OTP/change-password sequence -- see
+          src/lib/PortalAuthContext.tsx) so it never touches the staff
+          RequireAuth/Layout below. PortalApp handles its own internal
+          "pages" (home/contracts/job orders/incidents) without further
+          sub-routes here, the same way MobileApp does above. */}
+      <Route path="/portal/*" element={<PortalApp />} />
       <Route
         element={
           <RequireAuth>

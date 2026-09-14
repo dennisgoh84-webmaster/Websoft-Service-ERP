@@ -8,7 +8,8 @@ guide covers running everything on one server.
 |---|------|------|-------------|-------------|
 | 1 | **ERP (Client App)** — desktop + mobile web | this repo | `frontend` (nginx) → `backend` (FastAPI) → `db` (Postgres) | `:80` (HTTP_PORT) |
 | 2 | **Mobile Web App** | this repo | Built into ERP frontend at `/mobile` | Same as ERP |
-| 3 | **Central Command** | [websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command) | `cc-frontend` (nginx) → `cc-backend` (FastAPI) → `cc-db` (Postgres) | `:8080` (CC_HTTP_PORT) |
+| 3 | **Customer Helpdesk Portal** | this repo | Built into ERP frontend at `/portal` | Same as ERP |
+| 4 | **Central Command** | [websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command) | `cc-frontend` (nginx) → `cc-backend` (FastAPI) → `cc-db` (Postgres) | `:8080` (CC_HTTP_PORT) |
 
 ---
 
@@ -59,7 +60,7 @@ git checkout claude/webmaster-erp-setup-qjz74z   # or whichever branch you want 
 
 ---
 
-## Part 1 & 2: ERP + Mobile Web App
+## Part 1, 2 & 3: ERP + Mobile Web App + Customer Helpdesk Portal
 
 ### 3a. Configure secrets
 
@@ -73,8 +74,11 @@ Edit `.env` and fill in:
   the `dev-only-secret` default in `backend/app/core/config.py`.
 - `SMTP_*` — only if you want the "Email" button (Purchase Order,
   Sales Quotation/Invoice, Receipt/Payment Voucher, Statement of
-  Accounts) to actually send. Leave blank to leave Email disabled;
-  everything else (Print, Word export, WhatsApp) works regardless.
+  Accounts) to actually send, and for the Helpdesk Portal's login OTP
+  and staff-issued invite/reset emails to go out. Leave blank and
+  everything still works: Email/portal-OTP is simply skipped (fail-open,
+  see customer-portal-design.md §4), and a portal invite/reset shows the
+  temporary password on screen once instead of emailing it.
 - `HTTP_PORT` — leave as `80` unless this box already has something
   else listening there.
 
@@ -96,8 +100,11 @@ docker compose logs -f migrate   # confirm migrations applied cleanly
 Visit `http://<vps-ip>/` (or `http://<vps-ip>:<HTTP_PORT>` if you
 changed it). You should see the login page.
 
-The **Mobile Web App** is accessible at `http://<vps-ip>/mobile` — no
-separate deploy needed.
+The **Mobile Web App** is accessible at `http://<vps-ip>/mobile`, and
+the **Customer Helpdesk Portal** at `http://<vps-ip>/portal` — neither
+needs a separate deploy. Enable a customer contact's portal access from
+their Company/Individual detail page → Contacts tab (needs PDPA consent
+recorded first).
 
 ### 5a. Load ERP demo data
 
@@ -235,6 +242,7 @@ gunzip -c backup-cc-*.sql.gz | docker compose exec -T cc-db psql -U cc_app centr
 │  │  :80  nginx (frontend)                              │     │
 │  │         ├── /           → React SPA (desktop)       │     │
 │  │         ├── /mobile     → React SPA (mobile)        │     │
+│  │         ├── /portal     → React SPA (customer portal)│     │
 │  │         └── /api/*      → backend :8000             │     │
 │  │  :8000  FastAPI backend                             │     │
 │  │  :5432  PostgreSQL (websoft_service_erp)             │     │

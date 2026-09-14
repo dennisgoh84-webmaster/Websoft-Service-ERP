@@ -189,7 +189,14 @@ class LoginOtp(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    # Exactly one of user_id (staff) / portal_user_id (customer portal,
+    # PORTAL-003) is set. One OTP table and one mailer path serve both
+    # logins rather than duplicating the flow -- see
+    # docs/customer-portal-design.md §3.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    portal_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("portal_users.id"), nullable=True
+    )
     code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     purpose: Mapped[str] = mapped_column(String(20), nullable=False, default="login")
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

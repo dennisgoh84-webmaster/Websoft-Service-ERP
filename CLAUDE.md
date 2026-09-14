@@ -98,7 +98,7 @@ explaining the reason first (see Development Rules below).
 - [docs/system-architecture.md](docs/system-architecture.md) — system architecture
 - [docs/module-map.md](docs/module-map.md), [docs/workflows.md](docs/workflows.md), [docs/open-business-decisions.md](docs/open-business-decisions.md) — supporting planning docs
 - [docs/planned-work.md](docs/planned-work.md) — confirmed future work, described in enough detail to record, not yet designed or built
-- [docs/gl-posting-design.md](docs/gl-posting-design.md), [docs/customer-portal-design.md](docs/customer-portal-design.md) — buildable designs for confirmed-but-unbuilt work (sub-ledger → GL posting + Bank step; Customer Helpdesk Portal), decided 2026-09-14
+- [docs/gl-posting-design.md](docs/gl-posting-design.md), [docs/customer-portal-design.md](docs/customer-portal-design.md) — designs for sub-ledger → GL posting + Bank step, and the Customer Helpdesk Portal, decided **and built** 2026-09-14
 - [docs/backlog.md](docs/backlog.md) — short, checkable summary of everything pending, linking into the detail docs above
 - [docs/ui-guidelines.md](docs/ui-guidelines.md) — screen label conventions and the Export (CSV/Excel) / Print (PDF/Word) pattern every screen follows
 - [DEV_SETUP.md](DEV_SETUP.md) — how to run the application locally

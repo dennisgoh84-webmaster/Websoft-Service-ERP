@@ -85,6 +85,7 @@ from app.models.periods import (  # noqa: F401
 from app.models.ops_tasks import OpsTask, OpsTaskCategory, OpsTaskStatus  # noqa: F401
 from app.models.announcements import AdBannerSettings, Announcement  # noqa: F401
 from app.models.incidents import Incident, IncidentSource, IncidentStatus  # noqa: F401
+from app.models.portal import PortalUser  # noqa: F401
 from app.models.attachments import (  # noqa: F401
     AttachmentKind,
     ServiceRecordAttachment,

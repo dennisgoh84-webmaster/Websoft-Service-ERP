@@ -46,14 +46,21 @@ def record(
     entity_id: uuid.UUID,
     action: str,
     actor_user_id: uuid.UUID | None,
+    actor_name: str | None = None,
+    company_id: uuid.UUID | None = None,
     reason: str | None = None,
     details: str | None = None,
     old_value: dict[str, Any] | None = None,
     new_value: dict[str, Any] | None = None,
 ) -> AuditLogEntry:
+    """`actor_name`/`company_id` are only for a non-staff actor (the
+    Customer Helpdesk Portal, PORTAL-001..004): a PortalUser isn't a
+    `User` row, so there's nothing to look up here -- the caller passes
+    them directly (e.g. the contact's name and their PortalUser.company_id)
+    so the entry still shows a real name and lands in the right
+    company's Event Logs. A staff actor_user_id always overrides both,
+    same as before this parameter existed."""
     ctx = _request_context.get()
-    actor_name = None
-    company_id = None
     if actor_user_id is not None:
         actor = db.get(User, actor_user_id)
         if actor is not None:

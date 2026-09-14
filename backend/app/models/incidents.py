@@ -32,6 +32,7 @@ class IncidentSource(str, enum.Enum):
     PHONE = "phone"
     EMAIL = "email"
     OTHER = "other"
+    PORTAL = "portal"  # raised by a customer through the Helpdesk Portal (PORTAL-002)
 
 
 class IncidentStatus(str, enum.Enum):
@@ -78,6 +79,11 @@ class Incident(Base):
     # Set together when status becomes PENDING_CALLBACK (confirmed
     # 2026-09-12: no separate reminder/task record).
     assigned_to_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    # Set when a customer raised this through the Helpdesk Portal: the
+    # person, not just the customer (PORTAL-001 audit trail).
+    raised_by_portal_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("portal_users.id"), nullable=True
+    )
 
     # Exactly one of these is set once status = CONVERTED -- which
     # target type this Incident was routed to.

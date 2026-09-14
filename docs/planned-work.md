@@ -374,28 +374,30 @@ see [central-command-schema-contract.md](central-command-schema-contract.md).
 
 ---
 
-## 9. Sub-ledger → General Ledger posting + Bank step (raised and confirmed 2026-09-14)
+## 9. Sub-ledger → General Ledger posting + Bank step (raised 2026-09-14, built 2026-09-14)
 
-Confirmed scope, designed, not yet built. The full design — account
-map, posting rules per document, Bank/Unbank and UNGL lifecycle,
-migration and back-fill plan, endpoints, frontend changes and test plan
-— is in [gl-posting-design.md](gl-posting-design.md). Rules ACC-001..004
-in [business-requirements.md](business-requirements.md); decision record
-in [open-business-decisions.md #38](open-business-decisions.md#38-sub-ledger--general-ledger-posting-and-the-bank-step-raised-and-settled-2026-09-14).
+**Built 2026-09-14.** The full design — account map, posting rules per
+document, Bank/Unbank and UNGL lifecycle, migration and back-fill plan,
+endpoints, frontend changes and test plan — is in
+[gl-posting-design.md](gl-posting-design.md), all §8 test-plan items
+verified. Rules ACC-001..004 in
+[business-requirements.md](business-requirements.md); decision record in
+[open-business-decisions.md #38](open-business-decisions.md#38-sub-ledger--general-ledger-posting-and-the-bank-step-raised-and-settled-2026-09-14).
 
-Build order: migration → posting service + auto-post hooks → Bank/Unbank
-and UNGL endpoints → `post_backlog.py` + frontend chips and dropdowns →
-verify against the test plan.
+Built in order: migration → posting service + auto-post hooks →
+Bank/Unbank and UNGL endpoints → `post_backlog.py` + frontend chips and
+dropdowns → verified against the test plan.
 
-## 10. Customer Helpdesk Portal (raised and confirmed 2026-09-14)
+## 10. Customer Helpdesk Portal (raised 2026-09-14, built 2026-09-14)
 
-Confirmed scope, designed, not yet built. Data model, auth flow, the
-staff-side enable/disable, portal endpoints, frontend mount at `/portal`,
-module key and test plan are in
-[customer-portal-design.md](customer-portal-design.md). Rules
+**Built 2026-09-14.** Data model, auth flow, the staff-side
+enable/disable, portal endpoints, frontend mount at `/portal`, module
+key and test plan are in
+[customer-portal-design.md](customer-portal-design.md), all §9 test-plan
+items verified (including the token boundary tests). Rules
 PORTAL-001..004 in [business-requirements.md](business-requirements.md);
 decision record in [open-business-decisions.md #39](open-business-decisions.md#39-customer-helpdesk-portal-raised-and-settled-2026-09-14).
 
-Build order: models + migration → auth + token boundary (with the
-boundary tests first) → staff enable/disable on Contacts → portal
-endpoints → `/portal` frontend → verify.
+Built in order: models + migration → auth + token boundary (boundary
+tests written and run first) → staff enable/disable on Contacts →
+portal endpoints → `/portal` frontend → verified.

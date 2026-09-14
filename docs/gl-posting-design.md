@@ -1,7 +1,7 @@
 # Sub-ledger → General Ledger posting, and the Bank step
 
-Status: **DESIGN — confirmed with Dennis 2026-09-14, not yet built.**
-Decisions here are recorded as ACC-001..ACC-004 in
+Status: **BUILT — confirmed with Dennis 2026-09-14, built and verified
+the same day.** Decisions here are recorded as ACC-001..ACC-004 in
 [business-requirements.md](business-requirements.md).
 
 ## 1. The gap this closes

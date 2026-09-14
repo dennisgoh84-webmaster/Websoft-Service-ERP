@@ -45,6 +45,7 @@ from app.routers import (
     monitoring,
     ops_dashboard,
     periods,
+    portal,
     quotations,
     reference_codes,
     reports,
@@ -119,6 +120,7 @@ app.include_router(document_control.router)
 app.include_router(tax_codes.router)
 app.include_router(periods.router)
 app.include_router(ops_dashboard.router)
+app.include_router(portal.router)
 app.include_router(mobile.router)
 app.include_router(documents.router)
 app.include_router(approvals.router)

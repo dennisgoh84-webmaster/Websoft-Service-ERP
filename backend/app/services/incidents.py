@@ -78,7 +78,15 @@ def create_incident(
     sender_email: str | None,
     sender_phone: str | None,
     created_by_user_id: uuid.UUID | None,
+    raised_by_portal_user_id: uuid.UUID | None = None,
+    portal_actor_name: str | None = None,
 ) -> Incident:
+    """`raised_by_portal_user_id`/`portal_actor_name` are set only when a
+    customer raised this themselves through the Helpdesk Portal
+    (PORTAL-002, app/routers/portal.py) -- `created_by_user_id` stays
+    None in that case (no staff member created it), so the audit trail
+    is told the actor's name directly rather than looking one up on
+    `User` (see app/services/audit.py's docstring on those two params)."""
     incident = Incident(
         company_id=company_id,
         incident_number=next_document_number(db, company_id=company_id, doc_kind="incident"),
@@ -90,6 +98,7 @@ def create_incident(
         sender_email=sender_email,
         sender_phone=sender_phone,
         created_by_user_id=created_by_user_id,
+        raised_by_portal_user_id=raised_by_portal_user_id,
     )
     db.add(incident)
     db.flush()
@@ -99,6 +108,8 @@ def create_incident(
         entity_id=incident.id,
         action="created",
         actor_user_id=created_by_user_id,
+        actor_name=portal_actor_name,
+        company_id=company_id if raised_by_portal_user_id else None,
         details=f"{incident.incident_number}: {subject}",
         new_value={"source": source.value, "customer_id": str(customer_id) if customer_id else None},
     )

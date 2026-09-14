@@ -1,13 +1,14 @@
 # Local Development Setup
 
 This covers running the full Websoft Service ERP ecosystem on your own
-machine for development and testing. The system has **three parts**:
+machine for development and testing. The system has **four parts**:
 
 | # | Part | Repo | Default Port |
 |---|------|------|--------------|
 | 1 | **ERP (Client App)** — desktop web + mobile web | this repo | Frontend `:5173`, Backend `:8000` |
 | 2 | **Mobile Web App** — runs inside the ERP frontend at `/mobile` | this repo | Same as ERP (`:5173`) |
-| 3 | **Central Command** — admin portal for managing all client ERP instances | [websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command) | Frontend `:5174`, Backend `:8001` |
+| 3 | **Customer Helpdesk Portal** — runs inside the ERP frontend at `/portal` | this repo | Same as ERP (`:5173`) |
+| 4 | **Central Command** — admin portal for managing all client ERP instances | [websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command) | Frontend `:5174`, Backend `:8001` |
 
 For standing up a shared server so other staff can test it, see
 [DEPLOY.md](DEPLOY.md) instead.
@@ -96,7 +97,28 @@ server needed. Once Part 1 is running:
 
 ---
 
-## Part 3: Central Command (Admin Portal)
+## Part 3: Customer Helpdesk Portal
+
+Also **built into the ERP frontend** — no separate server needed. Once
+Part 1 is running:
+
+- Open http://127.0.0.1:5173/portal.
+- A customer signs in with the email + temporary password staff issued
+  them (Company/Individual detail page → Contacts tab → **Enable portal
+  access**) — first sign-in forces a password change, then (if SMTP is
+  configured) a 6-digit email code.
+- Shows the signed-in contact's own contract hour balance, job orders +
+  service records, and incidents, and lets them raise a new incident.
+  Deliberately nothing about money (invoices, quotations, rates).
+
+**Note:** Uses its own token (`websoft_portal_token`, separate from the
+staff session) at `/api/portal/*` — see
+[customer-portal-design.md](docs/customer-portal-design.md). No
+additional backend setup is required beyond Part 1.
+
+---
+
+## Part 4: Central Command (Admin Portal)
 
 Central Command is a **completely separate application** with its own
 repository, database, backend, and frontend. It manages all client ERP
@@ -135,6 +157,7 @@ cd frontend && npm run dev -- --port 5173
 Then open:
 - **ERP Desktop:** http://127.0.0.1:5173
 - **Mobile Web App:** http://127.0.0.1:5173/mobile
+- **Customer Helpdesk Portal:** http://127.0.0.1:5173/portal
 
 Central Command runs from its
 [own repository](https://github.com/dennisgoh84-webmaster/websoft-central-command)

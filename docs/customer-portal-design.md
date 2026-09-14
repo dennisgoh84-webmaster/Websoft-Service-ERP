@@ -1,8 +1,11 @@
 # Customer Helpdesk Portal
 
-Status: **DESIGN — confirmed with Dennis 2026-09-14, not yet built.**
-Decisions here are recorded as PORTAL-001..PORTAL-004 in
-[business-requirements.md](business-requirements.md).
+Status: **BUILT — confirmed with Dennis 2026-09-14, built and verified
+the same day.** Decisions here are recorded as PORTAL-001..PORTAL-004 in
+[business-requirements.md](business-requirements.md). All 7 items in the
+§9 test plan below passed, including the §9.4 token boundary tests
+(portal token refused on every staff endpoint and vice versa, a portal
+user requesting another customer's job-order id gets 404 never 403).
 
 ## 1. What it is
 

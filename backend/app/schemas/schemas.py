@@ -90,6 +90,147 @@ class ResetPasswordWithOtpRequest(BaseModel):
     new_password: str = Field(min_length=8)
 
 
+# ---- Customer Helpdesk Portal auth (PORTAL-001..004) -------------------
+# Deliberately its own small set of schemas, mirroring the staff ones
+# above, rather than reusing them -- the portal login takes JSON
+# (not an OAuth2 form) and its token/flow shape is simpler (see
+# docs/customer-portal-design.md §4): login always challenges by OTP
+# (or signs straight in if SMTP isn't configured, same fail-open as
+# staff), and verify-otp hands back the one long-lived portal bearer
+# token -- must_change_password is a flag the frontend acts on by
+# routing to the change-password screen, not a second gate on the API.
+
+
+class PortalLoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class PortalLoginResult(BaseModel):
+    status: str  # "otp_required" | "ok"
+    otp_token: str | None = None
+    portal_token: str | None = None
+    must_change_password: bool = False
+
+
+class PortalVerifyOtpRequest(BaseModel):
+    otp_token: str
+    code: str = Field(min_length=6, max_length=6)
+
+
+class PortalChangePasswordRequest(BaseModel):
+    new_password: str = Field(min_length=8)
+
+
+class PortalForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class PortalResetPasswordWithOtpRequest(BaseModel):
+    email: str
+    code: str = Field(min_length=6, max_length=6)
+    new_password: str = Field(min_length=8)
+
+
+class PortalMeOut(BaseModel):
+    contact_name: str
+    email: str
+    customer_name: str
+    must_change_password: bool
+
+
+class PortalAccessOut(BaseModel):
+    """Staff-side view of one Contact's portal login (design §5) --
+    returned by the enable/disable/reset-password actions and by the
+    plain GET so the Contacts tab can show current status without the
+    staff member having to trigger an action first."""
+
+    enabled: bool
+    email: str | None = None
+    must_change_password: bool | None = None
+    last_login_at: datetime | None = None
+    locked: bool = False
+    # Only present immediately after enable/reset, and only when SMTP
+    # isn't configured -- the one-time display fallback (design §5).
+    temporary_password: str | None = None
+    invited_by_email: bool = False
+
+
+# ---- Customer Helpdesk Portal data (PORTAL-002) -------------------------
+# Deliberately thin views over the same records staff see -- never the
+# full *Out schemas above, per design §6's "deliberately not exposed"
+# list: no money (invoice/quotation/rate/cost), no internal notes, no
+# raw vs deducted minutes (just the rounded SRV-007 figure), no other
+# contacts, no staff names beyond the one engineer assigned to the work.
+
+
+class PortalContractOut(BaseModel):
+    id: uuid.UUID
+    contract_number: str
+    contract_kind: ContractKind
+    status: ContractStatus
+    contracted_hours: float
+    consumed_hours: float
+    remaining_hours: float
+    start_date: date
+    end_date: date
+
+    @classmethod
+    def from_model(cls, contract) -> "PortalContractOut":
+        return cls(
+            id=contract.id,
+            contract_number=contract.contract_number,
+            contract_kind=contract.contract_kind,
+            status=contract.status,
+            contracted_hours=contract.contracted_minutes / 60,
+            consumed_hours=contract.consumed_minutes / 60,
+            remaining_hours=contract.remaining_minutes / 60,
+            start_date=contract.start_date,
+            end_date=contract.end_date,
+        )
+
+
+class PortalJobOrderOut(BaseModel):
+    id: uuid.UUID
+    job_order_number: str
+    subject: str
+    job_order_type: JobOrderType
+    status: JobOrderStatus
+    assigned_engineer_name: str | None
+    due_date: date | None
+
+
+class PortalServiceRecordOut(BaseModel):
+    id: uuid.UUID
+    service_record_number: str
+    job_order_id: uuid.UUID
+    job_order_number: str
+    work_date: date
+    engineer_name: str
+    minutes: int  # rounded_minutes (SRV-007) -- never raw or deducted, see module docstring
+    completion_status: ServiceRecordCompletion
+    status: ServiceRecordStatus
+
+
+class PortalJobOrderDetailOut(PortalJobOrderOut):
+    service_records: list[PortalServiceRecordOut] = Field(default_factory=list)
+
+
+class PortalIncidentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    incident_number: str
+    subject: str
+    description: str | None
+    status: IncidentStatus
+    created_at: datetime
+
+
+class PortalIncidentCreate(BaseModel):
+    subject: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+
+
 class CurrentUser(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID

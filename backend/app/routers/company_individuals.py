@@ -1,3 +1,5 @@
+import secrets
+import string
 import uuid
 from datetime import datetime, timezone
 
@@ -10,6 +12,7 @@ from app.core.database import get_db
 from app.models.core import AuditLogEntry, User
 from app.models.company_individuals import Branch, Contact, CompanyIndividual, CompanyIndividualGroup, CompanyIndividualRelationship
 from app.models.groups import AccessLevel
+from app.models.portal import PortalUser
 from app.models.setup import SetupListItem, SetupListType
 from app.schemas.schemas import (
     AuditLogEntryOut,
@@ -26,8 +29,10 @@ from app.schemas.schemas import (
     CompanyIndividualUpdate,
     PdpaAgreementDocumentUpdate,
     PdpaConsentUpdate,
+    PortalAccessOut,
 )
-from app.services import audit, exports
+from app.services import audit, exports, mailer
+from app.services.auth import hash_password
 from app.services.authority import require_module_access
 
 router = APIRouter(prefix="/api/company-individuals", tags=["company-individuals"])
@@ -337,6 +342,18 @@ def archive_customer(
         old_value={"is_archived": False},
         new_value={"is_archived": True},
     )
+    # PORTAL-004 / design §5: archiving a customer disables every portal
+    # login under it, not just on their next request -- get_current_portal_user
+    # also refuses live tokens once the customer is archived, but this
+    # keeps the Contacts tab's own status display accurate too.
+    portal_users = (
+        db.query(PortalUser)
+        .join(Contact, PortalUser.contact_id == Contact.id)
+        .filter(Contact.customer_id == customer.id, PortalUser.is_active)
+        .all()
+    )
+    for portal_user in portal_users:
+        _disable_portal_user(db, portal_user, actor_user_id=current_user.id)
     db.commit()
     db.refresh(customer)
     return customer
@@ -695,6 +712,221 @@ def reactivate_contact(
     db.commit()
     db.refresh(contact)
     return contact
+
+
+# ---- Customer Helpdesk Portal access (PORTAL-001..004, design §5) -----
+# Enable/disable/reset a Contact's login to the separate /portal
+# frontend. Lives here (not on app/routers/portal.py) because it's a
+# staff action gated by this module's own EDIT authority, not something
+# a customer can reach -- app/routers/portal.py is customer-facing only
+# (get_current_portal_user), this is company_individual_management-facing.
+
+
+def _generate_temp_password() -> str:
+    """10 random alphanumeric characters, regenerated until it satisfies
+    validate_password_complexity's letter+digit rule (near-certain on
+    the first try, but never assumed)."""
+    alphabet = string.ascii_letters + string.digits
+    while True:
+        pw = "".join(secrets.choice(alphabet) for _ in range(10))
+        if any(c.isalpha() for c in pw) and any(c.isdigit() for c in pw):
+            return pw
+
+
+def _portal_access_out(portal_user: PortalUser | None, *, temporary_password: str | None = None, invited_by_email: bool = False) -> PortalAccessOut:
+    if portal_user is None:
+        return PortalAccessOut(enabled=False)
+    now = datetime.now(timezone.utc)
+    return PortalAccessOut(
+        enabled=portal_user.is_active,
+        email=portal_user.email,
+        must_change_password=portal_user.must_change_password,
+        last_login_at=portal_user.last_login_at,
+        locked=bool(portal_user.locked_until and portal_user.locked_until > now),
+        temporary_password=temporary_password,
+        invited_by_email=invited_by_email,
+    )
+
+
+@router.get("/{customer_id}/contacts/{contact_id}/portal-access", response_model=PortalAccessOut)
+def get_portal_access(
+    customer_id: uuid.UUID,
+    contact_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access(MODULE, AccessLevel.VIEW)),
+):
+    customer = _customer_or_404(db, customer_id, current_user.company_id)
+    contact = _contact_or_404(db, customer, contact_id)
+    portal_user = db.query(PortalUser).filter(PortalUser.contact_id == contact.id).first()
+    return _portal_access_out(portal_user)
+
+
+@router.post("/{customer_id}/contacts/{contact_id}/portal-access", response_model=PortalAccessOut)
+def enable_portal_access(
+    customer_id: uuid.UUID,
+    contact_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access(MODULE, AccessLevel.EDIT)),
+):
+    """Grants (or re-grants, if it was disabled) this Contact a Helpdesk
+    Portal login. Refuses without a contact email, without PDPA consent
+    on file, or if the customer is archived (design §5, PORTAL-004)."""
+    customer = _customer_or_404(db, customer_id, current_user.company_id)
+    contact = _contact_or_404(db, customer, contact_id)
+    if not contact.email:
+        raise HTTPException(status_code=422, detail="This contact has no email address -- add one before enabling portal access.")
+    if customer.is_archived:
+        raise HTTPException(status_code=422, detail="This customer is archived -- unarchive it before enabling portal access.")
+    if not customer.pdpa_consent_given:
+        raise HTTPException(
+            status_code=422,
+            detail="PDPA consent has not been recorded for this customer -- record consent before enabling portal access.",
+        )
+
+    portal_user = db.query(PortalUser).filter(PortalUser.contact_id == contact.id).first()
+    temp_password = _generate_temp_password()
+    if portal_user is None:
+        portal_user = PortalUser(
+            company_id=customer.company_id,
+            contact_id=contact.id,
+            email=contact.email,
+            hashed_password=hash_password(temp_password),
+            is_active=True,
+            must_change_password=True,
+            created_by_user_id=current_user.id,
+        )
+        db.add(portal_user)
+        audit_action = "portal_access_enabled"
+    else:
+        portal_user.email = contact.email
+        portal_user.hashed_password = hash_password(temp_password)
+        portal_user.is_active = True
+        portal_user.must_change_password = True
+        portal_user.failed_attempts = 0
+        portal_user.locked_until = None
+        audit_action = "portal_access_re_enabled"
+    db.flush()
+
+    invited_by_email = False
+    if mailer.is_configured():
+        try:
+            mailer.send_email(
+                to_email=portal_user.email,
+                subject="Your Websoft Helpdesk Portal access",
+                body_text=(
+                    f"Hi {contact.name},\n\n"
+                    f"You now have access to the {customer.name} Helpdesk Portal.\n\n"
+                    f"Sign in at the portal login page with:\n"
+                    f"  Email: {portal_user.email}\n"
+                    f"  Temporary password: {temp_password}\n\n"
+                    "You'll be asked to set your own password the first time you sign in."
+                ),
+            )
+            invited_by_email = True
+        except (mailer.MailerNotConfigured, mailer.MailerError):
+            invited_by_email = False  # fall through to showing it on screen below
+
+    audit.record(
+        db,
+        entity_type="portal_user",
+        entity_id=portal_user.id,
+        action=audit_action,
+        actor_user_id=current_user.id,
+        details=f"contact={contact.name}, customer={customer.name}",
+    )
+    db.commit()
+    db.refresh(portal_user)
+    return _portal_access_out(
+        portal_user,
+        temporary_password=None if invited_by_email else temp_password,
+        invited_by_email=invited_by_email,
+    )
+
+
+@router.post("/{customer_id}/contacts/{contact_id}/portal-access/reset-password", response_model=PortalAccessOut)
+def reset_portal_access_password(
+    customer_id: uuid.UUID,
+    contact_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access(MODULE, AccessLevel.EDIT)),
+):
+    customer = _customer_or_404(db, customer_id, current_user.company_id)
+    contact = _contact_or_404(db, customer, contact_id)
+    portal_user = db.query(PortalUser).filter(PortalUser.contact_id == contact.id).first()
+    if portal_user is None:
+        raise HTTPException(status_code=404, detail="This contact does not have portal access yet.")
+
+    temp_password = _generate_temp_password()
+    portal_user.hashed_password = hash_password(temp_password)
+    portal_user.must_change_password = True
+    portal_user.failed_attempts = 0
+    portal_user.locked_until = None
+
+    invited_by_email = False
+    if mailer.is_configured():
+        try:
+            mailer.send_email(
+                to_email=portal_user.email,
+                subject="Your Websoft Helpdesk Portal password has been reset",
+                body_text=(
+                    f"Hi {contact.name},\n\n"
+                    f"Your Helpdesk Portal password has been reset.\n\n"
+                    f"  Email: {portal_user.email}\n"
+                    f"  Temporary password: {temp_password}\n\n"
+                    "You'll be asked to set your own password the next time you sign in."
+                ),
+            )
+            invited_by_email = True
+        except (mailer.MailerNotConfigured, mailer.MailerError):
+            invited_by_email = False
+
+    audit.record(
+        db,
+        entity_type="portal_user",
+        entity_id=portal_user.id,
+        action="portal_password_reset_by_staff",
+        actor_user_id=current_user.id,
+        details=f"contact={contact.name}, customer={customer.name}",
+    )
+    db.commit()
+    db.refresh(portal_user)
+    return _portal_access_out(
+        portal_user,
+        temporary_password=None if invited_by_email else temp_password,
+        invited_by_email=invited_by_email,
+    )
+
+
+@router.post("/{customer_id}/contacts/{contact_id}/portal-access/disable", response_model=PortalAccessOut)
+def disable_portal_access(
+    customer_id: uuid.UUID,
+    contact_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module_access(MODULE, AccessLevel.EDIT)),
+):
+    customer = _customer_or_404(db, customer_id, current_user.company_id)
+    contact = _contact_or_404(db, customer, contact_id)
+    portal_user = db.query(PortalUser).filter(PortalUser.contact_id == contact.id).first()
+    if portal_user is None:
+        raise HTTPException(status_code=404, detail="This contact does not have portal access.")
+    _disable_portal_user(db, portal_user, actor_user_id=current_user.id)
+    db.commit()
+    db.refresh(portal_user)
+    return _portal_access_out(portal_user)
+
+
+def _disable_portal_user(db: Session, portal_user: PortalUser, *, actor_user_id: uuid.UUID | None) -> None:
+    """Shared by the explicit disable action above and by
+    archive_customer below (design §5: "Archiving a customer calls the
+    same disable for every portal user under it")."""
+    portal_user.is_active = False
+    audit.record(
+        db,
+        entity_type="portal_user",
+        entity_id=portal_user.id,
+        action="portal_access_disabled",
+        actor_user_id=actor_user_id,
+    )
 
 
 # ---- Branches (branch locations of a customer) ------------------------
