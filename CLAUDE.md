@@ -132,11 +132,14 @@ reason, approach, and status. Converted and verified so far: Core /
 Administration (auth, audit logging, Group Authority, Module Control,
 Company Setup, Users/Staff Master), CompanyIndividual Management
 (Customer/Supplier master, Contacts, Branches, Relationships, PDPA
-consent/archive), and the Product/Service Catalog. `backend/` (Python)
-is untouched and keeps running as the system of record until each
-remaining module (Contracts, Job Orders, Service Records, Excess
-Usage, Billing, AR, and everything else) is converted, module by
-module, the same way.
+consent/archive), Product/Service Catalog, and Service Contracts + Job
+Orders (the SRV-001..018 contract lifecycle, PROJECT milestone
+scheduling). **Known gap:** contract activation doesn't yet issue the
+annual invoice (Billing isn't converted) -- a contract activated via
+`backend-php/` is not yet billed. `backend/` (Python) is untouched and
+keeps running as the system of record until each remaining module
+(Service Records, Excess Usage, Billing, AR, and everything else) is
+converted, module by module, the same way.
 
 No other business area has application code yet. **Commission
 Management, further Service Record business-rule decisions (open item

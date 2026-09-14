@@ -1,0 +1,503 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Exceptions\ApiException;
+use App\Http\Controllers\Controller;
+use App\Http\Middleware\Authenticate;
+use App\Models\Contract;
+use App\Models\JobOrder;
+use App\Models\ProjectMilestone;
+use App\Models\User;
+use App\Services\Audit;
+use App\Services\Authority;
+use App\Services\Numbering;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Job Orders (formerly "Helpdesk Tickets") -- Service Operations.
+ * Mirrors backend/app/routers/job_orders.py.
+ *
+ * NOT yet converted from the Python router: CSV/Excel export. Budget-
+ * overrun consumed-hours/cost is a stub (always 0) until Service
+ * Records is converted -- see computeBudgetOverrun()'s docblock and
+ * docs/php-conversion-plan.md. Auto-close on Service Record approval
+ * also isn't wired up yet, so nothing in this backend ever sets a Job
+ * Order to CLOSED -- VOID and manual states work fully.
+ */
+class JobOrderController extends Controller
+{
+    private const MODULE = 'service_operations';
+
+    // Sales Manager (Cherish) or Owner -- budget overrun approval (7.1)
+    // and milestone completion (7.3).
+    private const OVERRUN_APPROVAL_ROLES = [User::ROLE_SALES_MANAGER, User::ROLE_OWNER];
+
+    // Default project milestones template -- created automatically
+    // when a PROJECT-type Job Order is opened.
+    private const PROJECT_MILESTONE_TEMPLATE = [
+        ['installation', 'Installation', 0],
+        ['training', 'Training', 1],
+        ['repeat_training', 'Repeat Training', 2],
+        ['handover', 'Handover', 3],
+        ['completion_signoff', 'Completion Sign-off', 4],
+    ];
+
+    private function jobOrderOrFail(string $companyId, string $jobOrderId): JobOrder
+    {
+        $jobOrder = JobOrder::with('milestones')->find($jobOrderId);
+        if (! $jobOrder || $jobOrder->company_id !== $companyId) {
+            throw new ApiException(404, 'Job order not found');
+        }
+
+        return $jobOrder;
+    }
+
+    /**
+     * Check if a PROJECT-type Job Order has exceeded its contract's
+     * hours or cost. Returns null for SUPPORT-type or no-contract JOs
+     * (matching the Python version exactly) -- and, as a stub until
+     * Service Records is converted, also whenever it WOULD need to sum
+     * approved Service Record minutes: there are none in this backend
+     * yet (the table doesn't exist), so consumed is reported as 0
+     * rather than the query failing. Replace this stub with the real
+     * sum once Service Records lands.
+     */
+    private function computeBudgetOverrun(JobOrder $jobOrder): ?array
+    {
+        if ($jobOrder->job_order_type !== JobOrder::TYPE_PROJECT || ! $jobOrder->contract_id) {
+            return null;
+        }
+        $contract = Contract::find($jobOrder->contract_id);
+        if (! $contract) {
+            return null;
+        }
+
+        $totalMinutes = 0; // STUB -- see method docblock.
+
+        $contractedHours = $contract->contracted_minutes > 0 ? $contract->contracted_minutes / 60 : 0;
+        $contractValue = (float) $contract->contract_value_sgd;
+        $blendedRate = $contractedHours > 0 ? $contractValue / $contractedHours : 0;
+        $consumedHours = $totalMinutes / 60;
+        $consumedCost = $consumedHours * $blendedRate;
+
+        return [
+            'is_over_hours' => $contract->contracted_minutes > 0 && $totalMinutes > $contract->contracted_minutes,
+            'is_over_cost' => $contractValue > 0 && $consumedCost > $contractValue,
+            'consumed_minutes' => $totalMinutes,
+            'contracted_minutes' => $contract->contracted_minutes,
+            'consumed_cost_sgd' => round($consumedCost, 2),
+            'contract_value_sgd' => round($contractValue, 2),
+        ];
+    }
+
+    private function present(JobOrder $jobOrder): array
+    {
+        return [
+            'id' => $jobOrder->id,
+            'job_order_number' => $jobOrder->job_order_number,
+            'customer_id' => $jobOrder->customer_id,
+            'contract_id' => $jobOrder->contract_id,
+            'subject' => $jobOrder->subject,
+            'job_order_type' => $jobOrder->job_order_type,
+            'priority' => $jobOrder->priority,
+            'status' => $jobOrder->status,
+            'is_urgent' => $jobOrder->is_urgent,
+            'assigned_to_user_id' => $jobOrder->assigned_to_user_id,
+            'due_date' => optional($jobOrder->due_date)->toDateString(),
+            'void_reason' => $jobOrder->void_reason,
+            'budget_overrun_approved' => $jobOrder->budget_overrun_approved,
+            'budget_overrun_approved_by' => $jobOrder->budget_overrun_approved_by,
+            'budget_overrun_approved_at' => $jobOrder->budget_overrun_approved_at,
+            'created_at' => $jobOrder->created_at,
+            'closed_at' => $jobOrder->closed_at,
+            'milestones' => $jobOrder->milestones->map(fn ($m) => $this->presentMilestone($m))->values(),
+            'budget_overrun' => $this->computeBudgetOverrun($jobOrder),
+        ];
+    }
+
+    private function presentMilestone(ProjectMilestone $m): array
+    {
+        return [
+            'id' => $m->id,
+            'job_order_id' => $m->job_order_id,
+            'milestone_type' => $m->milestone_type,
+            'label' => $m->label,
+            'sort_order' => $m->sort_order,
+            'planned_start' => optional($m->planned_start)->toDateString(),
+            'planned_end' => optional($m->planned_end)->toDateString(),
+            'actual_start' => optional($m->actual_start)->toDateString(),
+            'actual_end' => optional($m->actual_end)->toDateString(),
+            'assigned_user_id' => $m->assigned_user_id,
+            'status' => $m->status,
+            'notes' => $m->notes,
+            'created_at' => $m->created_at,
+        ];
+    }
+
+    public function store(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $data = $request->validate([
+            'customer_id' => 'required|uuid',
+            'contract_id' => 'required|uuid',
+            'subject' => 'required|string',
+            'job_order_type' => 'sometimes|in:support,project',
+            'priority' => 'sometimes|in:low,normal,high,critical',
+            'due_date' => 'sometimes|nullable|date',
+            'is_urgent' => 'sometimes|boolean',
+        ]);
+        $data['job_order_type'] ??= JobOrder::TYPE_SUPPORT;
+        $data['priority'] ??= JobOrder::PRIORITY_NORMAL;
+        $data['is_urgent'] ??= false;
+
+        $jobOrder = DB::transaction(function () use ($data, $user) {
+            $jobOrder = JobOrder::create(array_merge($data, [
+                'company_id' => $user->company_id,
+                'job_order_number' => Numbering::next($user->company_id, 'job_order'),
+            ]));
+
+            // Auto-create milestone schedule template for PROJECT type.
+            if ($data['job_order_type'] === JobOrder::TYPE_PROJECT) {
+                foreach (self::PROJECT_MILESTONE_TEMPLATE as [$mtype, $label, $sortOrder]) {
+                    ProjectMilestone::create([
+                        'job_order_id' => $jobOrder->id,
+                        'milestone_type' => $mtype,
+                        'label' => $label,
+                        'sort_order' => $sortOrder,
+                    ]);
+                }
+            }
+
+            return $jobOrder;
+        });
+
+        return response()->json($this->present($jobOrder->fresh('milestones')));
+    }
+
+    public function index(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        $query = JobOrder::with('milestones')->where('company_id', $user->company_id);
+        if ($request->filled('status')) {
+            $query->where('status', $request->query('status'));
+        }
+        if ($request->filled('priority')) {
+            $query->where('priority', $request->query('priority'));
+        }
+        if ($request->filled('customer_id')) {
+            $query->where('customer_id', $request->query('customer_id'));
+        }
+        if ($request->filled('contract_id')) {
+            $query->where('contract_id', $request->query('contract_id'));
+        }
+        if ($request->filled('job_order_type')) {
+            $query->where('job_order_type', $request->query('job_order_type'));
+        }
+
+        return $query->orderByDesc('created_at')->get()->map(fn ($jo) => $this->present($jo))->values();
+    }
+
+    public function show(Request $request, string $jobOrderId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return response()->json($this->present($this->jobOrderOrFail($user->company_id, $jobOrderId)));
+    }
+
+    public function assign(Request $request, string $jobOrderId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $jobOrder = $this->jobOrderOrFail($user->company_id, $jobOrderId);
+        if (in_array($jobOrder->status, [JobOrder::STATUS_CLOSED, JobOrder::STATUS_VOID], true)) {
+            throw new ApiException(409, "Job order is {$jobOrder->status}; reopen it first.");
+        }
+        $data = $request->validate(['assigned_to_user_id' => 'required|uuid']);
+
+        $jobOrder->assigned_to_user_id = $data['assigned_to_user_id'];
+        $jobOrder->status = JobOrder::STATUS_ASSIGNED;
+        $jobOrder->save();
+
+        return response()->json($this->present($jobOrder->fresh('milestones')));
+    }
+
+    /**
+     * Manual due date, set/changed by whoever opens the Job Order
+     * (Sales/Coordinator) after discussion with Support -- see
+     * App\Models\JobOrder's docblock.
+     */
+    public function setDueDate(Request $request, string $jobOrderId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $jobOrder = $this->jobOrderOrFail($user->company_id, $jobOrderId);
+        if (in_array($jobOrder->status, [JobOrder::STATUS_CLOSED, JobOrder::STATUS_VOID], true)) {
+            throw new ApiException(409, "Job order is {$jobOrder->status}; reopen it first.");
+        }
+        $data = $request->validate(['due_date' => 'sometimes|nullable|date']);
+
+        $oldDueDate = optional($jobOrder->due_date)->toDateString();
+        $jobOrder->due_date = $data['due_date'] ?? null;
+        Audit::record(
+            'job_order', $jobOrder->id, 'due_date_set', $user->id,
+            oldValue: ['due_date' => $oldDueDate], newValue: ['due_date' => $data['due_date'] ?? null],
+        );
+        $jobOrder->save();
+
+        return response()->json($this->present($jobOrder->fresh('milestones')));
+    }
+
+    /**
+     * "Option to also tick Job Order as Urgent then Rates will X1.5" --
+     * manual, toggleable any time before the work is approved; the
+     * suggested-deduction-minutes multiplier itself lives in Service
+     * Records (not yet converted).
+     */
+    public function setUrgent(Request $request, string $jobOrderId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $jobOrder = $this->jobOrderOrFail($user->company_id, $jobOrderId);
+        $data = $request->validate(['is_urgent' => 'required|boolean']);
+
+        $oldValue = $jobOrder->is_urgent;
+        $jobOrder->is_urgent = $data['is_urgent'];
+        Audit::record('job_order', $jobOrder->id, 'urgent_set', $user->id, oldValue: ['is_urgent' => $oldValue], newValue: ['is_urgent' => $jobOrder->is_urgent]);
+        $jobOrder->save();
+
+        return response()->json($this->present($jobOrder->fresh('milestones')));
+    }
+
+    /**
+     * VOID is the one remaining manual terminal state, for a Job Order
+     * that should never have been raised at all (duplicate, raised in
+     * error) -- distinct from a normally completed job. A reason is
+     * required for audit.
+     */
+    public function void(Request $request, string $jobOrderId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $jobOrder = $this->jobOrderOrFail($user->company_id, $jobOrderId);
+        if (! in_array($jobOrder->status, [JobOrder::STATUS_OPEN, JobOrder::STATUS_ASSIGNED], true)) {
+            throw new ApiException(409, "Job order is already {$jobOrder->status}; nothing to void.");
+        }
+        $data = $request->validate(['reason' => 'required|string|min:1|max:500']);
+
+        $oldStatus = $jobOrder->status;
+        $jobOrder->status = JobOrder::STATUS_VOID;
+        $jobOrder->void_reason = $data['reason'];
+        Audit::record(
+            'job_order', $jobOrder->id, 'voided', $user->id,
+            oldValue: ['status' => $oldStatus], newValue: ['status' => $jobOrder->status, 'void_reason' => $data['reason']],
+        );
+        $jobOrder->save();
+
+        return response()->json($this->present($jobOrder->fresh('milestones')));
+    }
+
+    /**
+     * Correct an accidental auto-close or void without editing the
+     * database directly -- owner-only, mirroring the Accounting Period
+     * reopen pattern.
+     */
+    public function reopen(Request $request, string $jobOrderId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'full');
+        if ($user->role !== User::ROLE_OWNER) {
+            throw new ApiException(403, 'Only the owner can reopen a job order.');
+        }
+
+        $jobOrder = $this->jobOrderOrFail($user->company_id, $jobOrderId);
+        if (! in_array($jobOrder->status, [JobOrder::STATUS_CLOSED, JobOrder::STATUS_VOID], true)) {
+            throw new ApiException(409, 'Job order is not closed or void.');
+        }
+
+        $oldStatus = $jobOrder->status;
+        $jobOrder->status = $jobOrder->assigned_to_user_id ? JobOrder::STATUS_ASSIGNED : JobOrder::STATUS_OPEN;
+        $jobOrder->closed_at = null;
+        $jobOrder->void_reason = null;
+        Audit::record('job_order', $jobOrder->id, 'reopened', $user->id, oldValue: ['status' => $oldStatus], newValue: ['status' => $jobOrder->status]);
+        $jobOrder->save();
+
+        return response()->json($this->present($jobOrder->fresh('milestones')));
+    }
+
+    /** Sales Manager (Cherish) or Owner approves continuation past budget overrun on a PROJECT-type Job Order (7.1). */
+    public function approveOverrun(Request $request, string $jobOrderId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+        if (! in_array($user->role, self::OVERRUN_APPROVAL_ROLES, true)) {
+            throw new ApiException(403, 'Only Sales Manager or Owner can approve budget overrun.');
+        }
+
+        $jobOrder = $this->jobOrderOrFail($user->company_id, $jobOrderId);
+        if ($jobOrder->job_order_type !== JobOrder::TYPE_PROJECT) {
+            throw new ApiException(409, 'Budget overrun applies to PROJECT-type Job Orders only.');
+        }
+        if ($jobOrder->budget_overrun_approved) {
+            throw new ApiException(409, 'Budget overrun already approved.');
+        }
+
+        $jobOrder->budget_overrun_approved = true;
+        $jobOrder->budget_overrun_approved_by = $user->id;
+        $jobOrder->budget_overrun_approved_at = Carbon::now('UTC');
+        Audit::record('job_order', $jobOrder->id, 'budget_overrun_approved', $user->id, newValue: ['budget_overrun_approved' => true]);
+        $jobOrder->save();
+
+        return response()->json($this->present($jobOrder->fresh('milestones')));
+    }
+
+    // ---- Project Milestones (PROJECT-type Job Orders) -----------------
+
+    public function addMilestone(Request $request, string $jobOrderId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $jobOrder = $this->jobOrderOrFail($user->company_id, $jobOrderId);
+        if ($jobOrder->job_order_type !== JobOrder::TYPE_PROJECT) {
+            throw new ApiException(409, 'Milestones are only for PROJECT-type Job Orders.');
+        }
+        $data = $request->validate([
+            'milestone_type' => 'required|in:installation,training,repeat_training,handover,completion_signoff',
+            'label' => 'required|string',
+            'sort_order' => 'sometimes|integer',
+            'planned_start' => 'sometimes|nullable|date',
+            'planned_end' => 'sometimes|nullable|date',
+            'assigned_user_id' => 'sometimes|nullable|uuid',
+            'notes' => 'sometimes|nullable|string',
+        ]);
+        $data['sort_order'] ??= 0;
+
+        $milestone = ProjectMilestone::create(array_merge($data, ['job_order_id' => $jobOrder->id]));
+        Audit::record('project_milestone', $milestone->id, 'created', $user->id, newValue: ['milestone_type' => $data['milestone_type'], 'label' => $data['label']]);
+
+        return response()->json($this->presentMilestone($milestone->fresh()));
+    }
+
+    public function listMilestones(Request $request, string $jobOrderId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        $jobOrder = $this->jobOrderOrFail($user->company_id, $jobOrderId);
+
+        return ProjectMilestone::where('job_order_id', $jobOrder->id)
+            ->orderBy('sort_order')
+            ->get()
+            ->map(fn ($m) => $this->presentMilestone($m))
+            ->values();
+    }
+
+    /**
+     * Update dates, status, assignment or notes on a milestone.
+     * Milestone completion (7.3): only Sales Manager or Owner can set
+     * status to COMPLETED.
+     */
+    public function updateMilestone(Request $request, string $jobOrderId, string $milestoneId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $jobOrder = $this->jobOrderOrFail($user->company_id, $jobOrderId);
+        $milestone = ProjectMilestone::find($milestoneId);
+        if (! $milestone || $milestone->job_order_id !== $jobOrder->id) {
+            throw new ApiException(404, 'Milestone not found');
+        }
+
+        $fields = $request->validate([
+            'label' => 'sometimes|nullable|string',
+            'sort_order' => 'sometimes|nullable|integer',
+            'planned_start' => 'sometimes|nullable|date',
+            'planned_end' => 'sometimes|nullable|date',
+            'actual_start' => 'sometimes|nullable|date',
+            'actual_end' => 'sometimes|nullable|date',
+            'assigned_user_id' => 'sometimes|nullable|uuid',
+            'status' => 'sometimes|nullable|in:pending,in_progress,completed,skipped',
+            'notes' => 'sometimes|nullable|string',
+        ]);
+
+        // 7.3: gate COMPLETED status to Sales Manager / Owner.
+        if (
+            ($fields['status'] ?? null) === ProjectMilestone::STATUS_COMPLETED
+            && $milestone->status !== ProjectMilestone::STATUS_COMPLETED
+            && ! in_array($user->role, self::OVERRUN_APPROVAL_ROLES, true)
+        ) {
+            throw new ApiException(403, 'Only Sales Manager or Owner can mark a milestone as Completed.');
+        }
+
+        $oldValues = [];
+        $newValues = [];
+        foreach ($fields as $field => $value) {
+            if ($value === null) {
+                continue;
+            }
+            $oldValues[$field] = $milestone->{$field};
+            $milestone->{$field} = $value;
+            $newValues[$field] = $value;
+        }
+
+        if ($newValues) {
+            Audit::record('project_milestone', $milestone->id, 'updated', $user->id, oldValue: $oldValues, newValue: $newValues);
+        }
+        $milestone->save();
+
+        return response()->json($this->presentMilestone($milestone->fresh()));
+    }
+
+    public function deleteMilestone(Request $request, string $jobOrderId, string $milestoneId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $jobOrder = $this->jobOrderOrFail($user->company_id, $jobOrderId);
+        $milestone = ProjectMilestone::find($milestoneId);
+        if (! $milestone || $milestone->job_order_id !== $jobOrder->id) {
+            throw new ApiException(404, 'Milestone not found');
+        }
+
+        Audit::record('project_milestone', $milestone->id, 'deleted', $user->id, oldValue: ['milestone_type' => $milestone->milestone_type, 'label' => $milestone->label]);
+        $milestone->delete();
+
+        return response()->noContent();
+    }
+
+    /**
+     * Re-initialize the default milestone template on a PROJECT Job
+     * Order. Only works when it currently has zero milestones.
+     */
+    public function initMilestoneTemplate(Request $request, string $jobOrderId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $jobOrder = $this->jobOrderOrFail($user->company_id, $jobOrderId);
+        if ($jobOrder->job_order_type !== JobOrder::TYPE_PROJECT) {
+            throw new ApiException(409, 'Only PROJECT-type Job Orders support milestones.');
+        }
+        if (ProjectMilestone::where('job_order_id', $jobOrder->id)->count() > 0) {
+            throw new ApiException(409, 'Milestones already exist; delete them first to re-init.');
+        }
+
+        $milestones = collect(self::PROJECT_MILESTONE_TEMPLATE)->map(
+            fn ($t) => ProjectMilestone::create(['job_order_id' => $jobOrder->id, 'milestone_type' => $t[0], 'label' => $t[1], 'sort_order' => $t[2]])
+        );
+
+        return $milestones->map(fn ($m) => $this->presentMilestone($m))->values();
+    }
+}

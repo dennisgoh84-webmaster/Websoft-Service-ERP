@@ -274,6 +274,67 @@ sub-resource (depends on the Portal module below).
   `test_update_ignores_is_stock_same_as_python`, and worth flagging to
   Dennis as a possible oversight rather than a confirmed rule.
   **Not yet converted:** CSV/Excel export.
+- **Service Contracts** (`app/models/contracts.py`,
+  `app/services/contracts.py`, `app/routers/contracts.py` →
+  `App\Models\Contract`/`ContractProduct`/`ExpiredHoursRecord`,
+  `App\Services\ContractService`, `App\Http\Controllers\Api\ContractController`):
+  the full SRV-001, 002, 005, 010, 012, 014, 016, 018 lifecycle --
+  create (10-hour hard minimum enforced for Service Support, ignored
+  for Annual, Ad Hoc requires a positive reference rate), activate
+  (Draft → Active only), renew (SRV-016's 2-week seamless-backdating
+  window; beyond it, SRV-018 requires an explicit `force_start_date`,
+  never an automatic decision), expire (SRV-005's forfeit-to-
+  `ExpiredHoursRecord`, never a credit/rollover), `needsPreExpiryCheck`
+  (SRV-014) and `deductMinutes` (SRV-004, never negative) ported ahead
+  of their only caller (Service Records) so the enforcement point
+  exists when that module lands. Product coverage + per-seat license
+  tracking, and the sales-staff owner field. 21 dedicated business-
+  logic tests (`tests/Feature/ContractServiceTest.php`) pin the exact
+  arithmetic (12-month term via `addMonthsNoOverflow` matching Python's
+  `dateutil.relativedelta` month-clamping, the blended-rate example
+  from the screenshot below, renewal date-math) against worked
+  examples, not just smoke-tested.
+  **Also added:** `App\Services\Numbering` (mirrors
+  `app/services/numbering.py`'s document-numbering-with-locked-counter
+  design -- `CON-2026-0001` etc.), needed by Contracts and Job Orders
+  alike.
+  **KNOWN GAP (not silently papered over):** the Python router's
+  `POST /{contract}/activate` also issues the contract's annual invoice
+  in the same transaction (BILL-001/002/005, via
+  `app/services/billing.py` → GL posting → tax). Billing isn't
+  converted yet, so activation here only changes status -- see
+  `ContractController`'s class docblock. **Do not treat a contract
+  activated through `backend-php/` as billed** until Billing is
+  converted; this raises Billing's priority in the list below.
+  **Not yet converted:** CSV/Excel export, `GET /{contract}/excess-usage`
+  (needs `ExcessUsageRecord`, which needs Service Records first).
+- **Job Orders** (`app/models/job_orders.py`,
+  `app/routers/job_orders.py` → `App\Models\JobOrder`/`ProjectMilestone`,
+  `App\Http\Controllers\Api\JobOrderController`): create (auto-creates
+  the 5-step PROJECT milestone template), list/get, assign, manual due
+  date (SRV-009 -- no SLA target derived from priority, confirmed
+  deferred), urgent flag, void (reason required, audit-logged),
+  owner-only reopen, budget-overrun approval (7.1, Sales Manager/Owner
+  only) and PROJECT milestone CRUD + re-init template, with milestone
+  completion gated to Sales Manager/Owner (7.3).
+  **Stub, not a silent gap:** `computeBudgetOverrun()` always reports 0
+  consumed minutes -- the real figure sums approved Service Record
+  minutes, and Service Records isn't converted yet; see that method's
+  docblock. Nothing in this backend ever auto-closes a Job Order yet
+  either (that's driven by Service Record approval) -- VOID and the
+  other manual states work fully.
+  **Not yet converted:** CSV/Excel export.
+
+Verified end-to-end for both modules against the real React frontend
+(screenshots in the PR/commit history): contract creation blocked
+below the 10-hour minimum with the SRV-002 message, activation,
+renewal (both the seamless-backdated case and the SRV-018
+force-start-date case), the contract detail page showing the exact
+$300.00/hr blended rate, and a PROJECT-type Job Order with all 5
+milestones auto-created in order. The only 404s seen were for
+not-yet-converted modules (Announcements, Dashboard, Excess Usage,
+Invoices/Billing, Documents, Service Records) -- none from Contracts
+or Job Orders' own endpoints.
 
 ## Not yet converted (pending, in rough priority order)
 
@@ -282,24 +343,23 @@ phase of its own, following the same pattern as CompanyIndividual
 Management above -- model(s) + migration(s) + controller + routes +
 smoke test:
 
-1. **Service Contracts** (`app/models/contracts.py`,
-   `app/services/contracts.py`, `app/routers/contracts.py`) -- SRV-001,
-   002, 003, 005, 010, 012, 016, 017, 018.
-2. **Job Orders** (`app/models/job_orders.py`, `app/routers/job_orders.py`).
-3. **Service Records** (`app/models/service_records.py`,
+1. **Service Records** (`app/models/service_records.py`,
    `app/services/service_records.py`, `app/routers/service_records.py`)
-   -- SRV-007 (hour rounding), SRV-015 (submission timeframe).
-4. **Excess Usage** (`app/services/excess_usage.py`,
+   -- SRV-007 (hour rounding), SRV-015 (submission timeframe). Next in
+   line: `Contract::deductMinutes()`/`ContractService` are already
+   ported and waiting for this module's approval flow to call them.
+2. **Excess Usage** (`app/services/excess_usage.py`,
    `app/routers/excess_usage.py`) -- SRV-004, 008, 011, 013 (Nico/
    Cherish review, blended-rate billing, treatment categories); the
    business logic here has the most riding on getting the rounding/
    balance-never-negative arithmetic exactly right, so it should get a
    dedicated test suite before being trusted, not just a smoke test.
-5. **Billing / Invoicing** (`app/services/billing.py`,
-   `app/routers/billing.py`) -- BILL-001..006.
-6. **Accounts Receivable** (`app/services/accounts_receivable.py`,
+3. **Billing / Invoicing** (`app/services/billing.py`,
+   `app/routers/billing.py`) -- BILL-001..006. Bumped up in priority:
+   Contract activation's known gap (see above) depends on this.
+4. **Accounts Receivable** (`app/services/accounts_receivable.py`,
    `app/routers/accounts_receivable.py`) -- AR-001..003.
-7. Everything else in `backend/app/routers/` not listed above
+5. Everything else in `backend/app/routers/` not listed above
    (Quotations, Incidents, Accounts Payable/Purchasing, Inventory/
    Stock, GL posting + Bank step, Reporting/dashboards, Event Logs,
    Document Control, Periods, Announcements, Software Tasks, Ops

@@ -13,15 +13,19 @@ shipped and when.
 - [ ] **Backend language conversion, Python/FastAPI → PHP/Laravel**
   -- started 2026-09-14. Converted and verified so far: Core /
   Administration (auth, audit logging, Group Authority, Module
-  Control, Company Setup, Users/Staff Master) and CompanyIndividual
+  Control, Company Setup, Users/Staff Master), CompanyIndividual
   Management (Customer/Supplier master, Contacts, Branches,
-  Relationships, PDPA consent/archive), plus the Product/Service
-  Catalog, all in a new `backend-php/` app running against its own
-  Postgres database, `backend/` (Python) untouched. Each converted
-  module verified against the real React frontend (proxied at
-  backend-php/ for the check), not just its own tests. Still pending:
-  Service Contracts, Job Orders, Service Records, Excess Usage,
-  Billing, Accounts Receivable, and everything else -- converted
+  Relationships, PDPA consent/archive), Product/Service Catalog, and
+  Service Contracts + Job Orders (SRV-001/002/005/010/012/014/016/018,
+  21 dedicated business-logic tests), all in a new `backend-php/` app
+  running against its own Postgres database, `backend/` (Python)
+  untouched. Each converted module verified against the real React
+  frontend (proxied at backend-php/ for the check), not just its own
+  tests. **Known gap:** contract activation doesn't yet issue the
+  BILL-001 annual invoice (Billing isn't converted) -- don't treat a
+  contract activated via backend-php/ as billed. Still pending:
+  Service Records, Excess Usage, Billing, Accounts Receivable, and
+  everything else -- converted
   module by module, same pattern as the Odoo replacement strategy.
   → [php-conversion-plan.md](php-conversion-plan.md)
 
