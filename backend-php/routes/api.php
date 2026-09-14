@@ -41,6 +41,7 @@ require __DIR__.'/api/stock.php';
 require __DIR__.'/api/dashboard.php';
 require __DIR__.'/api/documents.php';
 require __DIR__.'/api/announcements.php';
+require __DIR__.'/api/portal.php';
 
 // NEW FEATURES (not Python->PHP conversions -- built directly in
 // backend-php per Dennis's request; backend/ has no equivalent for

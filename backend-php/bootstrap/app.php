@@ -2,6 +2,7 @@
 
 use App\Exceptions\ApiException;
 use App\Http\Middleware\Authenticate;
+use App\Http\Middleware\AuthenticatePortal;
 use App\Http\Middleware\CaptureAuditRequestContext;
 use App\Http\Middleware\RequireModuleAccess;
 use Illuminate\Auth\AuthenticationException;
@@ -26,12 +27,15 @@ return Application::configure(basePath: dirname(__DIR__))
             // audit_request_context_middleware in backend/app/main.py.
             CaptureAuditRequestContext::class,
         ]);
-        // 'auth.portal' (the Customer Helpdesk Portal's separate bearer
-        // scheme, see backend/app/core/deps.py's get_current_portal_user)
-        // is not registered yet -- the Portal module is still pending in
-        // this conversion, see docs/php-conversion-plan.md.
+        // 'auth.portal' is the Customer Helpdesk Portal's own, entirely
+        // separate bearer scheme (purpose="portal", resolved against
+        // `portal_users`) -- see App\Http\Middleware\AuthenticatePortal
+        // and backend/app/core/deps.py's get_current_portal_user. It is
+        // never a relaxed mode of 'auth.jwt': neither realm's token is
+        // accepted by the other's middleware.
         $middleware->alias([
             'auth.jwt' => Authenticate::class,
+            'auth.portal' => AuthenticatePortal::class,
             'module' => RequireModuleAccess::class,
         ]);
     })
