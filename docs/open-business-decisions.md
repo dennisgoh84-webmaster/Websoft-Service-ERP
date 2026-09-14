@@ -1878,7 +1878,7 @@ requirements have not been provided":
 | Open point | Pragmatic default applied | Status |
 |---|---|---|
 | What counts as "this Financial Year" for the Sales Dashboard's Top 10 / Bottom 10 listings? | Calendar year (1 Jan – 31 Dec) — no fiscal-year-start field exists anywhere in the system. | **OPEN** — needs Dennis to confirm the real FY start, or that calendar-year is fine. |
-| How does a Contract link to the Sales Quotation that renewed it? | A plain free-text `quotation_reference` field on Contract, settable once Renewed/Expired — **not** a real linked record. | **OPEN** — Quotations exists in `backend/` (Python) but is not converted to `backend-php/` yet, so a real foreign-key link isn't reachable from this work; revisit once it is converted. |
+| How does a Contract link to the Sales Quotation that renewed it? | A plain free-text `quotation_reference` field on Contract, settable once Renewed/Expired — **not** a real linked record. | **OPEN, partially unblocked 2026-09-14** — Quotations has since been converted to `backend-php/` (see [php-conversion-plan.md](php-conversion-plan.md)), so a real `Quotation` model now exists to link against. The free-text field hasn't been swapped for a real foreign key yet — that conversion pass was scoped to `QuotationController` only and deliberately didn't touch `Contract`/`ContractController` — so this is now a small, reachable follow-up rather than something blocked on a missing module. Still needs doing. |
 
 Also corrects an imprecise premise this feature set's build brief
 carried: "the Quotations module does not exist in either backend" is
@@ -1886,9 +1886,11 @@ only true of `backend-php/` — `backend/app/routers/quotations.py` (and
 its model/service) is real and working in the Python backend, just not
 yet converted (see
 [php-conversion-plan.md](php-conversion-plan.md)'s "Not yet converted"
-list). The practical conclusion (free-text stand-in, since this work is
-scoped to `backend-php/` only and cannot touch `backend/`) is unaffected
-by the correction.
+list, **now stale as of 2026-09-14: Quotations has since been
+converted**). The practical conclusion at the time (a free-text
+stand-in, since that work was scoped to `backend-php/` only and could
+not touch `backend/`) held until conversion caught up; see the table
+row above for the current state.
 
 Everything else in the feature list (SALES-001..005) was implemented as
 clarified, directly in `backend-php/` + `frontend/` (new feature work,

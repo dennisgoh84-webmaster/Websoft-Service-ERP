@@ -576,10 +576,15 @@ conversion" note on this set of rules). Decision record:
 
 - A contract can record a free-text Sales Quotation reference, settable
   once it has transitioned to Renewed or Expired. This is **not** a real
-  linked record — the Quotations module exists in `backend/` (Python)
-  but has not been converted to `backend-php/`, and this work is scoped
-  to `backend-php/` only. Replace with a real foreign key once
-  Quotations is converted.
+  linked record. **Update 2026-09-14:** Quotations has since been
+  converted to `backend-php/` (see
+  [php-conversion-plan.md](php-conversion-plan.md)), so a real
+  `Quotation` model now exists to link against — the free-text field is
+  no longer blocked on that, it just hasn't been swapped for a real
+  foreign key yet. That reconciliation is left as follow-up work for
+  the Sales module enhancements, not done as part of converting
+  Quotations itself (which touched `QuotationController` only, not
+  `Contract`/`ContractController`).
 
 ### SALES-007 — Sales Dashboard KPIs — CONFIRMED, with two pragmatic defaults
 
@@ -593,10 +598,15 @@ conversion" note on this set of rules). Decision record:
   Dec) — no fiscal-year-start field exists anywhere in the system yet.
 - **Known gap, not fabricated:** "Quotations Pending Approval" and
   "Quotations Pending Confirmation by Client" always report
-  not-available — the Quotations module isn't converted to
-  `backend-php/`, and even in `backend/`, `Quotation` has no status
-  distinguishing those two cases from its existing draft/sent/accepted/
-  rejected/expired states.
+  not-available. **Update 2026-09-14:** Quotations is now converted to
+  `backend-php/`, but this gap is not closed by that — `Quotation`'s
+  status enum (draft/sent/accepted/rejected/expired, ported faithfully
+  from `backend/`) has no state distinguishing "pending internal
+  approval" from "sent, awaiting the client's confirmation," so there
+  is nothing for these two tiles to count even now. Closing this needs
+  a business-rule decision (does an approval step exist before sending,
+  and how is it tracked?), not more conversion work — never assumed
+  here.
 
 ## Conceptual Business Entities
 

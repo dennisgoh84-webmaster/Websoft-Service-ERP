@@ -225,13 +225,18 @@ listings for "this Financial Year"). **Two pragmatic defaults, flagged
 for Dennis to confirm rather than silently assumed:** "this Financial
 Year" is taken as the calendar year (no fiscal-year-start field exists
 anywhere in the system yet), and the Contract-Quotation link is a
-free-text `quotation_reference` field, not a real linked record (the
-Quotations module exists in `backend/` Python but has not been
-converted to `backend-php/`, and this work is scoped to `backend-php/`
-only) -- both recorded in
+free-text `quotation_reference` field, not a real linked record --
+both recorded in
 [docs/open-business-decisions.md #40](docs/open-business-decisions.md#40-sales-module-enhancements-financial-year-definition-and-contractquotation-link-raised-2026-09-22).
-The Sales Dashboard's two Quotations-pending KPIs report not-available
-for the same reason, rather than fabricated.
+Quotations has since been converted to `backend-php/` (below), which
+unblocks replacing that free-text field with a real link, but that
+reconciliation hasn't been done yet -- the conversion pass was scoped
+to Quotations only and deliberately didn't touch `Contract`. The Sales
+Dashboard's two Quotations-pending KPIs still report not-available
+regardless: `Quotation`'s status enum has no state distinguishing
+"pending internal approval" from "sent, awaiting client confirmation,"
+so there is nothing for either tile to count until that's a confirmed
+business rule.
 
 No other business area has application code yet. **Commission
 Management, further Service Record business-rule decisions (open item
