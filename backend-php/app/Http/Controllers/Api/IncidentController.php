@@ -26,17 +26,21 @@ use Illuminate\Http\Request;
  * Service Operations (Job Orders)" in the module catalog) rather than
  * a new module key, same as the Python router.
  *
- * KNOWN GAPS (documented, not silently skipped -- see
- * docs/php-conversion-plan.md's Incidents entry):
- *   - No convert-to-software-task action/route: backend/app/models/
- *     software_tasks.py has no backend-php equivalent yet, so there is
- *     no SoftwareTask model to create against.
- *   - An Incident can never be raised through the Customer Helpdesk
- *     Portal here (source=portal, raised_by_portal_user_id): the
- *     Portal itself isn't converted to backend-php yet, and no route
- *     here accepts those two fields -- only staff-side phone/email/
- *     other Incidents and the Outlook Add-in's email-sourced ones are
- *     reachable.
+ * KNOWN GAP (documented, not silently skipped -- see
+ * docs/php-conversion-plan.md's Incidents entry): no
+ * convert-to-software-task action/route, because
+ * backend/app/models/software_tasks.py has no backend-php equivalent
+ * yet, so there is no SoftwareTask model to create against.
+ *
+ * Portal-raised Incidents (source=portal, raised_by_portal_user_id)
+ * were the module's other known gap and are now reachable: the
+ * Customer Helpdesk Portal is converted and
+ * App\Http\Controllers\Api\PortalController::createIncident() creates
+ * them through the same App\Services\IncidentService::createIncident(),
+ * so they land in this same staff queue and convert here like any
+ * other. As in the Python router, `raised_by_portal_user_id` is not
+ * part of this controller's own staff-facing response shape (the
+ * Python IncidentOut schema does not carry it either).
  */
 class IncidentController extends Controller
 {

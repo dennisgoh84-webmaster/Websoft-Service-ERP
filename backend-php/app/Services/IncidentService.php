@@ -85,11 +85,10 @@ class IncidentService
      * (PORTAL-002) -- `createdByUserId` stays null in that case (no
      * staff member created it), so the audit trail is told the actor's
      * name directly rather than looking one up on User (see
-     * App\Services\Audit's docstring on those two params). KNOWN GAP:
-     * no backend-php caller ever passes these two -- the Portal isn't
-     * converted -- but they're kept on the signature for fidelity with
-     * the Python function, since the Outlook Add-in and Portal paths
-     * are meant to share this exact function.
+     * App\Services\Audit's docstring on those two params). Passed by
+     * App\Http\Controllers\Api\PortalController::createIncident(), so
+     * the Outlook Add-in and Portal paths share this exact function,
+     * same as the Python source's own design intent.
      */
     public static function createIncident(
         string $companyId,

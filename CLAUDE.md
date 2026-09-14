@@ -241,9 +241,8 @@ Close, and converting to a draft Sales Quotation or a Job Order
 against a valid contract, each auto-creating the real record with a
 back-reference rather than just a routing flag, plus both Outlook
 Add-in endpoints including the confirmed fallback-to-plain-Incident
-rule). **Known gaps:** no convert-to-software-task route (the
-Software Tasks module isn't converted) and no Portal-sourced
-Incidents (the Customer Helpdesk Portal isn't converted either).
+rule). **Known gap:** no convert-to-software-task route (the
+Software Tasks module isn't converted).
 Also converted: the **Company Dashboard** summary -- the app's landing
 page, which until now reported "Company Dashboard summary
 unavailable" on every login against `backend-php/`. It aggregates
@@ -281,7 +280,33 @@ the table's shape is kept identical to the Python model on purpose:
 [docs/planned-work.md #8a](docs/planned-work.md) has the future,
 separate Server Company Central Command application pushing
 advertisements by writing straight into it, which makes that shape a
-schema contract. `backend/` (Python) is
+schema contract.
+
+Also converted: the **Customer Helpdesk Portal**
+(`docs/customer-portal-design.md`, PORTAL-001..006) -- the
+customer-side login as a genuinely separate auth realm: portal users
+live in their own `portal_users` table, never in staff `users`, and
+carry a `purpose="portal"` token that every staff endpoint refuses,
+while every portal endpoint refuses a staff token in return (a
+distinct middleware, never a relaxed mode of the staff one; tested
+explicitly in both directions). Ported exactly: the
+5-wrong-passwords/15-minute lockout, the same password-complexity
+policy staff use, the staff-side enable/disable/reset-password
+actions with their PDPA consent gate, and PORTAL-004's "archiving a
+Company/Individual disables every portal login under it,
+immediately". The customer sees only their own contracts and hour
+balance, job orders, service records, invoices and payments
+(PORTAL-005), can drill a contract into its own service records
+(PORTAL-006), and can raise an Incident that lands in the staff
+Helpdesk queue as `source=portal` through the same service function
+the staff screen and the Outlook Add-in use -- which closes the
+Incidents module's second known gap above. Every portal query is
+scoped to the token's own customer: another customer's document id
+returns 404, never 403, and a filter naming another customer's
+contract returns an empty list rather than their rows. This module
+also adds the two foreign keys (`login_otps.portal_user_id`,
+`incidents.raised_by_portal_user_id`) earlier migrations had
+deferred until `portal_users` existed. `backend/` (Python) is
 untouched and keeps running as the system of record until each
 remaining module is converted, module by module, the same way.
 

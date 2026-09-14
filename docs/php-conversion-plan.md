@@ -1324,6 +1324,171 @@ Deactivate button (the call that could only ever 422 against
 not-yet-converted ones (`/api/announcements/public`,
 `/api/dashboard/summary`) -- none from any stock endpoint.
 
+- **Customer Helpdesk Portal** (`app/models/portal.py`,
+  `app/routers/portal.py`, `get_current_portal_user` from
+  `app/core/deps.py`, and the portal-access sub-resource of
+  `app/routers/company_individuals.py` → `App\Models\PortalUser`,
+  `App\Http\Middleware\AuthenticatePortal`,
+  `App\Http\Controllers\Api\PortalAuthController`/`PortalController`,
+  the portal-access actions on
+  `App\Http\Controllers\Api\CompanyIndividualController`,
+  `routes/api/portal.php`): the whole customer-facing portal
+  (`docs/customer-portal-design.md`, PORTAL-001..006), converted in
+  three stages -- auth realm, staff-side access management, data
+  endpoints.
+  - **PORTAL-001/003 (the second auth realm).** `portal_users` is its
+    own table -- one login per Contact, one email per company, never a
+    row in staff `users`. A portal session token carries
+    `purpose="portal"`; `AuthenticatePortal` is a **distinct**
+    middleware (alias `auth.portal`), never a relaxed mode of the
+    staff `Authenticate`, and the boundary holds in both directions
+    exactly as the Python source intends: staff auth only ever decodes
+    `purpose="access"`, so a portal token is refused by every staff
+    endpoint; this middleware only ever decodes `purpose="portal"`, so
+    a staff access token -- and the short-lived `portal_otp`
+    intermediate token -- is refused by every portal endpoint; and the
+    two realms resolve their subject against different tables, so even
+    a correctly-signed `purpose="portal"` token naming a staff user id
+    resolves to nothing. Ported faithfully: the login sequence (email
+    + password → OTP by email, or the real token straight away when
+    SMTP is unconfigured -- the same deliberate fail-open staff login
+    has), `verify-otp`, `change-password`, `forgot-password`,
+    `reset-password-otp`, and `/me`. Password complexity is the same
+    `App\Services\PasswordPolicy` staff passwords use -- there is no
+    looser portal policy. Lockout is exactly the Python rule: 5 wrong
+    passwords lock for 15 minutes on `PortalUser.failed_attempts` /
+    `locked_until` (the 5th failure sets the lock and resets the
+    counter), and a locked account is refused even with the correct
+    password. OTPs reuse the existing `login_otps` table through its
+    `portal_user_id` column, whose foreign key this module's migration
+    finally adds (see below).
+  - **PORTAL-004 (PDPA gate + archive cascade), staff side.**
+    Enable/disable/reset-password live on
+    `CompanyIndividualController`, not on the portal controllers, for
+    the reason the Python router's own comment gives: it is a staff
+    action gated by `company_individual_management` (VIEW to read
+    status, EDIT to change it -- the same keys and levels as Python),
+    not something a customer can reach. Enabling refuses a contact
+    with no email, an archived customer, and a customer with no PDPA
+    consent recorded -- the same three checks in the same order with
+    the same message texts; no consent rule is invented. A 10-character
+    alphanumeric temporary password is emailed as an invite when SMTP
+    is configured and otherwise returned once for on-screen display
+    (design §5's documented fallback, `invited_by_email` says which
+    happened). Archiving a Company/Individual now disables every portal
+    login under it immediately through the same shared disable path,
+    closing the placeholder NOTE `CompanyIndividualController::archive()`
+    carried while this module was pending.
+  - **PORTAL-002/005/006 (data endpoints).** `/contracts` (with
+    contracted/consumed/remaining hours), `/job-orders` (+ `?contract_id=`),
+    `/job-orders/{id}` with its Service Records, `/service-records`
+    (+ `?contract_id=`), `/invoices` and `/payments` (PORTAL-005), and
+    `/incidents` GET + POST. Every query filters on the token's own
+    `contact.customer_id` -- never on an id from the request -- so the
+    contract filter applied to another customer's contract id returns
+    an empty list rather than their rows, and an id-bearing path
+    (job-order detail) 404s rather than 403s for another customer's
+    id, which is the information leak design §9.4 tests against. The
+    responses are deliberately thin: rounded SRV-007 minutes only
+    (never raw or deducted), no `cost_sgd`/`gp_sgd`/`gst_rate` on an
+    Invoice, no internal notes, no other contacts, no staff name
+    beyond the assigned engineer. Money follows the Decimal convention
+    above -- exact on the model, `(float)` only at the JSON boundary.
+    A portal-raised Incident goes through the *same*
+    `App\Services\IncidentService::createIncident()` the staff screen
+    and Outlook Add-in use, with `source=portal`,
+    `raised_by_portal_user_id` set, `created_by_user_id` null and the
+    contact's details taken from the token -- so it lands in the staff
+    Helpdesk queue and converts there like any other Incident. Audit
+    `entity_type`/`action` strings match the Python call sites exactly
+    (`portal_user` / `portal_access_enabled`, `portal_access_re_enabled`,
+    `portal_access_disabled`, `portal_password_reset_by_staff`,
+    `password_changed_self`, `password_reset_via_forgot_password`;
+    `incident` / `created` with the `"<contact> (portal)"` actor name
+    and no staff actor id).
+  - **Schema gaps closed.** The `portal_users` migration also adds the
+    two foreign keys earlier migrations explicitly deferred "until
+    portal_users exists": `login_otps.portal_user_id` and
+    `incidents.raised_by_portal_user_id`. Both are real `ForeignKey`
+    columns in the Python models, so the PHP schema is now at parity
+    rather than carrying two permanently unconstrained uuid columns.
+    This also closes the Incidents entry's second KNOWN GAP above (a
+    portal-raised Incident was unreachable); its first gap
+    (convert-to-software-task) is untouched and still stands.
+  - **PYTHON QUIRKS carried across deliberately, not fixed:** (a) a
+    portal login resolves the `PortalUser` by email alone with no
+    company filter, even though uniqueness is `(company_id, email)` --
+    if the same address were ever enabled under two companies the
+    first row wins; not a security hole (the password must still match
+    that row), but a quirk rather than a decision. (b) `last_login_at`
+    is only stamped in `verify-otp`, so it stays null for a login that
+    fail-opens because SMTP is unconfigured. (c) Python does not audit
+    a successful portal *login* (only password changes and the staff
+    enable/disable/reset actions), so neither does this -- matched
+    rather than "improved", since the audit-action vocabulary has to
+    stay identical between the two backends.
+  - **No KNOWN GAPs.** Every route
+    `backend/app/routers/portal.py` exposes has a PHP equivalent, and
+    so does every portal-access route in
+    `backend/app/routers/company_individuals.py`. No new module key is
+    registered: design §8 sketched a `customer_portal` key, but the
+    Python implementation gates the staff side under
+    `company_individual_management` and leaves the portal itself to its
+    own auth realm, and this conversion follows the source, not the
+    sketch.
+  - **48 tests**: `tests/Feature/PortalAuthTest.php` (17 -- the login/
+    change-password/forgot-password flows, lockout, disabled and
+    archived-customer refusal, and the §9.4 boundary in both
+    directions), `tests/Feature/PortalAccessTest.php` (16 -- the
+    consent/email/archived refusals, enable → a real portal sign-in
+    with the issued temporary password, reset/disable/re-enable audit
+    actions, the archive cascade, and the full RBAC/Module-Control/
+    multi-company-404 template), `tests/Feature/PortalDataTest.php`
+    (15 -- every data endpoint, each asserted against a **second
+    customer's data present in the same company**, plus the 404-not-403
+    rule and the staff-token refusal on every portal route).
+
+**Verification method (Portal):** a real browser pass, not a `curl`
+substitute -- Playwright drove the preinstalled Chromium at
+`/opt/pw-browsers/chromium-1194` against `npm run dev` proxied at
+`backend-php/`, on top of a scripted live-HTTP pass over the same flow.
+Against a freshly `migrate:fresh --seed`ed database: as staff
+(`dennis@websoft.example`), enabling portal access for a contact of a
+customer with no PDPA consent returned 422 with the exact Python
+message; after recording consent it returned a one-time temporary
+password; signing in at `/portal` with that password in the browser
+showed the forced password-change screen, then a Home page reading
+"Acme Manufacturing Pte Ltd", `CON-2026-0001` 10.0 of 10.0 hrs
+remaining, an account balance of $2,270.00 and `JO-2026-0001`, with
+Contracts / Job Orders / Billing (INV-2026-0001, net $3,000.00, GST
+$270.00, total $3,270.00, outstanding $2,270.00 after a $1,000.00
+receipt) / Incidents each rendering with no console or network errors;
+raising an Incident from the portal produced `INC-2026-0001`, which the
+staff Incidents screen then listed as source `portal`, customer Acme,
+sender `Alice Tan <alice@acme.example>`, and which converted to a Job
+Order from the staff side, after which the portal's own Incidents list
+showed the routed Job Order number. With a second customer ("Rival
+Holdings", carrying a job order titled RIVAL SECRET WORK) present
+throughout: that job order's id requested through the portal returned
+404 (never 403), filtering by that customer's contract id returned `[]`
+on both `/job-orders` and `/service-records`, and the string never
+appeared in any portal payload. Cross-realm rejection was asserted
+explicitly over real HTTP: the portal token returned 401 on
+`/api/auth/me`, `/api/company-individuals`, `/api/contracts`,
+`/api/job-orders`, `/api/service-records`, `/api/invoices`,
+`/api/incidents` and on the staff portal-access disable route, and the
+staff token returned 401 on all seven `/api/portal/*` endpoints. Also
+driven live: staff disable → the live portal token 401s on the next
+request; re-enable → 200; archiving the customer → 401 again with the
+Contacts-tab status reading `enabled: false` (PORTAL-004); and five
+wrong passwords → "Too many incorrect attempts. This login is locked
+until HH:MM (SGT server time)." even with the correct password. The
+resulting audit trail showed `portal_access_enabled`,
+`portal_access_disabled`, `portal_access_re_enabled` and
+`portal_password_reset_by_staff` attributed to Dennis, and
+`password_changed_self` plus the `incident`/`created` entry attributed
+to "Alice Tan (portal)" with no staff actor id.
+
 ## New feature work landed directly in `backend-php/` (not a conversion)
 
 2026-09-22: Dennis asked for a set of new Sales-area features (Job
@@ -1361,8 +1526,8 @@ smoke test:
 1. Everything else in `backend/app/routers/` not listed above
    (the rest of `reports.py` (AR/AP aging duplicates,
    GST Return, Sales GP, Operations Reports) and its CSV/Excel
-   exports, Event Logs, Software Tasks, Ops Dashboard, Customer
-   Helpdesk Portal, Mobile Web App, Commissions [deferred, per
+   exports, Event Logs, Software Tasks, Ops Dashboard,
+   Mobile Web App, Commissions [deferred, per
    CLAUDE.md]) -- lower priority than the Service Operations core
    above, since that core is what CLAUDE.md's Status section calls out
    as the one working slice today.

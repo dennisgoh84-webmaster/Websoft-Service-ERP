@@ -93,9 +93,8 @@ shipped and when.
   Job Order against a valid contract, each auto-creating the real
   record with a back-reference; both Outlook Add-in endpoints
   including the confirmed fallback-to-plain-Incident rule; 35
-  dedicated tests). KNOWN GAPS: no convert-to-software-task route
-  (Software Tasks isn't converted) and no Portal-sourced Incidents
-  (the Customer Helpdesk Portal isn't converted). Also converted: the
+  dedicated tests). KNOWN GAP: no convert-to-software-task route
+  (Software Tasks isn't converted). Also converted: the
   **Company Dashboard** summary (`/dashboard/summary`, 9 dedicated
   tests) -- the app's landing page, which until now showed "Company
   Dashboard summary unavailable: Not Found" on every login against
@@ -125,6 +124,23 @@ shipped and when.
   its table shape is kept identical to the Python model because
   [planned-work.md #8a](planned-work.md) has the future Server Company
   Central Command app writing advertisements straight into it.
+  Also converted: the **Customer
+  Helpdesk Portal** (PORTAL-001..006 -- the customer-side login as its
+  own auth realm in its own `portal_users` table, whose
+  `purpose="portal"` token every staff endpoint refuses and which
+  refuses every staff token in return; the 5-failure/15-minute
+  lockout; the staff-side enable/disable/reset actions with their PDPA
+  consent gate and the PORTAL-004 "archiving a customer disables every
+  portal login under it" cascade; and the customer-facing reads --
+  contracts and hour balance, job orders, service records, invoices
+  and payments -- plus raising an Incident that lands in the staff
+  Helpdesk queue as `source=portal`; 48 dedicated tests, every data
+  test run with a second customer's data present to prove isolation).
+  That closes the Incidents module's other known gap and the
+  CompanyIndividual Management module's portal-access gap, and adds
+  the two foreign keys (`login_otps.portal_user_id`,
+  `incidents.raised_by_portal_user_id`) earlier migrations had
+  deferred until `portal_users` existed.
   Still pending: everything else -- converted module by module, same
   pattern as the Odoo replacement strategy.
   → [php-conversion-plan.md](php-conversion-plan.md)

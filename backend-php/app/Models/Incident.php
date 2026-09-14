@@ -29,10 +29,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * catalog) rather than a new module key, since an Incident is exactly
  * the helpdesk front door for that same area.
  *
- * KNOWN GAP (see docs/php-conversion-plan.md): raised_by_portal_user_id
- * and converted_software_task_id have no FK constraint and no
- * backend-php code path ever sets them -- the Customer Helpdesk Portal
- * and Software Tasks modules aren't converted yet.
+ * KNOWN GAP (see docs/php-conversion-plan.md): converted_software_task_id
+ * has no FK constraint and no backend-php code path ever sets it --
+ * the Software Tasks module isn't converted yet.
+ * raised_by_portal_user_id no longer has either problem: the Customer
+ * Helpdesk Portal is converted, its FK to portal_users was added with
+ * that table, and App\Http\Controllers\Api\PortalController sets the
+ * column on a portal-raised Incident (source=portal).
  */
 class Incident extends Model
 {

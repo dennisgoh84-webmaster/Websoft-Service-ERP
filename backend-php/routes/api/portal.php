@@ -14,6 +14,7 @@
 // refused here exactly as a portal token is refused by `auth.jwt`.
 
 use App\Http\Controllers\Api\PortalAuthController;
+use App\Http\Controllers\Api\PortalController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('portal')->group(function () {
@@ -26,5 +27,17 @@ Route::prefix('portal')->group(function () {
     Route::middleware('auth.portal')->group(function () {
         Route::post('/auth/change-password', [PortalAuthController::class, 'changePassword']);
         Route::get('/me', [PortalAuthController::class, 'me']);
+
+        // Data endpoints (design §6). Every one of these scopes its
+        // query to the token's own customer -- ids are never accepted
+        // as input for that.
+        Route::get('/contracts', [PortalController::class, 'contracts']);
+        Route::get('/job-orders', [PortalController::class, 'jobOrders']);
+        Route::get('/job-orders/{jobOrder}', [PortalController::class, 'jobOrderDetail']);
+        Route::get('/service-records', [PortalController::class, 'serviceRecords']);
+        Route::get('/invoices', [PortalController::class, 'invoices']);
+        Route::get('/payments', [PortalController::class, 'payments']);
+        Route::get('/incidents', [PortalController::class, 'incidents']);
+        Route::post('/incidents', [PortalController::class, 'createIncident']);
     });
 });
