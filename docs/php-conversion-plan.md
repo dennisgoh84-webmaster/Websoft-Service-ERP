@@ -354,18 +354,45 @@ sub-resource (depends on the Portal module below).
   `ExcessUsageRecord`) are still pending -- see below; this module only
   creates those rows.
 
-Verified end-to-end for all three modules against the real React
+- **Excess Usage** (`app/services/excess_usage.py`,
+  `app/routers/excess_usage.py` → `App\Services\ExcessUsageService`,
+  `App\Http\Controllers\Api\ExcessUsageController`): SRV-004/011
+  (decide treatment, restricted to Service Lead/Sales Manager/Owner --
+  the same reviewer set as Service Records' approvers, matching the
+  Python source's shared `EXCESS_REVIEWER_ROLES` import), a reason
+  required on every decision (auditable), one-time decision (can't
+  redecide), and the 5 SRV-013 treatment categories. Uses the same
+  `service_contracts` module gate as the Python router, not a
+  dedicated module key. 5 business-logic tests
+  (`tests/Feature/ExcessUsageServiceTest.php`) + 6 API-level tests
+  (`tests/Feature/ExcessUsageTest.php`), built against real
+  contract-deduction/excess-split records produced by
+  `ServiceRecordService` rather than a bare factory, so the whole
+  Service Records → Excess Usage pipeline is exercised.
+  **KNOWN GAP (not silently papered over):** the Python service's
+  BILLABLE path also issues an invoice in the same transaction
+  (SRV-006/008, via `app/services/billing.py`). Billing isn't
+  converted yet, so a BILLABLE decision here records the decision but
+  leaves `invoiced` false -- see `ExcessUsageService`'s class
+  docblock. Do not treat a BILLABLE excess usage decided through
+  `backend-php/` as invoiced.
+  **Not yet converted:** CSV/Excel export.
+
+Verified end-to-end for all four modules against the real React
 frontend (screenshots in the PR/commit history): contract creation
 blocked below the 10-hour minimum with the SRV-002 message, activation,
 renewal (both the seamless-backdated case and the SRV-018
 force-start-date case), the contract detail page showing the exact
 $300.00/hr blended rate, a PROJECT-type Job Order with all 5
 milestones auto-created in order, submitting a Service Record with
-15-minute rounding visible, and the Service Record Approval queue
-showing the suggested deduction. The only 404s seen were for
-not-yet-converted modules (Announcements, Dashboard, Excess Usage,
-Invoices/Billing, Documents) -- none from Contracts, Job Orders, or
-Service Records' own endpoints.
+15-minute rounding visible, the Service Record Approval queue
+showing the suggested deduction, and the Excess Usage Review page
+showing a real 2.00-hr excess record end to end -- deciding it as
+Billable through the UI and confirming the page renders "Invoiced: No"
+(the known gap above, faithfully reflected, not hidden). The only
+404s seen were for not-yet-converted modules (Announcements,
+Dashboard, Invoices/Billing, Documents) -- none from Contracts, Job
+Orders, Service Records, or Excess Usage's own endpoints.
 
 ## Not yet converted (pending, in rough priority order)
 
@@ -374,16 +401,11 @@ phase of its own, following the same pattern as CompanyIndividual
 Management above -- model(s) + migration(s) + controller + routes +
 smoke test:
 
-1. **Excess Usage** (`app/services/excess_usage.py`,
-   `app/routers/excess_usage.py`) -- SRV-004, 008, 011, 013 (Nico/
-   Cherish review, blended-rate billing, treatment categories); the
-   business logic here has the most riding on getting the rounding/
-   balance-never-negative arithmetic exactly right, so it should get a
-   dedicated test suite before being trusted, not just a smoke test.
-2. **Billing / Invoicing** (`app/services/billing.py`,
-   `app/routers/billing.py`) -- BILL-001..006. Bumped up in priority:
-   Contract activation's known gap (see above) depends on this.
-3. **Accounts Receivable** (`app/services/accounts_receivable.py`,
+1. **Billing / Invoicing** (`app/services/billing.py`,
+   `app/routers/billing.py`) -- BILL-001..006. Highest priority:
+   Contract activation's and Excess Usage's known gaps (see above)
+   both depend on this.
+2. **Accounts Receivable** (`app/services/accounts_receivable.py`,
    `app/routers/accounts_receivable.py`) -- AR-001..003.
 4. Everything else in `backend/app/routers/` not listed above
    (Quotations, Incidents, Accounts Payable/Purchasing, Inventory/

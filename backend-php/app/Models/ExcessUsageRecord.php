@@ -13,10 +13,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * backend/app/models/contracts.py's ExcessUsageRecord.
  *
  * Rows are created by App\Services\ServiceRecordService::approveServiceRecord()
- * (SRV-003/004's split-at-approval logic); the treatment decision
- * itself (billable/goodwill/write-off, SRV-008/011/013) is not yet
- * exposed by a controller -- that's the Excess Usage module, still
- * pending (see docs/php-conversion-plan.md).
+ * (SRV-003/004's split-at-approval logic). The treatment decision
+ * itself (billable/goodwill/write-off, SRV-008/011/013) is
+ * App\Services\ExcessUsageService::decideExcessUsage() -- see that
+ * class's docblock for the known gap (a BILLABLE decision doesn't yet
+ * invoice, since Billing isn't converted).
  */
 class ExcessUsageRecord extends Model
 {

@@ -17,17 +17,19 @@ shipped and when.
   Management (Customer/Supplier master, Contacts, Branches,
   Relationships, PDPA consent/archive), Product/Service Catalog, and
   Service Contracts + Job Orders (SRV-001/002/005/010/012/014/016/018,
-  21 dedicated business-logic tests), and Service Records
+  21 dedicated business-logic tests), Service Records
   (SRV-003/004/007/015, the approval queue + Job Order auto-close, 24
-  dedicated tests), all in a new `backend-php/` app running against
-  its own Postgres database, `backend/` (Python) untouched. Each
-  converted module verified against the real React frontend (proxied
-  at backend-php/ for the check), not just its own tests. **Known
-  gap:** contract activation doesn't yet issue the BILL-001 annual
-  invoice (Billing isn't converted) -- don't treat a contract activated
-  via backend-php/ as billed. Still pending: Excess Usage treatment
-  decisions, Billing, Accounts Receivable, and everything else --
-  converted module by module, same pattern as the Odoo replacement
+  dedicated tests), and Excess Usage (SRV-004/011/013 treatment
+  decisions, 11 dedicated tests), all in a new `backend-php/` app
+  running against its own Postgres database, `backend/` (Python)
+  untouched. Each converted module verified against the real React
+  frontend (proxied at backend-php/ for the check), not just its own
+  tests. **Known gaps:** contract activation doesn't yet issue the
+  BILL-001 annual invoice, and a Billable excess-usage decision
+  doesn't yet issue its invoice either (Billing isn't converted) --
+  don't treat either as billed via backend-php/. Still pending:
+  Billing, Accounts Receivable, and everything else -- converted
+  module by module, same pattern as the Odoo replacement
   strategy.
   → [php-conversion-plan.md](php-conversion-plan.md)
 
