@@ -200,7 +200,17 @@ totals, and the confirmed 2026-09-10 accept-to-auto-Contract
 conversion -- lines split by unit of measure, "Hours"/"Hour" lines
 summing into one Service Support contract and every other line into
 one Annual contract, a quotation mixing both never blending them into
-one). `backend/` (Python) is untouched and keeps running as the
+one). Also converted: Incidents (the Helpdesk front door for an
+incoming call or email -- logging one with its one automatic
+customer-by-email match, the "needs a callback" status + assignee,
+Close, and converting to a draft Sales Quotation or a Job Order
+against a valid contract, each auto-creating the real record with a
+back-reference rather than just a routing flag, plus both Outlook
+Add-in endpoints including the confirmed fallback-to-plain-Incident
+rule). **Known gaps:** no convert-to-software-task route (the
+Software Tasks module isn't converted) and no Portal-sourced
+Incidents (the Customer Helpdesk Portal isn't converted either).
+`backend/` (Python) is untouched and keeps running as the
 system of record until each remaining module is converted, module by
 module, the same way.
 

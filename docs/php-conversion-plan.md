@@ -774,6 +774,109 @@ seen were the expected not-yet-converted ones (Announcements,
 Dashboard summary, and Reference Codes -- the last also already a
 known gap for Product/Service Catalog's `default_reference_code_id`).
 
+- **Incidents** (`app/models/incidents.py`, `app/services/incidents.py`,
+  `app/routers/incidents.py` → `App\Models\Incident`,
+  `App\Services\IncidentService`, `App\Http\Controllers\Api\IncidentController`):
+  the Helpdesk front door for an incoming call or email
+  (docs/open-business-decisions.md #36) -- logging one (with the one
+  automatic customer match this system attempts: a case-insensitive
+  match against an existing Contact's email address), the "someone to
+  return the call" outcome (a `PENDING_CALLBACK` status + assignee on
+  the Incident itself, confirmed 2026-09-12: no separate reminder/task
+  record), Close (reason required, blocked once already Converted or
+  Closed), and converting an Incident -- which **auto-creates** the
+  real target record with a back-reference, not just a routing flag
+  (confirmed 2026-09-11) -- to a draft Sales Quotation (one placeholder
+  line at SGD 0, since an Incident only ever carries a subject, never
+  product/price detail for Sales to price) or a Job Order (against a
+  contract that must belong to the same customer and be ACTIVE/EXCEEDED,
+  the exact same `VALID_CONTRACT_STATUSES` the Python service defines --
+  a Job Order can still be raised against a contract whose hours are
+  used up, SRV-001/SRV-008's excess-usage path exists for exactly that).
+  Also converted: both Outlook Add-in endpoints
+  (`POST /incidents/from-email`, `POST /incidents/from-email/convert-to-job-order`)
+  -- registered before the `/{incident}/...` routes for the same reason
+  the Python router gives (a wildcard route parameter would otherwise
+  swallow `from-email` as a garbage incident id) -- including the
+  confirmed 2026-09-12 fallback rule: if the sender's email doesn't
+  resolve to a known Company/Individual, or that customer has no
+  ACTIVE/EXCEEDED contract, "Convert to Job Order" falls back to
+  creating a plain Incident instead of erroring, with the reason
+  surfaced in `IncidentFromEmailResult.fallback_reason` -- exactly what
+  "Convert to Incident" would have done. Lives under the existing
+  `service_operations` module (already labelled "Helpdesk / Service
+  Operations (Job Orders)" in the module catalog), not a new module
+  key, same as the Python router. 18 business-logic tests
+  (`tests/Feature/IncidentServiceTest.php` -- the email match, contract
+  validity, every status-transition rule) + 17 API-level tests
+  (`tests/Feature/IncidentTest.php`, including both Outlook Add-in
+  fallback paths).
+  **KNOWN GAPS (not silently papered over, both confirmed against the
+  actual Python source rather than assumed):**
+  - **No convert-to-software-task action or route.**
+    `backend/app/services/incidents.py`'s `convert_to_software_task`
+    creates a `SoftwareTask` row, but `backend/app/models/software_tasks.py`
+    has no `backend-php/` equivalent yet (Software Tasks isn't
+    converted -- see "Not yet converted" below) -- there is no model to
+    create against, so `IncidentController` has no
+    convert-to-software-task action and no route is registered for it
+    at all, rather than a stub that would error or invent behaviour.
+    `IncidentsPage.tsx`'s "Convert to Software Task" button therefore
+    404s against `backend-php/` -- pre-existing to this conversion, not
+    introduced by it.
+  - **An Incident can never be raised through the Customer Helpdesk
+    Portal here.** The Python model's `source=PORTAL` and
+    `raised_by_portal_user_id` exist for exactly that
+    (`app/routers/portal.py`, PORTAL-002), but the Portal itself isn't
+    converted to `backend-php/` yet (see "Not yet converted" below), so
+    no route here ever accepts those two fields -- both columns exist
+    on the `incidents` table (for schema fidelity) and
+    `raised_by_portal_user_id`/`portal_actor_name` are still on
+    `IncidentService::createIncident()`'s signature (so the Outlook
+    Add-in and a future Portal conversion can keep sharing the exact
+    same function, same as the Python source's own design intent), but
+    nothing in `backend-php/` can ever populate them. Only staff-side
+    phone/email/other Incidents and the Outlook Add-in's email-sourced
+    ones are reachable today.
+
+**Verification method:** live API-level (`curl`) against `php artisan
+serve`, not Playwright -- browser/Chromium launch was unavailable in
+this session's sandbox (`npx playwright install chromium` produced no
+installed browser and no usable error, the same blocked-CDN situation
+an earlier session in this conversion hit), so per this task's own
+fallback instruction a thorough scripted `curl` pass substituted for a
+screenshot pass. Against a freshly `migrate:fresh --seed`ed database,
+logged in as the seeded demo owner (`dennis@websoft.example`) and
+exercised, end to end, over real HTTP: creating a Contact with a known
+email, then `POST /incidents/from-email` with a differently-cased
+version of that email auto-matching the right `customer_id` (no manual
+step); `PATCH /{id}/customer` on a phone-sourced Incident with no
+match; `POST /{id}/convert-to-quotation` producing a real draft
+Quotation (`QUO-2026-0001`) with the one placeholder line visible in
+the response, and the Incident flipping to `converted`; creating +
+activating a real Service Support Contract, then
+`POST /{id}/convert-to-job-order` against it producing a real Job
+Order (`JO-2026-0001`) -- fetched right back via
+`GET /job-orders/{id}` (a completely different controller) to confirm
+the two present an identical shape, catching any drift between
+`IncidentController`'s own `JobOrderOut`-shaped presenter and
+`JobOrderController`'s; `POST /{id}/callback` then `POST /{id}/close`
+as a status-transition pair; both Outlook Add-in endpoints -- an
+unknown sender and a known sender with no active contract each
+correctly falling back to a plain Incident with the right
+`fallback_reason` text, and a known sender with a valid contract
+correctly creating both the Incident (`converted`) and the Job Order
+in one call; re-attempting a conversion on an already-converted
+Incident correctly returning 422 with the exact Python message text;
+a request with no Authorization header returning 401; and
+`POST /{id}/convert-to-software-task` correctly returning a plain 404
+(no route registered at all) rather than a 500 or invented behaviour,
+confirming the KNOWN GAP fails safely. `php artisan test`'s own 351
+passing tests (17 of them API-level, via Laravel's HTTP test client
+against the same routes/middleware stack, just not a real running
+server) cover the RBAC/multi-company-404 cases this pass didn't
+re-drive manually.
+
 ## New feature work landed directly in `backend-php/` (not a conversion)
 
 2026-09-22: Dennis asked for a set of new Sales-area features (Job
@@ -809,7 +912,7 @@ Management above -- model(s) + migration(s) + controller + routes +
 smoke test:
 
 1. Everything else in `backend/app/routers/` not listed above
-   (Incidents, Inventory/Stock, Reporting/dashboards, Event Logs,
+   (Inventory/Stock, Reporting/dashboards, Event Logs,
    Document Control, Announcements, Software Tasks, Ops Dashboard,
    Customer Helpdesk Portal, Mobile Web App, Commissions [deferred,
    per CLAUDE.md]) -- lower priority than the Service Operations core

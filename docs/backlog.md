@@ -70,7 +70,16 @@ shipped and when.
   totals, and the confirmed 2026-09-10 accept -> auto-Contract
   conversion -- hourly lines become one Service Support contract,
   every other line one Annual contract, a mix becoming two separate
-  contracts never one blend, 19 dedicated tests).
+  contracts never one blend, 19 dedicated tests). Also converted:
+  Incidents (the Helpdesk front door -- logging a call/email with its
+  one automatic customer-by-email match, the "needs a callback" status
+  + assignee, Close, and converting to a draft Sales Quotation or a
+  Job Order against a valid contract, each auto-creating the real
+  record with a back-reference; both Outlook Add-in endpoints
+  including the confirmed fallback-to-plain-Incident rule; 35
+  dedicated tests). KNOWN GAPS: no convert-to-software-task route
+  (Software Tasks isn't converted) and no Portal-sourced Incidents
+  (the Customer Helpdesk Portal isn't converted).
   Still pending: everything else -- converted module by module, same
   pattern as the Odoo replacement strategy.
   → [php-conversion-plan.md](php-conversion-plan.md)
