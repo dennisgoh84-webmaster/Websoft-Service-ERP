@@ -22,6 +22,16 @@ shipped and when.
 
 ## Confirmed scope, not yet built
 
+- [ ] **Sub-ledger → GL posting + Bank step** -- settled 2026-09-14.
+  Invoices, bills, receipts and payments post to the GL; receipts and
+  payments get an explicit Bank / Unbank step into the bank book.
+  Closes the gap that the Trial Balance was only ever trivially balanced.
+  → [gl-posting-design.md](gl-posting-design.md), rules ACC-001..004
+- [ ] **Customer Helpdesk Portal** -- settled 2026-09-14. Per-Contact
+  logins (email + password + OTP, own table, purpose-tagged token);
+  view contracts/hours, job orders, service records, incidents; raise
+  an Incident. PDPA consent gates access.
+  → [customer-portal-design.md](customer-portal-design.md), rules PORTAL-001..004
 - [x] **Mobile web app for Support Staff** -- built 2026-09-12. Time
   in/out, work description, camera photo/video attachments, finger-drawn
   signature + watermarked chop photo sign-off. All 8 open questions
@@ -90,4 +100,4 @@ shipped and when.
   → [open-business-decisions.md #7-8](open-business-decisions.md#7-projects)
 
 ---
-Last updated: 2026-09-12 (Central Command built — client registry, ad push, license management, config updates)
+Last updated: 2026-09-14 (GL posting + Bank step and Customer Portal designed and confirmed; both not yet built)

@@ -371,3 +371,31 @@ as the original request intended. No Central Command code lives in this
 ERP repo. This section stays here because the client-side schema
 contract (the tables Central Command writes to) lives in this codebase —
 see [central-command-schema-contract.md](central-command-schema-contract.md).
+
+---
+
+## 9. Sub-ledger → General Ledger posting + Bank step (raised and confirmed 2026-09-14)
+
+Confirmed scope, designed, not yet built. The full design — account
+map, posting rules per document, Bank/Unbank and UNGL lifecycle,
+migration and back-fill plan, endpoints, frontend changes and test plan
+— is in [gl-posting-design.md](gl-posting-design.md). Rules ACC-001..004
+in [business-requirements.md](business-requirements.md); decision record
+in [open-business-decisions.md #38](open-business-decisions.md#38-sub-ledger--general-ledger-posting-and-the-bank-step-raised-and-settled-2026-09-14).
+
+Build order: migration → posting service + auto-post hooks → Bank/Unbank
+and UNGL endpoints → `post_backlog.py` + frontend chips and dropdowns →
+verify against the test plan.
+
+## 10. Customer Helpdesk Portal (raised and confirmed 2026-09-14)
+
+Confirmed scope, designed, not yet built. Data model, auth flow, the
+staff-side enable/disable, portal endpoints, frontend mount at `/portal`,
+module key and test plan are in
+[customer-portal-design.md](customer-portal-design.md). Rules
+PORTAL-001..004 in [business-requirements.md](business-requirements.md);
+decision record in [open-business-decisions.md #39](open-business-decisions.md#39-customer-helpdesk-portal-raised-and-settled-2026-09-14).
+
+Build order: models + migration → auth + token boundary (with the
+boundary tests first) → staff enable/disable on Contacts → portal
+endpoints → `/portal` frontend → verify.

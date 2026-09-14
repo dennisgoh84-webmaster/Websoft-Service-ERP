@@ -1819,3 +1819,44 @@ before building. Implementation is in `app/routers/mobile.py`,
 - New items should be added here as detailed requirements gathering
   uncovers further undecided rules — this list is a living document, not
   a one-time checklist.
+
+## 38. Sub-ledger → General Ledger posting and the Bank step (raised and settled 2026-09-14)
+
+Found while preparing the server deployment: **no sub-ledger document
+posted to the GL** — invoices, bills, receipts and payments never created
+a journal entry, and receipts/payments never reached the bank book,
+although the ledger's voucher types and the period-lock `BANK`/`UNBANK`
+operations had been built for exactly this.
+
+Settled with Dennis the same day, all recommended options taken:
+
+| Decision | Answer |
+|---|---|
+| Scope | **All four documents post to GL**; RV/PV also write the bank book (ACC-001) |
+| Bank step | **Explicit Bank / Unbank action** (ACC-002) |
+| GL trigger | Automatic at the accounting event — pragmatic default (ACC-003) |
+| Un-post | Reversal entry / void, never delete (ACC-004) |
+
+This also resolves the long-standing open item **4b.2 (auto-posting accounts)** — the account map is fixed in `app/services/posting.py`; multi-currency (4b.5) stays open, posting is SGD-only.
+
+Still open, recorded in the design: bad-debt account for write-off
+posting (proposed `5100`); credit notes have no document yet; project and
+hardware invoice types not issued yet. Design:
+[gl-posting-design.md](gl-posting-design.md).
+
+## 39. Customer Helpdesk Portal (raised and settled 2026-09-14)
+
+Requested as: customer login credentials so customers can see their own
+service position and raise issues. Settled with Dennis:
+
+| Decision | Answer |
+|---|---|
+| Who logs in | **Each Contact person individually** (PORTAL-001) |
+| First version | **View + raise Incidents**; nothing financial (PORTAL-002) |
+| Identity | Own table + purpose-tagged token — pragmatic default (PORTAL-003) |
+| PDPA | Consent required to enable; archive disables — pragmatic default (PORTAL-004) |
+
+Deferred to a later version: invoices/statements/payments in the portal
+(after item 38 is live), customer-side attachments, one person across
+several customers, SSO. Design:
+[customer-portal-design.md](customer-portal-design.md).

@@ -439,6 +439,70 @@ Items 5.4 (RMA process) and 5.5 (warranty terms) remain open.
   until the **customer signs off / confirms acceptance** — internal
   confirmation by the installing engineer alone is not sufficient.
 
+
+## Accounting Posting Business Rules (CONFIRMED)
+
+Status: **CONFIRMED / DECIDED** (2026-09-14). Full design in
+[gl-posting-design.md](gl-posting-design.md). Background: as of commit
+`8ac396b` no sub-ledger document posted to the General Ledger at all.
+
+### ACC-001 — Sub-ledger Posting Scope — CONFIRMED
+
+- Sales Invoices, Supplier Bills, Receipt Vouchers and Payment Vouchers
+  **all post to the General Ledger**; receipts and payments also write
+  to the bank book. Chosen over "bank book only" because posting
+  receipts alone would drive the AR control account negative — nothing
+  had ever debited it.
+
+### ACC-002 — Bank Step — CONFIRMED
+
+- Money is entered in the bank book by an **explicit "Bank" action**,
+  reversible by **"Unbank"** — the `BANK` / `UNBANK` operations already
+  declared in the period-lock matrix. Recording a voucher and confirming
+  the money actually moved are separate steps.
+
+### ACC-003 — GL Posting Trigger — pragmatic default
+
+- GL entries post **automatically** at each document's accounting event:
+  invoice issued (consistent with BILL-005), bill approved, receipt or
+  payment saved. `UNGL` reverses. Called out as a default, not a
+  decision: it can become an explicit "Post" action later with no
+  schema change.
+
+### ACC-004 — Reversal, Never Deletion — CONFIRMED
+
+- Un-posting creates a **reversing journal entry**; un-banking **voids**
+  the bank transaction with a required reason. No financial record is
+  ever deleted (CLAUDE.md).
+
+## Customer Portal Business Rules (CONFIRMED)
+
+Status: **CONFIRMED / DECIDED** (2026-09-14). Full design in
+[customer-portal-design.md](customer-portal-design.md).
+
+### PORTAL-001 — Login Identity — CONFIRMED
+
+- **Each Contact person** at a customer gets their own portal
+  credential, enabled per contact by staff. Not a shared login per
+  Company/Individual — so there is an audit trail of who did what.
+
+### PORTAL-002 — First-Version Scope — CONFIRMED
+
+- Customers can **view** their contracts and hour balance, job orders,
+  service records and incidents, and **raise Incidents** into the
+  existing Helpdesk queue. Nothing financial in this version.
+
+### PORTAL-003 — Identity Separation — pragmatic default
+
+- Portal users live in their own table, never in staff `users`, and
+  carry a purpose-tagged token that staff endpoints reject.
+
+### PORTAL-004 — PDPA Gate — pragmatic default
+
+- Access can be enabled only for a contact whose Company/Individual has
+  given PDPA consent and is not archived; archiving a customer disables
+  every portal login under it.
+
 ## Conceptual Business Entities
 
 This section lists the major business entities Websoft Service ERP Solution is expected
