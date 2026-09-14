@@ -76,6 +76,35 @@ class SupplierPaymentTest extends TestCase
         $this->assertSame('paid', $bill->fresh()->status);
     }
 
+    public function test_a_single_payment_can_allocate_across_two_bills_in_one_request(): void
+    {
+        // Regression test: allocateSupplierPayment() must refresh the
+        // payment's cached `allocations` relation after each write, or
+        // the second line's unallocated-balance check sees a stale
+        // (empty) collection and wrongly allows over-allocating.
+        $company = Company::factory()->create();
+        [$owner, $token] = $this->ownerToken($company);
+        $supplier = CompanyIndividual::factory()->for($company)->create(['is_supplier' => true]);
+        $bank = BankAccount::factory()->for($company)->create();
+        $billA = $this->matchedBill($company, $owner, $supplier, 300);
+        $billB = $this->matchedBill($company, $owner, $supplier, 300);
+
+        $create = $this->postJson('/api/accounts-payable/payments', [
+            'supplier_id' => $supplier->id, 'payment_date' => now()->toDateString(),
+            'amount_sgd' => 600, 'bank_account_id' => $bank->id,
+            'allocations' => [
+                ['supplier_invoice_id' => $billA->id, 'amount_sgd' => 300],
+                ['supplier_invoice_id' => $billB->id, 'amount_sgd' => 300],
+            ],
+        ], $this->headers($token));
+
+        $create->assertOk();
+        $this->assertEqualsWithDelta(600.0, $create->json('allocated_sgd'), 0.01);
+        $this->assertEqualsWithDelta(0.0, $create->json('unallocated_sgd'), 0.01);
+        $this->assertSame('paid', $billA->fresh()->status);
+        $this->assertSame('paid', $billB->fresh()->status);
+    }
+
     public function test_payment_without_a_bank_account_is_rejected(): void
     {
         $company = Company::factory()->create();

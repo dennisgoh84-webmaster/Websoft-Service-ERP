@@ -17,20 +17,17 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Accounts Receivable. Mirrors
+ * Accounts Receivable (invoice-side actions). Mirrors
  * backend/app/routers/accounts_receivable.py -- see
  * App\Services\AccountsReceivableService for the AR-002/003 business
- * logic this only orchestrates.
+ * logic this only orchestrates. The AR-001 payment/receipt endpoints
+ * live in App\Http\Controllers\Api\PaymentController.
  *
  * NOT yet converted from the Python router (tracked in
- * docs/php-conversion-plan.md): everything Payment-related (POST
- * /payments, allocate, statements, CSV/Excel/.docx export, "Email
- * Receipt"/"Email Statement") -- AR-001 (recording a customer receipt)
- * is its own module-sized addition (App\Models\Payment doesn't exist
- * yet), scoped out even though GL posting + Bank now exists to
- * support it. Also not converted: the commission clawback that
- * Python's write-off endpoint triggers (Commission Management is
- * deferred, per CLAUDE.md).
+ * docs/php-conversion-plan.md): Customer Statement, CSV/Excel/.docx
+ * export. Also not converted: the commission clawback that Python's
+ * write-off endpoint triggers (Commission Management is deferred, per
+ * CLAUDE.md).
  */
 class AccountsReceivableController extends Controller
 {

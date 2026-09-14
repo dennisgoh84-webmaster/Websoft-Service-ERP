@@ -225,6 +225,12 @@ class PayablesService
             'amount_sgd' => $amount->toString(),
         ]);
         self::recalculateBillStatus($bill);
+        // unallocatedSgd()/allocatedSgd() reduce over the cached
+        // `allocations` relation -- refresh it so a second allocation
+        // against the same $payment instance (e.g. several lines in
+        // one request) sees this one, not a stale empty/partial
+        // collection.
+        $payment->load('allocations');
 
         return $allocation;
     }

@@ -10,6 +10,7 @@ use App\Models\BankAccount;
 use App\Models\BankTransaction;
 use App\Models\Invoice;
 use App\Models\JournalEntry;
+use App\Models\Payment;
 use App\Models\SupplierInvoice;
 use App\Models\SupplierPayment;
 use App\Support\Money;
@@ -27,16 +28,10 @@ use Illuminate\Support\Collection;
  * document's own number; GL posting happens automatically at the
  * accounting event, ACC-003).
  *
- * NOT yet converted: postReceipt()/bankReceipt() (the customer-
- * receipt half, AR-001) -- App\Models\Payment (the receipt model)
- * doesn't exist yet; AR-001 itself is still a documented known gap
- * on App\Services\AccountsReceivableService. The account map and
- * _post()/_bank() plumbing below are already correct for it the day
- * that model exists. Also not converted: gl_status_map/
- * bank_status_map/decorate() as a *batch* one-query-per-list helper
- * (Python's own optimisation for list screens) -- callers here fetch
- * per-document instead, correct but not yet optimised for a large
- * list.
+ * NOT yet converted: gl_status_map/bank_status_map/decorate() as a
+ * *batch* one-query-per-list helper (Python's own optimisation for
+ * list screens) -- callers here fetch per-document instead, correct
+ * but not yet optimised for a large list.
  */
 class Posting
 {
@@ -234,6 +229,28 @@ class Posting
         );
     }
 
+    /** §4.3 Receipt Voucher -- on save. Dr bank GL / Cr 1100 AR. */
+    public static function postReceipt(Payment $payment, ?string $actorUserId): JournalEntry
+    {
+        $cid = $payment->company_id;
+        $bank = self::bankGlAccount($cid, $payment->bank_account_id);
+        $ar = self::accountByCode($cid, self::AR_CONTROL);
+        $amount = Money::of($payment->amount_sgd);
+        $customerName = $payment->customer?->name ?? '';
+        $ref = $payment->reference ? " ref {$payment->reference}" : '';
+
+        return self::post(
+            companyId: $cid, voucherType: JournalEntry::TYPE_RECEIPT, voucherNumber: $payment->voucher_number,
+            entryDate: $payment->payment_date, narration: trim("Receipt {$payment->voucher_number} — {$customerName}{$ref}", ' —'),
+            lines: [
+                self::line($bank, $amount, Money::of(0), "{$payment->voucher_number}{$ref}"),
+                self::line($ar, Money::of(0), $amount, $customerName ?: null),
+            ],
+            sourceType: self::SOURCE_RECEIPT, sourceId: $payment->id,
+            actorUserId: $actorUserId, auditEntityType: 'payment',
+        );
+    }
+
     /** §4.4 Payment Voucher -- on save. Dr 2000 AP / Cr bank GL. */
     public static function postSupplierPayment(SupplierPayment $payment, ?string $actorUserId): JournalEntry
     {
@@ -369,6 +386,21 @@ class Posting
         );
 
         return $txn;
+    }
+
+    public static function bankReceipt(Payment $payment, string $actorUserId): BankTransaction
+    {
+        $customerName = $payment->customer?->name ?? '';
+
+        return self::bank(
+            companyId: $payment->company_id, bankAccountId: $payment->bank_account_id,
+            sourceType: self::SOURCE_RECEIPT, sourceId: $payment->id,
+            voucherNumber: $payment->voucher_number, on: $payment->payment_date,
+            amount: Money::of($payment->amount_sgd), moneyIn: true,
+            description: trim("{$payment->voucher_number} — {$customerName}", ' —'),
+            reference: $payment->reference, docType: 'receipt_voucher',
+            actorUserId: $actorUserId, auditEntityType: 'payment',
+        );
     }
 
     public static function bankSupplierPayment(SupplierPayment $payment, string $actorUserId): BankTransaction

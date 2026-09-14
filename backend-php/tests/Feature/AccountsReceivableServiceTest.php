@@ -6,10 +6,12 @@ use App\Exceptions\ARRuleViolation;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\Invoice;
+use App\Models\Payment;
 use App\Models\User;
 use App\Services\AccountsReceivableService;
 use App\Services\BillingService;
 use App\Services\ContractService;
+use App\Support\Money;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -154,5 +156,67 @@ class AccountsReceivableServiceTest extends TestCase
         [, $rows] = AccountsReceivableService::agingRows($company->id);
 
         $this->assertCount(0, $rows);
+    }
+
+    // ---- AR-001: payment allocation -----------------------------------------
+
+    public function test_allocating_a_payment_marks_the_invoice_partially_paid_then_paid(): void
+    {
+        $company = Company::factory()->create();
+        $invoice = $this->invoice($company, 1000); // total incl. GST 0 by default (no tax code)
+        $payment = Payment::factory()->for($company)->create(['customer_id' => $invoice->customer_id, 'amount_sgd' => 1000]);
+
+        AccountsReceivableService::allocatePayment($payment, $invoice, Money::of(400));
+        $this->assertSame(Invoice::STATUS_PARTIALLY_PAID, $invoice->fresh()->status);
+        $this->assertEqualsWithDelta(400.0, (float) $invoice->fresh()->amount_paid_sgd, 0.01);
+
+        AccountsReceivableService::allocatePayment($payment, $invoice->fresh(), Money::of(600));
+        $this->assertSame(Invoice::STATUS_PAID, $invoice->fresh()->status);
+    }
+
+    public function test_cannot_allocate_more_than_the_payment_has_unallocated(): void
+    {
+        $company = Company::factory()->create();
+        $invoiceA = $this->invoice($company, 1000);
+        $invoiceB = $this->invoice($company, 1000);
+        $invoiceB->update(['customer_id' => $invoiceA->customer_id]);
+        $payment = Payment::factory()->for($company)->create(['customer_id' => $invoiceA->customer_id, 'amount_sgd' => 500]);
+        AccountsReceivableService::allocatePayment($payment, $invoiceA, Money::of(500));
+
+        $this->expectException(ARRuleViolation::class);
+        AccountsReceivableService::allocatePayment($payment, $invoiceB->fresh(), Money::of(1));
+    }
+
+    public function test_cannot_allocate_more_than_the_invoice_has_outstanding(): void
+    {
+        $company = Company::factory()->create();
+        $invoice = $this->invoice($company, 500);
+        $payment = Payment::factory()->for($company)->create(['customer_id' => $invoice->customer_id, 'amount_sgd' => 5000]);
+
+        $this->expectException(ARRuleViolation::class);
+        AccountsReceivableService::allocatePayment($payment, $invoice, Money::of(5000));
+    }
+
+    public function test_cannot_allocate_against_an_invoice_for_a_different_customer(): void
+    {
+        $company = Company::factory()->create();
+        $invoice = $this->invoice($company, 500);
+        $otherCustomer = CompanyIndividual::factory()->for($company)->create();
+        $payment = Payment::factory()->for($company)->create(['customer_id' => $otherCustomer->id, 'amount_sgd' => 500]);
+
+        $this->expectException(ARRuleViolation::class);
+        AccountsReceivableService::allocatePayment($payment, $invoice, Money::of(100));
+    }
+
+    public function test_cannot_allocate_against_a_written_off_invoice(): void
+    {
+        $company = Company::factory()->create();
+        $owner = User::factory()->for($company)->create(['role' => User::ROLE_OWNER]);
+        $invoice = $this->invoice($company, 500);
+        AccountsReceivableService::writeOffInvoice($invoice, $owner, 'Bad debt');
+        $payment = Payment::factory()->for($company)->create(['customer_id' => $invoice->customer_id, 'amount_sgd' => 500]);
+
+        $this->expectException(ARRuleViolation::class);
+        AccountsReceivableService::allocatePayment($payment, $invoice->fresh(), Money::of(100));
     }
 }

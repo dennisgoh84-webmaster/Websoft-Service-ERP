@@ -6,6 +6,8 @@ use App\Exceptions\ARRuleViolation;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\Invoice;
+use App\Models\Payment;
+use App\Models\PaymentAllocation;
 use App\Models\User;
 use App\Support\Money;
 use Illuminate\Support\Carbon;
@@ -14,18 +16,6 @@ use Illuminate\Support\Carbon;
  * Accounts Receivable business logic. Mirrors
  * backend/app/services/accounts_receivable.py -- see that file's
  * docstring for AR-001/002/003.
- *
- * KNOWN GAP, deliberately not silently papered over: this class only
- * ports the invoice-side rules (AR-002 write-off, AR-003 dispute
- * flagging) and the AR-003 aging report. AR-001 (recording a customer
- * Payment and manually allocating it against invoices) is NOT
- * converted yet -- Payment.bank_account_id is a required, non-null
- * foreign key into `bank_accounts` (docs/gl-posting-design.md's Bank
- * step), and that table doesn't exist in `backend-php/` until GL
- * posting + Bank is converted (see docs/php-conversion-plan.md's
- * "Not yet converted" list). Recording a receipt through
- * `backend-php/` is not possible yet; do not treat an invoice's
- * `amount_paid_sgd`/status here as reflecting real payments.
  */
 class AccountsReceivableService
 {
@@ -123,6 +113,69 @@ class AccountsReceivableService
         $invoice->save();
 
         return $invoice;
+    }
+
+    /**
+     * Derive an invoice's paid state from what is allocated to it, so
+     * it can't drift out of step with the payments actually applied.
+     */
+    public static function recalculateInvoiceStatus(Invoice $invoice): void
+    {
+        if ($invoice->status === Invoice::STATUS_WRITTEN_OFF) {
+            return;
+        }
+        $paid = PaymentAllocation::where('invoice_id', $invoice->id)->get()
+            ->reduce(fn (Money $carry, PaymentAllocation $a) => $carry->plus(Money::of($a->amount_sgd)), Money::of(0));
+        $invoice->amount_paid_sgd = $paid->toString();
+
+        $total = Money::of($invoice->total_amount_sgd);
+        if ($paid->toFloat() <= 0) {
+            $invoice->status = Invoice::STATUS_OUTSTANDING;
+        } elseif ($paid->toFloat() >= $total->toFloat()) {
+            $invoice->status = Invoice::STATUS_PAID;
+        } else {
+            $invoice->status = Invoice::STATUS_PARTIALLY_PAID;
+        }
+        $invoice->save();
+    }
+
+    /** Apply part (or all) of a payment to one invoice -- AR-001, always a manual decision by Finance. */
+    public static function allocatePayment(Payment $payment, Invoice $invoice, Money $amount): PaymentAllocation
+    {
+        if ($amount->toFloat() <= 0) {
+            throw new ARRuleViolation('Allocation amount must be greater than zero.');
+        }
+        if ($invoice->company_id !== $payment->company_id) {
+            throw new ARRuleViolation('Invoice and payment belong to different companies.');
+        }
+        if ($invoice->customer_id !== $payment->customer_id) {
+            throw new ARRuleViolation('That invoice belongs to a different customer than this payment.');
+        }
+        if ($invoice->status === Invoice::STATUS_WRITTEN_OFF) {
+            throw new ARRuleViolation('That invoice has been written off.');
+        }
+        if ($amount->toFloat() > $payment->unallocatedSgd()->toFloat()) {
+            throw new ARRuleViolation("Only SGD {$payment->unallocatedSgd()->toString()} of this payment is still unallocated.");
+        }
+        if ($amount->toFloat() > $invoice->outstandingSgd()->toFloat()) {
+            throw new ARRuleViolation("Invoice {$invoice->invoice_number} only has SGD {$invoice->outstandingSgd()->toString()} outstanding.");
+        }
+
+        $allocation = PaymentAllocation::create([
+            'company_id' => $payment->company_id,
+            'payment_id' => $payment->id,
+            'invoice_id' => $invoice->id,
+            'amount_sgd' => $amount->toString(),
+        ]);
+        self::recalculateInvoiceStatus($invoice);
+        // unallocatedSgd()/allocatedSgd() reduce over the cached
+        // `allocations` relation -- refresh it so a second allocation
+        // against the same $payment instance (e.g. several lines in
+        // one request) sees this one, not a stale empty/partial
+        // collection.
+        $payment->load('allocations');
+
+        return $allocation;
     }
 
     /**

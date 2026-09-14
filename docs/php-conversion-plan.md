@@ -453,20 +453,35 @@ breakdown.
   -- every threshold/role combination, the exact bucket boundaries,
   written-off invoices excluded from aging) + 6 API-level tests
   (`tests/Feature/AccountsReceivableTest.php`).
-  **KNOWN GAP (not silently papered over):** AR-001 (recording a
-  customer Payment and manually allocating it against invoices) is
-  NOT converted. `Payment.bank_account_id` is a required foreign key
-  into `bank_accounts` (the GL posting + Bank module's own table,
-  `docs/gl-posting-design.md`), which doesn't exist in `backend-php/`
-  yet -- so a receipt can't be recorded at all through this backend
-  today, and no invoice's `amount_paid_sgd`/status here reflects a
-  real payment. This is why AR needed real scoping, not just a
-  smaller endpoint list: about half of the Python router (payments,
-  allocation, statements, un-GL/un-bank) is genuinely blocked on a
-  module that hasn't been converted yet, not merely deferred for
-  time. Also not converted: the commission clawback the Python
-  write-off endpoint triggers (Commission Management is deferred, per
-  CLAUDE.md) and CSV/Excel/.docx export.
+  **Not yet converted:** the commission clawback the Python write-off
+  endpoint triggers (Commission Management is deferred, per
+  CLAUDE.md), CSV/Excel/.docx export.
+- **AR-001** (`app/models/payments.py`, the payment half of
+  `app/routers/accounts_receivable.py` →
+  `App\Models\Payment`/`PaymentAllocation`,
+  `App\Http\Controllers\Api\PaymentController`): recording a Receipt
+  Voucher (allocation to invoices is a manual, optional-at-creation
+  decision -- a receipt can sit unallocated on the customer's account
+  until Finance decides what it settles), posting it to the GL on save
+  (Dr bank / Cr AR, via the now-built `App\Services\Posting::postReceipt()`),
+  the explicit Bank step, and UNGL. Symmetric to the Accounts Payable
+  Payment Voucher work, unblocked the same way once GL posting + Bank
+  existed.
+  **Bug fix found and fixed in the process, in both AR and AP:**
+  `allocatePayment()`/`allocateSupplierPayment()` compute a payment's
+  unallocated balance by summing its `allocations` relation, which
+  Eloquent caches after first access -- allocating two invoices/bills
+  against the *same* payment instance in one request (e.g. the
+  `allocations` array on `POST /payments`) meant the second line's
+  balance check saw a stale, pre-first-allocation collection and could
+  have let a payment be over-allocated. Fixed by refreshing the
+  relation (`$payment->load('allocations')`) after each write in both
+  services; each now has a dedicated regression test covering two
+  allocations in one request.
+  9 business-logic tests added to `AccountsReceivableServiceTest.php`
+  + 9 API-level tests (`tests/Feature/PaymentTest.php`).
+  **Not yet converted:** the Customer Statement endpoints, CSV/Excel/
+  .docx export, "Email Receipt".
 - **Accounts Payable / Purchasing** (`app/models/payables.py`,
   `app/services/payables.py`, `app/routers/payables.py` (partial) →
   `App\Models\PurchaseOrder`/`SupplierInvoice`,
@@ -566,21 +581,23 @@ breakdown.
   `tests/Feature/SupplierPaymentTest.php`).
   **Not yet converted:** CSV/Excel export.
 
-Verified end-to-end for all eight modules against the real React
+Verified end-to-end for all nine modules against the real React
 frontend (screenshots in the PR/commit history), including the
 Invoices page's Aging widget -- which previously 404'd (a confirmed
 gap noted when Billing shipped) -- now rendering all 5 buckets with
 the real activation invoice correctly showing as "Current / not yet
 due" ($3,270.00); the Purchase Orders / Accounts Payable pages
 showing a PO raised, approved, imported to AP as a matched, auto-
-approved (and now GL-posted) bill; and the full GL posting + Bank
-loop -- Chart of Accounts (36 seeded rows), a Payment Voucher raised
-against that bill, banked, and the Bank Master File's balance
-correctly showing -$2,180.00 after the fix above. The only 404s seen
-were for not-yet-converted modules (Announcements, Dashboard,
-Documents) -- none from Contracts, Job Orders, Service Records,
-Excess Usage, Billing, Accounts Receivable, Accounts Payable, or GL
-posting's own endpoints.
+approved (and now GL-posted) bill; the full GL posting + Bank loop --
+Chart of Accounts (36 seeded rows), a Payment Voucher raised against
+that bill, banked, and the Bank Master File's balance correctly
+showing -$2,180.00 after the fix above; and a Receipt Voucher raised
+against a real invoice, allocated, and banked, with the Invoices
+page's Aging widget correctly dropping to $0.00 outstanding once
+fully paid. The only 404s seen were for not-yet-converted modules
+(Announcements, Dashboard, Documents) -- none from Contracts, Job
+Orders, Service Records, Excess Usage, Billing, Accounts Receivable,
+Accounts Payable, or GL posting's own endpoints.
 
 ## Not yet converted (pending, in rough priority order)
 
@@ -589,18 +606,12 @@ phase of its own, following the same pattern as CompanyIndividual
 Management above -- model(s) + migration(s) + controller + routes +
 smoke test:
 
-1. **AR-001** (recording a customer receipt and allocating it against
-   invoices) -- `App\Models\Payment` doesn't exist yet; its own
-   module-sized addition, mirroring the now-built Accounts Payable
-   Payment Voucher on the customer side. Bumped up in priority: GL
-   posting + Bank now exists to support it, so nothing structural
-   blocks it anymore.
-2. **Accounting Period management** (create/close/reopen a period,
+1. **Accounting Period management** (create/close/reopen a period,
    the per-doc-type per-operation lock matrix, Year-End Closing) and
    **GL Trial Balance / the per-account transaction ledger** -- both
    scoped out of the GL posting + Bank conversion above; see that
    entry's docblock references.
-3. Everything else in `backend/app/routers/` not listed above
+2. Everything else in `backend/app/routers/` not listed above
    (Quotations, Incidents, Inventory/Stock, Reporting/dashboards,
    Event Logs, Document Control, Announcements, Software Tasks, Ops
    Dashboard, Customer Helpdesk Portal, Mobile Web App, Commissions
