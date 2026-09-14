@@ -4,7 +4,7 @@
 // dynamic-filter + one-Export-button pattern as Invoices; a report type
 // selector switches which filter panel and columns show.
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
 import {
   api,
@@ -26,10 +26,27 @@ import {
 import { isoToMonth, monthEndISO, monthStartISO } from '../lib/period'
 import { formatMoney as money, formatDate } from '../lib/format'
 
-type ReportType = 'contracts' | 'job-orders' | 'service-records' | 'customer-product-usage'
+// NEW FEATURE (not a Python->PHP conversion -- see
+// docs/backlog.md / docs/planned-work.md): "Service Contract
+// Operation Report - Contract Expiry Listing, Contract due for
+// renewal Listing" adds two report types onto this same page,
+// following its existing report-type-selector pattern.
+type ReportType =
+  | 'contracts'
+  | 'job-orders'
+  | 'service-records'
+  | 'customer-product-usage'
+  | 'contract-expiry-listing'
+  | 'contract-renewal-due-listing'
 
 export default function OperationsReportsPage() {
-  const [reportType, setReportType] = useState<ReportType>('contracts')
+  const [searchParams] = useSearchParams()
+  const preselectedReport = (searchParams.get('report') as ReportType | null) ?? 'contracts'
+  const [reportType, setReportType] = useState<ReportType>(preselectedReport)
+  const [contractExpiryFrom, setContractExpiryFrom] = useState('')
+  const [contractExpiryTo, setContractExpiryTo] = useState('')
+  const [expiryListingRows, setExpiryListingRows] = useState<Contract[]>([])
+  const [renewalDueRows, setRenewalDueRows] = useState<Contract[]>([])
   const [customers, setCustomers] = useState<CompanyIndividual[]>([])
   const [staff, setStaff] = useState<StaffUser[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -88,6 +105,8 @@ export default function OperationsReportsPage() {
     setSrOutcome('')
     setProductId('')
     setIndustryCode('')
+    setContractExpiryFrom('')
+    setContractExpiryTo('')
   }
 
   useEffect(() => {
@@ -128,7 +147,7 @@ export default function OperationsReportsPage() {
         })
         .then(setServiceRecords)
         .catch((e) => setError(e.message))
-    } else {
+    } else if (reportType === 'customer-product-usage') {
       api
         .reportCompanyIndividualProductUsage({
           customer_id: customerId || undefined,
@@ -137,11 +156,22 @@ export default function OperationsReportsPage() {
         })
         .then(setProductUsage)
         .catch((e) => setError(e.message))
+    } else if (reportType === 'contract-expiry-listing') {
+      api
+        .reportContractExpiryListing({ expiry_from: contractExpiryFrom || undefined, expiry_to: contractExpiryTo || undefined })
+        .then(setExpiryListingRows)
+        .catch((e) => setError(e.message))
+    } else if (reportType === 'contract-renewal-due-listing') {
+      api
+        .reportContractRenewalDueListing()
+        .then(setRenewalDueRows)
+        .catch((e) => setError(e.message))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     reportType, customerId, staffId, startDate, endDate, contractStatus, contractKind,
     expiringWithinDays, jobOrderStatus, overdueOnly, srStatus, srOutcome, productId, industryCode,
+    contractExpiryFrom, contractExpiryTo,
   ])
 
   const customerName = (id: string) => customers.find((c) => c.id === id)?.name ?? id.slice(0, 8)
@@ -184,7 +214,7 @@ export default function OperationsReportsPage() {
       const blob =
         format === 'csv' ? await api.exportServiceRecordsReportCsv(filters) : await api.exportServiceRecordsReportExcel(filters)
       downloadBlob(blob, `service-records-report.${format === 'csv' ? 'csv' : 'xlsx'}`)
-    } else {
+    } else if (reportType === 'customer-product-usage') {
       const filters = {
         customer_id: customerId || undefined,
         product_id: productId || undefined,
@@ -195,6 +225,19 @@ export default function OperationsReportsPage() {
           ? await api.exportCompanyIndividualProductUsageCsv(filters)
           : await api.exportCompanyIndividualProductUsageExcel(filters)
       downloadBlob(blob, `customer-product-usage.${format === 'csv' ? 'csv' : 'xlsx'}`)
+    } else if (reportType === 'contract-expiry-listing') {
+      const filters = { expiry_from: contractExpiryFrom || undefined, expiry_to: contractExpiryTo || undefined }
+      const blob =
+        format === 'csv'
+          ? await api.exportContractExpiryListingCsv(filters)
+          : await api.exportContractExpiryListingExcel(filters)
+      downloadBlob(blob, `contract-expiry-listing.${format === 'csv' ? 'csv' : 'xls'}`)
+    } else if (reportType === 'contract-renewal-due-listing') {
+      const blob =
+        format === 'csv'
+          ? await api.exportContractRenewalDueListingCsv()
+          : await api.exportContractRenewalDueListingExcel()
+      downloadBlob(blob, `contract-renewal-due-listing.${format === 'csv' ? 'csv' : 'xls'}`)
     }
   }
 
@@ -216,20 +259,44 @@ export default function OperationsReportsPage() {
               <option value="job-orders">Job Orders</option>
               <option value="service-records">Service Records</option>
               <option value="customer-product-usage">CompanyIndividual Product Usage</option>
+              <option value="contract-expiry-listing">Contract Expiry Listing</option>
+              <option value="contract-renewal-due-listing">Contract due for Renewal Listing</option>
             </select>
           </div>
 
-          <div className="form-row" style={{ margin: 0 }}>
-            <label>Company / Individual</label>
-            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-              <option value="">All</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {reportType !== 'contract-expiry-listing' && reportType !== 'contract-renewal-due-listing' && (
+            <div className="form-row" style={{ margin: 0 }}>
+              <label>Company / Individual</label>
+              <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
+                <option value="">All</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {reportType === 'contract-expiry-listing' && (
+            <>
+              <div className="form-row" style={{ margin: 0 }}>
+                <label>Expiry from</label>
+                <input type="date" value={contractExpiryFrom} onChange={(e) => setContractExpiryFrom(e.target.value)} />
+              </div>
+              <div className="form-row" style={{ margin: 0 }}>
+                <label>Expiry to</label>
+                <input type="date" value={contractExpiryTo} onChange={(e) => setContractExpiryTo(e.target.value)} />
+              </div>
+            </>
+          )}
+
+          {reportType === 'contract-renewal-due-listing' && (
+            <p className="muted" style={{ margin: 0 }}>
+              Contracts within SRV-014's 30-day pre-expiry window (same window the contract detail
+              page uses).
+            </p>
+          )}
 
           {reportType === 'contracts' && (
             <>
@@ -360,7 +427,9 @@ export default function OperationsReportsPage() {
             </>
           )}
 
-          {reportType !== 'customer-product-usage' && (
+          {reportType !== 'customer-product-usage' &&
+            reportType !== 'contract-expiry-listing' &&
+            reportType !== 'contract-renewal-due-listing' && (
             <>
               <div className="form-row" style={{ margin: 0 }}>
                 <label>Period from</label>
@@ -559,6 +628,78 @@ export default function OperationsReportsPage() {
                   <tr>
                     <td colSpan={7} className="muted">
                       No customers currently covered for these filters.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {reportType === 'contract-expiry-listing' && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Number</th>
+                  <th>Company / Individual</th>
+                  <th>Status</th>
+                  <th>Remaining</th>
+                  <th>Value (SGD)</th>
+                  <th>End date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expiryListingRows.map((c) => (
+                  <tr key={c.id}>
+                    <td className="muted">{c.contract_number}</td>
+                    <td>{customerName(c.customer_id)}</td>
+                    <td>
+                      <span className={`badge ${c.status}`}>{c.status}</span>
+                    </td>
+                    <td>{c.remaining_hours.toFixed(1)}</td>
+                    <td>{money(c.contract_value_sgd)}</td>
+                    <td>{c.end_date}</td>
+                  </tr>
+                ))}
+                {expiryListingRows.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="muted">
+                      No contracts match these filters.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {reportType === 'contract-renewal-due-listing' && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Number</th>
+                  <th>Company / Individual</th>
+                  <th>Status</th>
+                  <th>Remaining</th>
+                  <th>End date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {renewalDueRows.map((c) => (
+                  <tr key={c.id}>
+                    <td className="muted">{c.contract_number}</td>
+                    <td>
+                      <Link to={`/contracts/${c.id}`}>{customerName(c.customer_id)}</Link>
+                    </td>
+                    <td>
+                      <span className={`badge ${c.status}`}>{c.status}</span>
+                    </td>
+                    <td>{c.remaining_hours.toFixed(1)}</td>
+                    <td>{c.end_date}</td>
+                  </tr>
+                ))}
+                {renewalDueRows.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="muted">
+                      No contracts within the SRV-014 30-day pre-expiry window.
                     </td>
                   </tr>
                 )}

@@ -36,6 +36,11 @@ require __DIR__.'/api/reports.php';
 require __DIR__.'/api/bank_accounts.php';
 require __DIR__.'/api/periods.php';
 
+// NEW FEATURES (not Python->PHP conversions -- built directly in
+// backend-php per Dennis's request; backend/ has no equivalent for
+// any of these. See docs/backlog.md / docs/planned-work.md).
+require __DIR__.'/api/contract_reports.php';
+
 // Mirrors backend/app/main.py's GET /api/health.
 Route::get('/health', function () {
     return response()->json([
