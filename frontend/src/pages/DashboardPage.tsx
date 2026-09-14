@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api, type DashboardSummary } from '../lib/api'
 import { formatMoney as money } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
+import SalesDashboardSection from '../components/SalesDashboardSection'
 
 function Stat({
   label,
@@ -43,14 +44,18 @@ function Stat({
 export default function DashboardPage() {
   const { activeCompany } = useAuth()
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
+  // Company Dashboard's own /dashboard/summary endpoint is not yet
+  // converted to backend-php (a pre-existing, separate gap -- not part
+  // of this feature set) -- caught here so a failure there never
+  // blocks the Sales Dashboard section below from rendering.
+  const [summaryError, setSummaryError] = useState<string | null>(null)
 
   useEffect(() => {
-    api.dashboardSummary().then(setSummary)
+    api
+      .dashboardSummary()
+      .then(setSummary)
+      .catch((e) => setSummaryError(e instanceof Error ? e.message : 'Failed to load'))
   }, [])
-
-  if (!summary) return <p>Loading...</p>
-
-  const netReceivable = summary.ar_outstanding_sgd - summary.ap_outstanding_sgd
 
   return (
     <div>
@@ -70,6 +75,20 @@ export default function DashboardPage() {
         logo) live under Company Setup.
       </p>
 
+      {summaryError && <p className="muted">Company Dashboard summary unavailable: {summaryError}</p>}
+      {!summary && !summaryError && <p>Loading...</p>}
+      {summary && <CompanyDashboardSummary summary={summary} />}
+
+      <SalesDashboardSection />
+    </div>
+  )
+}
+
+function CompanyDashboardSummary({ summary }: { summary: DashboardSummary }) {
+  const netReceivable = summary.ar_outstanding_sgd - summary.ap_outstanding_sgd
+
+  return (
+    <>
       <h2>Financial Summary</h2>
       <div className="stat-grid">
         <Stat
@@ -144,7 +163,6 @@ export default function DashboardPage() {
           <strong>{summary.total_remaining_hours.toFixed(1)} hrs remaining</strong>
         </p>
       </div>
-
-    </div>
+    </>
   )
 }

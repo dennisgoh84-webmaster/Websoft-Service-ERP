@@ -40,6 +40,7 @@ require __DIR__.'/api/periods.php';
 // backend-php per Dennis's request; backend/ has no equivalent for
 // any of these. See docs/backlog.md / docs/planned-work.md).
 require __DIR__.'/api/contract_reports.php';
+require __DIR__.'/api/sales_dashboard.php';
 
 // Mirrors backend/app/main.py's GET /api/health.
 Route::get('/health', function () {
