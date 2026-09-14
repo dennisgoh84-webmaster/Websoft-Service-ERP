@@ -1,0 +1,178 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Company;
+use App\Models\CompanyIndividual;
+use App\Models\CompanyModule;
+use App\Models\Group;
+use App\Models\GroupModuleAuthority;
+use App\Models\ModuleCatalog;
+use App\Models\User;
+use App\Models\UserCompanyAccess;
+use App\Services\PasswordPolicy;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+/**
+ * Mirrors backend/app/routers/company_individuals.py's core CRUD +
+ * RBAC + multi-company scoping + audit trail, the pattern every other
+ * converted (and future) module follows -- see
+ * docs/php-conversion-plan.md.
+ */
+class CompanyIndividualTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private function ownerToken(Company $company): string
+    {
+        $user = User::factory()->for($company)->create([
+            'role' => User::ROLE_OWNER,
+            'hashed_password' => PasswordPolicy::hash('demo1234'),
+        ]);
+        $login = $this->post('/api/auth/login', ['username' => $user->email, 'password' => 'demo1234']);
+
+        return $login->json('access_token');
+    }
+
+    private function authHeaders(string $token): array
+    {
+        return ['Authorization' => "Bearer {$token}"];
+    }
+
+    public function test_owner_can_create_and_list_customers(): void
+    {
+        $company = Company::factory()->create();
+        $token = $this->ownerToken($company);
+
+        $create = $this->postJson('/api/company-individuals', [
+            'name' => 'Acme Manufacturing Pte Ltd',
+            'customer_type' => 'company',
+        ], $this->authHeaders($token));
+        $create->assertOk()->assertJson(['name' => 'Acme Manufacturing Pte Ltd']);
+
+        $list = $this->getJson('/api/company-individuals', $this->authHeaders($token));
+        $list->assertOk()->assertJsonCount(1);
+    }
+
+    public function test_user_with_no_group_is_denied(): void
+    {
+        $company = Company::factory()->create();
+        $user = User::factory()->for($company)->create([
+            'role' => User::ROLE_SUPPORT_ENGINEER, // not owner, no Group assigned
+            'hashed_password' => PasswordPolicy::hash('demo1234'),
+        ]);
+        $login = $this->post('/api/auth/login', ['username' => $user->email, 'password' => 'demo1234']);
+        $token = $login->json('access_token');
+
+        $this->getJson('/api/company-individuals', $this->authHeaders($token))->assertStatus(403);
+    }
+
+    public function test_view_only_group_cannot_create(): void
+    {
+        $company = Company::factory()->create();
+        ModuleCatalog::firstOrCreate(['key' => 'company_individual_management'], ['name' => 'Customer Management', 'is_built' => true]);
+        $group = Group::factory()->for($company)->create();
+        GroupModuleAuthority::create([
+            'group_id' => $group->id,
+            'module_key' => 'company_individual_management',
+            'access_level' => GroupModuleAuthority::VIEW,
+        ]);
+        CompanyModule::create([
+            'company_id' => $company->id,
+            'module_key' => 'company_individual_management',
+            'enabled' => true,
+        ]);
+        $user = User::factory()->for($company)->create([
+            'role' => User::ROLE_SUPPORT_ENGINEER,
+            'hashed_password' => PasswordPolicy::hash('demo1234'),
+        ]);
+        UserCompanyAccess::create(['user_id' => $user->id, 'company_id' => $company->id, 'group_id' => $group->id]);
+
+        $login = $this->post('/api/auth/login', ['username' => $user->email, 'password' => 'demo1234']);
+        $token = $login->json('access_token');
+
+        $this->getJson('/api/company-individuals', $this->authHeaders($token))->assertOk();
+        $this->postJson('/api/company-individuals', ['name' => 'X'], $this->authHeaders($token))->assertStatus(403);
+    }
+
+    public function test_disabled_module_is_denied_even_with_full_group_authority(): void
+    {
+        $company = Company::factory()->create();
+        ModuleCatalog::firstOrCreate(['key' => 'company_individual_management'], ['name' => 'Customer Management', 'is_built' => true]);
+        $group = Group::factory()->for($company)->create();
+        GroupModuleAuthority::create([
+            'group_id' => $group->id,
+            'module_key' => 'company_individual_management',
+            'access_level' => GroupModuleAuthority::FULL,
+        ]);
+        // No CompanyModule row at all -- Module Control fails closed.
+        $user = User::factory()->for($company)->create([
+            'role' => User::ROLE_SUPPORT_ENGINEER,
+            'hashed_password' => PasswordPolicy::hash('demo1234'),
+        ]);
+        UserCompanyAccess::create(['user_id' => $user->id, 'company_id' => $company->id, 'group_id' => $group->id]);
+
+        $login = $this->post('/api/auth/login', ['username' => $user->email, 'password' => 'demo1234']);
+        $token = $login->json('access_token');
+
+        $this->getJson('/api/company-individuals', $this->authHeaders($token))->assertStatus(403);
+    }
+
+    public function test_customer_from_another_company_is_not_found(): void
+    {
+        $companyA = Company::factory()->create();
+        $companyB = Company::factory()->create();
+        $otherCustomer = CompanyIndividual::factory()->for($companyB)->create();
+
+        $token = $this->ownerToken($companyA);
+
+        $this->getJson("/api/company-individuals/{$otherCustomer->id}", $this->authHeaders($token))
+            ->assertStatus(404);
+    }
+
+    public function test_archive_writes_an_audit_trail_entry(): void
+    {
+        $company = Company::factory()->create();
+        $token = $this->ownerToken($company);
+        $customer = CompanyIndividual::factory()->for($company)->create();
+
+        $this->postJson("/api/company-individuals/{$customer->id}/archive", [], $this->authHeaders($token))
+            ->assertOk()->assertJson(['is_archived' => true]);
+
+        $log = $this->getJson("/api/company-individuals/{$customer->id}/audit-log", $this->authHeaders($token));
+        $log->assertOk();
+        $this->assertContains('archived', collect($log->json())->pluck('action')->all());
+    }
+
+    public function test_pdpa_consent_is_server_timestamped(): void
+    {
+        $company = Company::factory()->create();
+        $token = $this->ownerToken($company);
+        $customer = CompanyIndividual::factory()->for($company)->create();
+
+        $response = $this->postJson(
+            "/api/company-individuals/{$customer->id}/pdpa-consent",
+            ['given' => true],
+            $this->authHeaders($token),
+        );
+
+        $response->assertOk()->assertJson(['pdpa_consent_given' => true]);
+        $this->assertNotNull($response->json('pdpa_consent_at'));
+    }
+
+    public function test_can_add_a_contact_under_a_customer(): void
+    {
+        $company = Company::factory()->create();
+        $token = $this->ownerToken($company);
+        $customer = CompanyIndividual::factory()->for($company)->create();
+
+        $response = $this->postJson(
+            "/api/company-individuals/{$customer->id}/contacts",
+            ['name' => 'Jane Tan', 'email' => 'jane@example.com'],
+            $this->authHeaders($token),
+        );
+
+        $response->assertOk()->assertJson(['name' => 'Jane Tan', 'customer_id' => $customer->id]);
+    }
+}

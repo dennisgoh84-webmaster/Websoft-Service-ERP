@@ -53,7 +53,16 @@ The following architecture decisions have been approved for the initial
 Websoft Service ERP Solution project. These decisions must not be changed without
 explaining the reason first (see Development Rules below).
 
-1. **Backend:** Python + FastAPI
+1. **Backend:** PHP 8.4 / Laravel 11 (**changed 2026-09-14, in progress**
+   -- was Python + FastAPI. Reason: a team/hosting constraint, not a
+   technical problem with FastAPI. Same PostgreSQL schema design and
+   the same JSON API contract, so the frontend is unaffected. Being
+   carried out as a phased, module-by-module conversion, the same
+   pattern already used for the Odoo replacement strategy below, with
+   the existing Python backend (`backend/`) kept running unchanged
+   until each module's PHP equivalent (`backend-php/`) is converted and
+   verified -- see [docs/php-conversion-plan.md](docs/php-conversion-plan.md)
+   for what has been converted so far and what remains.)
 2. **Frontend:** React + TypeScript
 3. **Database:** PostgreSQL
 4. **Initial deployment:** Cloud/VPS deployment, with the architecture kept
@@ -101,6 +110,7 @@ explaining the reason first (see Development Rules below).
 - [docs/gl-posting-design.md](docs/gl-posting-design.md), [docs/customer-portal-design.md](docs/customer-portal-design.md) — designs for sub-ledger → GL posting + Bank step, and the Customer Helpdesk Portal, decided **and built** 2026-09-14
 - [docs/backlog.md](docs/backlog.md) — short, checkable summary of everything pending, linking into the detail docs above
 - [docs/ui-guidelines.md](docs/ui-guidelines.md) — screen label conventions and the Export (CSV/Excel) / Print (PDF/Word) pattern every screen follows
+- [docs/php-conversion-plan.md](docs/php-conversion-plan.md) — the backend Python→PHP language conversion: reason, approach, stack, and what's converted so far vs. pending
 - [DEV_SETUP.md](DEV_SETUP.md) — how to run the application locally
 
 ## Status
@@ -114,6 +124,18 @@ Invoice). It also includes Module Control / multi-company licensing
 (Core / Administration — see [docs/system-architecture.md](docs/system-architecture.md)),
 a summary dashboard, and dynamic filters on the main list views. See
 [DEV_SETUP.md](DEV_SETUP.md) to run it.
+
+**Backend language conversion to PHP/Laravel is in progress
+(`backend-php/`, started 2026-09-14)** — see
+[docs/php-conversion-plan.md](docs/php-conversion-plan.md) for the
+reason, approach, and status. Converted and verified so far: Core /
+Administration (auth, audit logging, Group Authority, Module Control,
+Company Setup) and CompanyIndividual Management (Customer/Supplier
+master, Contacts, Branches, PDPA consent/archive). `backend/` (Python)
+is untouched and keeps running as the system of record until each
+remaining module (Contracts, Job Orders, Service Records, Excess
+Usage, Billing, AR, and everything else) is converted, module by
+module, the same way.
 
 No other business area has application code yet. **Commission
 Management, further Service Record business-rule decisions (open item

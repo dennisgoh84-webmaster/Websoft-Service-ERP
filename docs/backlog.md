@@ -8,6 +8,21 @@ item below rather than repeated here. Tick an item off when it's built
 first) -- don't delete finished lines, so this stays a record of what
 shipped and when.
 
+## In progress
+
+- [ ] **Backend language conversion, Python/FastAPI → PHP/Laravel**
+  -- started 2026-09-14. Converted and verified so far: Core /
+  Administration (auth, audit logging, Group Authority, Module
+  Control, Company Setup) and CompanyIndividual Management
+  (Customer/Supplier master, Contacts, Branches, PDPA consent/
+  archive), all in a new `backend-php/` app running against its own
+  Postgres database, `backend/` (Python) untouched. Still pending:
+  Users/Staff Master, Catalog, Service Contracts, Job Orders, Service
+  Records, Excess Usage, Billing, Accounts Receivable, and everything
+  else -- converted module by module, same pattern as the Odoo
+  replacement strategy.
+  → [php-conversion-plan.md](php-conversion-plan.md)
+
 ## Waiting on Dennis to pick up (deferred 2026-09-12)
 
 - [x] **GL Transactions / multi-currency** -- GL debit/credit ledger

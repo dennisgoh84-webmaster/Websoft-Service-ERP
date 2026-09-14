@@ -1,0 +1,235 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Exceptions\ApiException;
+use App\Http\Controllers\Controller;
+use App\Http\Middleware\Authenticate;
+use App\Models\Company;
+use App\Models\CompanyModule;
+use App\Models\Group;
+use App\Models\GroupModuleAuthority;
+use App\Models\ModuleCatalog;
+use App\Models\User;
+use App\Models\UserCompanyAccess;
+use App\Services\Audit;
+use App\Services\Authority;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+
+/**
+ * Company Setup / multi-company. Mirrors backend/app/routers/companies.py
+ * -- see that file's module docstring for the full design rationale.
+ */
+class CompanyController extends Controller
+{
+    private const MODULE = 'core_administration';
+
+    private const MAX_LOGO_CHARS = 400_000; // ~300 KB of base64
+
+    /**
+     * Companies this user may switch to. The owner can reach every
+     * company; everyone else is limited to their explicit
+     * UserCompanyAccess rows, plus their current company so they can
+     * never be stranded without one.
+     *
+     * @return array<int, string>
+     */
+    public static function accessibleCompanyIds(User $user): array
+    {
+        if ($user->role === User::ROLE_OWNER) {
+            return Company::query()->pluck('id')->all();
+        }
+        $ids = UserCompanyAccess::where('user_id', $user->id)->pluck('company_id')->all();
+
+        return array_values(array_unique([...$ids, $user->company_id]));
+    }
+
+    /** The Login page's logo/name -- deliberately the only unauthenticated endpoint here. */
+    public function publicBranding()
+    {
+        $company = Company::where('is_active', true)->orderBy('created_at')->first();
+        if (! $company) {
+            return response()->json(['name' => 'Websoft Service ERP', 'logo' => null]);
+        }
+
+        return response()->json(['name' => $company->name, 'logo' => $company->logo]);
+    }
+
+    public function index(Request $request)
+    {
+        $user = Authenticate::user($request);
+        $ids = self::accessibleCompanyIds($user);
+
+        return Company::whereIn('id', $ids)->where('is_active', true)->orderBy('name')->get();
+    }
+
+    public function store(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, GroupModuleAuthority::FULL);
+
+        $data = $request->validate([
+            'name' => 'required|string',
+            'country' => 'sometimes|string',
+            'currency' => 'sometimes|string',
+            'timezone' => 'sometimes|string',
+            'logo' => 'nullable|string',
+        ]);
+        self::validateLogo($data['logo'] ?? null);
+
+        $company = Company::create([
+            'name' => $data['name'],
+            'country' => $data['country'] ?? 'Singapore',
+            'currency' => $data['currency'] ?? 'SGD',
+            'timezone' => $data['timezone'] ?? 'Asia/Singapore',
+            'logo' => $data['logo'] ?? null,
+        ]);
+
+        // A new company starts with the same module catalog, all
+        // disabled except the ones already built.
+        $builtModuleKeys = [];
+        foreach (ModuleCatalog::all() as $module) {
+            if ($module->is_built) {
+                $builtModuleKeys[] = $module->key;
+            }
+            CompanyModule::create([
+                'company_id' => $company->id,
+                'module_key' => $module->key,
+                'enabled' => $module->is_built,
+                'license_type' => CompanyModule::INCLUDED,
+            ]);
+        }
+
+        // Groups are per company; bootstrap one admin group with full
+        // access to the built modules.
+        $adminGroup = Group::create([
+            'company_id' => $company->id,
+            'name' => 'Owner / Admin',
+            'description' => 'Full access to every module in this company. Created with the company.',
+        ]);
+        foreach ($builtModuleKeys as $moduleKey) {
+            GroupModuleAuthority::create([
+                'group_id' => $adminGroup->id,
+                'module_key' => $moduleKey,
+                'access_level' => GroupModuleAuthority::FULL,
+            ]);
+        }
+
+        // Whoever created it can work in it, as an admin there.
+        UserCompanyAccess::create([
+            'user_id' => $user->id,
+            'company_id' => $company->id,
+            'group_id' => $adminGroup->id,
+        ]);
+
+        Audit::record(
+            'company', $company->id, 'created', $user->id,
+            details: "name={$data['name']}",
+            newValue: ['name' => $data['name'], 'country' => $company->country, 'currency' => $company->currency, 'timezone' => $company->timezone],
+        );
+
+        return response()->json($company->fresh());
+    }
+
+    public function update(Request $request, string $companyId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, GroupModuleAuthority::FULL);
+
+        $company = Company::find($companyId);
+        if (! $company) {
+            throw new ApiException(404, 'Company not found');
+        }
+        if (! in_array($company->id, self::accessibleCompanyIds($user), true)) {
+            throw new ApiException(403, 'You cannot manage this company.');
+        }
+
+        $fields = $request->validate([
+            'name' => 'sometimes|string',
+            'country' => 'sometimes|string',
+            'currency' => 'sometimes|string',
+            'timezone' => 'sometimes|string',
+            'is_active' => 'sometimes|boolean',
+            'logo' => 'sometimes|nullable|string',
+            'address' => 'sometimes|nullable|string',
+            'gst_registration_no' => 'sometimes|nullable|string',
+            'phone' => 'sometimes|nullable|string',
+            'website' => 'sometimes|nullable|string',
+            'uen' => 'sometimes|nullable|string',
+            'write_off_approval_threshold_sgd' => 'sometimes|nullable|numeric',
+            'credit_note_approval_threshold_sgd' => 'sometimes|nullable|numeric',
+            'po_approval_threshold_sgd' => 'sometimes|nullable|numeric',
+        ]);
+        if (array_key_exists('logo', $fields)) {
+            self::validateLogo($fields['logo']);
+        }
+
+        $oldValue = [];
+        $newValue = [];
+        foreach ($fields as $field => $new) {
+            $old = $company->{$field};
+            if ($old == $new) {
+                continue;
+            }
+            if ($field === 'logo') {
+                // Never dump base64 image data into the audit trail.
+                $oldValue[$field] = $old ? '(image set)' : '(none)';
+                $newValue[$field] = $new ? '(image set)' : '(none)';
+            } else {
+                $oldValue[$field] = $old;
+                $newValue[$field] = $new;
+            }
+            $company->{$field} = $new;
+        }
+
+        Audit::record('company', $company->id, 'updated', $user->id, oldValue: $oldValue ?: null, newValue: $newValue ?: null);
+        $company->save();
+
+        return response()->json($company->fresh());
+    }
+
+    /**
+     * Change the company this user is working in. Everything they see
+     * is scoped to User.company_id, so this one write re-scopes the
+     * whole application for them.
+     */
+    public function switchCompany(Request $request, string $companyId)
+    {
+        $user = Authenticate::user($request);
+
+        $company = Company::find($companyId);
+        if (! $company || ! $company->is_active) {
+            throw new ApiException(404, 'Company not found');
+        }
+        if (! in_array($company->id, self::accessibleCompanyIds($user), true)) {
+            throw new ApiException(403, 'You do not have access to this company.');
+        }
+
+        $previous = Company::find($user->company_id);
+        if ($company->id !== $user->company_id) {
+            Audit::record(
+                'user', $user->id, 'switched_company', $user->id,
+                oldValue: ['company' => $previous?->name],
+                newValue: ['company' => $company->name],
+            );
+            $user->company_id = $company->id;
+            $user->save();
+        }
+
+        return response()->json($company->fresh());
+    }
+
+    private static function validateLogo(?string $logo): void
+    {
+        if ($logo === null) {
+            return;
+        }
+        if (! Str::startsWith($logo, 'data:image/')) {
+            throw new ApiException(400, "Logo must be an image data URI (e.g. 'data:image/png;base64,...').");
+        }
+        if (strlen($logo) > self::MAX_LOGO_CHARS) {
+            throw new ApiException(400, 'Logo image is too large -- please use an image under ~300 KB.');
+        }
+    }
+}

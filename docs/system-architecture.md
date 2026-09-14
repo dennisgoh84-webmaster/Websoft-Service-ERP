@@ -190,7 +190,21 @@ approval workflows) without changing the shape described here.
 
 ### Backend architecture
 
-- A Python/FastAPI backend, structured as a **modular monolith**: one
+**Backend language conversion in progress (started 2026-09-14):** the
+backend is being converted from Python/FastAPI to **PHP 8.4 / Laravel
+11**, for a team/hosting constraint rather than a technical problem
+with FastAPI — see [php-conversion-plan.md](php-conversion-plan.md)
+for the reason, approach, and current status. This is a
+backend-language change only: the modular-monolith structure, module
+boundaries, PostgreSQL schema design, and API contract described below
+all carry across unchanged so the React frontend is unaffected either
+way. The conversion is phased and module-by-module (the same pattern
+already used for the Odoo replacement strategy), with the existing
+Python backend kept running as the system of record until each
+module's PHP equivalent is converted and verified. Everything below
+describes the target architecture, which both implementations follow.
+
+- A backend structured as a **modular monolith**: one
   deployable service, internally organized into modules that mirror
   [module-map.md](module-map.md), each owning its own data access and
   business logic and exposing it to other modules through explicit
