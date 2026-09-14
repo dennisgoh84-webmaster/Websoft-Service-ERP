@@ -42,6 +42,7 @@ class CompanyIndividualController extends Controller
         'address_state', 'address_postal_code', 'address_country', 'tags',
         'industry_code', 'exclude_auto_sent', 'terms_and_conditions', 'memo',
         'billing_notes', 'payment_terms_days', 'data_expiry_date',
+        'is_customer', 'is_supplier',
     ];
 
     private function customerOrFail(User $user, string $customerId): CompanyIndividual
@@ -656,10 +657,23 @@ class CompanyIndividualController extends Controller
             'billing_notes' => 'sometimes|nullable|string',
             'payment_terms_days' => 'sometimes|nullable|integer',
             'data_expiry_date' => 'sometimes|nullable|date',
+            // A record can be a customer, a supplier, or both -- see
+            // CompanyIndividual's model docstring (2026-09-12: folded
+            // the former standalone Supplier table into this one as a
+            // role flag). is_customer defaults true since that's this
+            // page's usual purpose; is_supplier defaults false.
+            'is_customer' => 'sometimes|boolean',
+            'is_supplier' => 'sometimes|boolean',
         ];
         $data = $request->validate($rules);
         if ($forCreate && ! array_key_exists('customer_type', $data)) {
             $data['customer_type'] = CompanyIndividual::TYPE_COMPANY;
+        }
+        if ($forCreate && ! array_key_exists('is_customer', $data)) {
+            $data['is_customer'] = true;
+        }
+        if ($forCreate && ! array_key_exists('is_supplier', $data)) {
+            $data['is_supplier'] = false;
         }
 
         return $data;

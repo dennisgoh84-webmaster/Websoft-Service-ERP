@@ -151,17 +151,26 @@ issues its own invoice at the contract's blended rate. Also converted:
 Accounts Receivable (AR-002 write-offs -- the owner always may, anyone
 else only below a configured threshold, nobody but the owner while
 that threshold is unset; AR-003 dispute flagging, which never holds
-collections; the 5-bucket aging report). **Known gaps:** invoices
-aren't posted to the General Ledger yet, and recording a customer
-payment (AR-001) isn't possible at all yet -- both genuinely blocked
-on the still-unconverted GL posting + Bank module
-(`docs/gl-posting-design.md`), since a payment record requires a real
-bank account row from that module; don't treat an invoice issued via
-`backend-php/` as posted to the books, or its status as reflecting
-real payments received. `backend/` (Python) is untouched and keeps
-running as the system of record until each remaining module (GL
-posting + Bank, and everything else) is converted, module by module,
-the same way.
+collections; the 5-bucket aging report), and Accounts
+Payable/Purchasing (PUR-001 PO approval on the same owner/threshold
+pattern; PUR-002 2-way matching against the purchase order only;
+PUR-003 auto-approval on a match, an EXCEPTION spelling out exactly
+what differs on a mismatch; "confirm and import to AP"; AP aging).
+Also fixed in passing: `is_customer`/`is_supplier` were missing from
+CompanyIndividual's create/update entirely, a leftover gap from that
+module's own conversion that silently blocked anyone from ever being
+marked a supplier. **Known gaps:** invoices aren't posted to the
+General Ledger yet, a matched Accounts Payable bill's own GL posting
+is one step short, and recording a payment (AR-001 customer receipts,
+and Accounts Payable's own Payment Vouchers) isn't possible at all
+yet -- all genuinely blocked on the still-unconverted GL posting +
+Bank module (`docs/gl-posting-design.md`), since a payment record
+requires a real bank account row from that module; don't treat an
+invoice or bill issued via `backend-php/` as posted to the books, or
+its status as reflecting real payments received. `backend/` (Python)
+is untouched and keeps running as the system of record until each
+remaining module (GL posting + Bank, and everything else) is
+converted, module by module, the same way.
 
 No other business area has application code yet. **Commission
 Management, further Service Record business-rule decisions (open item

@@ -55,6 +55,18 @@ class CompanyIndividualTest extends TestCase
         $list->assertOk()->assertJsonCount(1);
     }
 
+    public function test_is_customer_defaults_true_and_is_supplier_can_be_set(): void
+    {
+        $company = Company::factory()->create();
+        $token = $this->ownerToken($company);
+
+        $create = $this->postJson('/api/company-individuals', [
+            'name' => 'Best Office Supplies Pte Ltd', 'customer_type' => 'company', 'is_supplier' => true,
+        ], $this->authHeaders($token));
+
+        $create->assertOk()->assertJson(['is_customer' => true, 'is_supplier' => true]);
+    }
+
     public function test_user_with_no_group_is_denied(): void
     {
         $company = Company::factory()->create();

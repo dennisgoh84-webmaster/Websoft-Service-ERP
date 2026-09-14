@@ -29,6 +29,7 @@ require __DIR__.'/api/service_records.php';
 require __DIR__.'/api/excess_usage.php';
 require __DIR__.'/api/invoices.php';
 require __DIR__.'/api/accounts_receivable.php';
+require __DIR__.'/api/payables.php';
 
 // Mirrors backend/app/main.py's GET /api/health.
 Route::get('/health', function () {

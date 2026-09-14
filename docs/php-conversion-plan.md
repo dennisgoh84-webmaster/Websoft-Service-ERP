@@ -467,16 +467,64 @@ breakdown.
   time. Also not converted: the commission clawback the Python
   write-off endpoint triggers (Commission Management is deferred, per
   CLAUDE.md) and CSV/Excel/.docx export.
+- **Accounts Payable / Purchasing** (`app/models/payables.py`,
+  `app/services/payables.py`, `app/routers/payables.py` (partial) →
+  `App\Models\PurchaseOrder`/`SupplierInvoice`,
+  `App\Services\PayablesService`,
+  `App\Http\Controllers\Api\PurchaseOrderController`/
+  `SupplierInvoiceController`/`AccountsPayableController`): PUR-001
+  (PO approval, value-based -- same owner/configurable-threshold
+  pattern as AR-002/write-offs, `po_approval_threshold_sgd`), PUR-002
+  (2-way match: a bill is compared to its PO only, no goods receipt),
+  PUR-003 (a match auto-approves the bill for payment; a mismatch
+  becomes an EXCEPTION spelling out exactly what differs -- supplier,
+  amount, or an unapproved PO -- and stops there, resolution being
+  open item 4.5), "confirm and import to AP" (turns an approved PO
+  straight into its matching, pre-matched bill; guards against
+  importing the same PO twice), and the AP aging report (mirrors AR's
+  bucket logic exactly, reused from
+  `AccountsReceivableService::agingBucketFor()` rather than
+  reimplemented). A supplier is a `CompanyIndividual` flagged
+  `is_supplier` (2026-09-12: folded into the customer master, not a
+  separate table), same as Python.
+  **Bug fix found and fixed in the process:** `is_customer`/
+  `is_supplier` were missing from `CompanyIndividualController`'s
+  create/update validation entirely -- a leftover gap from the
+  CompanyIndividual Management conversion (Python's schema always
+  accepted them) that meant no record could ever be marked a supplier
+  through `backend-php/`, silently blocking this whole module. Fixed
+  by adding both fields (`is_customer` defaults true, `is_supplier`
+  false, matching Python's schema defaults), with a new test.
+  17 business-logic tests (`tests/Feature/PayablesServiceTest.php` --
+  every threshold/role combination, every 2-way-match outcome, the
+  double-import guard, aging) + 8 API-level tests
+  (`tests/Feature/PayablesTest.php`).
+  **KNOWN GAP (not silently papered over), scoped up front rather than
+  discovered mid-conversion:** Payment Vouchers (`SupplierPayment` +
+  allocations) are NOT converted. Unlike an Invoice or a bill, Python's
+  own `POST /payments` makes GL posting a *required* part of creating
+  a Payment Voucher -- there is no "recorded but not posted" state for
+  one, so this genuinely cannot be built faithfully until GL posting
+  exists; building a partial version that skips posting would silently
+  diverge from the real rule (a payment voucher that never fails to
+  post). A matched bill's own GL posting (Dr expense / Dr GST input /
+  Cr AP, ACC-001/003) is the same story --
+  `PayablesService::matchBillToPo()` stops one step short of it; see
+  that method's docblock. Also not converted: CSV/Excel/.docx export,
+  "Email Purchase Order", un-GL.
 
-Verified end-to-end for all six modules against the real React
+Verified end-to-end for all seven modules against the real React
 frontend (screenshots in the PR/commit history), including the
 Invoices page's Aging widget -- which previously 404'd (a confirmed
 gap noted when Billing shipped) -- now rendering all 5 buckets with
 the real activation invoice correctly showing as "Current / not yet
-due" ($3,270.00). The only 404s seen were for not-yet-converted
-modules (Announcements, Dashboard, Documents) -- none from Contracts,
-Job Orders, Service Records, Excess Usage, Billing, or Accounts
-Receivable's own endpoints.
+due" ($3,270.00), and the Purchase Orders / Accounts Payable pages
+showing a PO raised, approved, imported to AP as a matched, auto-
+approved bill, and the AP Aging widget picking it up correctly. The
+only 404s seen were for not-yet-converted modules (Announcements,
+Dashboard, Documents, Chart of Accounts, Payment Vouchers) -- none
+from Contracts, Job Orders, Service Records, Excess Usage, Billing,
+Accounts Receivable, or Accounts Payable's own endpoints.
 
 ## Not yet converted (pending, in rough priority order)
 
@@ -486,18 +534,21 @@ Management above -- model(s) + migration(s) + controller + routes +
 smoke test:
 
 1. **GL posting + Bank step** (`app/services/posting.py`,
+   `app/services/ledger.py`, `app/models/accounting.py`,
+   `app/models/treasury.py`, `app/models/periods.py`,
    `docs/gl-posting-design.md`) -- Chart of Accounts, journal entries,
-   period locking, bank reconciliation. Bumped up in priority: it now
-   blocks two real gaps (invoices aren't posted to the GL; AR-001
-   payment recording can't happen at all without `bank_accounts`).
+   period locking, the Bank Book. Highest priority: it now blocks
+   three real gaps -- invoices aren't posted to the GL; a matched
+   bill's GL posting is one step short; AR-001 (customer receipts) and
+   AP's Payment Vouchers can't be built at all without `bank_accounts`
+   and `accounts`.
 2. Everything else in `backend/app/routers/` not listed above
-   (Quotations, Incidents, Accounts Payable/Purchasing, Inventory/
-   Stock, Reporting/dashboards, Event Logs, Document Control, Periods,
-   Announcements, Software Tasks, Ops Dashboard, Customer Helpdesk
-   Portal, Mobile Web App, Commissions [deferred, per CLAUDE.md]) --
-   lower priority than the Service Operations core above, since that
-   core is what CLAUDE.md's Status section calls out as the one
-   working slice today.
+   (Quotations, Incidents, Inventory/Stock, Reporting/dashboards,
+   Event Logs, Document Control, Announcements, Software Tasks, Ops
+   Dashboard, Customer Helpdesk Portal, Mobile Web App, Commissions
+   [deferred, per CLAUDE.md]) -- lower priority than the Service
+   Operations core above, since that core is what CLAUDE.md's Status
+   section calls out as the one working slice today.
 
 ## Running the PHP backend locally
 

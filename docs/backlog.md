@@ -21,25 +21,32 @@ shipped and when.
   (SRV-003/004/007/015, the approval queue + Job Order auto-close, 24
   dedicated tests), Excess Usage (SRV-004/011/013 treatment decisions,
   11 dedicated tests), Billing/Invoicing (BILL-001/002/005, SRV-008,
-  GST via TaxCode, 10 dedicated tests), and Accounts Receivable
-  (AR-002 write-offs with the owner/threshold rule, AR-003 dispute
-  flagging, the 5-bucket aging report, 16 dedicated tests), all in a
-  new `backend-php/` app running against its own Postgres database,
-  `backend/` (Python) untouched. Each converted module verified
-  against the real React frontend (proxied at backend-php/ for the
-  check), not just its own tests -- including the Invoices page's
-  Aging widget, previously 404ing, now showing all 5 buckets. Billing
+  GST via TaxCode, 10 dedicated tests), Accounts Receivable (AR-002
+  write-offs with the owner/threshold rule, AR-003 dispute flagging,
+  the 5-bucket aging report, 16 dedicated tests), and Accounts
+  Payable/Purchasing (PUR-001/002/003 -- PO approval, 2-way matching,
+  auto-approval on match, "confirm and import to AP", AP aging, 25
+  dedicated tests), all in a new `backend-php/` app running against
+  its own Postgres database, `backend/` (Python) untouched. Each
+  converted module verified against the real React frontend (proxied
+  at backend-php/ for the check), not just its own tests -- including
+  the Invoices page's Aging widget, previously 404ing, now showing all
+  5 buckets, and the Purchase Orders/Accounts Payable pages. Billing
   closes both known gaps flagged by earlier modules -- contract
   activation now issues its BILL-001 annual invoice (except AD_HOC),
   and a Billable excess-usage decision now issues its SRV-008 invoice,
-  both with GST correctly applied. **Known gaps:** invoices aren't
-  posted to the General Ledger yet, and AR-001 (recording a customer
-  payment) can't happen at all yet -- both genuinely blocked on the
-  still-unconverted GL posting + Bank module (`Payment.bank_account_id`
-  is a required FK into its `bank_accounts` table), not merely
-  deferred for time. Still pending: GL posting + Bank step, and
-  everything else -- converted module by module, same pattern as the
-  Odoo replacement strategy.
+  both with GST correctly applied. Also fixed in passing: a real gap
+  in the earlier CompanyIndividual Management conversion where
+  `is_customer`/`is_supplier` were missing from create/update
+  validation entirely, silently blocking anyone from ever being
+  marked a supplier. **Known gaps:** invoices aren't posted to the
+  General Ledger yet, a matched bill's own GL posting is one step
+  short, and AR-001 (customer receipts) / Payment Vouchers can't
+  happen at all yet -- all genuinely blocked on the still-unconverted
+  GL posting + Bank module (`bank_accounts`/`accounts` don't exist
+  yet), not merely deferred for time. Still pending: GL posting +
+  Bank step, and everything else -- converted module by module, same
+  pattern as the Odoo replacement strategy.
   → [php-conversion-plan.md](php-conversion-plan.md)
 
 ## Waiting on Dennis to pick up (deferred 2026-09-12)
