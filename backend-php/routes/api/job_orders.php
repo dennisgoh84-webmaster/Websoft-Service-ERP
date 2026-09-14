@@ -22,4 +22,11 @@ Route::middleware('auth.jwt')->prefix('job-orders')->group(function () {
     Route::put('/{jobOrder}/milestones/{milestone}', [JobOrderController::class, 'updateMilestone']);
     Route::delete('/{jobOrder}/milestones/{milestone}', [JobOrderController::class, 'deleteMilestone']);
     Route::post('/{jobOrder}/milestones/init-template', [JobOrderController::class, 'initMilestoneTemplate']);
+
+    // NEW FEATURE (not a Python->PHP conversion -- see
+    // docs/backlog.md / docs/planned-work.md): multi-Product selection
+    // + Job Implementation Template import.
+    Route::post('/{jobOrder}/products', [JobOrderController::class, 'addProducts']);
+    Route::post('/{jobOrder}/implementation-tasks/{task}/complete', [JobOrderController::class, 'completeImplementationTask']);
+    Route::post('/{jobOrder}/implementation-tasks/{task}/reopen', [JobOrderController::class, 'reopenImplementationTask']);
 });

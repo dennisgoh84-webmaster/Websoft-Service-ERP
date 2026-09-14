@@ -81,4 +81,20 @@ class JobOrder extends Model
     {
         return $this->hasMany(ServiceRecord::class);
     }
+
+    /**
+     * NEW FEATURE (not a Python->PHP conversion -- see
+     * docs/backlog.md / docs/planned-work.md): "Job Order - To allow
+     * choosing of multiple Products". See App\Models\JobOrderProduct.
+     */
+    public function products(): HasMany
+    {
+        return $this->hasMany(JobOrderProduct::class);
+    }
+
+    /** The checklist copied on from each selected product's Job Implementation Template. */
+    public function implementationTasks(): HasMany
+    {
+        return $this->hasMany(JobOrderImplementationTask::class)->orderBy('sort_order');
+    }
 }

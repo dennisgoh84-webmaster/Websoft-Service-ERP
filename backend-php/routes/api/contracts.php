@@ -15,4 +15,10 @@ Route::middleware('auth.jwt')->prefix('contracts')->group(function () {
     Route::post('/{contract}/activate', [ContractController::class, 'activate']);
     Route::post('/{contract}/renew', [ContractController::class, 'renew']);
     Route::get('/{contract}/excess-usage', [ContractController::class, 'excessUsage']);
+
+    // NEW FEATURE (not a Python->PHP conversion -- see
+    // docs/backlog.md / docs/planned-work.md).
+    Route::post('/{contract}/quotation-reference', [ContractController::class, 'setQuotationReference']);
+    Route::post('/{contract}/shared-customers', [ContractController::class, 'addSharedCustomer']);
+    Route::delete('/{contract}/shared-customers/{sharedCustomer}', [ContractController::class, 'removeSharedCustomer']);
 });

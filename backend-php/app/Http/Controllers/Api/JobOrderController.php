@@ -3,15 +3,20 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
+use App\Exceptions\ContractRuleViolation;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Contract;
 use App\Models\JobOrder;
+use App\Models\JobOrderImplementationTask;
+use App\Models\JobOrderProduct;
+use App\Models\Product;
 use App\Models\ProjectMilestone;
 use App\Models\ServiceRecord;
 use App\Models\User;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\JobOrderImplementationTaskService;
 use App\Services\Numbering;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -43,7 +48,7 @@ class JobOrderController extends Controller
 
     private function jobOrderOrFail(string $companyId, string $jobOrderId): JobOrder
     {
-        $jobOrder = JobOrder::with('milestones')->find($jobOrderId);
+        $jobOrder = JobOrder::with(['milestones', 'products.product', 'implementationTasks'])->find($jobOrderId);
         if (! $jobOrder || $jobOrder->company_id !== $companyId) {
             throw new ApiException(404, 'Job order not found');
         }
@@ -110,6 +115,30 @@ class JobOrderController extends Controller
             'closed_at' => $jobOrder->closed_at,
             'milestones' => $jobOrder->milestones->map(fn ($m) => $this->presentMilestone($m))->values(),
             'budget_overrun' => $this->computeBudgetOverrun($jobOrder),
+            // NEW FEATURE (not a Python->PHP conversion) -- see
+            // docs/backlog.md / docs/planned-work.md: "Job Order - To
+            // allow choosing of multiple Products and Template to
+            // import according to Product".
+            'products' => $jobOrder->products->map(fn (JobOrderProduct $p) => [
+                'product_id' => $p->product_id,
+                'product_name' => $p->product?->name,
+            ])->values(),
+            'implementation_tasks' => $jobOrder->implementationTasks->map(fn ($t) => $this->presentImplementationTask($t))->values(),
+        ];
+    }
+
+    private function presentImplementationTask(JobOrderImplementationTask $t): array
+    {
+        return [
+            'id' => $t->id,
+            'job_order_id' => $t->job_order_id,
+            'source_product_id' => $t->source_product_id,
+            'task_name' => $t->task_name,
+            'description' => $t->description,
+            'sort_order' => $t->sort_order,
+            'status' => $t->status,
+            'completed_by_user_id' => $t->completed_by_user_id,
+            'completed_at' => optional($t->completed_at)->toIso8601String(),
         ];
     }
 
@@ -145,33 +174,69 @@ class JobOrderController extends Controller
             'priority' => 'sometimes|in:low,normal,high,critical',
             'due_date' => 'sometimes|nullable|date',
             'is_urgent' => 'sometimes|boolean',
+            // NEW FEATURE (not a Python->PHP conversion) -- see
+            // docs/backlog.md / docs/planned-work.md.
+            'product_ids' => 'sometimes|array',
+            'product_ids.*' => 'uuid',
         ]);
         $data['job_order_type'] ??= JobOrder::TYPE_SUPPORT;
         $data['priority'] ??= JobOrder::PRIORITY_NORMAL;
         $data['is_urgent'] ??= false;
+        $productIds = $data['product_ids'] ?? [];
+        unset($data['product_ids']);
 
-        $jobOrder = DB::transaction(function () use ($data, $user) {
-            $jobOrder = JobOrder::create(array_merge($data, [
-                'company_id' => $user->company_id,
-                'job_order_number' => Numbering::next($user->company_id, 'job_order'),
-            ]));
+        // NEW FEATURE (not a Python->PHP conversion): "Service
+        // Contract - ... When opening of Job Orders, have to check
+        // according to this [shared-hours] company list included."
+        // The Job Order's customer must be the contract's own primary
+        // customer, or on that contract's independent shared-hours
+        // list -- see App\Models\Contract::allowsCustomer().
+        $contract = Contract::find($data['contract_id']);
+        if (! $contract || $contract->company_id !== $user->company_id) {
+            throw new ApiException(404, 'Contract not found');
+        }
+        if (! $contract->allowsCustomer($data['customer_id'])) {
+            throw new ApiException(422, 'This company / individual is not the contract\'s own customer and is not on its shared-hours list.');
+        }
 
-            // Auto-create milestone schedule template for PROJECT type.
-            if ($data['job_order_type'] === JobOrder::TYPE_PROJECT) {
-                foreach (self::PROJECT_MILESTONE_TEMPLATE as [$mtype, $label, $sortOrder]) {
-                    ProjectMilestone::create([
-                        'job_order_id' => $jobOrder->id,
-                        'milestone_type' => $mtype,
-                        'label' => $label,
-                        'sort_order' => $sortOrder,
-                    ]);
+        try {
+            $jobOrder = DB::transaction(function () use ($data, $user, $productIds) {
+                $jobOrder = JobOrder::create(array_merge($data, [
+                    'company_id' => $user->company_id,
+                    'job_order_number' => Numbering::next($user->company_id, 'job_order'),
+                ]));
+
+                // Auto-create milestone schedule template for PROJECT type.
+                if ($data['job_order_type'] === JobOrder::TYPE_PROJECT) {
+                    foreach (self::PROJECT_MILESTONE_TEMPLATE as [$mtype, $label, $sortOrder]) {
+                        ProjectMilestone::create([
+                            'job_order_id' => $jobOrder->id,
+                            'milestone_type' => $mtype,
+                            'label' => $label,
+                            'sort_order' => $sortOrder,
+                        ]);
+                    }
                 }
-            }
 
-            return $jobOrder;
-        });
+                foreach ($productIds as $productId) {
+                    $product = Product::find($productId);
+                    if ($product === null || $product->company_id !== $user->company_id) {
+                        throw new ContractRuleViolation('Unknown product selected on this job order.');
+                    }
+                    JobOrderProduct::create(['job_order_id' => $jobOrder->id, 'product_id' => $productId]);
+                }
+                // "Selecting that Product on a Job Order copies the
+                // checklist onto the Job Order as tasks" -- see
+                // App\Services\JobOrderImplementationTaskService.
+                JobOrderImplementationTaskService::importFromProducts($jobOrder, $productIds);
 
-        return response()->json($this->present($jobOrder->fresh('milestones')));
+                return $jobOrder;
+            });
+        } catch (ContractRuleViolation $e) {
+            throw new ApiException(422, $e->getMessage());
+        }
+
+        return response()->json($this->present($this->jobOrderOrFail($user->company_id, $jobOrder->id)));
     }
 
     public function index(Request $request)
@@ -179,7 +244,7 @@ class JobOrderController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $query = JobOrder::with('milestones')->where('company_id', $user->company_id);
+        $query = JobOrder::with(['milestones', 'products.product', 'implementationTasks'])->where('company_id', $user->company_id);
         if ($request->filled('status')) {
             $query->where('status', $request->query('status'));
         }
@@ -494,5 +559,94 @@ class JobOrderController extends Controller
         );
 
         return $milestones->map(fn ($m) => $this->presentMilestone($m))->values();
+    }
+
+    // ---- Multi-Product selection + Job Implementation Template import ----
+    // NEW FEATURE (not a Python->PHP conversion) -- see
+    // docs/backlog.md / docs/planned-work.md.
+
+    /**
+     * Adds products to an already-created Job Order (on top of
+     * whatever was selected at creation) and imports each newly-added
+     * product's Job Implementation Template tasks. Already-linked
+     * products are ignored, not duplicated -- see
+     * App\Services\JobOrderImplementationTaskService::importFromProducts()
+     * for the dedupe rule.
+     */
+    public function addProducts(Request $request, string $jobOrderId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $jobOrder = $this->jobOrderOrFail($user->company_id, $jobOrderId);
+        $data = $request->validate([
+            'product_ids' => 'required|array|min:1',
+            'product_ids.*' => 'uuid',
+        ]);
+
+        $alreadyLinked = JobOrderProduct::where('job_order_id', $jobOrder->id)->pluck('product_id')->all();
+        $newProductIds = array_values(array_diff($data['product_ids'], $alreadyLinked));
+
+        DB::transaction(function () use ($jobOrder, $newProductIds, $user) {
+            foreach ($newProductIds as $productId) {
+                $product = Product::find($productId);
+                if ($product === null || $product->company_id !== $user->company_id) {
+                    throw new ApiException(404, 'Unknown product');
+                }
+                JobOrderProduct::create(['job_order_id' => $jobOrder->id, 'product_id' => $productId]);
+            }
+            $added = JobOrderImplementationTaskService::importFromProducts($jobOrder, $newProductIds);
+            if (! empty($newProductIds)) {
+                Audit::record(
+                    'job_order', $jobOrder->id, 'products_added', $user->id,
+                    details: count($newProductIds).' product(s), '.$added.' implementation task(s) imported',
+                    newValue: ['product_ids' => $newProductIds],
+                );
+            }
+        });
+
+        return response()->json($this->present($this->jobOrderOrFail($user->company_id, $jobOrder->id)));
+    }
+
+    private function implementationTaskOrFail(JobOrder $jobOrder, string $taskId): JobOrderImplementationTask
+    {
+        $task = JobOrderImplementationTask::find($taskId);
+        if (! $task || $task->job_order_id !== $jobOrder->id) {
+            throw new ApiException(404, 'Implementation task not found');
+        }
+
+        return $task;
+    }
+
+    /** 7.3-style gate, mirroring milestone completion: Sales Manager or Owner only. */
+    public function completeImplementationTask(Request $request, string $jobOrderId, string $taskId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+        if (! JobOrderImplementationTaskService::canComplete($user)) {
+            throw new ApiException(403, 'Only Sales Manager or Owner can mark an implementation task as Completed.');
+        }
+
+        $jobOrder = $this->jobOrderOrFail($user->company_id, $jobOrderId);
+        $task = $this->implementationTaskOrFail($jobOrder, $taskId);
+
+        JobOrderImplementationTaskService::markCompleted($task, $user);
+        Audit::record('job_order_implementation_task', $task->id, 'completed', $user->id, details: $task->task_name);
+
+        return response()->json($this->presentImplementationTask($task->fresh()));
+    }
+
+    public function reopenImplementationTask(Request $request, string $jobOrderId, string $taskId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $jobOrder = $this->jobOrderOrFail($user->company_id, $jobOrderId);
+        $task = $this->implementationTaskOrFail($jobOrder, $taskId);
+
+        JobOrderImplementationTaskService::markPending($task);
+        Audit::record('job_order_implementation_task', $task->id, 'reopened', $user->id, details: $task->task_name);
+
+        return response()->json($this->presentImplementationTask($task->fresh()));
     }
 }

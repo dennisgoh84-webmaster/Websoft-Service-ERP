@@ -44,6 +44,13 @@ export default function ContractsPage() {
   const [filterProduct, setFilterProduct] = useState('')
   const [filterCoverageStart, setFilterCoverageStart] = useState('')
   const [filterCoverageEnd, setFilterCoverageEnd] = useState('')
+  // NEW FEATURE (not a Python->PHP conversion) -- see
+  // docs/backlog.md / docs/planned-work.md: "Service Contract -
+  // Require to be able to filter out less than (Flexible) Number of
+  // Hours, require filter by Expiry Date Range".
+  const [filterRemainingHoursLt, setFilterRemainingHoursLt] = useState('')
+  const [filterExpiryFrom, setFilterExpiryFrom] = useState('')
+  const [filterExpiryTo, setFilterExpiryTo] = useState('')
 
   function refresh() {
     api
@@ -55,6 +62,9 @@ export default function ContractsPage() {
         product_id: filterProduct || undefined,
         coverage_start: filterCoverageStart || undefined,
         coverage_end: filterCoverageEnd || undefined,
+        remaining_hours_lt: filterRemainingHoursLt ? Number(filterRemainingHoursLt) : undefined,
+        expiry_from: filterExpiryFrom || undefined,
+        expiry_to: filterExpiryTo || undefined,
       })
       .then(setContracts)
     api.listCompanyIndividuals().then(setCustomers)
@@ -62,7 +72,10 @@ export default function ContractsPage() {
     api.listCatalog().then(setProducts)
   }
 
-  useEffect(refresh, [filterStatus, filterCompanyIndividual, filterKind, filterSalesStaff, filterProduct, filterCoverageStart, filterCoverageEnd])
+  useEffect(refresh, [
+    filterStatus, filterCompanyIndividual, filterKind, filterSalesStaff, filterProduct,
+    filterCoverageStart, filterCoverageEnd, filterRemainingHoursLt, filterExpiryFrom, filterExpiryTo,
+  ])
 
   const customerName = (id: string) => customers.find((c) => c.id === id)?.name ?? id.slice(0, 8)
   const staffName = (id: string | null) => (id ? staff.find((s) => s.id === id)?.full_name ?? id.slice(0, 8) : '-')
@@ -75,6 +88,9 @@ export default function ContractsPage() {
     setFilterProduct('')
     setFilterCoverageStart('')
     setFilterCoverageEnd('')
+    setFilterRemainingHoursLt('')
+    setFilterExpiryFrom('')
+    setFilterExpiryTo('')
   }
 
   async function onCreate(e: FormEvent) {
@@ -108,6 +124,9 @@ export default function ContractsPage() {
       product_id: filterProduct || undefined,
       coverage_start: filterCoverageStart || undefined,
       coverage_end: filterCoverageEnd || undefined,
+      remaining_hours_lt: filterRemainingHoursLt || undefined,
+      expiry_from: filterExpiryFrom || undefined,
+      expiry_to: filterExpiryTo || undefined,
     }
     const blob = format === 'csv' ? await api.exportContractsCsv(filters) : await api.exportContractsExcel(filters)
     downloadBlob(blob, `contracts.${format === 'csv' ? 'csv' : 'xlsx'}`)
@@ -279,6 +298,26 @@ export default function ContractsPage() {
               value={isoToMonth(filterCoverageEnd)}
               onChange={(e) => setFilterCoverageEnd(monthEndISO(e.target.value))}
             />
+          </div>
+          <div className="form-row" style={{ margin: 0 }}>
+            <label>Remaining hours less than</label>
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              style={{ width: 90 }}
+              value={filterRemainingHoursLt}
+              onChange={(e) => setFilterRemainingHoursLt(e.target.value)}
+              placeholder="Any"
+            />
+          </div>
+          <div className="form-row" style={{ margin: 0 }}>
+            <label>Expiry from</label>
+            <input type="date" value={filterExpiryFrom} onChange={(e) => setFilterExpiryFrom(e.target.value)} />
+          </div>
+          <div className="form-row" style={{ margin: 0 }}>
+            <label>Expiry to</label>
+            <input type="date" value={filterExpiryTo} onChange={(e) => setFilterExpiryTo(e.target.value)} />
           </div>
           <button type="button" className="secondary" onClick={resetFilters}>
             Reset filters

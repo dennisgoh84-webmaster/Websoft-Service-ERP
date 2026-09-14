@@ -15,6 +15,24 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * file's docstring for why contracted_minutes/consumed_minutes are
  * stored in minutes, not hours (avoids float rounding issues with the
  * SRV-007 15-minute rounding rule).
+ *
+ * NEW FEATURE FIELDS (not part of the Python->PHP conversion -- built
+ * directly in backend-php per Dennis's request, see docs/backlog.md /
+ * docs/planned-work.md):
+ * - `quotation_reference` (+ its set_at/set_by pair): "Service
+ *   Contract - To be able to link to Sales Quotation upon Renewal or
+ *   Expired". PRAGMATIC DEFAULT / KNOWN GAP, flagged for Dennis's
+ *   confirmation rather than silently assumed: a real Sales Quotation
+ *   module exists in backend/ (Python) but has NOT been converted to
+ *   backend-php yet, and this work is scoped to backend-php only, so
+ *   this is a plain free-text reference a human types in -- NOT a
+ *   real linked/validated record. Settable via
+ *   App\Http\Controllers\Api\ContractController::setQuotationReference()
+ *   while the contract is Renewed or Expired, or inline on ::renew().
+ *   Replace with a real foreign key once Quotations is converted.
+ * - `sharedCustomers()` below: "Service Contract - To have selection
+ *   of Sharing of Hours with multiple company". See
+ *   App\Models\ContractSharedCustomer.
  */
 class Contract extends Model
 {
@@ -57,6 +75,9 @@ class Contract extends Model
         'company_id', 'customer_id', 'contract_number', 'status', 'contract_kind',
         'contracted_minutes', 'consumed_minutes', 'contract_value_sgd', 'hourly_rate_sgd',
         'sales_staff_id', 'start_date', 'end_date', 'renewed_from_contract_id', 'activated_at',
+        // NEW FEATURE (not a Python->PHP conversion) -- see this
+        // class's quotation_reference note below.
+        'quotation_reference', 'quotation_reference_set_at', 'quotation_reference_set_by',
     ];
 
     // Money fields use 'decimal:2' (not 'float') because the service
@@ -73,6 +94,7 @@ class Contract extends Model
         'end_date' => 'date',
         'created_at' => 'datetime',
         'activated_at' => 'datetime',
+        'quotation_reference_set_at' => 'datetime',
     ];
 
     public function company(): BelongsTo
@@ -93,6 +115,27 @@ class Contract extends Model
     public function excessUsageRecords(): HasMany
     {
         return $this->hasMany(ExcessUsageRecord::class);
+    }
+
+    /** NEW FEATURE (not a Python->PHP conversion) -- see this class's docblock. */
+    public function sharedCustomers(): HasMany
+    {
+        return $this->hasMany(ContractSharedCustomer::class);
+    }
+
+    /**
+     * SRV-004-adjacent hour-sharing rule: a Job Order may be opened
+     * against this contract for its own primary customer, OR for any
+     * customer on its independent shared-hours list -- never any other
+     * customer. See App\Http\Controllers\Api\JobOrderController::store().
+     */
+    public function allowsCustomer(string $customerId): bool
+    {
+        if ($this->customer_id === $customerId) {
+            return true;
+        }
+
+        return $this->sharedCustomers()->where('customer_id', $customerId)->exists();
     }
 
     public function renewedFrom(): BelongsTo

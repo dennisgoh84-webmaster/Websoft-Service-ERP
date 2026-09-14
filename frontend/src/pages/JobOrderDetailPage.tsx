@@ -6,6 +6,7 @@ import {
   type ServiceRecord,
   type ServiceRecordCompletion,
   type JobOrder,
+  type Product,
 } from '../lib/api'
 import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ProjectSchedulePanel from '../components/ProjectSchedulePanel'
@@ -21,6 +22,14 @@ export default function JobOrderDetailPage() {
   const [users, setUsers] = useState<CurrentUser[]>([])
   const [error, setError] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
+  // NEW FEATURE (not a Python->PHP conversion) -- see
+  // docs/backlog.md / docs/planned-work.md: "Job Order - To allow
+  // choosing of multiple Products and Template to import according to
+  // Product".
+  const [catalog, setCatalog] = useState<Product[]>([])
+  const [productToAdd, setProductToAdd] = useState('')
+  const [addingProduct, setAddingProduct] = useState(false)
+  const [savingTaskId, setSavingTaskId] = useState<string | null>(null)
 
   const [assignee, setAssignee] = useState('')
   const [employee, setEmployee] = useState('')
@@ -39,11 +48,46 @@ export default function JobOrderDetailPage() {
     })
     api.listServiceRecords({ job_order_id: id }).then(setRecords)
     api.listUsers().then(setUsers)
+    api.listCatalog().then(setCatalog)
   }
 
   useEffect(refresh, [id])
 
   const userName = (uid: string | null) => users.find((u) => u.id === uid)?.full_name ?? '-'
+
+  async function onAddProducts(e: FormEvent) {
+    e.preventDefault()
+    if (!id || !productToAdd) return
+    setError(null)
+    setAddingProduct(true)
+    try {
+      await api.addJobOrderProducts(id, [productToAdd])
+      setProductToAdd('')
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add product')
+    } finally {
+      setAddingProduct(false)
+    }
+  }
+
+  async function onToggleImplementationTask(taskId: string, completed: boolean) {
+    if (!id) return
+    setError(null)
+    setSavingTaskId(taskId)
+    try {
+      if (completed) {
+        await api.reopenJobOrderImplementationTask(id, taskId)
+      } else {
+        await api.completeJobOrderImplementationTask(id, taskId)
+      }
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update task')
+    } finally {
+      setSavingTaskId(null)
+    }
+  }
 
   async function onAssign(e: FormEvent) {
     e.preventDefault()
@@ -388,6 +432,74 @@ export default function JobOrderDetailPage() {
           onRefresh={refresh}
         />
       )}
+
+      <div className="card">
+        <h2>Products &amp; Job Implementation Tasks</h2>
+        <p className="muted" style={{ marginTop: -6 }}>
+          Each selected product's Job Implementation Template is copied onto this job order as
+          tasks. Only Sales Manager or Owner can mark a task Completed.
+        </p>
+        <p>
+          {jobOrder.products.length > 0
+            ? jobOrder.products.map((p) => p.product_name).join(', ')
+            : <span className="muted">No products selected.</span>}
+        </p>
+        {isOpenOrAssigned && (
+          <form onSubmit={onAddProducts} className="form-row" style={{ margin: 0, marginBottom: 10 }}>
+            <select value={productToAdd} onChange={(e) => setProductToAdd(e.target.value)}>
+              <option value="">Add a product...</option>
+              {catalog
+                .filter((p) => !jobOrder.products.some((jp) => jp.product_id === p.id))
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+            </select>
+            <button type="submit" className="secondary" disabled={addingProduct || !productToAdd}>
+              {addingProduct ? 'Adding...' : 'Add product'}
+            </button>
+          </form>
+        )}
+        <table>
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Description</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {jobOrder.implementation_tasks.map((t) => (
+              <tr key={t.id}>
+                <td>{t.task_name}</td>
+                <td className="muted">{t.description ?? '-'}</td>
+                <td>
+                  <span className={`badge ${t.status === 'completed' ? 'active' : 'draft'}`}>{t.status}</span>
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={savingTaskId === t.id}
+                    onClick={() => onToggleImplementationTask(t.id, t.status === 'completed')}
+                  >
+                    {t.status === 'completed' ? 'Reopen' : 'Mark completed'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {jobOrder.implementation_tasks.length === 0 && (
+              <tr>
+                <td colSpan={4} className="muted">
+                  No implementation tasks -- select a product with a Job Implementation Template.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <div className="card">
         <h2>Service Records</h2>

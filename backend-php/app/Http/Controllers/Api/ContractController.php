@@ -6,8 +6,10 @@ use App\Exceptions\ApiException;
 use App\Exceptions\ContractRuleViolation;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
+use App\Models\CompanyIndividual;
 use App\Models\Contract;
 use App\Models\ContractProduct;
+use App\Models\ContractSharedCustomer;
 use App\Models\ExcessUsageRecord;
 use App\Models\Product;
 use App\Services\Audit;
@@ -31,7 +33,7 @@ class ContractController extends Controller
 
     private function contractOrFail(string $companyId, string $contractId): Contract
     {
-        $contract = Contract::with('products.product')->find($contractId);
+        $contract = Contract::with(['products.product', 'sharedCustomers.customer'])->find($contractId);
         if (! $contract || $contract->company_id !== $companyId) {
             throw new ApiException(404, 'Contract not found');
         }
@@ -62,6 +64,15 @@ class ContractController extends Controller
                 'license_type' => $cp->license_type,
                 'number_of_licenses' => $cp->number_of_licenses,
             ])->values(),
+            // NEW FEATURE (not a Python->PHP conversion) -- see
+            // docs/backlog.md / docs/planned-work.md.
+            'shared_customers' => $contract->sharedCustomers->map(fn (ContractSharedCustomer $sc) => [
+                'id' => $sc->id,
+                'customer_id' => $sc->customer_id,
+                'customer_name' => $sc->customer?->name,
+            ])->values(),
+            'quotation_reference' => $contract->quotation_reference,
+            'quotation_reference_set_at' => optional($contract->quotation_reference_set_at)->toIso8601String(),
         ];
     }
 
@@ -128,6 +139,31 @@ class ContractController extends Controller
         }
         if ($request->filled('coverage_end')) {
             $query->where('start_date', '<=', $request->query('coverage_end'));
+        }
+        // NEW FEATURE (not a Python->PHP conversion -- see
+        // docs/backlog.md / docs/planned-work.md): "Service Contract -
+        // Require to be able to filter out less than (Flexible) Number
+        // of Hours, require filter by Expiry Date Range".
+        //
+        // remaining_hours_lt: a flexible numeric threshold on the SAME
+        // remaining-hours figure the contract detail page already
+        // shows (Contract::remainingMinutes() = GREATEST(contracted -
+        // consumed, 0), never negative) -- computed here as raw SQL so
+        // it can be compared inside the query rather than in PHP after
+        // fetching every row.
+        if ($request->filled('remaining_hours_lt')) {
+            $thresholdMinutes = (float) $request->query('remaining_hours_lt') * 60;
+            $query->whereRaw('GREATEST(contracted_minutes - consumed_minutes, 0) < ?', [$thresholdMinutes]);
+        }
+        // expiry_from/expiry_to: the contract's OWN end_date falling in
+        // this range -- distinct from coverage_start/coverage_end above
+        // (which finds contracts covering a period, i.e. an overlap
+        // test); this is specifically "when does this contract expire".
+        if ($request->filled('expiry_from')) {
+            $query->where('end_date', '>=', $request->query('expiry_from'));
+        }
+        if ($request->filled('expiry_to')) {
+            $query->where('end_date', '<=', $request->query('expiry_to'));
         }
 
         return $query->orderBy('end_date')->get();
@@ -271,22 +307,124 @@ class ContractController extends Controller
             'contract_value_sgd' => 'required|numeric|min:0',
             'force_start_date' => 'sometimes|nullable|date',
             'hourly_rate_sgd' => 'sometimes|nullable|numeric|gt:0',
+            // NEW FEATURE (not a Python->PHP conversion) -- see
+            // docs/backlog.md / docs/planned-work.md: "Service
+            // Contract - To be able to link to Sales Quotation upon
+            // Renewal or Expired". KNOWN GAP / pragmatic default:
+            // free text only -- see Contract's class docblock.
+            'quotation_reference' => 'sometimes|nullable|string|max:50',
         ]);
 
         try {
-            $newContract = DB::transaction(fn () => ContractService::renewContract(
-                priorContract: $prior,
-                contractedHours: (float) $data['contracted_hours'],
-                contractValueSgd: (float) $data['contract_value_sgd'],
-                actorUserId: $user->id,
-                forceStartDate: $data['force_start_date'] ?? null,
-                hourlyRateSgd: isset($data['hourly_rate_sgd']) ? (float) $data['hourly_rate_sgd'] : null,
-            ));
+            $newContract = DB::transaction(function () use ($prior, $data, $user) {
+                $newContract = ContractService::renewContract(
+                    priorContract: $prior,
+                    contractedHours: (float) $data['contracted_hours'],
+                    contractValueSgd: (float) $data['contract_value_sgd'],
+                    actorUserId: $user->id,
+                    forceStartDate: $data['force_start_date'] ?? null,
+                    hourlyRateSgd: isset($data['hourly_rate_sgd']) ? (float) $data['hourly_rate_sgd'] : null,
+                );
+                // The quotation reference belongs on the PRIOR
+                // contract -- renewContract() has just transitioned it
+                // to RENEWED in this same transaction, and it's the
+                // one the renewal quotation was raised against.
+                if (! empty($data['quotation_reference'])) {
+                    ContractService::setQuotationReference($prior, $data['quotation_reference'], $user->id);
+                }
+
+                return $newContract;
+            });
         } catch (ContractRuleViolation $e) {
             throw new ApiException(422, $e->getMessage());
         }
 
         return response()->json($this->present($newContract->fresh('products.product')));
+    }
+
+    /**
+     * NEW FEATURE (not a Python->PHP conversion) -- see
+     * docs/backlog.md / docs/planned-work.md. Settable directly (not
+     * only inline on ::renew()) once the contract has transitioned to
+     * Renewed or Expired -- see App\Services\ContractService::setQuotationReference().
+     */
+    public function setQuotationReference(Request $request, string $contractId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $contract = $this->contractOrFail($user->company_id, $contractId);
+        $data = $request->validate(['quotation_reference' => 'required|string|max:50']);
+
+        try {
+            ContractService::setQuotationReference($contract, $data['quotation_reference'], $user->id);
+        } catch (ContractRuleViolation $e) {
+            throw new ApiException(422, $e->getMessage());
+        }
+
+        return response()->json($this->present($contract->fresh('products.product')));
+    }
+
+    // ---- Hour-sharing customer list -----------------------------------
+    // NEW FEATURE (not a Python->PHP conversion -- see
+    // docs/backlog.md / docs/planned-work.md): "Service Contract - To
+    // have selection of Sharing of Hours with multiple company even
+    // not in the related company file". Deliberately independent of
+    // App\Models\CompanyIndividualRelationship -- see
+    // App\Models\ContractSharedCustomer's docblock.
+
+    public function addSharedCustomer(Request $request, string $contractId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $contract = $this->contractOrFail($user->company_id, $contractId);
+        $data = $request->validate(['customer_id' => 'required|uuid']);
+
+        $customer = CompanyIndividual::find($data['customer_id']);
+        if (! $customer || $customer->company_id !== $user->company_id) {
+            throw new ApiException(404, 'Company / Individual not found');
+        }
+        if ($customer->id === $contract->customer_id) {
+            throw new ApiException(422, 'That is already this contract\'s own customer.');
+        }
+        if (ContractSharedCustomer::where('contract_id', $contract->id)->where('customer_id', $customer->id)->exists()) {
+            throw new ApiException(422, 'That company / individual is already on this contract\'s shared-hours list.');
+        }
+
+        $shared = ContractSharedCustomer::create([
+            'contract_id' => $contract->id,
+            'customer_id' => $customer->id,
+            'added_by_user_id' => $user->id,
+        ]);
+        Audit::record(
+            'contract', $contract->id, 'shared_customer_added', $user->id,
+            details: "{$contract->contract_number}: +{$customer->name}",
+            newValue: ['customer_id' => $customer->id, 'customer_name' => $customer->name],
+        );
+
+        return response()->json($this->present($contract->fresh(['products.product', 'sharedCustomers.customer'])));
+    }
+
+    public function removeSharedCustomer(Request $request, string $contractId, string $sharedCustomerId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $contract = $this->contractOrFail($user->company_id, $contractId);
+        $shared = ContractSharedCustomer::find($sharedCustomerId);
+        if (! $shared || $shared->contract_id !== $contract->id) {
+            throw new ApiException(404, 'Shared-hours entry not found');
+        }
+
+        Audit::record(
+            'contract', $contract->id, 'shared_customer_removed', $user->id,
+            details: "{$contract->contract_number}: -{$shared->customer?->name}",
+            oldValue: ['customer_id' => $shared->customer_id],
+        );
+        $shared->delete();
+
+        return response()->json($this->present($contract->fresh(['products.product', 'sharedCustomers.customer'])));
     }
 
     public function excessUsage(Request $request, string $contractId)

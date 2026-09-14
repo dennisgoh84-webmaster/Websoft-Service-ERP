@@ -8,6 +8,7 @@ use App\Models\ContractProduct;
 use App\Models\ExpiredHoursRecord;
 use App\Models\Product;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * Service Contracts business logic -- the single place that enforces
@@ -256,5 +257,98 @@ class ContractService
         );
 
         return $newContract;
+    }
+
+    /**
+     * NEW FEATURE (not a Python->PHP conversion -- see
+     * docs/backlog.md / docs/planned-work.md): "Service Contract - To
+     * be able to link to Sales Quotation upon Renewal or Expired".
+     * PRAGMATIC DEFAULT / KNOWN GAP -- see App\Models\Contract's
+     * docblock: this stores a free-text reference only, settable once
+     * the contract has actually transitioned to Renewed or Expired
+     * (matching the feature request's own wording), not at any other
+     * point in its lifecycle. Always audit-logged.
+     */
+    public static function setQuotationReference(Contract $contract, string $quotationReference, string $actorUserId): Contract
+    {
+        if (! in_array($contract->status, [Contract::STATUS_RENEWED, Contract::STATUS_EXPIRED], true)) {
+            throw new ContractRuleViolation(
+                'A Sales Quotation reference can only be recorded once the contract has transitioned to '
+                .'Renewed or Expired.'
+            );
+        }
+
+        $old = $contract->quotation_reference;
+        $contract->quotation_reference = trim($quotationReference);
+        $contract->quotation_reference_set_at = Carbon::now('UTC');
+        $contract->quotation_reference_set_by = $actorUserId;
+        $contract->save();
+
+        Audit::record(
+            'contract', $contract->id, 'quotation_reference_set', $actorUserId,
+            oldValue: ['quotation_reference' => $old],
+            newValue: ['quotation_reference' => $contract->quotation_reference],
+        );
+
+        return $contract;
+    }
+
+    /**
+     * NEW FEATURE (not a Python->PHP conversion -- see
+     * docs/backlog.md / docs/planned-work.md): "Contract due for
+     * renewal Listing" -- reuses needsPreExpiryCheck()'s SRV-014
+     * 30-day pre-expiry window exactly, so this listing and the
+     * contract detail page's own "needs a pre-expiry check" flag can
+     * never disagree.
+     *
+     * @return Collection<int, Contract>
+     */
+    public static function dueForRenewal(string $companyId, ?string $asOf = null)
+    {
+        return Contract::with('products.product')
+            ->where('company_id', $companyId)
+            ->whereIn('status', [Contract::STATUS_ACTIVE, Contract::STATUS_EXCEEDED])
+            ->get()
+            ->filter(fn (Contract $c) => self::needsPreExpiryCheck($c, $asOf))
+            ->sortBy('end_date')
+            ->values();
+    }
+
+    /**
+     * NEW FEATURE (not a Python->PHP conversion -- see
+     * docs/backlog.md / docs/planned-work.md): "Contract Expiry
+     * Listing" -- contracts expiring within a date range, OR already
+     * expired (the two conditions are OR'd -- an already-expired
+     * contract should always show here, whether or not its end_date
+     * happens to fall inside the given window). PRAGMATIC DEFAULT: when
+     * neither $from nor $to is given, defaults to a 90-day-forward
+     * window from today so the report stays bounded rather than
+     * dumping every contract ever created -- documented here per
+     * CLAUDE.md, not a confirmed rule.
+     *
+     * @return Collection<int, Contract>
+     */
+    public static function expiryListing(string $companyId, ?string $from = null, ?string $to = null)
+    {
+        if ($from === null && $to === null) {
+            $from = Carbon::today()->toDateString();
+            $to = Carbon::today()->addDays(90)->toDateString();
+        }
+
+        return Contract::with('products.product')
+            ->where('company_id', $companyId)
+            ->where(function ($q) use ($from, $to) {
+                $q->where('status', Contract::STATUS_EXPIRED);
+                $q->orWhere(function ($q2) use ($from, $to) {
+                    if ($from !== null) {
+                        $q2->where('end_date', '>=', $from);
+                    }
+                    if ($to !== null) {
+                        $q2->where('end_date', '<=', $to);
+                    }
+                });
+            })
+            ->orderBy('end_date')
+            ->get();
     }
 }

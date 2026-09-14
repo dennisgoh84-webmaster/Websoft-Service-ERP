@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
-import { api, downloadBlob, type Contract, type CompanyIndividual, type JobOrder, type JobOrderPriority, type JobOrderType } from '../lib/api'
+import { api, downloadBlob, type Contract, type CompanyIndividual, type JobOrder, type JobOrderPriority, type JobOrderType, type Product } from '../lib/api'
 
 export default function JobOrdersPage() {
   const [jobOrders, setJobOrders] = useState<JobOrder[]>([])
   const [customers, setCustomers] = useState<CompanyIndividual[]>([])
   const [contracts, setContracts] = useState<Contract[]>([])
+  const [products, setProducts] = useState<Product[]>([])
   const [searchParams] = useSearchParams()
   const preselectedContract = searchParams.get('contract') ?? ''
 
@@ -17,6 +18,11 @@ export default function JobOrdersPage() {
   const [priority, setPriority] = useState<JobOrderPriority>('normal')
   const [dueDate, setDueDate] = useState('')
   const [isUrgent, setIsUrgent] = useState(false)
+  // NEW FEATURE (not a Python->PHP conversion) -- see
+  // docs/backlog.md / docs/planned-work.md: "Job Order - To allow
+  // choosing of multiple Products and Template to import according to
+  // Product".
+  const [productIds, setProductIds] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
 
   // Dynamic filters
@@ -38,6 +44,7 @@ export default function JobOrdersPage() {
       .then(setJobOrders)
     api.listCompanyIndividuals().then(setCustomers)
     api.listContracts().then(setContracts)
+    api.listCatalog().then(setProducts)
   }
 
   useEffect(refresh, [filterStatus, filterPriority, filterCompanyIndividual, filterContract, filterType])
@@ -57,11 +64,13 @@ export default function JobOrdersPage() {
         priority,
         due_date: dueDate || undefined,
         is_urgent: isUrgent,
+        product_ids: productIds,
       })
       setSubject('')
       setJobOrderType('support')
       setDueDate('')
       setIsUrgent(false)
+      setProductIds([])
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create job order')
@@ -131,6 +140,25 @@ export default function JobOrdersPage() {
           <div className="form-row">
             <label>Subject</label>
             <input value={subject} onChange={(e) => setSubject(e.target.value)} required />
+          </div>
+          <div className="form-row">
+            <label>Products (ctrl/cmd-click for more than one)</label>
+            <select
+              multiple
+              size={Math.min(6, Math.max(3, products.length))}
+              value={productIds}
+              onChange={(e) => setProductIds(Array.from(e.target.selectedOptions, (o) => o.value))}
+            >
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <span className="muted" style={{ fontSize: 12 }}>
+              Each product's Job Implementation Template (set on the Product/Service Catalog page)
+              is copied onto this job order as tasks.
+            </span>
           </div>
           <div className="form-row">
             <label>Type</label>

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   api,
+  type CompanyIndividual,
   type Contract,
   type ExcessUsageRecord,
   type Invoice,
@@ -26,11 +27,20 @@ export default function ContractDetailPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [staff, setStaff] = useState<StaffUser[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [customers, setCustomers] = useState<CompanyIndividual[]>([])
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [renewHours, setRenewHours] = useState('10')
   const [renewValue, setRenewValue] = useState('2400')
   const [renewRate, setRenewRate] = useState('150')
+  const [renewQuotationReference, setRenewQuotationReference] = useState('')
+
+  // NEW FEATURE (not a Python->PHP conversion) -- see
+  // docs/backlog.md / docs/planned-work.md.
+  const [quotationReferenceDraft, setQuotationReferenceDraft] = useState('')
+  const [savingQuotationReference, setSavingQuotationReference] = useState(false)
+  const [sharedCustomerToAdd, setSharedCustomerToAdd] = useState('')
+  const [savingSharedCustomer, setSavingSharedCustomer] = useState(false)
 
   const [editingCoverage, setEditingCoverage] = useState(false)
   const [salesStaffId, setSalesStaffId] = useState('')
@@ -57,11 +67,13 @@ export default function ContractDetailPage() {
           ]),
         ),
       )
+      setQuotationReferenceDraft(c.quotation_reference ?? '')
     })
     api.listContractExcessUsage(id).then(setExcessUsage)
     api.listInvoices({ contract_id: id }).then(setInvoices)
     api.listStaff().then(setStaff)
     api.listCatalog().then(setProducts)
+    api.listCompanyIndividuals().then(setCustomers)
   }
 
   useEffect(refresh, [id])
@@ -86,10 +98,57 @@ export default function ContractDetailPage() {
         contracted_hours: parseFloat(renewHours),
         contract_value_sgd: contract.contract_kind === 'ad_hoc' ? 0 : parseFloat(renewValue),
         hourly_rate_sgd: contract.contract_kind === 'ad_hoc' ? parseFloat(renewRate) : null,
+        quotation_reference: renewQuotationReference || undefined,
       })
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to renew')
+    }
+  }
+
+  // NEW FEATURE (not a Python->PHP conversion) -- see
+  // docs/backlog.md / docs/planned-work.md. KNOWN GAP: free-text
+  // stand-in for a real Sales Quotation link -- see Contract's model
+  // docblock in backend-php.
+  async function onSaveQuotationReference(e: FormEvent) {
+    e.preventDefault()
+    if (!id || !quotationReferenceDraft) return
+    setError(null)
+    setSavingQuotationReference(true)
+    try {
+      await api.setContractQuotationReference(id, quotationReferenceDraft)
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to set quotation reference')
+    } finally {
+      setSavingQuotationReference(false)
+    }
+  }
+
+  async function onAddSharedCustomer(e: FormEvent) {
+    e.preventDefault()
+    if (!id || !sharedCustomerToAdd) return
+    setError(null)
+    setSavingSharedCustomer(true)
+    try {
+      await api.addContractSharedCustomer(id, sharedCustomerToAdd)
+      setSharedCustomerToAdd('')
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add shared-hours customer')
+    } finally {
+      setSavingSharedCustomer(false)
+    }
+  }
+
+  async function onRemoveSharedCustomer(sharedCustomerId: string) {
+    if (!id) return
+    setError(null)
+    try {
+      await api.removeContractSharedCustomer(id, sharedCustomerId)
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove shared-hours customer')
     }
   }
 
@@ -369,10 +428,105 @@ export default function ContractDetailPage() {
                 />
               </div>
             )}
+            <div className="form-row">
+              <label>Sales Quotation reference (optional)</label>
+              <input
+                value={renewQuotationReference}
+                onChange={(e) => setRenewQuotationReference(e.target.value)}
+                placeholder="e.g. QUO-2026-0100"
+              />
+            </div>
             <button type="submit">Renew</button>
           </form>
         </div>
       )}
+
+      <div className="card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h2>Sales Quotation reference</h2>
+            <p className="muted" style={{ marginTop: -6 }}>
+              KNOWN GAP: free-text only, not a real linked record -- the Quotations module does not
+              exist in backend-php yet. Settable once this contract has been Renewed or Expired.
+            </p>
+          </div>
+        </div>
+        {contract.quotation_reference && (
+          <p>
+            <strong>{contract.quotation_reference}</strong>
+            {contract.quotation_reference_set_at && (
+              <span className="muted"> -- set {formatDate(contract.quotation_reference_set_at)}</span>
+            )}
+          </p>
+        )}
+        {(contract.status === 'renewed' || contract.status === 'expired') && (
+          <form onSubmit={onSaveQuotationReference} className="form-row" style={{ margin: 0 }}>
+            <input
+              value={quotationReferenceDraft}
+              onChange={(e) => setQuotationReferenceDraft(e.target.value)}
+              placeholder="e.g. QUO-2026-0100"
+            />
+            <button type="submit" disabled={savingQuotationReference || !quotationReferenceDraft}>
+              {savingQuotationReference ? 'Saving...' : 'Save quotation reference'}
+            </button>
+          </form>
+        )}
+        {contract.status !== 'renewed' && contract.status !== 'expired' && !contract.quotation_reference && (
+          <p className="muted">Not set -- only settable once this contract is Renewed or Expired.</p>
+        )}
+      </div>
+
+      <div className="card">
+        <h2>Sharing of Hours</h2>
+        <p className="muted" style={{ marginTop: -6 }}>
+          Other companies / individuals allowed to draw down this contract's pooled hours when
+          opening a Job Order -- independent of any CompanyIndividual Relationship record.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Company / Individual</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {contract.shared_customers.map((sc) => (
+              <tr key={sc.id}>
+                <td>{sc.customer_name}</td>
+                <td>
+                  <button type="button" className="secondary" onClick={() => onRemoveSharedCustomer(sc.id)}>
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {contract.shared_customers.length === 0 && (
+              <tr>
+                <td colSpan={2} className="muted">
+                  None -- only this contract's own Company / Individual can open Job Orders against it.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        <form onSubmit={onAddSharedCustomer} className="form-row" style={{ margin: 0, marginTop: 10 }}>
+          <select value={sharedCustomerToAdd} onChange={(e) => setSharedCustomerToAdd(e.target.value)}>
+            <option value="">Select a company / individual to add...</option>
+            {customers
+              .filter(
+                (c) => c.id !== contract.customer_id && !contract.shared_customers.some((sc) => sc.customer_id === c.id),
+              )
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+          </select>
+          <button type="submit" className="secondary" disabled={savingSharedCustomer || !sharedCustomerToAdd}>
+            {savingSharedCustomer ? 'Adding...' : 'Add to shared-hours list'}
+          </button>
+        </form>
+      </div>
 
       <div className="card">
         <h2>Excess usage (SRV-003 / SRV-004 / SRV-013)</h2>

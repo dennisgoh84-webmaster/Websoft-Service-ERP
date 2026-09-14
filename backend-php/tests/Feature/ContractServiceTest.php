@@ -6,6 +6,7 @@ use App\Exceptions\ContractRuleViolation;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\Contract;
+use App\Models\ContractSharedCustomer;
 use App\Models\User;
 use App\Services\ContractService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -314,5 +315,95 @@ class ContractServiceTest extends TestCase
         ContractService::activateContract($contract, $actorId);
 
         return [$contract, $actorId];
+    }
+
+    // ---- NEW FEATURES (not a Python->PHP conversion) -- see
+    // docs/backlog.md / docs/planned-work.md -----------------------------
+
+    public function test_allows_customer_true_for_the_contracts_own_customer(): void
+    {
+        [$contract] = $this->activeContract();
+
+        $this->assertTrue($contract->allowsCustomer($contract->customer_id));
+    }
+
+    public function test_allows_customer_false_for_an_unrelated_customer(): void
+    {
+        [$contract] = $this->activeContract();
+        $other = CompanyIndividual::factory()->for(Company::find($contract->company_id))->create();
+
+        $this->assertFalse($contract->allowsCustomer($other->id));
+    }
+
+    public function test_allows_customer_true_once_added_to_the_shared_hours_list(): void
+    {
+        [$contract] = $this->activeContract();
+        $shared = CompanyIndividual::factory()->for(Company::find($contract->company_id))->create();
+        ContractSharedCustomer::create(['contract_id' => $contract->id, 'customer_id' => $shared->id]);
+
+        $this->assertTrue($contract->allowsCustomer($shared->id));
+    }
+
+    public function test_due_for_renewal_uses_the_srv014_thirty_day_window(): void
+    {
+        [$contract] = $this->activeContract();
+        $contract->end_date = now()->addDays(29)->toDateString();
+        $contract->save();
+        [$contractFar] = $this->activeContract();
+        $contractFar->end_date = now()->addDays(45)->toDateString();
+        $contractFar->save();
+
+        $due = ContractService::dueForRenewal($contract->company_id);
+
+        $ids = $due->pluck('id')->all();
+        $this->assertContains($contract->id, $ids);
+        $this->assertNotContains($contractFar->id, $ids);
+    }
+
+    public function test_expiry_listing_includes_expired_regardless_of_range_and_others_within_range(): void
+    {
+        [$customer, $actorId] = $this->customerAndActor();
+        $companyId = $customer->company_id;
+        $contract = ContractService::createContract(
+            companyId: $companyId, customerId: $customer->id, contractedHours: 10,
+            contractValueSgd: 3000, startDate: '2026-01-01', actorUserId: $actorId,
+        );
+        ContractService::activateContract($contract, $actorId);
+        $contract->end_date = now()->addDays(10)->toDateString();
+        $contract->save();
+
+        $expiredContract = ContractService::createContract(
+            companyId: $companyId, customerId: $customer->id, contractedHours: 10,
+            contractValueSgd: 3000, startDate: '2020-01-01', actorUserId: $actorId,
+        );
+        ContractService::activateContract($expiredContract, $actorId);
+        ContractService::expireContract($expiredContract, $actorId);
+        $expiredContract->end_date = now()->subYears(2)->toDateString(); // well outside any default window
+        $expiredContract->save();
+
+        $rows = ContractService::expiryListing($companyId, now()->toDateString(), now()->addDays(30)->toDateString());
+
+        $ids = $rows->pluck('id')->all();
+        $this->assertContains($contract->id, $ids);
+        $this->assertContains($expiredContract->id, $ids); // always included, per the OR rule
+    }
+
+    public function test_set_quotation_reference_rejected_while_contract_is_active(): void
+    {
+        [$contract, $actorId] = $this->activeContract();
+
+        $this->expectException(ContractRuleViolation::class);
+        ContractService::setQuotationReference($contract, 'QUO-2026-0001', $actorId);
+    }
+
+    public function test_set_quotation_reference_allowed_once_expired(): void
+    {
+        [$contract, $actorId] = $this->activeContract();
+        ContractService::expireContract($contract, $actorId);
+
+        ContractService::setQuotationReference($contract, 'QUO-2026-0001', $actorId);
+
+        $this->assertSame('QUO-2026-0001', $contract->fresh()->quotation_reference);
+        $this->assertNotNull($contract->fresh()->quotation_reference_set_at);
     }
 }
