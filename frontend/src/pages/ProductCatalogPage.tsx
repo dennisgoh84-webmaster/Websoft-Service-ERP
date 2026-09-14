@@ -3,12 +3,16 @@ import { Link } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
 import { api, downloadBlob, type Product, type ProductType, type ReferenceCode } from '../lib/api'
 import { formatMoney as money } from '../lib/format'
+import ProductImplementationTemplateEditor from '../components/ProductImplementationTemplateEditor'
 
 export default function ProductCatalogPage() {
   const [items, setItems] = useState<Product[]>([])
   const [referenceCodes, setReferenceCodes] = useState<ReferenceCode[]>([])
   const [showInactive, setShowInactive] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // NEW FEATURE (not a Python->PHP conversion) -- see
+  // docs/backlog.md / docs/planned-work.md.
+  const [templateEditorFor, setTemplateEditorFor] = useState<string | null>(null)
 
   const [productType, setProductType] = useState<ProductType>('service')
   const [name, setName] = useState('')
@@ -242,9 +246,15 @@ export default function ProductCatalogPage() {
                     {i.is_active ? 'Active' : 'Inactive'}
                   </span>
                 </td>
-                <td>
+                <td style={{ display: 'flex', gap: 6 }}>
                   <button className="secondary" onClick={() => onToggleActive(i)}>
                     {i.is_active ? 'Deactivate' : 'Reactivate'}
+                  </button>
+                  <button
+                    className="secondary"
+                    onClick={() => setTemplateEditorFor(templateEditorFor === i.id ? null : i.id)}
+                  >
+                    {templateEditorFor === i.id ? 'Close template' : 'Job Implementation Template'}
                   </button>
                 </td>
               </tr>
@@ -258,6 +268,12 @@ export default function ProductCatalogPage() {
             )}
           </tbody>
         </table>
+        {templateEditorFor && (
+          <div className="card" style={{ marginTop: 12 }}>
+            <h2>Job Implementation Template -- {items.find((x) => x.id === templateEditorFor)?.name}</h2>
+            <ProductImplementationTemplateEditor productId={templateEditorFor} />
+          </div>
+        )}
       </div>
     </div>
   )

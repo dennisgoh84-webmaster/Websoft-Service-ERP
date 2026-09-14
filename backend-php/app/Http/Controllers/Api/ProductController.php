@@ -6,9 +6,12 @@ use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Product;
+use App\Models\ProductImplementationTemplate;
+use App\Models\ProductImplementationTemplateTask;
 use App\Services\Audit;
 use App\Services\Authority;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Product/Service Catalog. Mirrors backend/app/routers/catalog.py --
@@ -151,5 +154,87 @@ class ProductController extends Controller
         $product->save();
 
         return response()->json($this->present($product->fresh()));
+    }
+
+    // ---- Job Implementation Template ---------------------------------
+    // NEW FEATURE (not a Python->PHP conversion -- see
+    // docs/backlog.md / docs/planned-work.md): "Product - To add in
+    // Job Implementation Template". A reusable, ordered task checklist
+    // attached to a product; selecting the product on a Job Order
+    // copies these tasks onto it -- see
+    // App\Services\JobOrderImplementationTaskService.
+
+    private function presentTask(ProductImplementationTemplateTask $task): array
+    {
+        return [
+            'id' => $task->id,
+            'task_name' => $task->task_name,
+            'description' => $task->description,
+            'sort_order' => $task->sort_order,
+        ];
+    }
+
+    public function getImplementationTemplate(Request $request, string $productId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        $product = $this->productOrFail($user->company_id, $productId);
+        $template = ProductImplementationTemplate::with('tasks')->where('product_id', $product->id)->first();
+
+        return response()->json([
+            'product_id' => $product->id,
+            'tasks' => $template ? $template->tasks->map(fn ($t) => $this->presentTask($t))->values() : [],
+        ]);
+    }
+
+    /**
+     * Replaces the whole ordered task list -- same "replace wholesale"
+     * pattern as App\Http\Controllers\Api\ContractController::update()'s
+     * product_ids handling, simpler than a line-by-line diff for a
+     * short checklist that's edited as a whole in one form.
+     */
+    public function setImplementationTemplate(Request $request, string $productId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $product = $this->productOrFail($user->company_id, $productId);
+        $data = $request->validate([
+            'tasks' => 'required|array',
+            'tasks.*.task_name' => 'required|string|max:200',
+            'tasks.*.description' => 'sometimes|nullable|string',
+        ]);
+
+        $template = DB::transaction(function () use ($product, $data, $user) {
+            $template = ProductImplementationTemplate::firstOrCreate(
+                ['product_id' => $product->id],
+                ['company_id' => $product->company_id],
+            );
+            $oldCount = $template->tasks()->count();
+            ProductImplementationTemplateTask::where('template_id', $template->id)->delete();
+            foreach (array_values($data['tasks']) as $i => $task) {
+                ProductImplementationTemplateTask::create([
+                    'template_id' => $template->id,
+                    'task_name' => $task['task_name'],
+                    'description' => $task['description'] ?? null,
+                    'sort_order' => $i,
+                ]);
+            }
+
+            Audit::record(
+                'product_implementation_template', $template->id, 'updated', $user->id,
+                details: "{$product->name}: {$oldCount} -> ".count($data['tasks']).' tasks',
+                oldValue: ['task_count' => $oldCount],
+                newValue: ['task_count' => count($data['tasks'])],
+            );
+
+            return $template;
+        });
+
+        return response()->json([
+            'product_id' => $product->id,
+            'tasks' => $template->fresh('tasks')->tasks->map(fn ($t) => $this->presentTask($t))->values(),
+        ]);
     }
 }

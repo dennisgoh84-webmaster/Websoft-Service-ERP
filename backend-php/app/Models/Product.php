@@ -6,6 +6,7 @@ use App\Models\Concerns\HasUuidPrimaryKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Product/Service Catalog. Mirrors backend/app/models/catalog.py's
@@ -49,5 +50,15 @@ class Product extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * NEW FEATURE (not a Python->PHP conversion): the Job
+     * Implementation Template checklist attached to this product --
+     * see App\Models\ProductImplementationTemplate.
+     */
+    public function implementationTemplate(): HasOne
+    {
+        return $this->hasOne(ProductImplementationTemplate::class);
     }
 }
