@@ -7,7 +7,7 @@ import {
   type StockValuationReport,
   type ReorderItem,
 } from '../lib/api'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 
 type Tab = 'valuation' | 'reorder' | 'movements'
 
@@ -177,7 +177,7 @@ function MovementsTab({ onError }: { onError: (e: string | null) => void }) {
           <tbody>
             {rows.map((m) => (
               <tr key={m.id}>
-                <td>{new Date(m.created_at).toLocaleDateString()}</td>
+                <td>{formatDate(m.created_at)}</td>
                 <td>{itemMap[m.stock_item_id]?.code || '?'}</td>
                 <td>{whMap[m.warehouse_id]?.code || '?'}</td>
                 <td>{m.movement_type.replace('_', ' ')}</td>

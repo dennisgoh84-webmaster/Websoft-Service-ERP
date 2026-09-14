@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import CompanyAccessCard from '../components/CompanyAccessCard'
 import { api, type AuditLogEntry, type StaffUser, type UserRole } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
+import { formatDate, formatDateTime } from '../lib/format'
 
 const ROLES: UserRole[] = ['owner', 'service_lead', 'sales_manager', 'support_engineer', 'finance']
 const MAX_PHOTO_BYTES = 300 * 1024
@@ -135,7 +136,7 @@ export default function StaffDetailPage() {
           {staff.is_active ? 'Active' : 'Deactivated'}
         </span>{' '}
         <span className="muted">
-          {staff.email} &middot; joined {new Date(staff.created_at).toLocaleDateString()}
+          {staff.email} &middot; joined {formatDate(staff.created_at)}
         </span>
       </p>
       {error && <div className="error-banner">{error}</div>}
@@ -265,7 +266,7 @@ export default function StaffDetailPage() {
           <tbody>
             {auditLog.map((entry) => (
               <tr key={entry.id}>
-                <td>{new Date(entry.at).toLocaleString()}</td>
+                <td>{formatDateTime(entry.at)}</td>
                 <td>{ACTION_LABELS[entry.action] ?? entry.action}</td>
                 <td>{actorName(entry.actor_user_id)}</td>
                 <td className="muted">{entry.details ?? entry.reason ?? '-'}</td>

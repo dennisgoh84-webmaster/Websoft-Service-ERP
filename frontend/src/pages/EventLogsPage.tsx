@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import ExportControl from '../components/ExportControl'
 import { api, downloadBlob, type AuditLogEntry, type EventLogFilters, type StaffUser } from '../lib/api'
 import { isoToMonth, monthEndISO, monthStartISO } from '../lib/period'
+import { formatDateTime } from '../lib/format'
 
 const ENTITY_TYPES = [
   'user',
@@ -181,7 +182,7 @@ export default function EventLogsPage() {
             <tbody>
               {entries.map((e) => (
                 <tr key={e.id}>
-                  <td style={{ whiteSpace: 'nowrap' }}>{new Date(e.at).toLocaleString()}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>{formatDateTime(e.at)}</td>
                   <td>{e.actor_name ?? <span className="muted">System</span>}</td>
                   <td>{e.action}</td>
                   <td>

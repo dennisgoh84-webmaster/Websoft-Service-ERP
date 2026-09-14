@@ -24,7 +24,7 @@ import {
   type StaffUser,
 } from '../lib/api'
 import { isoToMonth, monthEndISO, monthStartISO } from '../lib/period'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 
 type ReportType = 'contracts' | 'job-orders' | 'service-records' | 'customer-product-usage'
 
@@ -473,7 +473,7 @@ export default function OperationsReportsPage() {
                           </span>
                         )}
                       </td>
-                      <td>{new Date(o.created_at).toLocaleDateString()}</td>
+                      <td>{formatDate(o.created_at)}</td>
                     </tr>
                   )
                 })}

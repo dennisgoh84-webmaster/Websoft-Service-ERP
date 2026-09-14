@@ -5,7 +5,7 @@ import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type AgingReport, type CompanyIndividual, type CompanyIndividualStatement, type Invoice, type InvoiceStatus } from '../lib/api'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 
 const STATUS_BADGE: Record<InvoiceStatus, string> = {
   outstanding: 'draft',
@@ -438,7 +438,7 @@ export default function InvoicesPage() {
               <tr>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   {inv.invoice_number}
-                  <div className="muted">{new Date(inv.issued_at).toLocaleDateString()}</div>
+                  <div className="muted">{formatDate(inv.issued_at)}</div>
                 </td>
                 <td>{customerName(inv.customer_id)}</td>
                 <td>

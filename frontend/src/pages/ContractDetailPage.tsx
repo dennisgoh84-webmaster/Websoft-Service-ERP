@@ -11,7 +11,7 @@ import {
 } from '../lib/api'
 import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import SignaturePanel from '../components/SignaturePanel'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 
 const LICENSE_TYPE_LABEL: Record<LicenseDeploymentType, string> = {
   local: 'Local',
@@ -422,7 +422,7 @@ export default function ContractDetailPage() {
                 <td>{inv.invoice_type}</td>
                 <td>{inv.description}</td>
                 <td>{money(inv.amount_sgd)}</td>
-                <td>{new Date(inv.issued_at).toLocaleDateString()}</td>
+                <td>{formatDate(inv.issued_at)}</td>
               </tr>
             ))}
             {invoices.length === 0 && (

@@ -33,6 +33,7 @@ import {
   type PortalPayment,
   type PortalServiceRecord,
 } from '../lib/portalApi'
+import { formatDate, formatDateTime } from '../lib/format'
 
 const MAROON = '#7a1f2e'
 const WHITE = '#ffffff'
@@ -158,11 +159,11 @@ function fmtMoney(n: number): string {
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '-'
-  return new Date(iso).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })
+  return formatDate(iso)
 }
 
 function fmtDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-SG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return formatDateTime(iso)
 }
 
 function fmtMinutes(m: number): string {

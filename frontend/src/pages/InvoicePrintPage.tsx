@@ -9,7 +9,7 @@ import { useParams } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
 import { api, downloadBlob, type CompanyIndividual, type Invoice } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 
 export default function InvoicePrintPage() {
   const { id } = useParams<{ id: string }>()
@@ -97,7 +97,7 @@ export default function InvoicePrintPage() {
           </div>
           <div className="form-meta-row">
             <span className="muted">Date</span>
-            <span>: {new Date(invoice.issued_at).toLocaleDateString()}</span>
+            <span>: {formatDate(invoice.issued_at)}</span>
           </div>
           {invoice.due_date && (
             <div className="form-meta-row">

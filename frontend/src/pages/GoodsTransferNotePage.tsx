@@ -5,6 +5,7 @@ import {
   type Warehouse,
   type StockItemRow,
 } from '../lib/api'
+import { formatDate } from '../lib/format'
 
 interface LineInput { stock_item_id: string; quantity: string; notes: string }
 const emptyLine = (): LineInput => ({ stock_item_id: '', quantity: '', notes: '' })
@@ -125,7 +126,7 @@ export default function GoodsTransferNotePage() {
                 <td><strong>{g.gtn_number}</strong></td>
                 <td>{whMap[g.from_warehouse_id]?.code || '—'}</td>
                 <td>{whMap[g.to_warehouse_id]?.code || '—'}</td>
-                <td>{new Date(g.transfer_date).toLocaleDateString()}</td>
+                <td>{formatDate(g.transfer_date)}</td>
                 <td><span className={`badge badge-${g.status === 'confirmed' ? 'success' : g.status === 'draft' ? 'warning' : 'neutral'}`}>{g.status}</span></td>
                 <td>
                   {g.lines.map((ln, i) => (

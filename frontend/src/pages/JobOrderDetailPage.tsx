@@ -11,6 +11,7 @@ import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ProjectSchedulePanel from '../components/ProjectSchedulePanel'
 import SignaturePanel from '../components/SignaturePanel'
 import { useAuth } from '../lib/AuthContext'
+import { formatDateTime } from '../lib/format'
 
 export default function JobOrderDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -180,7 +181,7 @@ export default function JobOrderDetailPage() {
         {jobOrder.closed_at && (
           <>
             {' '}
-            &middot; <span className="muted">Closed {new Date(jobOrder.closed_at).toLocaleString()}</span>
+            &middot; <span className="muted">Closed {formatDateTime(jobOrder.closed_at)}</span>
           </>
         )}
       </p>
@@ -245,7 +246,7 @@ export default function JobOrderDetailPage() {
             <p style={{ margin: '6px 0 0', fontSize: 12, color: '#666' }}>
               Approved by {userName(jobOrder.budget_overrun_approved_by)} on{' '}
               {jobOrder.budget_overrun_approved_at
-                ? new Date(jobOrder.budget_overrun_approved_at).toLocaleString()
+                ? formatDateTime(jobOrder.budget_overrun_approved_at)
                 : '-'}
             </p>
           ) : (

@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type DocumentEntityType, type DocumentSignature } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
+import { formatDateTime } from '../lib/format'
 
 interface Props {
   entityType: DocumentEntityType
@@ -127,7 +128,7 @@ export default function SignaturePanel({ entityType, entityId }: Props) {
               )}
               <div style={{ fontWeight: 600, marginBottom: 4 }}>{sig.signer_name}</div>
               <div style={{ fontSize: '0.75em', opacity: 0.6 }}>
-                {new Date(sig.signed_at).toLocaleString()}
+                {formatDateTime(sig.signed_at)}
               </div>
             </div>
           ))}

@@ -15,6 +15,7 @@ import {
   type IncidentSource,
   type IncidentStatus,
 } from '../lib/api'
+import { formatDate } from '../lib/format'
 
 const STATUS_BADGE: Record<IncidentStatus, string> = {
   open: 'draft',
@@ -249,7 +250,7 @@ export default function IncidentsPage() {
                     <td>
                       <span className={`badge ${STATUS_BADGE[inc.status]}`}>{STATUS_LABEL[inc.status]}</span>
                     </td>
-                    <td>{new Date(inc.created_at).toLocaleDateString()}</td>
+                    <td>{formatDate(inc.created_at)}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         <button

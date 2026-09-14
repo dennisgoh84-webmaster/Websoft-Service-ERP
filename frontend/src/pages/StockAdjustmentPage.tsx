@@ -5,6 +5,7 @@ import {
   type Warehouse,
   type StockItemRow,
 } from '../lib/api'
+import { formatDate } from '../lib/format'
 
 interface LineInput { stock_item_id: string; quantity_change: string; notes: string }
 const emptyLine = (): LineInput => ({ stock_item_id: '', quantity_change: '', notes: '' })
@@ -127,7 +128,7 @@ export default function StockAdjustmentPage() {
               <tr key={adj.id}>
                 <td><strong>{adj.adj_number}</strong></td>
                 <td>{whMap[adj.warehouse_id]?.code || '—'}</td>
-                <td>{new Date(adj.adjustment_date).toLocaleDateString()}</td>
+                <td>{formatDate(adj.adjustment_date)}</td>
                 <td>{adj.reason || '—'}</td>
                 <td>{statusBadge(adj.status)}</td>
                 <td>

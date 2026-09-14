@@ -5,7 +5,7 @@ import {
   type Warehouse,
   type StockItemRow,
 } from '../lib/api'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 
 interface LineInput { stock_item_id: string; quantity: string; unit_cost: string }
 const emptyLine = (): LineInput => ({ stock_item_id: '', quantity: '', unit_cost: '' })
@@ -122,7 +122,7 @@ export default function GoodsReturnNotePage() {
               <tr key={g.id}>
                 <td><strong>{g.grtn_number}</strong></td>
                 <td>{whMap[g.warehouse_id]?.code || '—'}</td>
-                <td>{new Date(g.return_date).toLocaleDateString()}</td>
+                <td>{formatDate(g.return_date)}</td>
                 <td>{g.reason || '—'}</td>
                 <td><span className={`badge badge-${g.status === 'confirmed' ? 'success' : g.status === 'draft' ? 'warning' : 'neutral'}`}>{g.status}</span></td>
                 <td>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import StaffAvatar from '../components/StaffAvatar'
 import { api, type StaffMonitoring, type SupportMonitoring } from '../lib/api'
+import { formatDate } from '../lib/format'
 
 function StaffCard({ row }: { row: StaffMonitoring }) {
   const overloaded = row.overdue_job_orders > 0
@@ -73,7 +74,7 @@ export default function SupportMonitoringPage() {
       <h1>Support Monitoring</h1>
       <p className="muted">
         Job Order workload and contract-hours throughput per support staff, as at{' '}
-        {data ? new Date(data.as_at).toLocaleDateString() : '...'}. "Overdue" only counts Job Orders
+        {data ? formatDate(data.as_at) : '...'}. "Overdue" only counts Job Orders
         with a due date set -- due dates are set manually by Sales/Coordinator, not automatic.
         <Link to="/job-orders" style={{ marginLeft: 6 }}>
           Set a due date from a Job Order

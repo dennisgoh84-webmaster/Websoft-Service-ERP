@@ -10,7 +10,7 @@ import {
   type StockBrandRow,
   type Warehouse,
 } from '../lib/api'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 
 export default function StockItemDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -529,7 +529,7 @@ export default function StockItemDetailPage() {
                       <td style={{ textAlign: 'right' }}>
                         {att.file_size ? `${(att.file_size / 1024).toFixed(1)} KB` : '—'}
                       </td>
-                      <td>{new Date(att.created_at).toLocaleDateString()}</td>
+                      <td>{formatDate(att.created_at)}</td>
                       <td>
                         <button
                           className="secondary"
@@ -610,7 +610,7 @@ export default function StockItemDetailPage() {
           <tbody>
             {movements.map((m) => (
               <tr key={m.id}>
-                <td>{new Date(m.created_at).toLocaleDateString()}</td>
+                <td>{formatDate(m.created_at)}</td>
                 <td>{whMap[m.warehouse_id]?.code || '?'}</td>
                 <td>{m.movement_type.replace('_', ' ')}</td>
                 <td style={{ textAlign: 'right', color: m.quantity >= 0 ? 'green' : 'red' }}>

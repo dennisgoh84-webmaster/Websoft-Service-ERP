@@ -12,6 +12,7 @@ import {
   type CompanyIndividualType,
   type SetupListItem,
 } from '../lib/api'
+import { formatDate, formatDateTime } from '../lib/format'
 
 const ACTION_LABELS: Record<string, string> = {
   created: 'Created',
@@ -442,7 +443,7 @@ export default function CompanyIndividualDetailPage() {
         {customer.is_archived && <span className="badge draft">Archived</span>}{' '}
         <span className="muted">
           {customer.customer_type === 'individual' ? 'Individual' : 'Company'} &middot; added{' '}
-          {new Date(customer.created_at).toLocaleDateString()}
+          {formatDate(customer.created_at)}
           {customer.legacy_customer_code && <> &middot; Odoo ID {customer.legacy_customer_code}</>}
         </span>
       </p>
@@ -974,7 +975,7 @@ export default function CompanyIndividualDetailPage() {
         </div>
         <p className="muted" style={{ marginTop: -8 }}>
           {customer.pdpa_consent_given && customer.pdpa_consent_at
-            ? `Recorded ${new Date(customer.pdpa_consent_at).toLocaleString()}.`
+            ? `Recorded ${formatDateTime(customer.pdpa_consent_at)}.`
             : 'Not yet recorded. Ticking this box files it in the system with the current date/time.'}
         </p>
 
@@ -1035,7 +1036,7 @@ export default function CompanyIndividualDetailPage() {
           CLAUDE.md, nothing is ever permanently deleted -- but hides it from every normal
           list and picker.
           {customer.is_archived && customer.archived_at && (
-            <> Archived {new Date(customer.archived_at).toLocaleString()}.</>
+            <> Archived {formatDateTime(customer.archived_at)}.</>
           )}
         </p>
         {customer.is_archived ? (
@@ -1080,7 +1081,7 @@ export default function CompanyIndividualDetailPage() {
           <tbody>
             {auditLog.map((entry) => (
               <tr key={entry.id}>
-                <td>{new Date(entry.at).toLocaleString()}</td>
+                <td>{formatDateTime(entry.at)}</td>
                 <td>{ACTION_LABELS[entry.action] ?? entry.action}</td>
                 <td>{entry.actor_name ?? 'System'}</td>
                 <td className="muted">{entry.details ?? entry.reason ?? '-'}</td>

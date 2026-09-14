@@ -12,6 +12,7 @@ import {
   type DocumentEntityType,
   type StaffUser,
 } from '../lib/api'
+import { formatDate } from '../lib/format'
 
 const DOC_TYPE_LABELS: Record<DocumentEntityType, string> = {
   quotation: 'Quotation',
@@ -118,7 +119,7 @@ export default function ApprovalCenterPage() {
                     </span>
                   </div>
                   <div style={{ fontSize: '0.85em', opacity: 0.6 }}>
-                    {new Date(req.requested_at).toLocaleDateString()}
+                    {formatDate(req.requested_at)}
                   </div>
                 </div>
 

@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, type DocumentAttachment, type DocumentEntityType, getToken } from '../lib/api'
 import { getDeviceId } from '../lib/deviceId'
+import { formatDate } from '../lib/format'
 
 interface Props {
   entityType: DocumentEntityType
@@ -119,7 +120,7 @@ export default function DocumentAttachmentsPanel({ entityType, entityId }: Props
                 <td>{att.original_filename}</td>
                 <td>{att.content_type}</td>
                 <td>{formatBytes(att.file_size_bytes)}</td>
-                <td>{new Date(att.uploaded_at).toLocaleDateString()}</td>
+                <td>{formatDate(att.uploaded_at)}</td>
                 <td>
                   <button
                     className="secondary"

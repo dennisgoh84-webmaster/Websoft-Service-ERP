@@ -21,6 +21,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { getToken } from '../lib/api'
 import { getDeviceId } from '../lib/deviceId'
+import { formatDate } from '../lib/format'
 
 // ── API helpers (talk to /api/mobile/*) ─────────────────────────────
 
@@ -188,7 +189,7 @@ function fmtMinutes(m: number): string {
 }
 
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })
+  return formatDate(iso)
 }
 
 function fmtTime(iso: string): string {

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
 import StaffAvatar from '../components/StaffAvatar'
 import { api, downloadBlob, type Group, type StaffUser, type UserRole } from '../lib/api'
+import { formatDate } from '../lib/format'
 
 const ROLES: UserRole[] = ['owner', 'service_lead', 'sales_manager', 'support_engineer', 'finance']
 
@@ -165,7 +166,7 @@ export default function StaffMasterPage() {
                 <td>{u.email}</td>
                 <td>{u.role}</td>
                 <td>{groupName(u.group_id)}</td>
-                <td>{new Date(u.created_at).toLocaleDateString()}</td>
+                <td>{formatDate(u.created_at)}</td>
                 <td>
                   <span className={`badge ${u.is_active ? 'active' : 'draft'}`}>
                     {u.is_active ? 'Active' : 'Deactivated'}

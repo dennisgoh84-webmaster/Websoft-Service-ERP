@@ -7,6 +7,7 @@
 // like any posted voucher).
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, type Account, type FiscalYearClosure } from '../lib/api'
+import { formatDateTime } from '../lib/format'
 
 export default function YearEndClosingPage() {
   const [closures, setClosures] = useState<FiscalYearClosure[]>([])
@@ -120,7 +121,7 @@ export default function YearEndClosingPage() {
             {closures.map((c) => (
               <tr key={c.id}>
                 <td>{c.fiscal_year}</td>
-                <td>{new Date(c.closed_at).toLocaleString()}</td>
+                <td>{formatDateTime(c.closed_at)}</td>
               </tr>
             ))}
             {closures.length === 0 && (
