@@ -100,6 +100,11 @@ explaining the reason first (see Development Rules below).
 - Document major architectural decisions.
 - Do not change the approved architecture without explaining the reason first.
 - Never assume a business rule when requirements have not been provided.
+- Never push to `main` with a failing test suite. Run the full suite
+  (`cd backend-php && php artisan test`) and `./vendor/bin/pint --test`
+  first; a red suite is a blocker, never something to note and push
+  anyway. Confirmed 2026-09-14, when development moved to working on
+  `main` directly and the branch-review buffer went away.
 
 ## Documentation
 
