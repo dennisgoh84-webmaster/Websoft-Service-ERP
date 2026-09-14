@@ -245,8 +245,11 @@ resulting audit trail entries (including IP/User-Agent capture) -- see
 `database/seeders/DatabaseSeeder.php` for the demo dataset used.
 
 **Not yet converted from `app/routers/company_individuals.py`:**
-CSV/Excel export endpoints and the Customer Helpdesk Portal access
-sub-resource (depends on the Portal module below).
+CSV/Excel export endpoints. (The Customer Helpdesk Portal access
+sub-resource -- `GET/POST /{customer_id}/contacts/{contact_id}/portal-access`
+plus its `/reset-password` and `/disable` actions, and the PORTAL-004
+archive cascade -- was the other gap listed here; it is now converted,
+see the Customer Helpdesk Portal entry below.)
 
 - **Users / Staff Master** (`app/routers/users.py` →
   `App\Http\Controllers\Api\UserController`): staff directory

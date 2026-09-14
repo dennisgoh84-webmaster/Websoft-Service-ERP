@@ -10,9 +10,14 @@ use App\Models\Branch;
 use App\Models\CompanyIndividual;
 use App\Models\CompanyIndividualRelationship;
 use App\Models\Contact;
+use App\Models\PortalUser;
 use App\Models\User;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\Mailer;
+use App\Services\MailerException;
+use App\Services\MailerNotConfiguredException;
+use App\Services\PasswordPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -25,9 +30,7 @@ use Illuminate\Support\Str;
  * audit-action.
  *
  * NOT yet converted from the Python router (tracked in
- * docs/php-conversion-plan.md): CSV/Excel export and the Customer
- * Helpdesk Portal access endpoints (portal.py itself is still
- * pending).
+ * docs/php-conversion-plan.md): CSV/Excel export.
  */
 class CompanyIndividualController extends Controller
 {
@@ -255,11 +258,20 @@ class CompanyIndividualController extends Controller
             'customer', $customer->id, 'archived', $user->id,
             oldValue: ['is_archived' => false], newValue: ['is_archived' => true],
         );
-        // NOTE: the Python version also disables every Customer Helpdesk
-        // Portal login under this customer here (PORTAL-004). The
-        // Portal module is not yet converted -- see
-        // docs/php-conversion-plan.md -- so that step is intentionally
-        // not replicated yet rather than silently assumed.
+        // PORTAL-004 / design §5: archiving a customer disables every
+        // portal login under it, not just on their next request --
+        // App\Http\Middleware\AuthenticatePortal also refuses live
+        // tokens once the customer is archived, but this keeps the
+        // Contacts tab's own status display accurate too.
+        $portalUsers = PortalUser::query()
+            ->join('contacts', 'portal_users.contact_id', '=', 'contacts.id')
+            ->where('contacts.customer_id', $customer->id)
+            ->where('portal_users.is_active', true)
+            ->select('portal_users.*')
+            ->get();
+        foreach ($portalUsers as $portalUser) {
+            $this->disablePortalUser($portalUser, actorUserId: $user->id);
+        }
         $customer->save();
 
         return response()->json($customer->fresh());
@@ -434,6 +446,237 @@ class CompanyIndividualController extends Controller
         $contact->save();
 
         return response()->json($contact->fresh());
+    }
+
+    // ---- Customer Helpdesk Portal access (PORTAL-001..004, design §5) ----
+    // Enable/disable/reset a Contact's login to the separate /portal
+    // frontend. Lives here (not on PortalAuthController/PortalController)
+    // because it's a staff action gated by this module's own EDIT
+    // authority, not something a customer can reach -- the portal
+    // controllers are customer-facing only ('auth.portal'), this is
+    // company_individual_management-facing. Same split, and the same
+    // reason, as backend/app/routers/company_individuals.py.
+
+    /**
+     * 10 random alphanumeric characters, regenerated until it satisfies
+     * PasswordPolicy::validateComplexity's letter+digit rule (near-
+     * certain on the first try, but never assumed).
+     */
+    private static function generateTempPassword(): string
+    {
+        $alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        while (true) {
+            $pw = '';
+            for ($i = 0; $i < 10; $i++) {
+                $pw .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+            }
+            if (preg_match('/[A-Za-z]/', $pw) && preg_match('/[0-9]/', $pw)) {
+                return $pw;
+            }
+        }
+    }
+
+    /**
+     * Staff-side view of one Contact's portal login (design §5) --
+     * returned by the enable/disable/reset-password actions and by the
+     * plain GET so the Contacts tab can show current status without the
+     * staff member having to trigger an action first.
+     *
+     * @return array<string, mixed>
+     */
+    private function portalAccessOut(?PortalUser $portalUser, ?string $temporaryPassword = null, bool $invitedByEmail = false): array
+    {
+        if ($portalUser === null) {
+            return [
+                'enabled' => false,
+                'email' => null,
+                'must_change_password' => null,
+                'last_login_at' => null,
+                'locked' => false,
+                'temporary_password' => null,
+                'invited_by_email' => false,
+            ];
+        }
+        $now = Carbon::now('UTC');
+
+        return [
+            'enabled' => $portalUser->is_active,
+            'email' => $portalUser->email,
+            'must_change_password' => $portalUser->must_change_password,
+            'last_login_at' => $portalUser->last_login_at,
+            'locked' => (bool) ($portalUser->locked_until && $portalUser->locked_until->gt($now)),
+            // Only present immediately after enable/reset, and only when
+            // SMTP isn't configured -- the one-time display fallback.
+            'temporary_password' => $temporaryPassword,
+            'invited_by_email' => $invitedByEmail,
+        ];
+    }
+
+    public function getPortalAccess(Request $request, string $customerId, string $contactId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        $customer = $this->customerOrFail($user, $customerId);
+        $contact = $this->contactOrFail($customer, $contactId);
+
+        return response()->json($this->portalAccessOut(PortalUser::where('contact_id', $contact->id)->first()));
+    }
+
+    /**
+     * Grants (or re-grants, if it was disabled) this Contact a Helpdesk
+     * Portal login. Refuses without a contact email, without PDPA
+     * consent on file, or if the customer is archived (design §5,
+     * PORTAL-004).
+     */
+    public function enablePortalAccess(Request $request, string $customerId, string $contactId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $customer = $this->customerOrFail($user, $customerId);
+        $contact = $this->contactOrFail($customer, $contactId);
+        if (! $contact->email) {
+            throw new ApiException(422, 'This contact has no email address -- add one before enabling portal access.');
+        }
+        if ($customer->is_archived) {
+            throw new ApiException(422, 'This customer is archived -- unarchive it before enabling portal access.');
+        }
+        if (! $customer->pdpa_consent_given) {
+            throw new ApiException(422, 'PDPA consent has not been recorded for this customer -- record consent before enabling portal access.');
+        }
+
+        $portalUser = PortalUser::where('contact_id', $contact->id)->first();
+        $tempPassword = self::generateTempPassword();
+        if ($portalUser === null) {
+            $portalUser = PortalUser::create([
+                'company_id' => $customer->company_id,
+                'contact_id' => $contact->id,
+                'email' => $contact->email,
+                'hashed_password' => PasswordPolicy::hash($tempPassword),
+                'is_active' => true,
+                'must_change_password' => true,
+                'created_by_user_id' => $user->id,
+            ]);
+            $auditAction = 'portal_access_enabled';
+        } else {
+            $portalUser->email = $contact->email;
+            $portalUser->hashed_password = PasswordPolicy::hash($tempPassword);
+            $portalUser->is_active = true;
+            $portalUser->must_change_password = true;
+            $portalUser->failed_attempts = 0;
+            $portalUser->locked_until = null;
+            $portalUser->save();
+            $auditAction = 'portal_access_re_enabled';
+        }
+
+        $invitedByEmail = false;
+        if (Mailer::isConfigured()) {
+            try {
+                Mailer::send(
+                    $portalUser->email,
+                    'Your Websoft Helpdesk Portal access',
+                    "Hi {$contact->name},\n\n".
+                    "You now have access to the {$customer->name} Helpdesk Portal.\n\n".
+                    "Sign in at the portal login page with:\n".
+                    "  Email: {$portalUser->email}\n".
+                    "  Temporary password: {$tempPassword}\n\n".
+                    "You'll be asked to set your own password the first time you sign in."
+                );
+                $invitedByEmail = true;
+            } catch (MailerNotConfiguredException|MailerException) {
+                // fall through to showing it on screen below
+                $invitedByEmail = false;
+            }
+        }
+
+        Audit::record(
+            'portal_user', $portalUser->id, $auditAction, $user->id,
+            details: "contact={$contact->name}, customer={$customer->name}",
+        );
+
+        return response()->json($this->portalAccessOut(
+            $portalUser->fresh(),
+            temporaryPassword: $invitedByEmail ? null : $tempPassword,
+            invitedByEmail: $invitedByEmail,
+        ));
+    }
+
+    public function resetPortalAccessPassword(Request $request, string $customerId, string $contactId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $customer = $this->customerOrFail($user, $customerId);
+        $contact = $this->contactOrFail($customer, $contactId);
+        $portalUser = PortalUser::where('contact_id', $contact->id)->first();
+        if ($portalUser === null) {
+            throw new ApiException(404, 'This contact does not have portal access yet.');
+        }
+
+        $tempPassword = self::generateTempPassword();
+        $portalUser->hashed_password = PasswordPolicy::hash($tempPassword);
+        $portalUser->must_change_password = true;
+        $portalUser->failed_attempts = 0;
+        $portalUser->locked_until = null;
+        $portalUser->save();
+
+        $invitedByEmail = false;
+        if (Mailer::isConfigured()) {
+            try {
+                Mailer::send(
+                    $portalUser->email,
+                    'Your Websoft Helpdesk Portal password has been reset',
+                    "Hi {$contact->name},\n\n".
+                    "Your Helpdesk Portal password has been reset.\n\n".
+                    "  Email: {$portalUser->email}\n".
+                    "  Temporary password: {$tempPassword}\n\n".
+                    "You'll be asked to set your own password the next time you sign in."
+                );
+                $invitedByEmail = true;
+            } catch (MailerNotConfiguredException|MailerException) {
+                $invitedByEmail = false;
+            }
+        }
+
+        Audit::record(
+            'portal_user', $portalUser->id, 'portal_password_reset_by_staff', $user->id,
+            details: "contact={$contact->name}, customer={$customer->name}",
+        );
+
+        return response()->json($this->portalAccessOut(
+            $portalUser->fresh(),
+            temporaryPassword: $invitedByEmail ? null : $tempPassword,
+            invitedByEmail: $invitedByEmail,
+        ));
+    }
+
+    public function disablePortalAccess(Request $request, string $customerId, string $contactId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $customer = $this->customerOrFail($user, $customerId);
+        $contact = $this->contactOrFail($customer, $contactId);
+        $portalUser = PortalUser::where('contact_id', $contact->id)->first();
+        if ($portalUser === null) {
+            throw new ApiException(404, 'This contact does not have portal access.');
+        }
+        $this->disablePortalUser($portalUser, actorUserId: $user->id);
+
+        return response()->json($this->portalAccessOut($portalUser->fresh()));
+    }
+
+    /**
+     * Shared by the explicit disable action above and by archive()
+     * (design §5: "Archiving a customer calls the same disable for
+     * every portal user under it").
+     */
+    private function disablePortalUser(PortalUser $portalUser, ?string $actorUserId): void
+    {
+        $portalUser->is_active = false;
+        $portalUser->save();
+        Audit::record('portal_user', $portalUser->id, 'portal_access_disabled', $actorUserId);
     }
 
     // ---- Branches ------------------------------------------------------

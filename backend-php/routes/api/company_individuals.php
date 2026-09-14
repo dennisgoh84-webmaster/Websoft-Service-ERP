@@ -2,7 +2,7 @@
 
 // Mirrors backend/app/routers/company_individuals.py. NOT yet
 // converted from the Python router (see docs/php-conversion-plan.md):
-// CSV/Excel export and Customer Helpdesk Portal access endpoints.
+// CSV/Excel export.
 
 use App\Http\Controllers\Api\CompanyIndividualController;
 use Illuminate\Support\Facades\Route;
@@ -25,6 +25,15 @@ Route::middleware('auth.jwt')->prefix('company-individuals')->group(function () 
     Route::patch('/{customer}/contacts/{contact}', [CompanyIndividualController::class, 'updateContact']);
     Route::post('/{customer}/contacts/{contact}/deactivate', [CompanyIndividualController::class, 'deactivateContact']);
     Route::post('/{customer}/contacts/{contact}/reactivate', [CompanyIndividualController::class, 'reactivateContact']);
+
+    // Customer Helpdesk Portal access (PORTAL-001..004, design §5) --
+    // the STAFF side of the portal, gated by this module's own
+    // authority. The customer-facing portal itself is in
+    // routes/api/portal.php behind its own auth realm.
+    Route::get('/{customer}/contacts/{contact}/portal-access', [CompanyIndividualController::class, 'getPortalAccess']);
+    Route::post('/{customer}/contacts/{contact}/portal-access', [CompanyIndividualController::class, 'enablePortalAccess']);
+    Route::post('/{customer}/contacts/{contact}/portal-access/reset-password', [CompanyIndividualController::class, 'resetPortalAccessPassword']);
+    Route::post('/{customer}/contacts/{contact}/portal-access/disable', [CompanyIndividualController::class, 'disablePortalAccess']);
 
     Route::get('/{customer}/branches', [CompanyIndividualController::class, 'listBranches']);
     Route::post('/{customer}/branches', [CompanyIndividualController::class, 'createBranch']);
