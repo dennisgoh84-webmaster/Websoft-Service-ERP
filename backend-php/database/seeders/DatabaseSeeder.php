@@ -2,6 +2,8 @@
 
 namespace Database\Seeders;
 
+use App\Models\Account;
+use App\Models\BankAccount;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\CompanyModule;
@@ -63,6 +65,54 @@ class DatabaseSeeder extends Seeder
         'stock_adjustment' => ['Stock Adjustment', true, true],
         'stock_operation_reports' => ['Stock Operation Reports', true, true],
         'ops_dashboard' => ['Ops Dashboard (personal task tracker)', true, true],
+    ];
+
+    // A conventional Singapore SME chart of accounts, seeded as a
+    // STARTING POINT (confirmed approach with Dennis, 2026-09-10) --
+    // not a decided chart. Same list as
+    // backend/scripts/seed_demo.py's CHART_OF_ACCOUNTS.
+    private const CHART_OF_ACCOUNTS = [
+        // Assets (1xxx)
+        ['1000', 'Cash at bank', Account::TYPE_ASSET],
+        ['1010', 'Petty cash', Account::TYPE_ASSET],
+        ['1100', 'Accounts receivable', Account::TYPE_ASSET],
+        ['1150', 'Accrued revenue', Account::TYPE_ASSET],
+        ['1200', 'Prepayments', Account::TYPE_ASSET],
+        ['1300', 'Inventory', Account::TYPE_ASSET],
+        ['1500', 'Office equipment', Account::TYPE_ASSET],
+        ['1510', 'Accumulated depreciation -- office equipment', Account::TYPE_ASSET],
+        // Liabilities (2xxx)
+        ['2000', 'Accounts payable', Account::TYPE_LIABILITY],
+        ['2100', 'GST output tax (collected on sales)', Account::TYPE_LIABILITY],
+        ['2110', 'GST input tax (paid on purchases)', Account::TYPE_LIABILITY],
+        ['2200', 'Accruals', Account::TYPE_LIABILITY],
+        ['2300', 'Deferred revenue (unearned contract income)', Account::TYPE_LIABILITY],
+        ['2400', 'CPF payable', Account::TYPE_LIABILITY],
+        ['2500', 'Corporate tax payable', Account::TYPE_LIABILITY],
+        // Equity (3xxx)
+        ['3000', 'Share capital', Account::TYPE_EQUITY],
+        ['3100', 'Retained earnings', Account::TYPE_EQUITY],
+        // Revenue (4xxx)
+        ['4000', 'Service contract revenue', Account::TYPE_REVENUE],
+        ['4010', 'Excess usage revenue', Account::TYPE_REVENUE],
+        ['4020', 'Project revenue', Account::TYPE_REVENUE],
+        ['4030', 'Hardware sales', Account::TYPE_REVENUE],
+        ['4900', 'Other income', Account::TYPE_REVENUE],
+        // Expenses (5xxx-6xxx)
+        ['5000', 'Cost of services', Account::TYPE_EXPENSE],
+        ['5010', 'Cost of hardware sold', Account::TYPE_EXPENSE],
+        ['5020', 'Subcontractor costs', Account::TYPE_EXPENSE],
+        ['6000', 'Salaries and wages', Account::TYPE_EXPENSE],
+        ['6010', 'CPF contributions', Account::TYPE_EXPENSE],
+        ['6100', 'Rent', Account::TYPE_EXPENSE],
+        ['6110', 'Utilities', Account::TYPE_EXPENSE],
+        ['6200', 'Software and subscriptions', Account::TYPE_EXPENSE],
+        ['6300', 'Professional fees', Account::TYPE_EXPENSE],
+        ['6400', 'Marketing', Account::TYPE_EXPENSE],
+        ['6500', 'Bank charges', Account::TYPE_EXPENSE],
+        ['6600', 'Depreciation', Account::TYPE_EXPENSE],
+        ['6700', 'Bad debts written off', Account::TYPE_EXPENSE],
+        ['6900', 'Other operating expenses', Account::TYPE_EXPENSE],
     ];
 
     public function run(): void
@@ -135,6 +185,26 @@ class DatabaseSeeder extends Seeder
             );
         }
 
+        // Chart of Accounts + a default bank account, so GL posting
+        // has somewhere to post to and a Payment Voucher has a bank
+        // account to select -- see this class's CHART_OF_ACCOUNTS.
+        foreach (self::CHART_OF_ACCOUNTS as [$code, $name, $accountType]) {
+            Account::updateOrCreate(
+                ['company_id' => $company->id, 'code' => $code],
+                ['name' => $name, 'account_type' => $accountType, 'is_active' => true],
+            );
+        }
+        $cashAtBank = Account::where('company_id', $company->id)->where('code', '1000')->first();
+        BankAccount::firstOrCreate(
+            ['company_id' => $company->id, 'account_number' => '123-456789-0'],
+            [
+                'bank_name' => 'DBS Bank',
+                'account_name' => 'Webmaster Consultancy Pte Ltd',
+                'currency_code' => 'SGD',
+                'gl_account_id' => $cashAtBank?->id,
+            ],
+        );
+
         // One sample customer, so the CompanyIndividual Management
         // slice has something to look at immediately after seeding.
         CompanyIndividual::firstOrCreate(
@@ -148,6 +218,6 @@ class DatabaseSeeder extends Seeder
             ],
         );
 
-        $this->command?->info('Seeded: 1 company, module catalog, Owner/Admin group, Dennis (owner, demo1234), 1 sample customer.');
+        $this->command?->info('Seeded: 1 company, module catalog, Owner/Admin group, Dennis (owner, demo1234), Chart of Accounts, 1 bank account, 1 sample customer.');
     }
 }

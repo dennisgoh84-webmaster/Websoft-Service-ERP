@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
 use App\Exceptions\ARRuleViolation;
+use App\Exceptions\PostingError;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Invoice;
 use App\Services\AccountsReceivableService;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\Posting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -23,12 +25,12 @@ use Illuminate\Support\Facades\DB;
  * NOT yet converted from the Python router (tracked in
  * docs/php-conversion-plan.md): everything Payment-related (POST
  * /payments, allocate, statements, CSV/Excel/.docx export, "Email
- * Receipt"/"Email Statement") -- see AccountsReceivableService's class
- * docblock for why (needs `bank_accounts`, from the still-pending GL
- * posting + Bank module). Also not converted: the commission clawback
- * that Python's write-off endpoint triggers (Commission Management is
- * deferred, per CLAUDE.md) and the un-GL/un-bank endpoints (both GL
- * posting territory).
+ * Receipt"/"Email Statement") -- AR-001 (recording a customer receipt)
+ * is its own module-sized addition (App\Models\Payment doesn't exist
+ * yet), scoped out even though GL posting + Bank now exists to
+ * support it. Also not converted: the commission clawback that
+ * Python's write-off endpoint triggers (Commission Management is
+ * deferred, per CLAUDE.md).
  */
 class AccountsReceivableController extends Controller
 {
@@ -36,6 +38,8 @@ class AccountsReceivableController extends Controller
 
     private function present(Invoice $invoice): array
     {
+        $glEntry = Posting::liveEntryFor(Posting::SOURCE_INVOICE, $invoice->id);
+
         return [
             'id' => $invoice->id,
             'invoice_number' => $invoice->invoice_number,
@@ -55,8 +59,8 @@ class AccountsReceivableController extends Controller
             'is_disputed' => $invoice->is_disputed,
             'dispute_note' => $invoice->dispute_note,
             'issued_at' => optional($invoice->issued_at)->toIso8601String(),
-            'gl_status' => 'not_posted',
-            'gl_voucher_number' => null,
+            'gl_status' => $glEntry ? 'posted' : 'not_posted',
+            'gl_voucher_number' => $glEntry?->voucher_number,
         ];
     }
 
@@ -138,6 +142,24 @@ class AccountsReceivableController extends Controller
         );
 
         return response()->json($this->present($invoice->fresh()));
+    }
+
+    /** ACC-004: UNGL -- reverse this invoice's GL posting. */
+    public function unglInvoice(Request $request, string $invoiceId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $invoice = $this->invoiceOrFail($user->company_id, $invoiceId);
+        $data = $request->validate(['reason' => 'required|string|min:1']);
+
+        try {
+            $reversal = Posting::unpost(Posting::SOURCE_INVOICE, $invoice->id, $user->id, $data['reason'], 'invoice');
+        } catch (PostingError $e) {
+            throw new ApiException(422, $e->getMessage());
+        }
+
+        return response()->json(['status' => 'reversed', 'reversal_voucher' => $reversal->voucher_number]);
     }
 
     /**

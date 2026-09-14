@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Invoice;
 use App\Services\Authority;
+use App\Services\Posting;
 use Illuminate\Http\Request;
 
 /**
@@ -20,11 +21,6 @@ use Illuminate\Http\Request;
  * .docx export and "Email Invoice" endpoints (both need the Documents
  * module's mailer/docx-generation wiring, same gap as Service
  * Records).
- *
- * `gl_status` is always reported "not_posted" -- see
- * App\Services\BillingService's class docblock for the GL posting
- * known gap. This matches InvoiceOut's own Python default, so a
- * not-yet-converted GL step is never misreported as posted.
  */
 class InvoiceController extends Controller
 {
@@ -32,6 +28,8 @@ class InvoiceController extends Controller
 
     private function present(Invoice $invoice): array
     {
+        $glEntry = Posting::liveEntryFor(Posting::SOURCE_INVOICE, $invoice->id);
+
         return [
             'id' => $invoice->id,
             'invoice_number' => $invoice->invoice_number,
@@ -51,8 +49,8 @@ class InvoiceController extends Controller
             'is_disputed' => $invoice->is_disputed,
             'dispute_note' => $invoice->dispute_note,
             'issued_at' => optional($invoice->issued_at)->toIso8601String(),
-            'gl_status' => 'not_posted',
-            'gl_voucher_number' => null,
+            'gl_status' => $glEntry ? 'posted' : 'not_posted',
+            'gl_voucher_number' => $glEntry?->voucher_number,
         ];
     }
 

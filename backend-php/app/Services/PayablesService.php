@@ -3,10 +3,13 @@
 namespace App\Services;
 
 use App\Exceptions\PayablesRuleViolation;
+use App\Exceptions\PostingError;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\PurchaseOrder;
 use App\Models\SupplierInvoice;
+use App\Models\SupplierPayment;
+use App\Models\SupplierPaymentAllocation;
 use App\Models\User;
 use App\Support\Money;
 use Illuminate\Support\Carbon;
@@ -14,16 +17,10 @@ use Illuminate\Support\Carbon;
 /**
  * Accounts Payable business logic. Mirrors
  * backend/app/services/payables.py -- see that file's docstring for
- * PUR-001/002/003.
- *
- * KNOWN GAP, deliberately not silently papered over: a matched bill
- * (PUR-003 auto-approval) should post to the GL in the same step
- * (Dr expense / Dr GST input / Cr AP, ACC-001/003) -- see
- * matchBillToPo()'s docblock. Payment Vouchers (SupplierPayment) are
- * not converted at all yet; Python's own POST /payments makes GL
- * posting a required part of creating one, so that endpoint cannot be
- * built faithfully until GL posting + Bank exists -- see
- * docs/php-conversion-plan.md.
+ * PUR-001/002/003. A matched bill (PUR-003 auto-approval) posts to
+ * the GL in the same step (Dr expense / Dr GST input / Cr AP,
+ * ACC-001/003, App\Services\Posting), now that GL posting is
+ * converted -- see matchBillToPo().
  */
 class PayablesService
 {
@@ -106,12 +103,8 @@ class PayablesService
      * to its purchase order. Agreement auto-approves it for payment;
      * disagreement records exactly what differs and leaves it as an
      * exception for a human -- resolution is open item 4.5.
-     *
-     * KNOWN GAP: the Python version also posts the bill to the GL right
-     * here the moment it auto-approves (ACC-001/003). GL posting isn't
-     * converted yet, so that step is skipped -- see class docblock.
      */
-    public static function matchBillToPo(SupplierInvoice $bill): SupplierInvoice
+    public static function matchBillToPo(SupplierInvoice $bill, ?string $actorUserId = null): SupplierInvoice
     {
         if ($bill->purchase_order_id === null) {
             // No PO to match against. Not an error -- some spend
@@ -161,10 +154,79 @@ class PayablesService
         $bill->status = SupplierInvoice::STATUS_APPROVED;
         $bill->save();
 
-        // KNOWN GAP: ACC-001/003 -- reaching `approved` should post the
-        // bill to the GL now (Dr expense / Dr GST input / Cr AP). Not
-        // wired up until GL posting is converted; see class docblock.
+        // ACC-001/003: reaching `approved` is the bill's accounting
+        // event -- post it now (Dr expense / Dr GST input / Cr AP). A
+        // bill still in awaiting_match or exception never gets here, so
+        // an unresolved mismatch never sits in AP (gl-posting-design.md
+        // §4.2).
+        try {
+            Posting::postSupplierInvoice($bill, $actorUserId);
+        } catch (PostingError $e) {
+            throw new PayablesRuleViolation($e->getMessage());
+        }
+
         return $bill;
+    }
+
+    /**
+     * Derive a bill's paid state from what is allocated to it, so it
+     * can't drift out of step with the money actually paid.
+     */
+    public static function recalculateBillStatus(SupplierInvoice $bill): void
+    {
+        $paid = SupplierPaymentAllocation::where('supplier_invoice_id', $bill->id)->get()
+            ->reduce(fn (Money $carry, SupplierPaymentAllocation $a) => $carry->plus(Money::of($a->amount_sgd)), Money::of(0));
+        $bill->amount_paid_sgd = $paid->toString();
+
+        if ($bill->status === SupplierInvoice::STATUS_EXCEPTION && $paid->toFloat() <= 0) {
+            $bill->save();
+
+            return; // an unresolved exception stays an exception
+        }
+
+        $total = Money::of($bill->total_amount_sgd);
+        if ($paid->toFloat() <= 0) {
+            $bill->status = $bill->match_status === SupplierInvoice::MATCH_MATCHED
+                ? SupplierInvoice::STATUS_APPROVED : SupplierInvoice::STATUS_AWAITING_MATCH;
+        } elseif ($paid->toFloat() >= $total->toFloat()) {
+            $bill->status = SupplierInvoice::STATUS_PAID;
+        } else {
+            $bill->status = SupplierInvoice::STATUS_PARTIALLY_PAID;
+        }
+        $bill->save();
+    }
+
+    /** Apply part of a payment voucher to one bill. */
+    public static function allocateSupplierPayment(SupplierPayment $payment, SupplierInvoice $bill, Money $amount): SupplierPaymentAllocation
+    {
+        if ($amount->toFloat() <= 0) {
+            throw new PayablesRuleViolation('Allocation amount must be greater than zero.');
+        }
+        if ($bill->company_id !== $payment->company_id) {
+            throw new PayablesRuleViolation('Bill and payment belong to different companies.');
+        }
+        if ($bill->supplier_id !== $payment->supplier_id) {
+            throw new PayablesRuleViolation('That bill belongs to a different supplier than this payment.');
+        }
+        if ($bill->status === SupplierInvoice::STATUS_EXCEPTION) {
+            throw new PayablesRuleViolation("{$bill->bill_number} is a matching exception and is not approved for payment (PUR-003). Resolve the mismatch first.");
+        }
+        if ($amount->toFloat() > $payment->unallocatedSgd()->toFloat()) {
+            throw new PayablesRuleViolation("Only SGD {$payment->unallocatedSgd()->toString()} of this payment is still unallocated.");
+        }
+        if ($amount->toFloat() > $bill->outstandingSgd()->toFloat()) {
+            throw new PayablesRuleViolation("Bill {$bill->bill_number} only has SGD {$bill->outstandingSgd()->toString()} outstanding.");
+        }
+
+        $allocation = SupplierPaymentAllocation::create([
+            'company_id' => $payment->company_id,
+            'payment_id' => $payment->id,
+            'supplier_invoice_id' => $bill->id,
+            'amount_sgd' => $amount->toString(),
+        ]);
+        self::recalculateBillStatus($bill);
+
+        return $allocation;
     }
 
     /** From the supplier's agreed terms. None when none are agreed -- same treatment customers get. */

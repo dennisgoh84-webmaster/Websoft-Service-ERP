@@ -20,17 +20,10 @@ use Illuminate\Support\Carbon;
  * (App\Services\Numbering), and its due date comes from the
  * customer's own payment terms (confirmed 2026-09-10: terms vary per
  * customer -- CompanyIndividual::payment_terms_days). A customer with
- * no agreed terms gets no due date rather than an invented one.
- *
- * KNOWN GAP, deliberately not silently papered over: the Python
- * version posts every invoice to the General Ledger in the same
- * transaction (ACC-001/003, app/services/posting.py -- Dr AR / Cr
- * revenue / Cr GST output). GL posting is its own module (the
- * "GL posting + Bank step" design, docs/gl-posting-design.md) and
- * isn't converted yet, so an invoice issued here is NOT posted to the
- * GL. `InvoiceController::present()` always reports gl_status as
- * "not_posted", matching InvoiceOut's Python default so this is never
- * silently misreported as posted.
+ * no agreed terms gets no due date rather than an invented one. Every
+ * invoice also posts to the General Ledger in the same step
+ * (ACC-001/003, App\Services\Posting -- Dr AR / Cr revenue / Cr GST
+ * output), now that GL posting is converted.
  *
  * KNOWN GAP: GP costing (`cost_sgd`) traces a CONTRACT_ANNUAL
  * invoice's cost back to the Sales Quotation that converted into the
@@ -110,8 +103,11 @@ class BillingService
             costSgd: self::costBasisForContract($contract),
         );
         $invoice->save();
+        $invoice->refresh(); // pick up issued_at's DB default before posting
 
-        // KNOWN GAP: no GL posting here -- see class docblock.
+        // ACC-001/003 + BILL-005: issuing the invoice is the accounting
+        // event (revenue recognised on invoice) -- post it now.
+        Posting::postInvoice($invoice, $actorUserId);
 
         Audit::record(
             entityType: 'invoice',
@@ -167,10 +163,13 @@ class BillingService
             excessUsageRecordId: $excessRecord->id,
         );
         $invoice->save();
+        $invoice->refresh(); // pick up issued_at's DB default before posting
         $excessRecord->invoiced = true;
         $excessRecord->save();
 
-        // KNOWN GAP: no GL posting here -- see class docblock.
+        // ACC-001/003: post on issue -- Dr AR / Cr 4010 excess usage
+        // revenue / Cr GST output.
+        Posting::postInvoice($invoice, $actorUserId);
 
         Audit::record(
             entityType: 'invoice',

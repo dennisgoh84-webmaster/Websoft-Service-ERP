@@ -156,21 +156,29 @@ Payable/Purchasing (PUR-001 PO approval on the same owner/threshold
 pattern; PUR-002 2-way matching against the purchase order only;
 PUR-003 auto-approval on a match, an EXCEPTION spelling out exactly
 what differs on a mismatch; "confirm and import to AP"; AP aging).
-Also fixed in passing: `is_customer`/`is_supplier` were missing from
-CompanyIndividual's create/update entirely, a leftover gap from that
-module's own conversion that silently blocked anyone from ever being
-marked a supplier. **Known gaps:** invoices aren't posted to the
-General Ledger yet, a matched Accounts Payable bill's own GL posting
-is one step short, and recording a payment (AR-001 customer receipts,
-and Accounts Payable's own Payment Vouchers) isn't possible at all
-yet -- all genuinely blocked on the still-unconverted GL posting +
-Bank module (`docs/gl-posting-design.md`), since a payment record
-requires a real bank account row from that module; don't treat an
-invoice or bill issued via `backend-php/` as posted to the books, or
-its status as reflecting real payments received. `backend/` (Python)
-is untouched and keeps running as the system of record until each
-remaining module (GL posting + Bank, and everything else) is
-converted, module by module, the same way.
+Also converted: GL posting + Bank (`docs/gl-posting-design.md`,
+ACC-001..004) -- every accounting event now posts a balanced double-
+entry voucher (Sales Invoice, Supplier Bill, Payment Voucher), the
+explicit Bank step, and UNGL (a reversal, never a delete). This closes
+every remaining gap the modules above had flagged: invoices post to
+the General Ledger on issue, a matched Accounts Payable bill posts on
+auto-approval, and Accounts Payable's own Payment Vouchers are now
+fully built (create, allocate, bank, unbank, UNGL). Two things fixed
+in passing while converting these modules: `is_customer`/`is_supplier`
+were missing from CompanyIndividual's create/update entirely, a
+leftover gap from that module's own conversion that silently blocked
+anyone from ever being marked a supplier; and a Bank Accounts API
+field-name mismatch (`balance_sgd` vs. the frontend's
+`current_balance_sgd`) that the Playwright verification pass caught
+before it shipped. **Known gap:** AR-001 (recording a customer
+receipt) is still its own module-sized addition -- it needs a
+`Payment` model that doesn't exist yet, even though GL posting + Bank
+now exists to support it once built. Accounting Period management
+(locking/closing periods) and GL Trial Balance reporting are also not
+built yet. `backend/` (Python) is untouched and keeps running as the
+system of record until each remaining module (AR-001, Period
+management, and everything else) is converted, module by module, the
+same way.
 
 No other business area has application code yet. **Commission
 Management, further Service Record business-rule decisions (open item

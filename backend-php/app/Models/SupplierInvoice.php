@@ -13,10 +13,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * going out against it -- App\Models\SupplierPayment). Mirrors
  * backend/app/models/payables.py's SupplierInvoice.
  *
- * `expense_account_id` (the GL posting's expense account,
- * gl-posting-design.md §4.2) is deferred to the GL posting + Bank
- * migration, once `accounts` exists -- see this table's migration
- * docblock.
+ * `expense_account_id` is the GL posting's expense account
+ * (gl-posting-design.md §4.2) -- optional; App\Services\Posting
+ * defaults to 5000 Cost of services when unset.
  */
 class SupplierInvoice extends Model
 {
@@ -41,7 +40,7 @@ class SupplierInvoice extends Model
     public const STATUS_PAID = 'paid';
 
     protected $fillable = [
-        'company_id', 'supplier_id', 'purchase_order_id', 'bill_number',
+        'company_id', 'supplier_id', 'purchase_order_id', 'expense_account_id', 'bill_number',
         'supplier_invoice_no', 'invoice_date', 'due_date', 'description',
         'amount_sgd', 'gst_amount_sgd', 'total_amount_sgd', 'amount_paid_sgd',
         'match_status', 'match_note', 'status',

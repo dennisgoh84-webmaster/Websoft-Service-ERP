@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
 use App\Exceptions\PayablesRuleViolation;
+use App\Exceptions\PostingError;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\CompanyIndividual;
@@ -12,6 +13,7 @@ use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\Numbering;
 use App\Services\PayablesService;
+use App\Services\Posting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -21,8 +23,7 @@ use Illuminate\Support\Facades\DB;
  * backend/app/routers/payables.py -- see App\Services\PayablesService
  * for the PUR-002/003 business logic this only orchestrates.
  *
- * NOT yet converted: CSV/Excel export. See PayablesService's class
- * docblock for the GL-posting known gap on auto-approval.
+ * NOT yet converted: CSV/Excel export.
  */
 class SupplierInvoiceController extends Controller
 {
@@ -50,6 +51,8 @@ class SupplierInvoiceController extends Controller
 
     public function present(SupplierInvoice $bill): array
     {
+        $glEntry = Posting::liveEntryFor(Posting::SOURCE_SUPPLIER_INVOICE, $bill->id);
+
         return [
             'id' => $bill->id,
             'bill_number' => $bill->bill_number,
@@ -67,8 +70,8 @@ class SupplierInvoiceController extends Controller
             'match_status' => $bill->match_status,
             'match_note' => $bill->match_note,
             'status' => $bill->status,
-            'gl_status' => 'not_posted',
-            'gl_voucher_number' => null,
+            'gl_status' => $glEntry ? 'posted' : 'not_posted',
+            'gl_voucher_number' => $glEntry?->voucher_number,
         ];
     }
 
@@ -136,7 +139,7 @@ class SupplierInvoiceController extends Controller
                     'total_amount_sgd' => $net + $gst,
                 ]);
 
-                PayablesService::matchBillToPo($bill);
+                PayablesService::matchBillToPo($bill, $user->id);
 
                 Audit::record(
                     entityType: 'supplier_invoice',
@@ -159,5 +162,23 @@ class SupplierInvoiceController extends Controller
         }
 
         return response()->json($this->present($bill->fresh()));
+    }
+
+    /** ACC-004: UNGL -- reverse this bill's GL posting. */
+    public function ungl(Request $request, string $billId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $bill = $this->billOrFail($user->company_id, $billId);
+        $data = $request->validate(['reason' => 'required|string|min:1']);
+
+        try {
+            $reversal = Posting::unpost(Posting::SOURCE_SUPPLIER_INVOICE, $bill->id, $user->id, $data['reason'], 'supplier_invoice');
+        } catch (PostingError $e) {
+            throw new ApiException(422, $e->getMessage());
+        }
+
+        return response()->json(['status' => 'reversed', 'reversal_voucher' => $reversal->voucher_number]);
     }
 }

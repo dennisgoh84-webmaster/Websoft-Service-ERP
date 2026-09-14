@@ -52,7 +52,9 @@ class InvoiceTest extends TestCase
 
         $list = $this->getJson('/api/invoices', $this->headers($token));
         $list->assertOk()->assertJsonCount(1);
-        $this->assertSame('not_posted', $list->json('0.gl_status'));
+        // Issuing an invoice posts it to the GL in the same step now
+        // that GL posting is converted (ACC-001/003).
+        $this->assertSame('posted', $list->json('0.gl_status'));
 
         $show = $this->getJson("/api/invoices/{$invoice->id}", $this->headers($token));
         $show->assertOk()->assertJson(['invoice_type' => 'contract_annual', 'status' => 'outstanding']);

@@ -201,7 +201,7 @@ class PurchaseOrderController extends Controller
                     'gst_amount_sgd' => $po->gst_amount_sgd,
                     'total_amount_sgd' => $po->total_amount_sgd,
                 ]);
-                PayablesService::matchBillToPo($bill);
+                PayablesService::matchBillToPo($bill, $user->id);
 
                 Audit::record(
                     entityType: 'purchase_order',

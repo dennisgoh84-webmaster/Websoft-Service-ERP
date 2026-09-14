@@ -495,36 +495,92 @@ breakdown.
   through `backend-php/`, silently blocking this whole module. Fixed
   by adding both fields (`is_customer` defaults true, `is_supplier`
   false, matching Python's schema defaults), with a new test.
+  A matched bill's GL posting and Payment Vouchers (SupplierPayment +
+  allocations) were deferred here pending GL posting -- see the next
+  entry, which closes both.
   17 business-logic tests (`tests/Feature/PayablesServiceTest.php` --
   every threshold/role combination, every 2-way-match outcome, the
   double-import guard, aging) + 8 API-level tests
   (`tests/Feature/PayablesTest.php`).
-  **KNOWN GAP (not silently papered over), scoped up front rather than
-  discovered mid-conversion:** Payment Vouchers (`SupplierPayment` +
-  allocations) are NOT converted. Unlike an Invoice or a bill, Python's
-  own `POST /payments` makes GL posting a *required* part of creating
-  a Payment Voucher -- there is no "recorded but not posted" state for
-  one, so this genuinely cannot be built faithfully until GL posting
-  exists; building a partial version that skips posting would silently
-  diverge from the real rule (a payment voucher that never fails to
-  post). A matched bill's own GL posting (Dr expense / Dr GST input /
-  Cr AP, ACC-001/003) is the same story --
-  `PayablesService::matchBillToPo()` stops one step short of it; see
-  that method's docblock. Also not converted: CSV/Excel/.docx export,
-  "Email Purchase Order", un-GL.
+  **Not yet converted:** CSV/Excel/.docx export, "Email Purchase
+  Order".
+- **GL posting + Bank step** (`app/services/posting.py`,
+  `app/services/ledger.py`, `app/models/accounting.py`,
+  `app/models/treasury.py`, `app/models/periods.py` →
+  `App\Models\Account`/`JournalEntry`/`JournalLine`/`BankAccount`/
+  `BankTransaction`/`AccountingPeriod`/`PeriodLock`,
+  `App\Services\Ledger`/`Posting`/`Periods`,
+  `App\Http\Controllers\Api\AccountController`/
+  `BankAccountController`/`SupplierPaymentController`): ACC-001..004
+  -- every accounting event posts a balanced double-entry voucher
+  (Sales Invoice on issue: Dr AR / Cr revenue / Cr GST output;
+  Supplier Bill on auto-approval: Dr expense / Dr GST input / Cr AP;
+  Payment Voucher on save: Dr AP / Cr bank), the explicit Bank step
+  (ACC-002, a separate ledger from the GL, reversible with Unbank),
+  and UNGL (ACC-004: a reversal voucher, never a delete; re-posting
+  after UNGL is allowed since the reversal doesn't carry the
+  document's own `source_type`/`source_id`). `App\Services\Ledger`
+  enforces double-entry exactly (debits = credits, non-zero, a
+  posted voucher immutable, corrections only via `reverseEntry()`'s
+  mirror-image). This closes the known gaps flagged by every prior
+  billing-adjacent module: `BillingService` now posts every invoice
+  in the same step it's issued; `PayablesService::matchBillToPo()`
+  now posts a matched bill; Accounts Payable's Payment Vouchers
+  (`SupplierPaymentController`) are now fully built -- create,
+  allocate, bank, unbank, UNGL.
+  **Bug fix found and fixed in the process:**
+  `BankAccountController::present()` returned the computed balance
+  as `balance_sgd`; the frontend's `BankAccount` type expects
+  `current_balance_sgd` (confirmed against both `frontend/src/lib/api.ts`
+  and the Python schema) -- the Bank Accounts page rendered "$ NaN"
+  until this was caught in the Playwright verification pass and fixed.
+  **Scoped out (tracked here, not silently assumed done):** GLType (a
+  purely optional reporting sub-classification nothing in `posting.py`
+  reads), `BankReconciliation`, `CurrencyRate`, `FiscalYearClosure`,
+  and Period management itself (creating/closing a period, toggling
+  individual locks, Year-End Closing -- `app/services/periods.py` is
+  368 lines, its router another 252). `App\Services\Periods::requireAllows()`
+  is ported and wired into every posting/bank/reversal path exactly
+  like Python's `require_period_allows`, but since no endpoint here
+  ever creates an `AccountingPeriod` row, it is correctly always a
+  no-op today -- the same "opt-in protection: a date with no period
+  defined is unrestricted" default Python itself falls back to.
+  AR-001 (recording a customer receipt) remains its own
+  module-sized addition even though `bank_accounts` now exists to
+  support it -- `App\Models\Payment` doesn't exist yet; see
+  `AccountsReceivableController`'s docblock. GL Trial Balance / the
+  per-account transaction ledger (`ledger.account_balances`/
+  `account_transactions`) also aren't exposed by a controller yet.
+  A new `App\Database\Factories\CompanyFactory::configure()` hook
+  seeds a minimal 8-account chart for every factory-made `Company` in
+  tests, since issuing an invoice or auto-approving a bill now posts
+  to the GL as an integral step, not an optional one -- every test
+  company needs somewhere to post to, the same as a real company
+  would set one up before using Billing.
+  28 tests (`tests/Feature/LedgerServiceTest.php` -- the core double-
+  entry rules; `tests/Feature/PostingServiceTest.php` -- the exact
+  Dr/Cr lines for each document type, the double-post guard, bank/
+  unbank, UNGL-then-repost, a missing Chart of Accounts entry
+  surfacing as a clear `PostingError` rather than a crash;
+  `tests/Feature/AccountTest.php`, `tests/Feature/BankAccountTest.php`,
+  `tests/Feature/SupplierPaymentTest.php`).
+  **Not yet converted:** CSV/Excel export.
 
-Verified end-to-end for all seven modules against the real React
+Verified end-to-end for all eight modules against the real React
 frontend (screenshots in the PR/commit history), including the
 Invoices page's Aging widget -- which previously 404'd (a confirmed
 gap noted when Billing shipped) -- now rendering all 5 buckets with
 the real activation invoice correctly showing as "Current / not yet
-due" ($3,270.00), and the Purchase Orders / Accounts Payable pages
+due" ($3,270.00); the Purchase Orders / Accounts Payable pages
 showing a PO raised, approved, imported to AP as a matched, auto-
-approved bill, and the AP Aging widget picking it up correctly. The
-only 404s seen were for not-yet-converted modules (Announcements,
-Dashboard, Documents, Chart of Accounts, Payment Vouchers) -- none
-from Contracts, Job Orders, Service Records, Excess Usage, Billing,
-Accounts Receivable, or Accounts Payable's own endpoints.
+approved (and now GL-posted) bill; and the full GL posting + Bank
+loop -- Chart of Accounts (36 seeded rows), a Payment Voucher raised
+against that bill, banked, and the Bank Master File's balance
+correctly showing -$2,180.00 after the fix above. The only 404s seen
+were for not-yet-converted modules (Announcements, Dashboard,
+Documents) -- none from Contracts, Job Orders, Service Records,
+Excess Usage, Billing, Accounts Receivable, Accounts Payable, or GL
+posting's own endpoints.
 
 ## Not yet converted (pending, in rough priority order)
 
@@ -533,16 +589,18 @@ phase of its own, following the same pattern as CompanyIndividual
 Management above -- model(s) + migration(s) + controller + routes +
 smoke test:
 
-1. **GL posting + Bank step** (`app/services/posting.py`,
-   `app/services/ledger.py`, `app/models/accounting.py`,
-   `app/models/treasury.py`, `app/models/periods.py`,
-   `docs/gl-posting-design.md`) -- Chart of Accounts, journal entries,
-   period locking, the Bank Book. Highest priority: it now blocks
-   three real gaps -- invoices aren't posted to the GL; a matched
-   bill's GL posting is one step short; AR-001 (customer receipts) and
-   AP's Payment Vouchers can't be built at all without `bank_accounts`
-   and `accounts`.
-2. Everything else in `backend/app/routers/` not listed above
+1. **AR-001** (recording a customer receipt and allocating it against
+   invoices) -- `App\Models\Payment` doesn't exist yet; its own
+   module-sized addition, mirroring the now-built Accounts Payable
+   Payment Voucher on the customer side. Bumped up in priority: GL
+   posting + Bank now exists to support it, so nothing structural
+   blocks it anymore.
+2. **Accounting Period management** (create/close/reopen a period,
+   the per-doc-type per-operation lock matrix, Year-End Closing) and
+   **GL Trial Balance / the per-account transaction ledger** -- both
+   scoped out of the GL posting + Bank conversion above; see that
+   entry's docblock references.
+3. Everything else in `backend/app/routers/` not listed above
    (Quotations, Incidents, Inventory/Stock, Reporting/dashboards,
    Event Logs, Document Control, Announcements, Software Tasks, Ops
    Dashboard, Customer Helpdesk Portal, Mobile Web App, Commissions
