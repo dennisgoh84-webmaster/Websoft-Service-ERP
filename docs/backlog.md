@@ -15,14 +15,14 @@ shipped and when.
   Administration (auth, audit logging, Group Authority, Module
   Control, Company Setup, Users/Staff Master) and CompanyIndividual
   Management (Customer/Supplier master, Contacts, Branches,
-  Relationships, PDPA consent/archive), all in a new `backend-php/`
-  app running against its own Postgres database, `backend/` (Python)
-  untouched. Each converted module verified against the real React
-  frontend (proxied at backend-php/ for the check), not just its own
-  tests. Still pending: Catalog, Service Contracts, Job Orders,
-  Service Records, Excess Usage, Billing, Accounts Receivable, and
-  everything else -- converted module by module, same pattern as the
-  Odoo replacement strategy.
+  Relationships, PDPA consent/archive), plus the Product/Service
+  Catalog, all in a new `backend-php/` app running against its own
+  Postgres database, `backend/` (Python) untouched. Each converted
+  module verified against the real React frontend (proxied at
+  backend-php/ for the check), not just its own tests. Still pending:
+  Service Contracts, Job Orders, Service Records, Excess Usage,
+  Billing, Accounts Receivable, and everything else -- converted
+  module by module, same pattern as the Odoo replacement strategy.
   → [php-conversion-plan.md](php-conversion-plan.md)
 
 ## Waiting on Dennis to pick up (deferred 2026-09-12)

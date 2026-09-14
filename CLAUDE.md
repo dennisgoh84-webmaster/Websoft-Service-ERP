@@ -130,12 +130,13 @@ a summary dashboard, and dynamic filters on the main list views. See
 [docs/php-conversion-plan.md](docs/php-conversion-plan.md) for the
 reason, approach, and status. Converted and verified so far: Core /
 Administration (auth, audit logging, Group Authority, Module Control,
-Company Setup, Users/Staff Master) and CompanyIndividual Management
+Company Setup, Users/Staff Master), CompanyIndividual Management
 (Customer/Supplier master, Contacts, Branches, Relationships, PDPA
-consent/archive). `backend/` (Python) is untouched and keeps running
-as the system of record until each remaining module (Catalog,
-Contracts, Job Orders, Service Records, Excess Usage, Billing, AR, and
-everything else) is converted, module by module, the same way.
+consent/archive), and the Product/Service Catalog. `backend/` (Python)
+is untouched and keeps running as the system of record until each
+remaining module (Contracts, Job Orders, Service Records, Excess
+Usage, Billing, AR, and everything else) is converted, module by
+module, the same way.
 
 No other business area has application code yet. **Commission
 Management, further Service Record business-rule decisions (open item

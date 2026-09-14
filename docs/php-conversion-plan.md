@@ -258,6 +258,22 @@ sub-resource (depends on the Portal module below).
   within its own company; revoking the company a staff member is
   currently working in is blocked, matching the Python version
   exactly). **Not yet converted:** CSV/Excel export.
+- **Product/Service Catalog** (`app/models/catalog.py`,
+  `app/routers/catalog.py` → `App\Models\Product`,
+  `App\Http\Controllers\Api\ProductController`): create/update/list,
+  gated by the `sales` module (not `company_individual_management`,
+  matching the Python router's own `MODULE` constant). Backs Sales
+  Quotation lines once Quotations is converted. `default_reference_code_id`
+  has no FK constraint yet (Reference Codes isn't converted). Found
+  while converting, and deliberately **not** silently fixed (a straight
+  conversion preserves behaviour, not just intent): the Python
+  `ProductUpdate` schema accepts `is_stock`, but `update_product`'s
+  field-update loop never actually applies it, so it is only settable
+  at creation in both backends now -- pinned by
+  `tests/Feature/ProductTest.php`'s
+  `test_update_ignores_is_stock_same_as_python`, and worth flagging to
+  Dennis as a possible oversight rather than a confirmed rule.
+  **Not yet converted:** CSV/Excel export.
 
 ## Not yet converted (pending, in rough priority order)
 
@@ -266,26 +282,24 @@ phase of its own, following the same pattern as CompanyIndividual
 Management above -- model(s) + migration(s) + controller + routes +
 smoke test:
 
-1. **Catalog** (`app/models/catalog.py`, `app/routers/catalog.py`) --
-   Product/Service master, referenced by Contracts and Quotations.
-2. **Service Contracts** (`app/models/contracts.py`,
+1. **Service Contracts** (`app/models/contracts.py`,
    `app/services/contracts.py`, `app/routers/contracts.py`) -- SRV-001,
    002, 003, 005, 010, 012, 016, 017, 018.
-3. **Job Orders** (`app/models/job_orders.py`, `app/routers/job_orders.py`).
-4. **Service Records** (`app/models/service_records.py`,
+2. **Job Orders** (`app/models/job_orders.py`, `app/routers/job_orders.py`).
+3. **Service Records** (`app/models/service_records.py`,
    `app/services/service_records.py`, `app/routers/service_records.py`)
    -- SRV-007 (hour rounding), SRV-015 (submission timeframe).
-5. **Excess Usage** (`app/services/excess_usage.py`,
+4. **Excess Usage** (`app/services/excess_usage.py`,
    `app/routers/excess_usage.py`) -- SRV-004, 008, 011, 013 (Nico/
    Cherish review, blended-rate billing, treatment categories); the
    business logic here has the most riding on getting the rounding/
    balance-never-negative arithmetic exactly right, so it should get a
    dedicated test suite before being trusted, not just a smoke test.
-6. **Billing / Invoicing** (`app/services/billing.py`,
+5. **Billing / Invoicing** (`app/services/billing.py`,
    `app/routers/billing.py`) -- BILL-001..006.
-7. **Accounts Receivable** (`app/services/accounts_receivable.py`,
+6. **Accounts Receivable** (`app/services/accounts_receivable.py`,
    `app/routers/accounts_receivable.py`) -- AR-001..003.
-8. Everything else in `backend/app/routers/` not listed above
+7. Everything else in `backend/app/routers/` not listed above
    (Quotations, Incidents, Accounts Payable/Purchasing, Inventory/
    Stock, GL posting + Bank step, Reporting/dashboards, Event Logs,
    Document Control, Periods, Announcements, Software Tasks, Ops
