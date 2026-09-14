@@ -37,6 +37,7 @@ require __DIR__.'/api/ledger.php';
 require __DIR__.'/api/reports.php';
 require __DIR__.'/api/bank_accounts.php';
 require __DIR__.'/api/periods.php';
+require __DIR__.'/api/stock.php';
 require __DIR__.'/api/dashboard.php';
 require __DIR__.'/api/documents.php';
 require __DIR__.'/api/announcements.php';

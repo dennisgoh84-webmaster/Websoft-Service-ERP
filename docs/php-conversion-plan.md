@@ -1098,6 +1098,77 @@ API requests and zero console errors across the whole pass** -- the
 `/api/announcements/public` 404 that appeared in every earlier
 verification run is gone, and no 404s remained for the Company
 Dashboard, Documents or Document Control either.
+- **Inventory / Stock -- Stock Master + setup masters** (the
+  `stock_master` half of `app/models/inventory.py` and
+  `app/routers/stock.py` → `App\Models\StockCategory`/`StockGroup`/
+  `StockBrand`/`StockModel`/`StockUsage`/`Warehouse`/`StockItem`/
+  `StockItemAttachment`/`StockLevel`/`StockMovement`,
+  `App\Http\Controllers\Api\StockSetupController`/`WarehouseController`/
+  `StockItemController`): the five setup master files (Categories,
+  Groups, Brands + their child Models, Usages -- each with the
+  create/update/`/toggle` shape the setup screens use, never a delete),
+  Warehouses, the Stock Master item itself (including every extended
+  2026-09-13 field and the joined category/group/brand/model/usage
+  display names `StockMasterPage`/`StockItemDetailPage` render), item
+  picture/document attachments (upload/download/remove, stored on disk
+  under `config('websoft.uploads_dir')` keyed by the attachment's own
+  uuid, never the user-supplied filename), and the read-only
+  per-warehouse stock levels. A `StockModel` deliberately carries no
+  `company_id` of its own, exactly like the Python model -- every model
+  query is scoped by joining through its brand.
+  **BOUNDARY deliberately preserved:** Product's "Is Stock" flag is
+  *not* wired to `stock_items` here. `docs/backlog.md` and
+  `docs/planned-work.md` #5 record that the full Product → Stock Master
+  link-up is deferred pending the separate Websoft Stock Distribution
+  ERP project; the Python schema stops at `stock_items.product_id` (one
+  optional FK) and so does this conversion -- inventing that link would
+  be inventing a rule nobody confirmed.
+  **BUG FOUND AND FIXED (called out, not silently absorbed):** the
+  Python `PATCH /stock/warehouses/{id}` and `PATCH /stock/items/{id}`
+  routes type their request body as `WarehouseCreate`/`StockItemCreate`,
+  whose `code` and `name` are **required** and which have no
+  `is_active` field at all -- yet `WarehousesPage.tsx` and
+  `StockItemDetailPage.tsx` both implement Activate/Deactivate as
+  `update(id, { is_active: !x.is_active })`. Against `backend/` that
+  can only ever 422, and would not have toggled the flag even if it
+  validated. Both PHP routes make every field optional (which is what
+  Python's own `model_dump(exclude_unset=True)` update loop was
+  written for) and accept `is_active`, so the existing screens work;
+  pinned by
+  `test_warehouse_can_be_deactivated_with_is_active_alone` and
+  `test_stock_item_can_be_deactivated_with_is_active_alone`.
+  **FINDING -- audit trail (deliberate divergence):**
+  `backend/app/routers/stock.py` writes **no audit entries at all**,
+  for any of the six stock module keys. CLAUDE.md requires audit
+  trails on important operational transactions and Event Logs reads
+  that trail system-wide, so every create/update/state change in the
+  PHP module records one. There is no Python call site to copy
+  `entity_type`/`action` strings from, so they follow this codebase's
+  existing convention: `stock_category`/`stock_group`/`stock_usage`/
+  `stock_brand`/`stock_model`/`warehouse`/`stock_item` with
+  `created`/`updated`/`activated`/`deactivated` (plus
+  `attachment_uploaded`/`attachment_removed`). Worth raising with
+  Dennis as a gap in `backend/`, not just a difference.
+  **Also hardened (Python does not check this):** a stock item's
+  lookup FKs (`category_id`/`group_id`/`brand_id`/`model_id`/
+  `usage_id`/`product_id`) are verified to belong to the caller's own
+  company. The Python router assigns the raw uuid straight through, so
+  a cross-company id would leak another company's category or brand
+  *name* into this company's Stock Master list through the joined
+  display names. Refused with a 404 here rather than stored.
+  **Pragmatic default called out in code, not assumed:** the Python
+  attachment upload has no size limit at all; a 10 MB ceiling is set
+  here (`StockItemController::MAX_ATTACHMENT_KB`).
+  17 API-level tests (`tests/Feature/StockMasterTest.php`) covering the
+  masters' CRUD/toggle shape, brand→model scoping, the attachment
+  round-trip, both regression cases above, and the full RBAC matrix on
+  `stock_master` (no Group, VIEW-only on a write, EDIT-level on a write
+  -- Python gates stock writes at FULL, not EDIT -- Module Control
+  disabled failing closed, and another company's record 404ing).
+  `App\Support\Money::quantize()`/`toString()`/`toFloat()` gained an
+  optional scale argument (default 2, unchanged for every existing
+  caller) because a stock unit/average cost is `Numeric(14, 4)`, not
+  2dp money -- see the Movements entry below for where that matters.
 
 ## New feature work landed directly in `backend-php/` (not a conversion)
 

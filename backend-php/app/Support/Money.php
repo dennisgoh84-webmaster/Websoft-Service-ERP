@@ -80,22 +80,34 @@ final class Money
     }
 
     /**
-     * Rounds to 2 decimal places, half-up -- the same rounding mode
-     * and precision as every `.quantize(Decimal("0.01"),
+     * Rounds to `$scale` decimal places, half-up -- the same rounding
+     * mode and precision as every `.quantize(Decimal("0.01"),
      * rounding=ROUND_HALF_UP)` call in backend/app/services/billing.py.
      * Call this once, at the point a computation is finished, not
      * after every intermediate step (matches how the Python service
      * layer only quantizes the final rate/amount, not each operand).
+     *
+     * `$scale` defaults to 2 (customer-facing money, Numeric(12, 2)).
+     * Pass 4 for a stock unit/average cost, whose Python column is
+     * Numeric(14, 4) and whose weighted-average recalculation
+     * quantizes to `Decimal("0.0001")` -- see
+     * backend/app/services/inventory.py's receive_stock (INV-002).
+     * Rounding a 4dp cost to 2dp would drift the average over many
+     * receipts, so the scale is explicit rather than assumed.
      */
-    public function quantize(): self
+    public function quantize(int $scale = 2): self
     {
-        return new self($this->value->toScale(2, RoundingMode::HALF_UP));
+        return new self($this->value->toScale($scale, RoundingMode::HALF_UP));
     }
 
-    /** The exact decimal string, e.g. "1234.50" -- safe to store back into a `decimal:2` column. */
-    public function toString(): string
+    /**
+     * The exact decimal string, e.g. "1234.50" -- safe to store back
+     * into a `decimal:2` column (or a `decimal:4` one with $scale = 4;
+     * see quantize()).
+     */
+    public function toString(int $scale = 2): string
     {
-        return $this->value->toScale(2, RoundingMode::HALF_UP)->__toString();
+        return $this->value->toScale($scale, RoundingMode::HALF_UP)->__toString();
     }
 
     /**
@@ -103,8 +115,8 @@ final class Money
      * never for further arithmetic or for a comparison against
      * another money value (float equality is unreliable).
      */
-    public function toFloat(): float
+    public function toFloat(int $scale = 2): float
     {
-        return (float) $this->toString();
+        return (float) $this->toString($scale);
     }
 }

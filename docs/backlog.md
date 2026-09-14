@@ -71,6 +71,13 @@ shipped and when.
   conversion -- hourly lines become one Service Support contract,
   every other line one Annual contract, a mix becoming two separate
   contracts never one blend, 19 dedicated tests). Also converted:
+  Inventory / Stock -- the Stock Master half so far (setup masters
+  Categories/Groups/Brands+Models/Usages, Warehouses, the stock item
+  with its attachments, and read-only per-warehouse stock levels, 17
+  dedicated tests), which also fixed a real bug: the Warehouses and
+  Stock Item screens' Activate/Deactivate buttons could only ever 422
+  against the Python backend, because its PATCH body required
+  `code`/`name` and had no `is_active` field. Also converted:
   Incidents (the Helpdesk front door -- logging a call/email with its
   one automatic customer-by-email match, the "needs a callback" status
   + assignee, Close, and converting to a draft Sales Quotation or a

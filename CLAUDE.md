@@ -209,7 +209,18 @@ totals, and the confirmed 2026-09-10 accept-to-auto-Contract
 conversion -- lines split by unit of measure, "Hours"/"Hour" lines
 summing into one Service Support contract and every other line into
 one Annual contract, a quotation mixing both never blending them into
-one). Also converted: Incidents (the Helpdesk front door for an
+one). Also converted: the Stock Master half of Inventory / Stock (the
+`stock_master` module key -- setup masters Categories/Groups/
+Brands+Models/Usages, Warehouses, the stock item with its extended
+fields and picture/document attachments, and read-only per-warehouse
+stock levels). Two things found while converting it: the Warehouses
+and Stock Item screens' Activate/Deactivate buttons could never have
+worked against `backend/` (its PATCH body required `code`/`name` and
+had no `is_active` field at all) -- fixed here with regression tests;
+and `backend/app/routers/stock.py` writes **no audit trail at all**
+for any of its six module keys, so the PHP version adds one, flagged
+in docs/php-conversion-plan.md as a gap in `backend/` worth raising.
+Also converted: Incidents (the Helpdesk front door for an
 incoming call or email -- logging one with its one automatic
 customer-by-email match, the "needs a callback" status + assignee,
 Close, and converting to a draft Sales Quotation or a Job Order
