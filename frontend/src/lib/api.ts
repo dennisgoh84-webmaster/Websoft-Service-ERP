@@ -433,6 +433,15 @@ export interface ContractProductCoverage {
   number_of_licenses: number | null
 }
 
+// NEW FEATURE (not a Python->PHP conversion -- see
+// docs/backlog.md / docs/planned-work.md): "Service Contract - To
+// have selection of Sharing of Hours with multiple company".
+export interface ContractSharedCustomer {
+  id: string
+  customer_id: string
+  customer_name: string
+}
+
 export interface Contract {
   id: string
   contract_number: string
@@ -450,6 +459,11 @@ export interface Contract {
   end_date: string
   renewed_from_contract_id: string | null
   products: ContractProductCoverage[]
+  /** NEW FEATURE (not a Python->PHP conversion) -- see docs/backlog.md / docs/planned-work.md. */
+  shared_customers: ContractSharedCustomer[]
+  /** KNOWN GAP / pragmatic stand-in for a real Sales Quotation link -- free text only, see docs/planned-work.md. */
+  quotation_reference: string | null
+  quotation_reference_set_at: string | null
 }
 
 export type JobOrderPriority = 'low' | 'normal' | 'high' | 'critical'
@@ -488,6 +502,29 @@ export interface BudgetOverrunStatus {
   contract_value_sgd: number
 }
 
+// NEW FEATURE (not a Python->PHP conversion -- see
+// docs/backlog.md / docs/planned-work.md): "Job Order - To allow
+// choosing of multiple Products and Template to import according to
+// Product".
+export interface JobOrderProductSelection {
+  product_id: string
+  product_name: string
+}
+
+export type JobOrderImplementationTaskStatus = 'pending' | 'completed'
+
+export interface JobOrderImplementationTask {
+  id: string
+  job_order_id: string
+  source_product_id: string | null
+  task_name: string
+  description: string | null
+  sort_order: number
+  status: JobOrderImplementationTaskStatus
+  completed_by_user_id: string | null
+  completed_at: string | null
+}
+
 export interface JobOrder {
   id: string
   job_order_number: string
@@ -510,6 +547,8 @@ export interface JobOrder {
   closed_at: string | null
   milestones: ProjectMilestone[]
   budget_overrun: BudgetOverrunStatus | null
+  products: JobOrderProductSelection[]
+  implementation_tasks: JobOrderImplementationTask[]
 }
 
 // ---- Operations/Accounting Reports filters ----
@@ -1343,6 +1382,49 @@ export interface DashboardSummary {
   gl_is_balanced: boolean
 }
 
+// ---- Sales Dashboard ----
+// NEW FEATURE (not a Python->PHP conversion -- see
+// docs/backlog.md / docs/planned-work.md): "Sales Dashboard - Display
+// below Company Dashboard".
+export interface SalesDashboardQuotationKpi {
+  count: number
+  not_available: boolean
+  reason?: string
+}
+
+export interface SalesDashboardSummary {
+  financial_year: number
+  financial_year_is_calendar_year: boolean
+  contracts_due_for_renewal: number
+  ar_outstanding_total_sgd: number
+  ar_outstanding_2_months_sgd: number
+  ar_outstanding_3_months_sgd: number
+  quotations_pending_approval: SalesDashboardQuotationKpi
+  quotations_pending_confirmation: SalesDashboardQuotationKpi
+}
+
+export interface SalesDashboardArRow {
+  invoice_id: string
+  invoice_number: string
+  customer_id: string
+  customer_name: string
+  due_date: string | null
+  outstanding_sgd: number
+  bucket: string
+}
+
+export interface SalesDashboardTopCustomerRow {
+  customer_id: string
+  customer_name: string
+  invoice_count: number
+  net_revenue_sgd: number
+}
+
+export interface SalesDashboardBottomCustomerRow {
+  customer_id: string
+  customer_name: string
+}
+
 // ---- Product / Service Catalog ----
 export type ProductType = 'service' | 'product'
 
@@ -1908,6 +1990,11 @@ export const api = {
       product_id?: string
       coverage_start?: string
       coverage_end?: string
+      // NEW FEATURE (not a Python->PHP conversion) -- see
+      // docs/backlog.md / docs/planned-work.md.
+      remaining_hours_lt?: number
+      expiry_from?: string
+      expiry_to?: string
     } = {},
   ) => request<Contract[]>(`/contracts${qs(filters)}`),
   exportContractsCsv: (filters: Record<string, string | undefined> = {}) =>
@@ -1944,10 +2031,71 @@ export const api = {
       contract_value_sgd: number
       force_start_date?: string
       hourly_rate_sgd?: number | null
+      quotation_reference?: string | null
     },
   ) => request<Contract>(`/contracts/${id}/renew`, { method: 'POST', body: JSON.stringify(payload) }),
   listContractExcessUsage: (id: string) =>
     request<ExcessUsageRecord[]>(`/contracts/${id}/excess-usage`),
+
+  // NEW FEATURES (not Python->PHP conversions) -- see
+  // docs/backlog.md / docs/planned-work.md.
+  setContractQuotationReference: (id: string, quotation_reference: string) =>
+    request<Contract>(`/contracts/${id}/quotation-reference`, { method: 'POST', body: JSON.stringify({ quotation_reference }) }),
+  addContractSharedCustomer: (id: string, customer_id: string) =>
+    request<Contract>(`/contracts/${id}/shared-customers`, { method: 'POST', body: JSON.stringify({ customer_id }) }),
+  removeContractSharedCustomer: (id: string, sharedCustomerId: string) =>
+    request<Contract>(`/contracts/${id}/shared-customers/${sharedCustomerId}`, { method: 'DELETE' }),
+
+  getProductImplementationTemplate: (productId: string) =>
+    request<{ product_id: string; tasks: { id: string; task_name: string; description: string | null; sort_order: number }[] }>(
+      `/catalog/${productId}/implementation-template`,
+    ),
+  setProductImplementationTemplate: (productId: string, tasks: { task_name: string; description?: string | null }[]) =>
+    request<{ product_id: string; tasks: { id: string; task_name: string; description: string | null; sort_order: number }[] }>(
+      `/catalog/${productId}/implementation-template`,
+      { method: 'PUT', body: JSON.stringify({ tasks }) },
+    ),
+
+  addJobOrderProducts: (jobOrderId: string, product_ids: string[]) =>
+    request<JobOrder>(`/job-orders/${jobOrderId}/products`, { method: 'POST', body: JSON.stringify({ product_ids }) }),
+  completeJobOrderImplementationTask: (jobOrderId: string, taskId: string) =>
+    request<JobOrderImplementationTask>(`/job-orders/${jobOrderId}/implementation-tasks/${taskId}/complete`, { method: 'POST' }),
+  reopenJobOrderImplementationTask: (jobOrderId: string, taskId: string) =>
+    request<JobOrderImplementationTask>(`/job-orders/${jobOrderId}/implementation-tasks/${taskId}/reopen`, { method: 'POST' }),
+
+  // ---- Contract Operation Report (Expiry / Renewal Due Listings) ----
+  reportContractExpiryListing: (filters: { expiry_from?: string; expiry_to?: string } = {}) =>
+    request<Contract[]>(`/reports/operations/contracts/expiry-listing${qs(filters)}`),
+  exportContractExpiryListingCsv: (filters: { expiry_from?: string; expiry_to?: string } = {}) =>
+    requestBlob(`/reports/operations/contracts/expiry-listing/export.csv${qs(filters)}`),
+  exportContractExpiryListingExcel: (filters: { expiry_from?: string; expiry_to?: string } = {}) =>
+    requestBlob(`/reports/operations/contracts/expiry-listing/export.xls${qs(filters)}`),
+
+  reportContractRenewalDueListing: (filters: { as_of?: string } = {}) =>
+    request<Contract[]>(`/reports/operations/contracts/renewal-due-listing${qs(filters)}`),
+  exportContractRenewalDueListingCsv: (filters: { as_of?: string } = {}) =>
+    requestBlob(`/reports/operations/contracts/renewal-due-listing/export.csv${qs(filters)}`),
+  exportContractRenewalDueListingExcel: (filters: { as_of?: string } = {}) =>
+    requestBlob(`/reports/operations/contracts/renewal-due-listing/export.xls${qs(filters)}`),
+
+  // ---- Sales Dashboard ----
+  salesDashboardSummary: (year?: number) => request<SalesDashboardSummary>(`/sales-dashboard/summary${qs({ year })}`),
+  salesDashboardArBreakdown: (bucket: string) =>
+    request<SalesDashboardArRow[]>(`/sales-dashboard/ar-breakdown${qs({ bucket })}`),
+  exportSalesDashboardArBreakdownCsv: (bucket: string) => requestBlob(`/sales-dashboard/ar-breakdown/export.csv${qs({ bucket })}`),
+  exportSalesDashboardArBreakdownExcel: (bucket: string) => requestBlob(`/sales-dashboard/ar-breakdown/export.xls${qs({ bucket })}`),
+  salesDashboardTopBillingCustomers: (year?: number) =>
+    request<SalesDashboardTopCustomerRow[]>(`/sales-dashboard/top-billing-customers${qs({ year })}`),
+  exportSalesDashboardTopBillingCustomersCsv: (year?: number) =>
+    requestBlob(`/sales-dashboard/top-billing-customers/export.csv${qs({ year })}`),
+  exportSalesDashboardTopBillingCustomersExcel: (year?: number) =>
+    requestBlob(`/sales-dashboard/top-billing-customers/export.xls${qs({ year })}`),
+  salesDashboardBottomNonActiveCustomers: (year?: number) =>
+    request<SalesDashboardBottomCustomerRow[]>(`/sales-dashboard/bottom-non-active-customers${qs({ year })}`),
+  exportSalesDashboardBottomNonActiveCustomersCsv: (year?: number) =>
+    requestBlob(`/sales-dashboard/bottom-non-active-customers/export.csv${qs({ year })}`),
+  exportSalesDashboardBottomNonActiveCustomersExcel: (year?: number) =>
+    requestBlob(`/sales-dashboard/bottom-non-active-customers/export.xls${qs({ year })}`),
 
   listJobOrders: (
     filters: { status?: string; priority?: string; customer_id?: string; contract_id?: string; job_order_type?: string } = {},
@@ -1967,6 +2115,9 @@ export const api = {
     priority?: JobOrderPriority
     due_date?: string | null
     is_urgent?: boolean
+    // NEW FEATURE (not a Python->PHP conversion) -- see
+    // docs/backlog.md / docs/planned-work.md.
+    product_ids?: string[]
   }) => request<JobOrder>('/job-orders', { method: 'POST', body: JSON.stringify(payload) }),
   assignJobOrder: (id: string, assigned_to_user_id: string) =>
     request<JobOrder>(`/job-orders/${id}/assign`, { method: 'POST', body: JSON.stringify({ assigned_to_user_id }) }),
