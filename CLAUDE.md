@@ -141,14 +141,20 @@ Order auto-close -- Job Orders' budget-overrun figure is now a real
 query against approved Service Records rather than a stub), and
 Excess Usage (SRV-004/011/013: the treatment decision, restricted to
 the same Service Lead/Sales Manager/Owner reviewer set as Service
-Records, always with an auditable reason). **Known gaps:** contract
-activation doesn't yet issue the annual invoice, and a Billable
-excess-usage decision doesn't yet issue its invoice either (Billing
-isn't converted for either) -- neither a contract activated nor an
-excess usage billed via `backend-php/` is actually invoiced yet.
-`backend/` (Python) is untouched and keeps running as the system of
-record until each remaining module (Billing, AR, and everything else)
-is converted, module by module, the same way.
+Records, always with an auditable reason), and Billing/Invoicing
+(BILL-001/002/005, SRV-008: GST applied via a proper TaxCode table,
+due dates from customer payment terms, serial invoice numbering).
+Billing closes the two known gaps flagged by earlier modules:
+contract activation now issues its annual invoice (except Ad Hoc,
+which has no upfront value), and a Billable excess-usage decision now
+issues its own invoice at the contract's blended rate. **Known gap:**
+invoices aren't posted to the General Ledger yet -- GL posting
+(`docs/gl-posting-design.md`) is its own module, not converted, so
+every invoice reports as not yet posted; don't treat an invoice
+issued via `backend-php/` as posted to the books. `backend/` (Python)
+is untouched and keeps running as the system of record until each
+remaining module (Accounts Receivable, GL posting, and everything
+else) is converted, module by module, the same way.
 
 No other business area has application code yet. **Commission
 Management, further Service Record business-rule decisions (open item

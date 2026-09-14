@@ -58,6 +58,22 @@ final class Money
         return new self($this->value->toScale(10, RoundingMode::HALF_UP)->multipliedBy((string) $factor));
     }
 
+    /**
+     * Multiply by another Money's full internal precision directly,
+     * rather than round-tripping it through toFloat()/toString()
+     * first (both of which quantize to 2dp -- fine for a final
+     * result, but lossy as an intermediate factor). Needed wherever
+     * two computed values multiply together before the final
+     * quantize(), e.g. a blended rate times a fractional hour count
+     * (App\Services\BillingService::issueExcessUsageInvoice(), mirrors
+     * Python's `rate * excess_hours` where both sides are full-
+     * precision Decimal).
+     */
+    public function multipliedByMoney(self $other): self
+    {
+        return new self($this->value->multipliedBy($other->value));
+    }
+
     public function dividedBy(string|int|float $divisor): self
     {
         return new self($this->value->toScale(10, RoundingMode::HALF_UP)->dividedBy((string) $divisor, 10, RoundingMode::HALF_UP));

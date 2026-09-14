@@ -21,9 +21,6 @@ use Illuminate\Support\Facades\DB;
  * dedicated "excess_usage" module key).
  *
  * NOT yet converted from the Python router: CSV/Excel export.
- *
- * KNOWN GAP: see ExcessUsageService's class docblock -- a BILLABLE
- * decision does not yet issue an invoice (Billing isn't converted).
  */
 class ExcessUsageController extends Controller
 {

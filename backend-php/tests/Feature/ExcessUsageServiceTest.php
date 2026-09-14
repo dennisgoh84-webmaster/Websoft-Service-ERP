@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\Contract;
 use App\Models\ExcessUsageRecord;
+use App\Models\Invoice;
 use App\Models\JobOrder;
 use App\Models\User;
 use App\Services\ContractService;
@@ -90,15 +91,26 @@ class ExcessUsageServiceTest extends TestCase
         ]);
     }
 
-    public function test_billable_decision_does_not_invoice_yet_known_gap(): void
+    public function test_billable_decision_issues_an_invoice_at_the_blended_rate(): void
     {
         [$excess, $contract, $approver] = $this->excessRecord();
 
-        ExcessUsageService::decideExcessUsage($excess, $contract, ExcessUsageRecord::TREATMENT_BILLABLE, 'Customer requested extra work', $approver);
+        $invoice = ExcessUsageService::decideExcessUsage($excess, $contract, ExcessUsageRecord::TREATMENT_BILLABLE, 'Customer requested extra work', $approver);
 
-        // KNOWN GAP: Billing isn't converted yet, so `invoiced` stays
-        // false even for a BILLABLE decision -- see
-        // ExcessUsageService's class docblock.
+        $this->assertNotNull($invoice);
+        $this->assertTrue($excess->fresh()->invoiced);
+        $this->assertSame(Invoice::TYPE_EXCESS_USAGE, $invoice->invoice_type);
+        // 40 excess minutes = 2/3 hr, contract is SGD 3000 / 10 hrs = SGD 300/hr blended rate.
+        $this->assertEqualsWithDelta(200.0, $invoice->fresh()->amount_sgd, 0.01);
+    }
+
+    public function test_non_billable_decision_does_not_issue_an_invoice(): void
+    {
+        [$excess, $contract, $approver] = $this->excessRecord();
+
+        $invoice = ExcessUsageService::decideExcessUsage($excess, $contract, ExcessUsageRecord::TREATMENT_WARRANTY_GOODWILL, 'Goodwill gesture', $approver);
+
+        $this->assertNull($invoice);
         $this->assertFalse($excess->fresh()->invoiced);
     }
 }

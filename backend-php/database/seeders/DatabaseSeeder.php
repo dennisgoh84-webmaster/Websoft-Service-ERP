@@ -8,6 +8,7 @@ use App\Models\CompanyModule;
 use App\Models\Group;
 use App\Models\GroupModuleAuthority;
 use App\Models\ModuleCatalog;
+use App\Models\TaxCode;
 use App\Models\User;
 use App\Models\UserCompanyAccess;
 use App\Services\PasswordPolicy;
@@ -116,6 +117,23 @@ class DatabaseSeeder extends Seeder
             ['user_id' => $dennis->id, 'company_id' => $company->id],
             ['group_id' => $adminGroup->id],
         );
+
+        // GST tax codes. Confirmed 2026-09-10: Webmaster is
+        // GST-registered and its services are standard-rated (SR). The
+        // others are seeded inactive-ready so a future zero-rated/
+        // exempt supply doesn't need a code change -- same list as
+        // backend/scripts/seed_demo.py's TAX_CODES.
+        foreach ([
+            ['SR', 'Standard-rated supply', '9.00'],
+            ['ZR', 'Zero-rated supply (e.g. export of services)', '0.00'],
+            ['ES', 'Exempt supply', '0.00'],
+            ['OS', 'Out of scope', '0.00'],
+        ] as [$code, $name, $rate]) {
+            TaxCode::updateOrCreate(
+                ['company_id' => $company->id, 'code' => $code],
+                ['name' => $name, 'rate_percent' => $rate, 'is_active' => true],
+            );
+        }
 
         // One sample customer, so the CompanyIndividual Management
         // slice has something to look at immediately after seeding.

@@ -12,6 +12,7 @@ use App\Models\ExcessUsageRecord;
 use App\Models\Product;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\BillingService;
 use App\Services\ContractService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,15 +24,6 @@ use Illuminate\Support\Facades\DB;
  *
  * NOT yet converted from the Python router (tracked in
  * docs/php-conversion-plan.md): CSV/Excel export.
- *
- * KNOWN GAP, deliberately not silently papered over: the Python
- * router's POST /{contract}/activate also issues the contract's
- * annual invoice (BILL-001/002/005, via app/services/billing.py) in
- * the same transaction. Billing isn't converted yet, so activation
- * here only changes status -- no invoice is issued. This makes
- * `backend-php/` NOT financially equivalent to `backend/` for this one
- * action until Billing is converted; do not treat a contract activated
- * through this backend as billed.
  */
 class ContractController extends Controller
 {
@@ -252,9 +244,14 @@ class ContractController extends Controller
         try {
             DB::transaction(function () use ($contract, $user) {
                 ContractService::activateContract($contract, $user->id);
-                // BILL-001/002/005 auto-invoice-on-activation is NOT
-                // performed here -- see this controller's class
-                // docblock ("KNOWN GAP").
+                // BILL-001/BILL-002/BILL-005: annual upfront invoice,
+                // issued directly, on activation -- except AD_HOC
+                // (confirmed 2026-09-11), which has no upfront value
+                // to invoice; billing happens manually as work is
+                // done.
+                if ($contract->contract_kind !== Contract::KIND_AD_HOC) {
+                    BillingService::issueContractAnnualInvoice($contract, $user->id);
+                }
             });
         } catch (ContractRuleViolation $e) {
             throw new ApiException(422, $e->getMessage());

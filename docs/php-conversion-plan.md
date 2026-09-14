@@ -368,31 +368,78 @@ sub-resource (depends on the Portal module below).
   (`tests/Feature/ExcessUsageTest.php`), built against real
   contract-deduction/excess-split records produced by
   `ServiceRecordService` rather than a bare factory, so the whole
-  Service Records → Excess Usage pipeline is exercised.
-  **KNOWN GAP (not silently papered over):** the Python service's
-  BILLABLE path also issues an invoice in the same transaction
-  (SRV-006/008, via `app/services/billing.py`). Billing isn't
-  converted yet, so a BILLABLE decision here records the decision but
-  leaves `invoiced` false -- see `ExcessUsageService`'s class
-  docblock. Do not treat a BILLABLE excess usage decided through
-  `backend-php/` as invoiced.
+  Service Records → Excess Usage pipeline is exercised. A BILLABLE
+  decision issues a real invoice via `App\Services\BillingService`
+  (see below) -- `invoiced` is set true and the invoice amount is
+  asserted (`test_billable_decision_issues_an_invoice_at_the_blended_rate`).
   **Not yet converted:** CSV/Excel export.
+- **Billing / Invoicing** (`app/services/billing.py`,
+  `app/models/billing.py`, `app/models/tax.py`,
+  `app/routers/billing.py` → `App\Models\Invoice`/`TaxCode`,
+  `App\Services\BillingService`/`Tax`,
+  `App\Http\Controllers\Api\InvoiceController`): BILL-001 (full
+  12-month contract value billed at activation), BILL-002 (no
+  approval required -- issued directly in "outstanding" status),
+  BILL-005 (revenue recognised on invoice, not on payment), and
+  SRV-008 (excess usage billed at the contract's own blended rate).
+  GST applied per `App\Models\TaxCode` (confirmed 2026-09-10:
+  GST-registered, standard-rated, 9%) -- zero and never invented for
+  an unconfigured company, exactly like the Python source. Due date
+  from the customer's own `payment_terms_days`, none invented when
+  unset. Serially numbered via the already-ported `App\Services\Numbering`.
+  This closes both known gaps flagged by earlier modules: activating a
+  contract now issues its BILL-001 annual invoice (skipped for AD_HOC,
+  which has no upfront value), and a BILLABLE excess usage decision
+  now issues its SRV-008 invoice. 5 business-logic tests
+  (`tests/Feature/BillingServiceTest.php` -- the exact GST math, the
+  blended-rate excess-usage amount, the due-date/no-due-date cases)
+  + 5 API-level tests (`tests/Feature/InvoiceTest.php`, including both
+  known-gap-closing paths). **Money-handling note:** found and fixed a
+  precision bug during this conversion -- `App\Support\Money`'s
+  `multipliedBy()` takes a plain scalar, and multiplying two computed
+  Money values by round-tripping one through `toFloat()` first
+  silently rounds it to 2dp *before* the multiply (e.g. 40/60 hours
+  become "0.67" instead of staying at full precision), which would
+  have under/over-billed excess usage by a cent in some cases. Added
+  `Money::multipliedByMoney()` so two computed values multiply at full
+  internal precision, quantized only once at the end -- matching how
+  `backend/`'s `Decimal` arithmetic never rounds an intermediate
+  operand. Covered by
+  `test_excess_usage_invoice_is_billed_at_the_blended_rate`.
+  **KNOWN GAP (not silently papered over):** the Python version posts
+  every invoice to the General Ledger in the same transaction
+  (ACC-001/003, `app/services/posting.py` -- Dr AR / Cr revenue / Cr
+  GST output). GL posting is a large module of its own
+  (`docs/gl-posting-design.md`) and isn't converted yet, so an invoice
+  issued here is NOT posted to the GL -- `InvoiceController` always
+  reports `gl_status: "not_posted"`, matching `InvoiceOut`'s own
+  Python default so this is never misreported as posted.
+  **KNOWN GAP:** GP costing (`cost_sgd`) traces a CONTRACT_ANNUAL
+  invoice's cost back to the Sales Quotation that converted into the
+  contract (open decision #32). Quotations isn't converted yet, so
+  `cost_sgd` is always null here -- the same as the Python source's
+  own "not created from a quotation" case, never an invented cost.
+  **Not yet converted:** CSV/Excel export, the `.docx` export and
+  "Email Invoice" endpoints (need the Documents module's mailer
+  wiring, same gap as Service Records).
 
-Verified end-to-end for all four modules against the real React
+Verified end-to-end for all five modules against the real React
 frontend (screenshots in the PR/commit history): contract creation
-blocked below the 10-hour minimum with the SRV-002 message, activation,
-renewal (both the seamless-backdated case and the SRV-018
-force-start-date case), the contract detail page showing the exact
-$300.00/hr blended rate, a PROJECT-type Job Order with all 5
-milestones auto-created in order, submitting a Service Record with
-15-minute rounding visible, the Service Record Approval queue
-showing the suggested deduction, and the Excess Usage Review page
-showing a real 2.00-hr excess record end to end -- deciding it as
-Billable through the UI and confirming the page renders "Invoiced: No"
-(the known gap above, faithfully reflected, not hidden). The only
-404s seen were for not-yet-converted modules (Announcements,
-Dashboard, Invoices/Billing, Documents) -- none from Contracts, Job
-Orders, Service Records, or Excess Usage's own endpoints.
+blocked below the 10-hour minimum with the SRV-002 message, activation
+now issuing a real INV-numbered invoice with GST correctly applied
+($3,000.00 net + $270.00 GST = $3,270.00 total, due date from the
+customer's payment terms), renewal (both the seamless-backdated case
+and the SRV-018 force-start-date case), the contract detail page
+showing the exact $300.00/hr blended rate, a PROJECT-type Job Order
+with all 5 milestones auto-created in order, submitting a Service
+Record with 15-minute rounding visible, the Service Record Approval
+queue showing the suggested deduction, the Excess Usage Review page
+showing a real 2.00-hr excess record end to end, and the Invoices
+page rendering the activation invoice with the correct net/GST/total
+breakdown. The only 404s seen were for not-yet-converted modules
+(Announcements, Dashboard, Accounts Receivable aging, Documents) --
+none from Contracts, Job Orders, Service Records, Excess Usage, or
+Billing's own endpoints.
 
 ## Not yet converted (pending, in rough priority order)
 
@@ -401,13 +448,9 @@ phase of its own, following the same pattern as CompanyIndividual
 Management above -- model(s) + migration(s) + controller + routes +
 smoke test:
 
-1. **Billing / Invoicing** (`app/services/billing.py`,
-   `app/routers/billing.py`) -- BILL-001..006. Highest priority:
-   Contract activation's and Excess Usage's known gaps (see above)
-   both depend on this.
-2. **Accounts Receivable** (`app/services/accounts_receivable.py`,
+1. **Accounts Receivable** (`app/services/accounts_receivable.py`,
    `app/routers/accounts_receivable.py`) -- AR-001..003.
-4. Everything else in `backend/app/routers/` not listed above
+2. Everything else in `backend/app/routers/` not listed above
    (Quotations, Incidents, Accounts Payable/Purchasing, Inventory/
    Stock, GL posting + Bank step, Reporting/dashboards, Event Logs,
    Document Control, Periods, Announcements, Software Tasks, Ops

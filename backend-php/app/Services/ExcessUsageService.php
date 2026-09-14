@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Exceptions\ContractRuleViolation;
 use App\Models\Contract;
 use App\Models\ExcessUsageRecord;
+use App\Models\Invoice;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 
@@ -13,15 +14,11 @@ use Illuminate\Support\Carbon;
  * always recorded with a reason), SRV-013 (treatment categories), and
  * SRV-006/SRV-008 (a billable decision must proceed to invoicing, at
  * the contract's blended rate). Mirrors
- * backend/app/services/excess_usage.py's decide_excess_usage exactly.
- *
- * KNOWN GAP, deliberately not silently papered over: the Python
- * version's BILLABLE path calls app/services/billing.py to issue an
- * invoice in the same transaction. Billing isn't converted yet, so a
- * BILLABLE decision here records the decision (treatment, reason,
- * reviewer, audit trail) but does NOT invoice -- `invoiced` stays
- * false. Do not treat a BILLABLE excess usage decided through
- * `backend-php/` as billed; see docs/php-conversion-plan.md.
+ * backend/app/services/excess_usage.py's decide_excess_usage exactly,
+ * including the BILLABLE -> App\Services\BillingService::
+ * issueExcessUsageInvoice() call now that Billing is converted -- see
+ * BillingService's class docblock for what that invoice still doesn't
+ * do (GL posting).
  */
 class ExcessUsageService
 {
@@ -36,7 +33,7 @@ class ExcessUsageService
         string $treatment,
         string $reason,
         User $reviewer,
-    ): void {
+    ): ?Invoice {
         if (! in_array($reviewer->role, self::REVIEWER_ROLES, true)) {
             throw new ContractRuleViolation(
                 'Only Nico (service_lead), Cherish as backup (sales_manager), or '.
@@ -67,8 +64,13 @@ class ExcessUsageService
             details: "treatment={$treatment}",
         );
 
-        // KNOWN GAP: BILLABLE should issue an invoice here
-        // (SRV-006/SRV-008, billing.issue_excess_usage_invoice) -- not
-        // wired up until Billing is converted. See class docblock.
+        if ($treatment === ExcessUsageRecord::TREATMENT_BILLABLE) {
+            // SRV-006/SRV-008: billable excess must proceed to
+            // invoicing, at the contract's blended rate, no customer
+            // pre-approval needed.
+            return BillingService::issueExcessUsageInvoice($record, $contract, $reviewer->id);
+        }
+
+        return null;
     }
 }
