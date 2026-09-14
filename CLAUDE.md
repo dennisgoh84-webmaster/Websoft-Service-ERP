@@ -213,7 +213,15 @@ one). Also converted: the Stock Master half of Inventory / Stock (the
 `stock_master` module key -- setup masters Categories/Groups/
 Brands+Models/Usages, Warehouses, the stock item with its extended
 fields and picture/document attachments, and read-only per-warehouse
-stock levels). Two things found while converting it: the Warehouses
+stock levels), and its stock movements -- Goods Receive Note, Goods
+Transfer Note, Goods Return Note and Stock Adjustment, each on its own
+module key, carrying both confirmed Inventory rules: INV-002 (stock
+valued at weighted average cost -- only a receipt re-weights it, a
+transfer carries the source warehouse's cost across rather than
+revaluing, and stock can never go negative) and INV-001 (a stock
+adjustment moves nothing until it is approved; a draft or rejected one
+provably never touches a stock level). Two things found while
+converting it: the Warehouses
 and Stock Item screens' Activate/Deactivate buttons could never have
 worked against `backend/` (its PATCH body required `code`/`name` and
 had no `is_active` field at all) -- fixed here with regression tests;

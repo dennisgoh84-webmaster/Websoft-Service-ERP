@@ -77,7 +77,12 @@ shipped and when.
   dedicated tests), which also fixed a real bug: the Warehouses and
   Stock Item screens' Activate/Deactivate buttons could only ever 422
   against the Python backend, because its PATCH body required
-  `code`/`name` and had no `is_active` field. Also converted:
+  `code`/`name` and had no `is_active` field. Stock movements
+  followed: Goods Receive/Transfer/Return Notes and Stock Adjustments,
+  carrying both confirmed Inventory rules -- INV-002 weighted average
+  cost (pinned to worked examples at the 4dp precision the stock
+  columns actually use) and INV-001, where only an approval ever moves
+  stock -- 32 dedicated tests. Also converted:
   Incidents (the Helpdesk front door -- logging a call/email with its
   one automatic customer-by-email match, the "needs a callback" status
   + assignee, Close, and converting to a draft Sales Quotation or a

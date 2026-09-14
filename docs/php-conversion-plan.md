@@ -1169,6 +1169,89 @@ Dashboard, Documents or Document Control either.
   optional scale argument (default 2, unchanged for every existing
   caller) because a stock unit/average cost is `Numeric(14, 4)`, not
   2dp money -- see the Movements entry below for where that matters.
+- **Inventory / Stock -- movements: GRN, GTN, GRTN, Stock Adjustment**
+  (`app/services/inventory.py` (264 lines) and the movement half of
+  `app/routers/stock.py` → `App\Services\InventoryService`,
+  `App\Models\GoodsReceiveNote`/`GoodsTransferNote`/`GoodsReturnNote`/
+  `StockAdjustment` (+ their line models),
+  `App\Http\Controllers\Api\GoodsReceiveNoteController`/
+  `GoodsTransferNoteController`/`GoodsReturnNoteController`/
+  `StockAdjustmentController`): the two confirmed Inventory rules, each
+  gated by its own Module Control key (`goods_receive_note`,
+  `goods_transfer_note`, `goods_return_note`, `stock_adjustment` --
+  VIEW to list, FULL to create/confirm/approve, identical to the
+  Python router, so receiving rights never carry transfer or
+  adjustment-approval rights with them).
+  **INV-002 (weighted average cost)** is `InventoryService`'s
+  `receiveStock`/`deductStock`/`adjustStockIncrease`, ported 1:1: a
+  receipt is the only event carrying new cost information, so the only
+  one that re-weights the average
+  (`(existing_qty x existing_avg + received_qty x received_cost) /
+  new_qty`, quantized 4dp HALF_UP); a deduction leaves the average
+  alone and leaves at it; a positive adjustment adds at the current
+  average without moving it; a transfer reads the SOURCE warehouse's
+  average *before* deducting and receives at exactly that cost, so
+  moving stock never revalues it; and a resulting quantity of zero or
+  less leaves the average untouched rather than inventing one. Stock
+  can never go negative -- `deductStock` refuses the whole movement
+  with Python's own `Insufficient stock: have X, need Y` message, and
+  every confirm/approve runs in one DB transaction so a multi-line
+  document is all-or-nothing.
+  **INV-001 (adjustment approval)** is the `draft → submit →
+  pending_approval → approve | reject` machine on `StockAdjustment`:
+  `InventoryService::approveAdjustment()` is the *only* path by which
+  an adjustment ever touches a stock level, so a draft or a rejected
+  adjustment provably moves nothing. Who counts as "a manager" stays
+  Group Authority's decision (FULL on `stock_adjustment`), exactly as
+  in `backend/` -- no named-role check and no "creator cannot approve
+  their own" rule is invented here, because neither was ever confirmed.
+  **Money/cost precision:** all arithmetic goes through
+  `App\Support\Money`, never raw PHP float math, at the two precisions
+  the Python columns actually use -- 4dp for a unit/average cost
+  (`Numeric(14, 4)`) and 2dp for an extended total (`Numeric(14, 2)`).
+  Pinned by worked examples in `tests/Feature/InventoryServiceTest.php`
+  the way `tests/Unit/MoneyTest.php` pins SRV-008, including a
+  deliberately recurring one: 15 units at $110.0000 plus 3 at $55.50 =
+  $1,816.50 / 18 = 100.91666... → **$100.9167**, so a rounding
+  regression fails a test rather than silently mis-valuing stock.
+  **QUIRK PRESERVED (flagged, not fixed):** the stock router does its
+  own count-based document numbering (`GRN-00001` = "count this
+  company's GRNs, add one") instead of `app/services/numbering.py`,
+  whose `PREFIXES` table has no grn/gtn/grtn/adj entry and whose
+  counter row is locked for the transaction. A count can repeat a
+  number if a document is ever removed, and two simultaneous creates
+  could collide. Kept byte-identical because changing it would change
+  document numbers users already see -- worth raising with Dennis as a
+  follow-up (moving these four onto `App\Services\Numbering` is a
+  small change once he picks a format).
+  **Also hardened (`backend/` does not check this):**
+  `App\Services\StockDocumentGuard` verifies every referenced
+  warehouse, stock item and supplier belongs to the caller's own
+  company. The Python router assigns those uuids straight from the
+  request body; the FK proves the row exists but not whose it is, so a
+  user could receive stock into another company's warehouse and the
+  resulting `stock_levels` row would carry their own `company_id`
+  while pointing at a foreign warehouse -- corrupting both companies'
+  stock reports. Refused with a 404 here.
+  **KNOWN GAP (carried over from `backend/`, not introduced here):**
+  no stock document posts anything to the General Ledger -- no
+  Dr Inventory / Cr GRNI on a receipt, no supplier credit note on a
+  return, no stock write-off entry on an adjustment. The Python
+  service has no posting either, and PUR-002 confirms Accounts Payable
+  matches a supplier bill against the **Purchase Order only** ("a
+  separate Goods Receipt match is not required"), so there is no
+  confirmed rule saying a receipt should post. Inventing one would be
+  inventing a business rule; recorded here instead.
+  15 business-logic tests (`tests/Feature/InventoryServiceTest.php` --
+  the weighted-average worked examples above, the deduct-at-average
+  rule, the negative-stock guard, each document's confirm, and every
+  INV-001 case including a zero-quantity line and an overdrawing
+  adjustment being refused whole) + 17 API-level tests
+  (`tests/Feature/StockMovementTest.php` -- the full
+  receive → transfer → return → adjust flow through the real routes,
+  the same-warehouse transfer guard, double-confirm, and each of the
+  four module keys gating independently, plus no-Group, VIEW-only,
+  Module-Control-disabled and cross-company cases).
 
 ## New feature work landed directly in `backend-php/` (not a conversion)
 

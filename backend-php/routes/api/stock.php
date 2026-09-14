@@ -20,6 +20,10 @@
 // requireModuleAccess) rather than as route middleware, the same
 // pattern every other converted module in this backend uses.
 
+use App\Http\Controllers\Api\GoodsReceiveNoteController;
+use App\Http\Controllers\Api\GoodsReturnNoteController;
+use App\Http\Controllers\Api\GoodsTransferNoteController;
+use App\Http\Controllers\Api\StockAdjustmentController;
 use App\Http\Controllers\Api\StockItemController;
 use App\Http\Controllers\Api\StockSetupController;
 use App\Http\Controllers\Api\WarehouseController;
@@ -70,4 +74,28 @@ Route::middleware('auth.jwt')->prefix('stock')->group(function () {
     Route::patch('/items/{item}', [StockItemController::class, 'update']);
 
     Route::get('/levels', [StockItemController::class, 'levels']);
+
+    // ── Goods Receive Note (goods_receive_note) ─────────────────────
+    Route::get('/grn', [GoodsReceiveNoteController::class, 'index']);
+    Route::post('/grn', [GoodsReceiveNoteController::class, 'store']);
+    Route::get('/grn/{grn}', [GoodsReceiveNoteController::class, 'show']);
+    Route::post('/grn/{grn}/confirm', [GoodsReceiveNoteController::class, 'confirm']);
+
+    // ── Goods Transfer Note (goods_transfer_note) ───────────────────
+    // No GET /gtn/{id} in either backend -- the screen reads the list.
+    Route::get('/gtn', [GoodsTransferNoteController::class, 'index']);
+    Route::post('/gtn', [GoodsTransferNoteController::class, 'store']);
+    Route::post('/gtn/{gtn}/confirm', [GoodsTransferNoteController::class, 'confirm']);
+
+    // ── Goods Return Note (goods_return_note) ───────────────────────
+    Route::get('/grtn', [GoodsReturnNoteController::class, 'index']);
+    Route::post('/grtn', [GoodsReturnNoteController::class, 'store']);
+    Route::post('/grtn/{grtn}/confirm', [GoodsReturnNoteController::class, 'confirm']);
+
+    // ── Stock Adjustment -- INV-001 (stock_adjustment) ──────────────
+    Route::get('/adjustments', [StockAdjustmentController::class, 'index']);
+    Route::post('/adjustments', [StockAdjustmentController::class, 'store']);
+    Route::post('/adjustments/{adjustment}/submit', [StockAdjustmentController::class, 'submit']);
+    Route::post('/adjustments/{adjustment}/approve', [StockAdjustmentController::class, 'approve']);
+    Route::post('/adjustments/{adjustment}/reject', [StockAdjustmentController::class, 'reject']);
 });
