@@ -219,7 +219,23 @@ invoices, AR/AP outstanding + overdue, and whether the GL trial
 balance balances), reusing each owning service rather than
 re-querying, so no tile reports a placeholder figure; it is
 deliberately ungated by Module Control, matching the Python route,
-which has no `require_module_access` either. `backend/` (Python) is
+which has no `require_module_access` either. Also converted:
+**Document Control** (the document-numbering admin screen -- the
+running-number counters plus each document kind's number format;
+both are FULL-only and both require a reason recorded to Event Logs,
+and a format change only ever affects numbers issued from that point
+on) and **Document Attachments + eSignature** (the generic panel
+mounted on ~12 document detail pages, every one of which previously
+404'd: file upload/list/download/soft-delete, stored on disk under
+the same layout the Python backend uses, 20MB per file, any file
+type, plus drawn electronic signatures). **Correction to an earlier
+note:** the `.docx` export / "Email X" gaps recorded against Service
+Records, Invoices, Purchase Orders and Quotations are **not** closed
+by the Documents conversion -- that wiring is a separate,
+still-unconverted stack of Python services (`mailer.py`,
+`pdf_convert.py`, `docx_forms.py`, `document_email.py`), now tracked
+as its own pending item in docs/php-conversion-plan.md.
+`backend/` (Python) is
 untouched and keeps running as the system of record until each
 remaining module is converted, module by module, the same way.
 

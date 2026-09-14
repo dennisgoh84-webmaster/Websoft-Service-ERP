@@ -86,6 +86,19 @@ shipped and when.
   `backend-php/`; it aggregates only over modules already converted,
   reusing each owning service (AR/AP aging, the GL trial balance)
   rather than re-querying, so no tile reports a placeholder figure.
+  Also converted: **Document Control** (the document-numbering admin
+  screen -- counters plus each document kind's number format, both
+  FULL-only and both requiring a reason recorded to Event Logs, 10
+  dedicated tests) and **Document Attachments + eSignature** (the
+  generic panel mounted on ~12 document detail pages, all of which
+  404'd until now -- file upload/list/download/soft-delete on disk
+  under the same layout the Python backend uses, 20MB cap, any file
+  type, plus drawn signatures; 11 dedicated tests). **Correction to an
+  earlier note:** the `.docx` export / "Email X" gaps recorded against
+  Service Records, Invoices, Purchase Orders and Quotations are NOT
+  closed by this -- that wiring is a separate, still-unconverted stack
+  (`mailer.py`, `pdf_convert.py`, `docx_forms.py`,
+  `document_email.py`), now listed as its own pending item.
   Still pending: everything else -- converted module by module, same
   pattern as the Odoo replacement strategy.
   → [php-conversion-plan.md](php-conversion-plan.md)

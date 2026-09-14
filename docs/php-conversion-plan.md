@@ -922,6 +922,106 @@ re-drive manually.
   overdue split for an invoice with no due date, multi-company
   scoping, the no-module-gate decision, and 401 when unauthenticated).
 
+- **Document Control** (`app/routers/document_control.py` →
+  `App\Http\Controllers\Api\DocumentControlController`): the admin
+  screen over document numbering (`frontend/src/pages/DocumentControlPage.tsx`)
+  -- the running-number counters behind every serially-numbered
+  document, and each document kind's number FORMAT (front prefix /
+  digit padding / whether the year is included, confirmed
+  2026-09-11). No new model or migration either: `DocumentSequence`
+  and `DocumentNumberFormat` and `Numbering::format()` already existed,
+  built with the Contracts conversion; only the controller over them
+  was missing. Adjusting a counter and changing a format are both
+  FULL-only and both require a reason, recorded to Event Logs with the
+  same `document_sequence`/`last_number_changed` and
+  `document_number_format`/`updated` entity/action strings Python
+  uses. The formats list shows every doc kind built into the app
+  (`Numbering::PREFIXES`) plus any this company has ever numbered, so
+  a kind can be customized before its first document is issued, and
+  marks a kind with no override row `is_custom: false` so the UI can
+  say "default" vs "custom". A format change only affects numbers
+  issued from that point on -- pinned by
+  `DocumentControlTest::test_setting_a_format_changes_only_future_numbers`,
+  which asserts an already-issued `CON-2026-0001` still reads
+  `CON-2026-0001` after the prefix changes (CLAUDE.md: never modify
+  existing business records).
+  10 tests (`tests/Feature/DocumentControlTest.php`), including that
+  EDIT -- enough to write in every other module -- is still a 403 here
+  on both writes.
+
+- **Document Attachments + eSignature** (`app/models/documents.py`,
+  `app/services/documents.py`, `app/routers/documents.py` →
+  `App\Models\DocumentAttachment`/`DocumentSignature`,
+  `App\Services\DocumentService`, `App\Exceptions\DocumentFileError`,
+  `App\Http\Controllers\Api\DocumentController`): the generic
+  eDocument panel every document page carries (built 2026-09-12,
+  planned-work.md #3) -- file upload/list/download/soft-delete and
+  drawn electronic signatures, for all 12 document types in
+  `DocumentEntityType` (quotation, invoice, receipt voucher, payment
+  voucher, purchase order, supplier invoice, journal entry, job order,
+  service record, contract, incident, commission payout). This
+  unblocks `frontend/src/components/DocumentAttachmentsPanel.tsx` and
+  `SignaturePanel.tsx`, which are mounted on ~12 detail pages and
+  404'd on every one of them against `backend-php/` until now.
+  Files are written to disk under the **identical** layout the Python
+  version uses -- `<uploads_dir>/<company_id>/docs/<entity_type>/<entity_id>/<attachment_id>.<ext>`
+  -- so the two backends can be pointed at the same `UPLOADS_DIR`
+  during the conversion without either losing sight of the other's
+  files. Same 20MB-per-file cap, same "any file type, no allow-list,
+  unlimited count per document" rule (confirmed 2026-09-12 with
+  Dennis); an extension-less filename stores under the bare id, as in
+  Python. Both attachments and signatures are **soft-delete only**
+  (`is_deleted`), and the file on disk is never removed --
+  `DocumentTest::test_upload_list_download_and_soft_delete_an_attachment`
+  asserts the file still exists after a delete. The signature
+  endpoints never return `signature_data_uri` (Python's
+  `DocumentSignatureOut` omits it too), so a signature list stays
+  small and the drawn image is not re-served to a client that only
+  needs to know who signed and when.
+  Gated on `core_administration` (VIEW to read, EDIT to mutate),
+  matching the Python router's single `MODULE` constant rather than
+  each parent document's own module -- deliberate, so one panel
+  component works on every document page.
+  **Python quirk preserved with a check added:** Python declares
+  `entity_type` as a `DocumentEntityType` path parameter, so FastAPI
+  rejects an unknown value with a 422 before the handler runs. Laravel
+  has no equivalent path-level coercion, so the same check is explicit
+  in the controller and returns the same 422 -- without it an unknown
+  entity type would have silently become a valid, unreachable bucket.
+  **FINDING (flagged, not changed in `backend/`, which this work never
+  touches):** `app/routers/documents.py` passes a **dict** into
+  `audit.record()`'s `details` parameter at all three of its call
+  sites, but that function's own signature types `details` as
+  `str | None` and `AuditLogEntry.details` is a `Text` column
+  (`app/routers/approvals.py` does the same in several places). PHP's
+  `Audit::record()` types it `?string`, so the identical payload is
+  JSON-encoded here -- the evident intent, and the same information
+  either way. Worth raising with Dennis as a probable latent bug on
+  the Python side rather than fixed silently on either.
+  **KNOWN GAP -- and a correction to earlier gap notes:** converting
+  this module does **NOT** unblock the `.docx` export / "Email X"
+  endpoints that Service Records, Invoices, Purchase Orders and
+  Quotations each flagged above as awaiting "the Documents module's
+  mailer wiring". That attribution was wrong: the wiring is not in
+  `documents.py` at all, it is three separate, still-unconverted
+  Python services -- `app/services/mailer.py` (66 lines, SMTP),
+  `app/services/pdf_convert.py` (62 lines, .docx → PDF), and
+  `app/services/docx_forms.py` (497 lines, the document templates) --
+  tied together by `app/services/document_email.py`. Nothing in this
+  module reads any of them. Those four modules' Email/.docx gaps
+  therefore all stand unchanged, and converting them is its own future
+  task (config already has the `smtp_*` settings in
+  `config/websoft.php`, so the eventual PHP mailer has somewhere to
+  read from).
+  21 tests across both halves
+  (`tests/Feature/DocumentTest.php`, 11 -- a real multipart upload via
+  `UploadedFile::fake()`, the on-disk path and content, download,
+  soft-delete leaving the file in place, the 20MB rejection with the
+  exact Python message, any-file-type and extension-less names, the
+  unknown-entity-type 422, signatures with the data URI withheld,
+  cross-company isolation on list/download/delete, and the full RBAC
+  matrix; plus `tests/Feature/DocumentControlTest.php`, 10, above).
+
 Verified end-to-end against the real React frontend (Playwright
 against `backend-php/` on port 8004, screenshot in the PR/commit
 history): the **Company Dashboard** landing page rendering a full
@@ -933,10 +1033,16 @@ contract, 0 expiring soon, 0 open job orders, 0 excess awaiting
 review, 0 late service records, 1 invoice issued, and the
 contracted-hours bar reading "0.0 used / 10.0 contracted -- 10.0 hrs
 remaining" -- every figure from a real activated contract and its
-BILL-001 invoice, with no failed requests on the page. The only 404s
-still seen in the pass were the expected not-yet-converted ones
-(`/api/announcements/public`, the Documents attachments/signatures
-panels, Document Control).
+BILL-001 invoice, with no failed requests on the page; the **Document
+Control** page listing all 12 built-in document kinds with their
+default prefixes and examples plus the live contract counter
+previewing `CON-2026-0002` as its next number; and the **Attachments /
+Signatures** panel on a Contract detail page, with a real file
+uploaded through the actual file input (listed with its type, size and
+upload date, plus working download/delete buttons) and a real drawn
+signature saved through the canvas ("Authorized signatory / Dennis
+Goh", timestamped). The only 404 still seen in the pass was the
+expected not-yet-converted `/api/announcements/public`.
 
 ## New feature work landed directly in `backend-php/` (not a conversion)
 
@@ -975,12 +1081,22 @@ smoke test:
 1. Everything else in `backend/app/routers/` not listed above
    (Inventory/Stock, the rest of `reports.py` (AR/AP aging duplicates,
    GST Return, Sales GP, Operations Reports) and its CSV/Excel
-   exports, Event Logs, Documents, Document Control, Announcements,
-   Software Tasks, Ops Dashboard, Customer Helpdesk Portal, Mobile Web
-   App, Commissions [deferred, per CLAUDE.md]) -- lower priority than
-   the Service Operations core above, since that core is what
-   CLAUDE.md's Status section calls out as the one working slice
-   today.
+   exports, Event Logs, Announcements, Software Tasks, Ops Dashboard,
+   Customer Helpdesk Portal, Mobile Web App, Commissions [deferred,
+   per CLAUDE.md]) -- lower priority than the Service Operations core
+   above, since that core is what CLAUDE.md's Status section calls out
+   as the one working slice today.
+2. The shared document mailer stack -- `app/services/mailer.py` (66
+   lines, SMTP), `app/services/pdf_convert.py` (62 lines, .docx ->
+   PDF), `app/services/docx_forms.py` (497 lines, the document
+   templates) and `app/services/document_email.py` (the shared "Email
+   this document" helper tying the three together). Named separately
+   here because four already-converted modules (Service Records,
+   Invoices, Purchase Orders, Quotations) each carry a KNOWN GAP for
+   their `.docx` export and "Email X" endpoints -- and this stack, NOT
+   the Documents module converted above, is what actually unblocks all
+   four at once. `config/websoft.php` already carries the `smtp_*`
+   settings the eventual PHP mailer would read.
 
 ## Running the PHP backend locally
 
