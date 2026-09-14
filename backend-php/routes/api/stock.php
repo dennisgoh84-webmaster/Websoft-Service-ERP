@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\GoodsReturnNoteController;
 use App\Http\Controllers\Api\GoodsTransferNoteController;
 use App\Http\Controllers\Api\StockAdjustmentController;
 use App\Http\Controllers\Api\StockItemController;
+use App\Http\Controllers\Api\StockReportController;
 use App\Http\Controllers\Api\StockSetupController;
 use App\Http\Controllers\Api\WarehouseController;
 use Illuminate\Support\Facades\Route;
@@ -98,4 +99,11 @@ Route::middleware('auth.jwt')->prefix('stock')->group(function () {
     Route::post('/adjustments/{adjustment}/submit', [StockAdjustmentController::class, 'submit']);
     Route::post('/adjustments/{adjustment}/approve', [StockAdjustmentController::class, 'approve']);
     Route::post('/adjustments/{adjustment}/reject', [StockAdjustmentController::class, 'reject']);
+
+    // ── Stock reports (stock_operation_reports) ─────────────────────
+    // The movements journal is gated by the REPORTS key, not
+    // stock_master -- same as the Python router.
+    Route::get('/movements', [StockReportController::class, 'movements']);
+    Route::get('/reports/valuation', [StockReportController::class, 'valuation']);
+    Route::get('/reports/reorder', [StockReportController::class, 'reorder']);
 });

@@ -1252,6 +1252,74 @@ Dashboard, Documents or Document Control either.
   the same-warehouse transfer guard, double-confirm, and each of the
   four module keys gating independently, plus no-Group, VIEW-only,
   Module-Control-disabled and cross-company cases).
+- **Inventory / Stock -- stock operation reports** (the
+  `/api/stock/movements` and `/api/stock/reports/*` half of
+  `app/routers/stock.py` → `App\Http\Controllers\Api\StockReportController`):
+  the stock movements journal (newest first, filterable by item and
+  warehouse, same `limit = 200` default), the INV-002 stock valuation
+  report (quantity x weighted average cost per item per warehouse,
+  optionally filtered to one warehouse, only positive holdings valued)
+  and the reorder report (items whose total stock **across all
+  warehouses** is at or below their reorder level; an item with no
+  reorder level set has not opted in and is never reported). All three
+  on the `stock_operation_reports` key at VIEW -- its own key, so a
+  manager can read the stock reports with no rights to move stock, and
+  full Stock Master authority does not grant them (note the movements
+  journal is gated by the *reports* key, not `stock_master`, exactly as
+  in the Python router). The valuation total is accumulated at full
+  precision and quantized once at the end, matching the Python report
+  -- summing already-rounded per-row values instead would drift by
+  cents on a large holding.
+  **BUG FOUND AND FIXED during the live verification walk:**
+  `stock_movements` is an ordered ledger, but Laravel's `timestampTz()`
+  defaults to **whole-second precision** (the convention every other
+  table in this backend uses, and harmless for them), so
+  `ORDER BY created_at DESC` returned same-second movements in an
+  arbitrary order -- the journal showed a transfer's receipt above the
+  receipt that funded it. The Python column is
+  `DateTime(timezone=True)`, i.e. microseconds. Fixed by a separate,
+  additive migration (`2026_09_23_000300_...`, never an edit to the
+  already-applied create migration) narrowing the change to that one
+  ledger column; pinned by
+  `test_movements_written_within_the_same_second_still_order_correctly`.
+  Rows written inside the *same* transaction still share one timestamp
+  (Postgres `CURRENT_TIMESTAMP`/`now()` is the transaction start time)
+  -- identical in `backend/`, so that tie is left exactly as it is.
+  12 API-level tests (`tests/Feature/StockReportTest.php` -- the
+  valuation worked example and its warehouse filter, zero-quantity and
+  cross-company exclusion, the reorder report's at-or-below boundary
+  and its all-warehouses sum, the movements journal's filters and
+  ordering, and the `stock_operation_reports` key gating independently
+  of `stock_master`).
+  **Not yet converted:** CSV/Excel export -- the Python stock router
+  has none either, so nothing is missing relative to `backend/`.
+
+Verified end-to-end against the real React frontend with Playwright
+(Chromium at `/opt/pw-browsers/chromium-1194`; screenshots in the
+PR/commit history), walking a complete stock cycle on a freshly
+migrated + seeded database: setup masters (Hardware category,
+Networking group, Cisco brand + Catalyst 9300 model, Resale usage),
+two warehouses (MAIN, BR01), a stock item (SW-9300 "48-port switch",
+reorder level 5) whose detail page renders every joined lookup name;
+then **GRN-00001** receiving 10 @ $100.00 and **GRN-00002** 5 @
+$130.00 into MAIN (15 @ **$110.0000** -- the INV-002 worked example),
+**GTN-00001** transferring 6 to BR01 (both sides at $110.0000, so the
+transfer moved stock without revaluing it), **GRTN-00001** returning 2
+to the supplier, and **ADJ-00001** (-1, "Damaged in storage") --
+refused with a 400 while still draft, changing nothing on submit, and
+only moving stock on approval, exactly as INV-001 requires. The Stock
+Operation Reports page then showed the correct end state: MAIN 6 @
+$110.00 = $660.00, BR01 6 @ $110.00 = $660.00, **total $1,320.00**;
+the Stock Item Detail page showed the same 12 units / $1,320.00 across
+2 warehouses; and the Stock Movements tab listed all six movements
+newest-first (adjustment -1, return out -2, transfer out -6, receive
++6, receive +5 @ $130.00, receive +10 @ $100.00). The bug fix above was
+also exercised through the real UI, not just the API: a warehouse
+created through the Warehouses form and then deactivated with its own
+Deactivate button (the call that could only ever 422 against
+`backend/`). The only 404s seen anywhere were the expected
+not-yet-converted ones (`/api/announcements/public`,
+`/api/dashboard/summary`) -- none from any stock endpoint.
 
 ## New feature work landed directly in `backend-php/` (not a conversion)
 
@@ -1288,7 +1356,7 @@ Management above -- model(s) + migration(s) + controller + routes +
 smoke test:
 
 1. Everything else in `backend/app/routers/` not listed above
-   (Inventory/Stock, the rest of `reports.py` (AR/AP aging duplicates,
+   (the rest of `reports.py` (AR/AP aging duplicates,
    GST Return, Sales GP, Operations Reports) and its CSV/Excel
    exports, Event Logs, Software Tasks, Ops Dashboard, Customer
    Helpdesk Portal, Mobile Web App, Commissions [deferred, per
@@ -1306,6 +1374,13 @@ smoke test:
    the Documents module converted above, is what actually unblocks all
    four at once. `config/websoft.php` already carries the `smtp_*`
    settings the eventual PHP mailer would read.
+3. Follow-ups raised by the Inventory/Stock conversion, each small and
+   waiting on a decision rather than on code: moving the four stock
+   documents off their count-based numbering onto
+   `App\Services\Numbering` (needs Dennis to pick a format, since it
+   changes document numbers users already see), and deciding whether
+   any stock document should post to the General Ledger (today none
+   does, in either backend -- see that module's KNOWN GAP above).
 
 ## Running the PHP backend locally
 

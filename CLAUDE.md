@@ -220,11 +220,17 @@ valued at weighted average cost -- only a receipt re-weights it, a
 transfer carries the source warehouse's cost across rather than
 revaluing, and stock can never go negative) and INV-001 (a stock
 adjustment moves nothing until it is approved; a draft or rejected one
-provably never touches a stock level). Two things found while
-converting it: the Warehouses
+provably never touches a stock level), plus the stock operation
+reports (valuation, reorder alert and the movements journal, on their
+own module key so a manager can read them without any rights to move
+stock). Three things found while converting it: the Warehouses
 and Stock Item screens' Activate/Deactivate buttons could never have
 worked against `backend/` (its PATCH body required `code`/`name` and
 had no `is_active` field at all) -- fixed here with regression tests;
+the stock movements ledger's timestamp column stored only whole
+seconds, so same-second movements came back in an arbitrary order and
+the journal could show a transfer's receipt above the receipt that
+funded it -- fixed by an additive migration, with a regression test;
 and `backend/app/routers/stock.py` writes **no audit trail at all**
 for any of its six module keys, so the PHP version adds one, flagged
 in docs/php-conversion-plan.md as a gap in `backend/` worth raising.

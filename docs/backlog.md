@@ -82,7 +82,11 @@ shipped and when.
   carrying both confirmed Inventory rules -- INV-002 weighted average
   cost (pinned to worked examples at the 4dp precision the stock
   columns actually use) and INV-001, where only an approval ever moves
-  stock -- 32 dedicated tests. Also converted:
+  stock -- 32 dedicated tests -- and the stock operation reports
+  (valuation, reorder alert, movements journal, 12 dedicated tests),
+  which turned up a second real bug: the movements ledger's timestamp
+  column only stored whole seconds, so same-second movements came back
+  in an arbitrary order. Also converted:
   Incidents (the Helpdesk front door -- logging a call/email with its
   one automatic customer-by-email match, the "needs a callback" status
   + assignee, Close, and converting to a draft Sales Quotation or a
