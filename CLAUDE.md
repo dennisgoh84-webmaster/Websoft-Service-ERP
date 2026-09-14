@@ -177,11 +177,26 @@ caching bug in both AP's and AR's payment allocation (a payment's
 unallocated balance is computed from a relation Eloquent caches after
 first access, which didn't refresh between two allocations against
 the same payment in one request -- fixed, with a regression test on
-both sides). **Known gap:** Accounting Period management
-(locking/closing periods) and GL Trial Balance reporting are not built
-yet. `backend/` (Python) is untouched and keeps running as the system
-of record until each remaining module (Period management and
-everything else) is converted, module by module, the same way.
+both sides). Also converted: Accounting Period management (create/
+close/reopen a period, the per-document-type per-operation lock
+matrix -- Close All/Open All plus single-cell toggling, owner-only
+reopen -- and Year-End Closing, which posts one balanced journal
+entry zeroing every Revenue/Expense account's movement for the fiscal
+year into a chosen Equity account once every period in that year is
+closed) and GL Trial Balance / the per-account transaction ledger
+(including the `accounting_reports`-gated trial-balance duplicate
+`AccountingReportsPage` depends on, kept alongside the
+`finance_accounting`-gated one on the General Ledger screen since
+Python itself serves both routes). This is the first time
+`Periods::requireAllows()` -- wired into every posting/bank/reversal
+path since the GL posting + Bank module -- is a real, non-stub check
+rather than a permanent no-op, since no endpoint had ever created an
+`AccountingPeriod` row before now. **Known gap:** the manual Journal
+Voucher CRUD endpoints (raising/posting/reversing a voucher from the
+General Ledger screen) were outside this pass's scope and remain
+unconverted -- see docs/php-conversion-plan.md. `backend/` (Python) is
+untouched and keeps running as the system of record until each
+remaining module is converted, module by module, the same way.
 
 No other business area has application code yet. **Commission
 Management, further Service Record business-rule decisions (open item

@@ -580,8 +580,100 @@ breakdown.
   `tests/Feature/AccountTest.php`, `tests/Feature/BankAccountTest.php`,
   `tests/Feature/SupplierPaymentTest.php`).
   **Not yet converted:** CSV/Excel export.
+- **Accounting Period management + GL Trial Balance** (`app/models/periods.py`,
+  `app/services/periods.py` (368 lines), `app/routers/periods.py`
+  (252 lines), and the trial-balance/account-transactions halves of
+  `app/services/ledger.py`/`app/routers/ledger.py` →
+  `App\Models\FiscalYearClosure` (new -- `AccountingPeriod`/
+  `PeriodLock` already existed, schema-only, from the GL posting +
+  Bank module), `App\Services\Periods` (extended: `seedLocksForPeriod`,
+  `toggleLock`, `setAllLocks`/`closePeriod`/`reopenPeriod`, the derived
+  open/closed/partial status, `closeFiscalYear`), `App\Services\Ledger`
+  (extended: `accountTransactions`, `accountBalances`),
+  `App\Http\Controllers\Api\PeriodController`/`LedgerController`):
+  the full per-document-type x per-operation lock matrix
+  (`VALID_DOC_OPERATIONS` -- SALES_INVOICE/RECEIPT_VOUCHER/
+  PAYMENT_VOUCHER/PURCHASE_BILL/JOURNAL_VOUCHER x UPDATE/REVERSE/BANK/
+  UNBANK/GL/UNGL, only the valid combinations seeded per period),
+  "Close All"/"Open All" plus single-cell toggling, the derived
+  OPEN/CLOSED/(frontend-only) Partial status, owner-only reopen, and
+  Year-End Closing (every period in the fiscal year must already be
+  closed; the Retained Earnings account must be an Equity account;
+  posts one balanced closing journal entry zeroing every Revenue/
+  Expense account's movement for the year into it, `bypassPeriodCheck`
+  honoured so the entry can post despite its own period being closed;
+  records a `FiscalYearClosure`, never deletable, undone only by
+  reversing the closing voucher like any other posted voucher). This
+  is the FIRST time `App\Services\Periods::requireAllows()` -- wired
+  into every posting/bank/reversal path since the GL posting + Bank
+  module -- becomes a real, non-stub check: no endpoint had ever
+  created an `AccountingPeriod` row before this. The existing
+  Billing/AR/AP/GL posting/Bank test suites were re-run after wiring
+  this in and needed no changes (none of their fixtures create a
+  period, so `requireAllows()` stays a correct no-op for them, per its
+  own opt-in-protection default). Also ported: `account_transactions()`
+  (the per-account GL drill-down ledger with running balance,
+  including the brought-forward opening balance when `date_from` is
+  set) and `account_balances()` (the trial balance computation) on
+  `App\Services\Ledger`, exposed via `GET /ledger/trial-balance` and
+  `GET /ledger/transactions/{account}`.
+  **FINDING (per this task's own instruction to check):**
+  `backend/app/routers/reports.py`'s `_trial_balance_report`/
+  `trial_balance_report` (~line 603-660) IS a genuine duplicate of
+  `ledger.py`'s trial balance -- both call the identical
+  `ledger_svc.account_balances()` and build the identical
+  `TrialBalance` shape -- but it is not dead code: it lives at a
+  different route (`/reports/accounting/trial-balance` vs.
+  `/ledger/trial-balance`) gated by a *different* Module Control key
+  (`accounting_reports`, Python's `ACCOUNTING_MODULE` constant, vs.
+  `finance_accounting` for the General Ledger screen), and
+  `frontend/src/pages/AccountingReportsPage.tsx` depends on its own
+  route independently of `GeneralLedgerPage.tsx`. Ported as
+  `App\Http\Controllers\Api\ReportController::trialBalance()`,
+  mirroring Python's own structure (each router keeps its own small
+  private presentation helper around the same service call, rather
+  than one being rewritten to call the other) -- see that class's
+  docblock. The rest of `reports.py` (AR/AP aging duplicates -- already
+  served under their own modules' routes, see
+  `AccountsReceivableController`/`AccountsPayableController`'s
+  `agingReport()` -- GST Return, Sales GP, Operations Reports,
+  dashboards, and CSV/Excel export for all of these) is **not**
+  converted; only the trial-balance route was in this task's scope,
+  since it is the one `AccountingReportsPage.tsx` needs.
+  **KNOWN GAP (not silently papered over):** the *manual* Journal
+  Voucher CRUD endpoints (`GET /ledger/vouchers`, `POST /ledger/vouchers`,
+  `POST /ledger/vouchers/{id}/post`, `POST /ledger/vouchers/{id}/reverse`)
+  were never in this task's assigned scope (the task named only the
+  trial-balance/account-transactions half of `ledger.py`) and remain
+  unconverted -- `App\Services\Ledger::createJournalEntry()`/
+  `postEntry()`/`reverseEntry()` already exist (built for GL posting +
+  Bank, used internally by `App\Services\Posting`), only the endpoints
+  a person would use to raise a manual Journal Voucher from the
+  General Ledger screen are still missing a controller. This means
+  `GeneralLedgerPage.tsx`'s "Vouchers" list/"Raise a Journal Voucher"
+  form still 404 against `backend-php/` (pre-existing, not introduced
+  by this conversion) -- its Trial Balance card above them now works
+  correctly. Tracked here rather than silently left unmentioned; not
+  yet added to the priority list below since nothing has asked for it
+  yet.
+  **Not yet converted:** CSV/Excel export (the Python router has none
+  for Accounting Periods either).
+  26 business-logic + API-level tests for Periods
+  (`tests/Feature/PeriodsServiceTest.php`, 16 -- the lock matrix, the
+  derived open/closed/partial status, every Year-End Closing
+  precondition, and the exact worked example: a SGD 1,000 contract
+  invoice's revenue account closed with one balanced entry, Dr revenue
+  1000 / Cr Retained Earnings 1000; `tests/Feature/PeriodTest.php`, 10
+  -- CRUD, owner-only reopen/Year-End Closing, RBAC, multi-company
+  404) + 16 for the ledger/report additions
+  (`tests/Feature/LedgerServiceTest.php`, 5 new -- debit=credit trial
+  balance totals, draft/reversed vouchers excluded, running-balance
+  math including the opening-balance carry-forward;
+  `tests/Feature/LedgerTest.php`, 7; `tests/Feature/AccountingReportsTest.php`,
+  4 -- including the `accounting_reports` vs. `finance_accounting`
+  module-key independence the FINDING above describes).
 
-Verified end-to-end for all nine modules against the real React
+Verified end-to-end for all nine modules above against the real React
 frontend (screenshots in the PR/commit history), including the
 Invoices page's Aging widget -- which previously 404'd (a confirmed
 gap noted when Billing shipped) -- now rendering all 5 buckets with
@@ -599,6 +691,25 @@ fully paid. The only 404s seen were for not-yet-converted modules
 Orders, Service Records, Excess Usage, Billing, Accounts Receivable,
 Accounts Payable, or GL posting's own endpoints.
 
+Verified end-to-end for Accounting Period management / GL Trial
+Balance separately (screenshots in the PR/commit history): the
+Accounting Periods page showing two real periods, one correctly
+badged "Open" and the other "Partial" after locking two individual
+cells (SALES_INVOICE/UPDATE, RECEIPT_VOUCHER/BANK) rather than Close
+All; the General Ledger page's Trial Balance card showing a real,
+balanced $1,090.00 (AR) / $90.00 (GST output) / $1,000.00 (revenue)
+trial balance from an activated contract's annual invoice, with
+"balanced" correctly badged; the GL Transactions drill-down reached
+by clicking that AR row, showing the one INV-2026-0001 line with a
+running and closing balance of $1,090.00; and the Accounting Reports
+page's own Trial Balance selection (a separate route/module gate from
+the General Ledger's) rendering the identical, correctly-balanced
+figures. The only 404s seen were the expected not-yet-converted ones
+(Announcements, Dashboard, the pre-existing Journal Voucher CRUD gap
+noted above, and AR Aging under Accounting Reports -- that report's
+own route, distinct from the trial-balance one just converted, is
+part of the still-unconverted `reports.py` module).
+
 ## Not yet converted (pending, in rough priority order)
 
 Everything below still only exists in `backend/` (Python). Each is a
@@ -606,12 +717,7 @@ phase of its own, following the same pattern as CompanyIndividual
 Management above -- model(s) + migration(s) + controller + routes +
 smoke test:
 
-1. **Accounting Period management** (create/close/reopen a period,
-   the per-doc-type per-operation lock matrix, Year-End Closing) and
-   **GL Trial Balance / the per-account transaction ledger** -- both
-   scoped out of the GL posting + Bank conversion above; see that
-   entry's docblock references.
-2. Everything else in `backend/app/routers/` not listed above
+1. Everything else in `backend/app/routers/` not listed above
    (Quotations, Incidents, Inventory/Stock, Reporting/dashboards,
    Event Logs, Document Control, Announcements, Software Tasks, Ops
    Dashboard, Customer Helpdesk Portal, Mobile Web App, Commissions

@@ -105,7 +105,9 @@ class Ledger
      * Post a draft voucher to the ledger. Refuses to post anything
      * that doesn't balance, or anything dated inside a closed
      * accounting period. `bypassPeriodCheck` exists only for the
-     * Year-End Closing voucher itself (not yet converted).
+     * Year-End Closing voucher itself (App\Services\Periods::
+     * closeFiscalYear()), which is deliberately dated inside a period
+     * that is closed by definition.
      */
     public static function postEntry(JournalEntry $entry, ?string $actorUserId, bool $bypassPeriodCheck = false): JournalEntry
     {
@@ -202,5 +204,138 @@ class Ledger
         $entry->save();
 
         return $reversal;
+    }
+
+    /**
+     * GL transaction ledger for one account: every posted journal line
+     * touching this account, ordered by date then voucher number, with
+     * a running balance. Mirrors backend/app/services/ledger.py's
+     * account_transactions() -- including that function's own choice
+     * to convert to float here (not at the controller boundary), since
+     * this is a read-only report row, not a value fed back into
+     * further arithmetic.
+     *
+     * The running balance is cumulative debit minus credit, starting
+     * at zero (or at the brought-forward total when $dateFrom is set).
+     *
+     * @return list<array{line_id: string, entry_id: string, voucher_number: string, voucher_type: string, entry_date: string, narration: string, line_description: ?string, debit_sgd: float, credit_sgd: float, balance_sgd: float}>
+     */
+    public static function accountTransactions(string $companyId, string $accountId, ?Carbon $dateFrom = null, ?Carbon $dateTo = null): array
+    {
+        $account = Account::find($accountId);
+        if ($account === null || $account->company_id !== $companyId) {
+            return [];
+        }
+
+        // ── Opening balance when a date_from filter is set ──
+        $openingBalance = Money::of(0);
+        if ($dateFrom !== null) {
+            $priorLines = JournalLine::where('account_id', $accountId)
+                ->whereHas('entry', function ($q) use ($companyId, $dateFrom) {
+                    $q->where('company_id', $companyId)
+                        ->where('status', JournalEntry::STATUS_POSTED)
+                        ->where('entry_date', '<', $dateFrom->toDateString());
+                })
+                ->get();
+            foreach ($priorLines as $line) {
+                $openingBalance = $openingBalance->plus(Money::of($line->debit_sgd))->minus(Money::of($line->credit_sgd));
+            }
+        }
+
+        // ── Transaction lines in the date window ──
+        $lines = JournalLine::where('account_id', $accountId)
+            ->whereHas('entry', function ($q) use ($companyId, $dateFrom, $dateTo) {
+                $q->where('company_id', $companyId)->where('status', JournalEntry::STATUS_POSTED);
+                if ($dateFrom !== null) {
+                    $q->where('entry_date', '>=', $dateFrom->toDateString());
+                }
+                if ($dateTo !== null) {
+                    $q->where('entry_date', '<=', $dateTo->toDateString());
+                }
+            })
+            ->with('entry')
+            ->get()
+            ->all();
+
+        usort($lines, function (JournalLine $a, JournalLine $b) {
+            $cmp = $a->entry->entry_date <=> $b->entry->entry_date;
+
+            return $cmp !== 0 ? $cmp : $a->entry->voucher_number <=> $b->entry->voucher_number;
+        });
+
+        $running = $openingBalance;
+        $rows = [];
+        foreach ($lines as $line) {
+            $entry = $line->entry;
+            $debit = Money::of($line->debit_sgd);
+            $credit = Money::of($line->credit_sgd);
+            $running = $running->plus($debit)->minus($credit);
+            $rows[] = [
+                'line_id' => $line->id,
+                'entry_id' => $entry->id,
+                'voucher_number' => $entry->voucher_number,
+                'voucher_type' => $entry->voucher_type,
+                'entry_date' => $entry->entry_date->toDateString(),
+                'narration' => $entry->narration,
+                'line_description' => $line->description,
+                'debit_sgd' => $debit->toFloat(),
+                'credit_sgd' => $credit->toFloat(),
+                'balance_sgd' => $running->toFloat(),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Trial balance: every account's posted debits and credits. Draft
+     * and reversed vouchers are excluded -- only posted entries are
+     * part of the ledger. Mirrors backend/app/services/ledger.py's
+     * account_balances() -- unlike accountTransactions() above, this
+     * keeps debit/credit/balance as Money (Python keeps them as
+     * Decimal), only converted to float at the controller boundary,
+     * since App\Services\Periods::closeFiscalYear() does further
+     * arithmetic on the result (a fiscal year's movement = one
+     * as-at balance minus another).
+     *
+     * @return list<array{account_id: string, code: string, name: string, account_type: string, debit_sgd: Money, credit_sgd: Money, balance_sgd: Money}>
+     */
+    public static function accountBalances(string $companyId, ?Carbon $asAt = null): array
+    {
+        $lines = JournalLine::whereHas('entry', function ($q) use ($companyId, $asAt) {
+            $q->where('company_id', $companyId)->where('status', JournalEntry::STATUS_POSTED);
+            if ($asAt !== null) {
+                $q->where('entry_date', '<=', $asAt->toDateString());
+            }
+        })->with('account')->get();
+
+        $totals = [];
+        foreach ($lines as $line) {
+            $account = $line->account;
+            if ($account === null) {
+                continue;
+            }
+            if (! isset($totals[$account->id])) {
+                $totals[$account->id] = [
+                    'account_id' => $account->id,
+                    'code' => $account->code,
+                    'name' => $account->name,
+                    'account_type' => $account->account_type,
+                    'debit_sgd' => Money::of(0),
+                    'credit_sgd' => Money::of(0),
+                ];
+            }
+            $totals[$account->id]['debit_sgd'] = $totals[$account->id]['debit_sgd']->plus(Money::of($line->debit_sgd));
+            $totals[$account->id]['credit_sgd'] = $totals[$account->id]['credit_sgd']->plus(Money::of($line->credit_sgd));
+        }
+
+        $rows = array_values($totals);
+        usort($rows, fn (array $a, array $b) => $a['code'] <=> $b['code']);
+        foreach ($rows as &$row) {
+            $row['balance_sgd'] = $row['debit_sgd']->minus($row['credit_sgd']);
+        }
+        unset($row);
+
+        return $rows;
     }
 }

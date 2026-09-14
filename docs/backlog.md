@@ -57,10 +57,17 @@ shipped and when.
   allocation (a payment's unallocated balance is computed from a
   cached relation that didn't refresh between two allocations in the
   same request, which could have let a payment be over-allocated).
-  **Known gap:** Accounting Period management and GL Trial Balance
-  reporting are scoped out for now (tracked in php-conversion-plan.md).
-  Still pending: Period management, and everything else -- converted
-  module by module, same pattern as the Odoo replacement strategy.
+  Also converted: Accounting Period management (create/close/reopen a
+  period, the per-doc-type per-operation lock matrix, Year-End
+  Closing, 26 dedicated tests) and GL Trial Balance / the per-account
+  transaction ledger (including the `/reports/accounting/trial-balance`
+  duplicate route AccountingReportsPage depends on, gated by its own
+  `accounting_reports` module key, 16 dedicated tests) -- this makes
+  `App\Services\Periods::requireAllows()`, wired into every posting/
+  bank/reversal path since the GL posting + Bank module, a real check
+  for the first time rather than a permanent no-op.
+  Still pending: everything else -- converted module by module, same
+  pattern as the Odoo replacement strategy.
   → [php-conversion-plan.md](php-conversion-plan.md)
 
 ## Waiting on Dennis to pick up (deferred 2026-09-12)

@@ -8,8 +8,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * One cell of the period x document-type x operation lock matrix.
- * Mirrors backend/app/models/periods.py's PeriodLock -- see
- * App\Models\AccountingPeriod's docblock for why no row exists yet.
+ * Mirrors backend/app/models/periods.py's PeriodLock. Created
+ * automatically when a period is created (App\Services\Periods::
+ * seedLocksForPeriod()) -- one row per valid doc-type x operation
+ * combination from Periods::VALID_DOC_OPERATIONS.
  */
 class PeriodLock extends Model
 {

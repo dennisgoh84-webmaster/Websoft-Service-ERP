@@ -9,16 +9,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * One posting period (typically a calendar month) for a company.
- * Mirrors backend/app/models/periods.py's AccountingPeriod.
- *
- * NOT yet converted: Period management itself (create/close/reopen a
- * period, lock/unlock individual doc-type x operation cells, Year-End
- * Closing) -- see App\Services\Periods' class docblock. This model
- * exists purely so App\Services\Posting's guard can look a period up
- * correctly the day that management UI is converted; until then no
- * row is ever created, so the guard is always a no-op (matching
- * Python's own "opt-in protection: a date with no period defined is
- * unrestricted").
+ * Mirrors backend/app/models/periods.py's AccountingPeriod. Managed
+ * via App\Http\Controllers\Api\PeriodController /
+ * App\Services\Periods (create/close/reopen, per-doc-type x
+ * per-operation lock matrix, Year-End Closing).
  */
 class AccountingPeriod extends Model
 {
