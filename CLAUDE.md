@@ -335,9 +335,11 @@ of writing document text unescaped meant a literal "&" -- which every
 Service Record carries in "Signature & Company Stamp" -- produced a
 file Word silently repairs but LibreOffice refuses, so the Word
 download looked fine while the PDF behind every Email button failed.
-**Still a KNOWN GAP:** CSV/Excel export, a different Python service
-(`exports.py`), is the one export format still missing across the
-converted modules.
+**Partly closed since:** CSV/Excel export, a different Python
+service (`exports.py`), has been ported as `App\Services\Exports` and
+wired into the modules converted after it (Tax Types onward, the
+ledger, and all of Management Reporting). **Still a KNOWN GAP:**
+retrofitting it onto the modules converted before it.
 
 `backend/` (Python) is untouched and keeps running as the system of
 record until each remaining module is converted, module by module,
@@ -365,7 +367,31 @@ per-line reconcile and full reconciliation sessions, plus the
 `bank_reconciliations` table), and the **Mobile Web App**
 (planned-work #1: own-Job-Orders-only, time in/out replacing keyed
 minutes, work photos and videos, and customer sign-off with a
-watermarked chop photo).
+watermarked chop photo). Also converted: **Management Reporting**
+(the whole of `reports.py`) -- the four **Operations Reports**
+(Contracts, Job Orders, Service Records, Company/Individual Product
+Usage) and the **Accounting Reports** (AR aging, AP aging, trial
+balance, GST return, Sales GP, and Commission with its rate setting),
+each as JSON plus CSV and Excel, every export audited with its report
+name, format and row count. The two aging reports deliberately call
+the same services the AR and AP screens call rather than carrying
+Python's duplicated bucketing loop, so the figures on those screens
+can never drift apart. Commission adds a `commission_settings` table:
+the formula is confirmed but the percentage is Dennis's to set, so it
+starts at zero and a report run before it is set reports zero rather
+than an invented rate. Two things found while converting it: the Job
+Orders export's "overdue" column tests the status against a
+`"resolved"` state that does not exist in this system, so a VOID job
+order reads as overdue there while the `overdue_only` filter beside it
+excludes VOID correctly -- carried across verbatim so the backends
+match, and flagged in
+[docs/php-conversion-plan.md](docs/php-conversion-plan.md) as a
+`backend/` bug worth raising; and the reports' staff-name lookup now
+resolves the ids in the result set rather than filtering `users` by
+company, which had blanked out the name of anyone reached through
+`UserCompanyAccess` rather than their home company. **Still deferred:**
+Commission Payouts, which is a separate module -- only the report and
+its rate live in `reports.py`.
 
 **Sales module enhancements landed directly in `backend-php/` +
 `frontend/`, not as part of the conversion above** (`backend/` has no

@@ -643,13 +643,10 @@ breakdown.
   mirroring Python's own structure (each router keeps its own small
   private presentation helper around the same service call, rather
   than one being rewritten to call the other) -- see that class's
-  docblock. The rest of `reports.py` (AR/AP aging duplicates -- already
-  served under their own modules' routes, see
-  `AccountsReceivableController`/`AccountsPayableController`'s
-  `agingReport()` -- GST Return, Sales GP, Operations Reports,
-  dashboards, and CSV/Excel export for all of these) is **not**
-  converted; only the trial-balance route was in this task's scope,
-  since it is the one `AccountingReportsPage.tsx` needs.
+  docblock. At the time, only the trial-balance route was in scope,
+  since it is the one `AccountingReportsPage.tsx` needs; **the rest of
+  `reports.py` has since been converted** -- see "Management Reporting
+  -- Operations + Accounting Reports" below.
   **KNOWN GAP (not silently papered over):** the *manual* Journal
   Voucher CRUD endpoints (`GET /ledger/vouchers`, `POST /ledger/vouchers`,
   `POST /ledger/vouchers/{id}/post`, `POST /ledger/vouchers/{id}/reverse`)
@@ -2331,6 +2328,97 @@ a 502, an unconfigured mailbox a 422.
   first instalment of the tracked CSV/Excel gap; the remaining modules
   still need theirs.
 
+### Management Reporting -- Operations + Accounting Reports (converted 2026-09-15)
+
+The whole of `app/routers/reports.py` (931 lines) and
+`app/services/reports.py` (433 lines), minus the trial-balance endpoint
+already converted with the General Ledger. `App\Services\ReportsService`
+holds the queries; the endpoints split across two controllers on two
+different Module Control keys, exactly as Python splits them.
+
+- **Operations Reports** (`operations_reports` ->
+  `App\Http\Controllers\Api\OperationsReportController`,
+  `routes/api/operations_reports.php`, 14 tests): Contracts, Job
+  Orders, Service Records and Company/Individual Product Usage, each as
+  JSON plus a CSV and an XLSX export -- 12 endpoints.
+
+  Gated at VIEW: these are read-only views over data other modules own,
+  so a manager can be given the reports without being given the ability
+  to change anything they report on.
+
+  **The JSON and the export are deliberately different shapes**, as in
+  Python: the JSON endpoints return the same record shapes their own
+  screens already use (`ContractOut`, `JobOrderOut`, `ServiceRecordOut`
+  -- hours and minutes as numbers), because
+  `frontend/src/pages/OperationsReportsPage.tsx` types them
+  `Contract[]`/`JobOrder[]`/`ServiceRecord[]` and does its own
+  formatting; the export rows are the flattened, name-resolved,
+  fixed-decimal rows a spreadsheet wants. A first pass that returned
+  the export rows from the JSON endpoints would have broken every
+  column on that screen.
+
+  RULES PINNED BY TESTS: "expiring within N days" is forward-looking,
+  so something that expired last week is excluded; a Service Record
+  reaches its customer only through its Job Order; `overdue_only`
+  excludes CLOSED and VOID; and every export writes an audit entry
+  naming the report, the format and the row count.
+
+  **A PYTHON QUIRK CARRIED ACROSS VERBATIM, flagged rather than
+  corrected:** the Job Orders export's `overdue` column tests the
+  status against the strings `"resolved"` and `"closed"`, but
+  `JobOrderStatus` has no `resolved` state -- so only `closed` actually
+  excludes a job order, and a VOID one still reads as overdue, even
+  though the `overdue_only` *filter* two functions away excludes VOID
+  correctly. The two therefore disagree in Python today. Preserved so
+  the backends match; worth raising with Dennis as a `backend/` bug.
+
+  Also fixed here: the staff-name lookup resolves the ids that actually
+  appear in a report's rows rather than filtering the `users` table by
+  its own company column -- a staff member reaches a company through
+  `UserCompanyAccess`, so the company-scoped version blanked out the
+  name of anyone whose home company differed. Python loads every user
+  for the same reason.
+
+- **Accounting Reports** (`accounting_reports` ->
+  `App\Http\Controllers\Api\ReportController`, `routes/api/reports.php`,
+  22 tests): AR aging, AP aging, the trial balance, the GST return,
+  Sales GP, and Commission with its rate setting -- 20 endpoints.
+
+  **AR and AP aging are not re-implemented.** Python's `reports.py`
+  copies both bucketing loops out of the AR and AP routers; here both
+  screens call the same `App\Services\AccountsReceivableService::agingRows`
+  / `App\Services\PayablesService::agingRows`, so the Accounting
+  Reports screen and the AR/AP screens cannot drift -- which is the
+  property Python's own comment says the copy exists to preserve. A
+  test asserts the two endpoints return byte-identical JSON.
+
+  NEW TABLE: `commission_settings` (one row per company, keyed by the
+  company itself so it can never hold two competing rates), mirroring
+  Python's model. The rate starts at zero and is never invented -- see
+  docs/open-business-decisions.md #34 -- so a Commission report run
+  before an administrator sets a rate reports zero, not a guess.
+  Reading the rate needs VIEW; setting it needs FULL, and every change
+  is audited with the old and new rate.
+
+  RULES PINNED BY TESTS: commission is rate% x gross profit on the
+  share of an invoice a receipt actually settled, and the allocation is
+  converted to its share of NET revenue first, so **GST never inflates
+  commission**; an invoice whose contract names no salesperson is
+  reported against "Unassigned" rather than dropped; a receipt outside
+  the period is ignored; input tax is one `PURCHASES` total because a
+  supplier bill carries no tax code of its own; and a null `cost_sgd`
+  on Sales GP reads as zero cost (100% GP) with `has_cost_basis: false`
+  marking the row, never as a silently excluded invoice.
+
+  `Invoice::gp_percent`, a computed property on Python's model that
+  `backend-php`'s Invoice has no equivalent of, lives in
+  `ReportsService` beside the only two reports that need it rather than
+  widening the model for one report family.
+
+  STILL A KNOWN GAP: Commission *Management* (payouts) is a separate,
+  deferred module -- this converts only the report and its rate
+  setting, which is all `reports.py` carries.
+
 ## Not yet converted (pending, in rough priority order)
 
 Everything below still only exists in `backend/` (Python). Each is a
@@ -2338,14 +2426,10 @@ phase of its own, following the same pattern as CompanyIndividual
 Management above -- model(s) + migration(s) + controller + routes +
 smoke test:
 
-1. Everything else in `backend/app/routers/` not listed above
-   (the rest of `reports.py` (AR/AP aging duplicates,
-   GST Return, Sales GP, Operations Reports) and its CSV/Excel
-   exports, Event Logs, Software Tasks, Ops Dashboard,
-   Mobile Web App, Commissions [deferred, per
-   CLAUDE.md]) -- lower priority than the Service Operations core
-   above, since that core is what CLAUDE.md's Status section calls out
-   as the one working slice today.
+1. Anything else in `backend/app/routers/` not listed above.
+   Commission Payouts remains deferred per CLAUDE.md (the Commission
+   *report* and its rate setting are converted -- see Management
+   Reporting above).
 2. CSV/Excel export (`app/services/exports.py` plus the
    `export.csv`/`export.xlsx` route on nearly every list screen). This
    is now the only export format still missing on the converted
