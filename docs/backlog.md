@@ -320,13 +320,16 @@ shipped and when.
   Admin login: `admin` / `Admin123`.
   → [planned-work.md #8](planned-work.md#8-server-company-central-command----remote-adbanner-push--license-enforcement-raised-2026-09-12)
 - [ ] **Server/system config pushed from Central Command, not set per
-  client** -- raised 2026-09-15. The system SMTP settings (login OTP,
-  password reset) should be owned in Central Command and pushed down,
-  instead of hand-edited in each install's `backend-php/.env`. Central
-  Command already pushes config by SQL, so the blocker is on this
-  side: `.env` is a file and no push can reach it, so the settings
-  must move into a database table first. Distinct from the
-  per-company mailbox in Company Setup, which stays client-side.
+  client** -- raised 2026-09-15. ~~The blocker is on this side: `.env`
+  is a file and no push can reach it, so the settings must move into a
+  database table first.~~ **This side done 2026-09-15:** the system
+  mailboxes are in `system_mail_settings` (two rows -- `otp` for
+  sign-in codes / resets / portal invites, `helpdesk` for the Outlook
+  Add-in's Incident / Job Order acknowledgements) with a Maintenance →
+  System Email screen; `.env` stays the bootstrap fallback for `otp`
+  only. What remains is the push from Central Command into that table.
+  Distinct from the per-company mailbox in Company Setup, which stays
+  client-side.
   → [planned-work.md #8c](planned-work.md#8c-serversystem-configuration-push-raised-2026-09-15)
 
 - [x] **No Dockerfile for `backend-php/`** -- found and written

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { api, type Company } from '../lib/api'
+import MailboxSettingsForm from '../components/MailboxSettingsForm'
 import { useAuth } from '../lib/AuthContext'
 
 const MAX_LOGO_BYTES = 300 * 1024
@@ -20,74 +21,15 @@ function fyDescription(startMonth: number): string {
 
 /**
  * This company's own outbound mailbox -- what the customer-facing
- * "Email Invoice / Quotation / ..." buttons send from. It is NOT the
- * system mailbox in .env (login codes, password resets, portal
- * invites), and neither falls back to the other: an invoice sent from
- * the wrong domain fails SPF/DKIM and lands in spam, so the backend
- * refuses to send a document until this is filled in. The password is
- * write-only -- the backend never returns it, only whether one is set
- * -- so a blank password field here means "leave it as it is".
+ * "Email Invoice / Quotation / ..." buttons send from. It is NOT either
+ * of the system mailboxes under Maintenance -> System Email (sign-in
+ * codes; Helpdesk acknowledgements), and none of the three falls back
+ * to another: an invoice sent from the wrong domain fails SPF/DKIM and
+ * lands in spam, so the backend refuses to send a document until this
+ * is filled in.
  */
 function CompanyMailboxCard({ company, onSaved }: { company: Company; onSaved: () => void }) {
-  const [host, setHost] = useState(company.smtp_host ?? '')
-  const [port, setPort] = useState(String(company.smtp_port))
-  const [username, setUsername] = useState(company.smtp_username ?? '')
-  const [password, setPassword] = useState('')
-  const [clearPassword, setClearPassword] = useState(false)
-  const [useTls, setUseTls] = useState(company.smtp_use_tls)
-  const [fromEmail, setFromEmail] = useState(company.smtp_from_email ?? '')
-  const [fromName, setFromName] = useState(company.smtp_from_name ?? '')
-  const [testTo, setTestTo] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<string | null>(null)
-
   const configured = !!(company.smtp_host && company.smtp_from_email)
-
-  async function onSave(e: FormEvent) {
-    e.preventDefault()
-    setError(null)
-    setSaved(false)
-    setTestResult(null)
-    setSaving(true)
-    try {
-      await api.updateCompany(company.id, {
-        smtp_host: host || null,
-        smtp_port: Number(port) || 587,
-        smtp_username: username || null,
-        // Omitted entirely unless there is something to change, so a
-        // save with the field left blank never wipes the stored one.
-        ...(clearPassword ? { smtp_password: null } : password ? { smtp_password: password } : {}),
-        smtp_use_tls: useTls,
-        smtp_from_email: fromEmail || null,
-        smtp_from_name: fromName || null,
-      })
-      setPassword('')
-      setClearPassword(false)
-      setSaved(true)
-      onSaved()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save email settings')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function onSendTest() {
-    setError(null)
-    setTestResult(null)
-    setTesting(true)
-    try {
-      const r = await api.testCompanyEmail(company.id, testTo)
-      setTestResult(`Sent to ${r.to}. Check that inbox (and its spam folder).`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Test email failed')
-    } finally {
-      setTesting(false)
-    }
-  }
 
   return (
     <div className="card">
@@ -102,109 +44,35 @@ function CompanyMailboxCard({ company, onSaved }: { company: Company; onSaved: (
         Orders, Statements and the rest of the "Email ..." buttons. Use an account on your own
         domain so the mail passes SPF/DKIM at the customer's end. Until this is filled in those
         buttons report "Email is not configured for {company.name}"; the Word and PDF downloads
-        work regardless. Sign-in codes and password resets use the server's own mailbox
-        (SMTP_* in .env), not this one.
+        work regardless. Sign-in codes and Helpdesk acknowledgements use the system mailboxes
+        under Maintenance → System Email, not this one.
       </p>
-      {error && <div className="error-banner">{error}</div>}
-      <form onSubmit={onSave}>
-        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 260 }}>
-            <div className="form-row">
-              <label>SMTP host</label>
-              <input value={host} onChange={(e) => setHost(e.target.value)} placeholder="e.g. smtp.office365.com" />
-            </div>
-            <div className="form-row">
-              <label>Port</label>
-              <input type="number" min={1} max={65535} value={port} onChange={(e) => setPort(e.target.value)} />
-              <span className="muted">587 with TLS is the usual setting; 465 for implicit SSL; 25 for a plain relay.</span>
-            </div>
-            <div className="form-row">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={useTls}
-                  onChange={(e) => setUseTls(e.target.checked)}
-                  style={{ width: 'auto', marginRight: 8 }}
-                />
-                Use TLS (STARTTLS)
-              </label>
-            </div>
-            <div className="form-row">
-              <label>Username</label>
-              <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" />
-            </div>
-            <div className="form-row">
-              <label>Password {company.smtp_password_set && !clearPassword && '(one is on file -- leave blank to keep it)'}</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="new-password"
-                disabled={clearPassword}
-                placeholder={company.smtp_password_set ? '********' : ''}
-              />
-              {company.smtp_password_set && (
-                <label style={{ marginTop: 6 }}>
-                  <input
-                    type="checkbox"
-                    checked={clearPassword}
-                    onChange={(e) => setClearPassword(e.target.checked)}
-                    style={{ width: 'auto', marginRight: 8 }}
-                  />
-                  Remove the stored password
-                </label>
-              )}
-            </div>
-          </div>
-          <div style={{ flex: 1, minWidth: 260 }}>
-            <div className="form-row">
-              <label>From address</label>
-              <input
-                type="email"
-                value={fromEmail}
-                onChange={(e) => setFromEmail(e.target.value)}
-                placeholder="e.g. accounts@websoft.sg"
-              />
-              <span className="muted">Most providers require this to be the mailbox you sign in as.</span>
-            </div>
-            <div className="form-row">
-              <label>From name</label>
-              <input value={fromName} onChange={(e) => setFromName(e.target.value)} placeholder={company.name} />
-            </div>
-            <button type="submit" disabled={saving}>
-              {saving ? 'Saving...' : 'Save email settings'}
-            </button>
-            {saved && (
-              <span className="muted" style={{ marginLeft: 10 }}>
-                Saved.
-              </span>
-            )}
-
-            <div className="form-row" style={{ marginTop: 22 }}>
-              <label>Send a test email to</label>
-              <input
-                type="email"
-                value={testTo}
-                onChange={(e) => setTestTo(e.target.value)}
-                placeholder="your own address"
-              />
-              <span className="muted">
-                Sends a real message through the settings saved above (save first). A failure here
-                shows the mail server's own reply, which is usually the quickest way to spot a
-                wrong password or a blocked port.
-              </span>
-            </div>
-            <button type="button" className="secondary" disabled={testing || !configured || !testTo} onClick={onSendTest}>
-              {testing ? 'Sending...' : 'Send test email'}
-            </button>
-            {testResult && (
-              <span className="muted" style={{ marginLeft: 10 }}>
-                {testResult}
-              </span>
-            )}
-          </div>
-        </div>
-      </form>
+      <MailboxSettingsForm
+        values={{
+          host: company.smtp_host,
+          port: company.smtp_port,
+          username: company.smtp_username,
+          use_tls: company.smtp_use_tls,
+          from_email: company.smtp_from_email,
+          from_name: company.smtp_from_name,
+          password_set: company.smtp_password_set,
+        }}
+        configured={configured}
+        fromNamePlaceholder={company.name}
+        onSave={async (p) => {
+          await api.updateCompany(company.id, {
+            smtp_host: p.host,
+            smtp_port: p.port,
+            smtp_username: p.username,
+            ...('password' in p ? { smtp_password: p.password } : {}),
+            smtp_use_tls: p.use_tls,
+            smtp_from_email: p.from_email,
+            smtp_from_name: p.from_name,
+          })
+          onSaved()
+        }}
+        onTest={(to) => api.testCompanyEmail(company.id, to)}
+      />
     </div>
   )
 }

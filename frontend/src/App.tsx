@@ -8,6 +8,7 @@ import ApprovalAuthoritiesPage from './pages/ApprovalAuthoritiesPage'
 import ApprovalCenterPage from './pages/ApprovalCenterPage'
 import AccountingReportsPage from './pages/AccountingReportsPage'
 import AnnouncementsPage from './pages/AnnouncementsPage'
+import SystemEmailPage from './pages/SystemEmailPage'
 import AccountsPayablePage from './pages/AccountsPayablePage'
 import BankAccountDetailPage from './pages/BankAccountDetailPage'
 import BankAccountsPage from './pages/BankAccountsPage'
@@ -143,6 +144,7 @@ function AppRoutes() {
         <Route path="/commission-payouts" element={<CommissionPayoutsPage />} />
         <Route path="/company-setup" element={<CompanySetupPage />} />
         <Route path="/announcements" element={<AnnouncementsPage />} />
+        <Route path="/system-email" element={<SystemEmailPage />} />
         <Route path="/staff" element={<StaffMasterPage />} />
         <Route path="/staff/:id" element={<StaffDetailPage />} />
         <Route path="/groups" element={<GroupsPage />} />

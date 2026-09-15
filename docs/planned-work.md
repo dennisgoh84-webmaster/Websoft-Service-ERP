@@ -336,6 +336,17 @@ already has `is_active` and `expires_at` fields per module per company).
 
 ### 8c. Server/system configuration push (raised 2026-09-15)
 
+> **Client side built 2026-09-15.** The system mailboxes now live in a
+> `system_mail_settings` table (one row per purpose: `otp` for sign-in
+> codes / password resets / portal invites, `helpdesk` for the Outlook
+> Add-in's Incident / Job Order acknowledgements), with a Maintenance →
+> System Email screen, the password encrypted at rest, and `.env`'s
+> `SMTP_*` kept as the bootstrap fallback for the `otp` purpose only
+> (open question 4 below, answered: yes, `.env` stays as the way to
+> recover the first admin until the row is filled in). That is the
+> table Central Command can now push into; the push itself, and open
+> questions 1-3, are still Central Command's side.
+
 **Dennis's instruction: build the server/system configuration in
 Central Command and push it down to each client deployment, rather
 than configuring it locally on each client.**

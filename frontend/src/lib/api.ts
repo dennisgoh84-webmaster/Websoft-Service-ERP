@@ -390,6 +390,26 @@ export interface PortalAccess {
   invited_by_email: boolean
 }
 
+/**
+ * One of the two system-level mailboxes (Maintenance -> System Email):
+ * `otp` (sign-in codes, password resets, portal invites) and `helpdesk`
+ * (the Outlook Add-in's Incident / Job Order acknowledgements). The
+ * password is write-only; `source` says where the live settings for
+ * this purpose currently come from.
+ */
+export interface SystemMailbox {
+  purpose: 'otp' | 'helpdesk'
+  host: string | null
+  port: number
+  username: string | null
+  use_tls: boolean
+  from_email: string | null
+  from_name: string | null
+  password_set: boolean
+  configured: boolean
+  source: 'database' | 'env' | 'none'
+}
+
 export interface Branch {
   id: string
   customer_id: string
@@ -1773,6 +1793,27 @@ export const api = {
   // unauthenticated call here (used by both the Login page and the
   // app-wide banner); the rest back the Announcements admin screen.
   getPublicAdBanner: () => request<PublicAdBanner>('/announcements/public'),
+  // Maintenance -> System Email (the two system mailboxes).
+  getSystemMail: () => request<{ otp: SystemMailbox; helpdesk: SystemMailbox }>('/system-mail'),
+  updateSystemMail: (
+    purpose: 'otp' | 'helpdesk',
+    payload: {
+      host?: string | null
+      port?: number
+      username?: string | null
+      /** Omit to leave the stored password alone; null clears it. */
+      password?: string | null
+      use_tls?: boolean
+      from_email?: string | null
+      from_name?: string | null
+    },
+  ) => request<SystemMailbox>(`/system-mail/${purpose}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  testSystemMail: (purpose: 'otp' | 'helpdesk', toEmail: string) =>
+    request<{ sent: boolean; to: string }>(`/system-mail/${purpose}/test-email`, {
+      method: 'POST',
+      body: JSON.stringify({ to_email: toEmail }),
+    }),
+
   getAdBannerSettings: () => request<{ video_url: string | null }>('/announcements/settings'),
   updateAdBannerSettings: (videoUrl: string | null) =>
     request<{ video_url: string | null }>('/announcements/settings', {

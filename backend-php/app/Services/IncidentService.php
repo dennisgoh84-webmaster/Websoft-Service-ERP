@@ -129,6 +129,59 @@ class IncidentService
         return $incident;
     }
 
+    /**
+     * Tell the person whose email became this Incident (and, when the
+     * Outlook Add-in also opened one, this Job Order) that it has been
+     * logged, from the Helpdesk mailbox (Dennis, 2026-09-15: a separate
+     * system mailbox "for MS Outlook add in to convert to Incident/Job
+     * Order").
+     *
+     * Returns whether it went out. It NEVER fails the conversion: an
+     * unconfigured mailbox or a refused send leaves the Incident and
+     * Job Order exactly as created and reports false, and the audit
+     * trail records the send only when it happened. The add-in shows
+     * the result either way.
+     */
+    public static function sendAcknowledgement(Incident $incident, ?JobOrder $jobOrder, ?string $actorUserId): bool
+    {
+        $to = trim((string) $incident->sender_email);
+        if ($to === '' || ! filter_var($to, FILTER_VALIDATE_EMAIL) || ! Mailer::isHelpdeskConfigured()) {
+            return false;
+        }
+
+        $greeting = $incident->sender_name ? "Hi {$incident->sender_name}," : 'Hello,';
+        $lines = [
+            $greeting,
+            '',
+            "Thank you for your email \"{$incident->subject}\". We have logged it as {$incident->incident_number}.",
+        ];
+        if ($jobOrder) {
+            $lines[] = "A Job Order, {$jobOrder->job_order_number}, has been opened for it and our support team will be in touch.";
+        } else {
+            $lines[] = 'Our support team will review it and be in touch.';
+        }
+        $lines[] = '';
+        $lines[] = 'Please quote the reference above in any reply.';
+
+        try {
+            Mailer::sendFromHelpdesk(
+                $to,
+                "[{$incident->incident_number}] We have received your request: {$incident->subject}",
+                implode("\n", $lines),
+            );
+        } catch (MailerNotConfiguredException|MailerException) {
+            return false;
+        }
+
+        Audit::record(
+            'incident', $incident->id, 'acknowledgement_emailed', $actorUserId,
+            details: "{$incident->incident_number}: acknowledgement sent to {$to}"
+                .($jobOrder ? " for {$jobOrder->job_order_number}" : ''),
+        );
+
+        return true;
+    }
+
     private static function requireOpen(Incident $incident): void
     {
         if ($incident->status !== Incident::STATUS_OPEN) {

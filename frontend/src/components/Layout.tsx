@@ -146,6 +146,7 @@ export default function Layout() {
       label: 'Announcements & Ad Banner',
       visible: can('core_administration'),
     },
+    { key: 'system-email', path: '/system-email', label: 'System Email', visible: can('core_administration') },
     { key: 'staff', path: '/staff', label: 'Staff Master', visible: can('core_administration') },
     { key: 'groups', path: '/groups', label: 'Group Authority', visible: can('core_administration') },
     { key: 'product-catalog', path: '/product-catalog', label: 'Product Catalog', visible: can('sales') },

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Company;
+use App\Models\SystemMailSetting;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Symfony\Component\Mailer\Transport;
 use Symfony\Component\Mime\Email;
@@ -21,17 +22,27 @@ use Symfony\Component\Mime\Email;
  * that passes them. The 3-argument calls (OTP, password reset) are
  * unchanged.
  *
- * TWO MAILBOXES, DELIBERATELY SEPARATE (Dennis, 2026-09-15), with NO
- * fallback in either direction:
+ * THREE MAILBOXES, DELIBERATELY SEPARATE (Dennis, 2026-09-15), with NO
+ * fallback between them:
  *
- *   send() / isConfigured()          -- the SYSTEM mailbox from
- *     .env. Used by login OTP and password reset, which run BEFORE a
- *     company is chosen, so they could not resolve a company mailbox
- *     even in principle.
+ *   send() / isConfigured()          -- the SYSTEM "otp" mailbox
+ *     (system_mail_settings, purpose=otp; .env's SMTP_* keys as the
+ *     fallback for THIS purpose only, so an install configured the old
+ *     way keeps working). Login one-time codes, password resets and
+ *     portal invites, which run BEFORE a company is chosen, so they
+ *     could not resolve a company mailbox even in principle.
+ *
+ *   sendFromHelpdesk() / isHelpdeskConfigured() -- the SYSTEM
+ *     "helpdesk" mailbox (purpose=helpdesk, database only). The
+ *     acknowledgement sent to the person whose email the Outlook
+ *     Add-in turned into an Incident or Job Order.
  *
  *   sendAs() / isConfiguredFor()     -- the COMPANY's own mailbox from
  *     its Company Setup row. Used by the customer-facing document
  *     emails.
+ *
+ * TESTS: fake() swaps the transport for an in-memory list, so a test
+ * can assert what would have been sent without an SMTP server.
  *
  * Why no fallback: a customer-facing invoice sent from the system
  * mailbox would come from the wrong domain, failing SPF/DKIM at the
@@ -46,7 +57,31 @@ class Mailer
 {
     public static function isConfigured(): bool
     {
-        return (bool) (config('websoft.smtp_host') && config('websoft.smtp_from_email'));
+        $s = self::systemSettings();
+
+        return (bool) ($s['host'] && $s['from_email']);
+    }
+
+    public static function isHelpdeskConfigured(): bool
+    {
+        $s = self::helpdeskSettings();
+
+        return (bool) ($s['host'] && $s['from_email']);
+    }
+
+    /**
+     * Where the "otp" mailbox is currently coming from -- shown on the
+     * System Email screen so an operator can tell whether the row they
+     * are looking at is live or whether .env is still in charge.
+     */
+    public static function otpSource(): string
+    {
+        $row = self::row(SystemMailSetting::PURPOSE_OTP);
+        if ($row?->isConfigured()) {
+            return 'database';
+        }
+
+        return (config('websoft.smtp_host') && config('websoft.smtp_from_email')) ? 'env' : 'none';
     }
 
     /**
@@ -92,9 +127,21 @@ class Mailer
         return $dsn.(($s['use_tls'] ?? true) ? '?require_tls=true' : '?auto_tls=false');
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * The "otp" mailbox: the database row when it is configured,
+     * otherwise .env. The fallback exists so an install set up before
+     * system_mail_settings existed keeps sending login codes until its
+     * row is filled in; it is the ONLY fallback in this class.
+     *
+     * @return array<string, mixed>
+     */
     private static function systemSettings(): array
     {
+        $row = self::row(SystemMailSetting::PURPOSE_OTP);
+        if ($row?->isConfigured()) {
+            return self::rowSettings($row);
+        }
+
         return [
             'host' => config('websoft.smtp_host'),
             'port' => config('websoft.smtp_port'),
@@ -104,6 +151,101 @@ class Mailer
             'from_email' => config('websoft.smtp_from_email'),
             'from_name' => config('websoft.smtp_from_name'),
         ];
+    }
+
+    /**
+     * The "helpdesk" mailbox: database only. There is no .env
+     * equivalent to fall back to, and deliberately no fallback to the
+     * otp mailbox either -- a support acknowledgement should come from
+     * the support desk, not from the address that sends login codes.
+     *
+     * @return array<string, mixed>
+     */
+    private static function helpdeskSettings(): array
+    {
+        $row = self::row(SystemMailSetting::PURPOSE_HELPDESK);
+
+        return $row ? self::rowSettings($row) : ['host' => null, 'from_email' => null];
+    }
+
+    /**
+     * Null when the table does not exist yet (a request served mid-
+     * migration, or a unit test that never migrated), so a missing
+     * table degrades to the .env fallback instead of a 500 on login.
+     */
+    private static function row(string $purpose): ?SystemMailSetting
+    {
+        try {
+            return SystemMailSetting::find($purpose);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private static function rowSettings(SystemMailSetting $row): array
+    {
+        return [
+            'host' => $row->host,
+            'port' => $row->port,
+            'username' => $row->username,
+            'password' => $row->password,
+            'use_tls' => $row->use_tls,
+            'from_email' => $row->from_email,
+            'from_name' => $row->from_name ?: config('websoft.smtp_from_name'),
+        ];
+    }
+
+    /**
+     * Send from the helpdesk mailbox. Refuses, rather than borrowing
+     * another mailbox, when it is not configured -- see the class
+     * docblock.
+     */
+    public static function sendFromHelpdesk(string $toEmail, string $subject, string $bodyText): void
+    {
+        if (! self::isHelpdeskConfigured()) {
+            throw new MailerNotConfiguredException(
+                'The Helpdesk mailbox is not configured. Set it under Maintenance -> System Email.'
+            );
+        }
+
+        self::dispatch(self::helpdeskSettings(), $toEmail, $subject, $bodyText, null, null, 'application/pdf');
+    }
+
+    /**
+     * Send a test message through one system mailbox, so the System
+     * Email screen can prove a row works before anything depends on it.
+     */
+    public static function sendSystemTest(string $purpose, string $toEmail, string $subject, string $bodyText): void
+    {
+        $settings = $purpose === SystemMailSetting::PURPOSE_HELPDESK ? self::helpdeskSettings() : self::systemSettings();
+        if (! ($settings['host'] && $settings['from_email'])) {
+            throw new MailerNotConfiguredException("The {$purpose} mailbox is not configured yet.");
+        }
+
+        self::dispatch($settings, $toEmail, $subject, $bodyText, null, null, 'application/pdf');
+    }
+
+    // ── Test seam ───────────────────────────────────────────────────
+
+    /** @var list<array<string, mixed>>|null */
+    private static ?array $sent = null;
+
+    /** Capture sends in memory instead of opening an SMTP connection. */
+    public static function fake(): void
+    {
+        self::$sent = [];
+    }
+
+    /** @return list<array<string, mixed>> */
+    public static function sent(): array
+    {
+        return self::$sent ?? [];
+    }
+
+    public static function restore(): void
+    {
+        self::$sent = null;
     }
 
     /** @return array<string, mixed> */
@@ -203,10 +345,31 @@ class Mailer
             $email->attach($attachmentBytes, $attachmentFilename, $attachmentContentType);
         }
 
+        if (self::$sent !== null) {
+            self::$sent[] = [
+                'from' => $settings['from_email'],
+                'to' => $toEmail,
+                'subject' => $subject,
+                'body' => $bodyText,
+                'attachment' => $attachmentFilename,
+            ];
+
+            return;
+        }
+
+        // Symfony's SMTP transport takes its connect timeout from PHP's
+        // default_socket_timeout (60s). An unreachable host would hold
+        // a request -- and the "Send test email" button -- for a full
+        // minute before failing, so it is bounded here for the duration
+        // of the send and put back afterwards.
+        $previousTimeout = ini_get('default_socket_timeout');
+        ini_set('default_socket_timeout', '15');
         try {
             Transport::fromDsn(self::dsnFor($settings))->send($email);
         } catch (TransportExceptionInterface $e) {
             throw new MailerException("Could not send email: {$e->getMessage()}", previous: $e);
+        } finally {
+            ini_set('default_socket_timeout', (string) $previousTimeout);
         }
     }
 }

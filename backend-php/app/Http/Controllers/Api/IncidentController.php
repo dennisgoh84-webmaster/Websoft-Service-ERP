@@ -238,7 +238,9 @@ class IncidentController extends Controller
             createdByUserId: $user->id,
         );
 
-        return response()->json($this->present($incident->fresh()));
+        $acknowledged = IncidentService::sendAcknowledgement($incident, null, $user->id);
+
+        return response()->json($this->present($incident->fresh()) + ['acknowledgement_sent' => $acknowledged]);
     }
 
     /**
@@ -285,19 +287,24 @@ class IncidentController extends Controller
         );
 
         if ($fallbackReason !== null) {
+            $acknowledged = IncidentService::sendAcknowledgement($incident, null, $user->id);
+
             return response()->json([
                 'incident' => $this->present($incident->fresh()),
                 'job_order_created' => false,
                 'fallback_reason' => $fallbackReason,
+                'acknowledgement_sent' => $acknowledged,
             ]);
         }
 
-        IncidentService::convertToJobOrder($incident, $contract->id, JobOrder::PRIORITY_NORMAL, $user->id);
+        $jobOrder = IncidentService::convertToJobOrder($incident, $contract->id, JobOrder::PRIORITY_NORMAL, $user->id);
+        $acknowledged = IncidentService::sendAcknowledgement($incident, $jobOrder, $user->id);
 
         return response()->json([
             'incident' => $this->present($incident->fresh()),
             'job_order_created' => true,
             'fallback_reason' => null,
+            'acknowledgement_sent' => $acknowledged,
         ]);
     }
 
