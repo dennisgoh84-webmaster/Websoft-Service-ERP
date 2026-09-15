@@ -782,6 +782,7 @@ export interface AiUsage {
     id: string
     created_at: string
     user_name: string
+    channel: 'staff' | 'portal'
     feature: string
     entity_type: string | null
     entity_id: string | null

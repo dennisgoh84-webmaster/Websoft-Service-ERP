@@ -13,6 +13,7 @@
 // ever accepts a purpose="portal" token; a staff access token is
 // refused here exactly as a portal token is refused by `auth.jwt`.
 
+use App\Http\Controllers\Api\PortalAiController;
 use App\Http\Controllers\Api\PortalAuthController;
 use App\Http\Controllers\Api\PortalController;
 use Illuminate\Support\Facades\Route;
@@ -39,5 +40,9 @@ Route::prefix('portal')->group(function () {
         Route::get('/payments', [PortalController::class, 'payments']);
         Route::get('/incidents', [PortalController::class, 'incidents']);
         Route::post('/incidents', [PortalController::class, 'createIncident']);
+
+        // AI Assistant slice 3 (docs/planned-work.md #12 Tier 2 item 6).
+        Route::get('/ai/persona', [PortalAiController::class, 'persona']);
+        Route::post('/ai/chat', [PortalAiController::class, 'chat']);
     });
 });

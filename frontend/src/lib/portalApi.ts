@@ -189,6 +189,30 @@ export interface PortalPayment {
   allocations: PortalPaymentAllocation[]
 }
 
+// AI Assistant slice 3 (docs/planned-work.md #12 Tier 2 item 6): the
+// chat panel on the portal. Its own auth realm, its own narrower
+// read-only scope -- always the signed-in customer's own records.
+export interface PortalAiPersona {
+  name: string
+  avatar: string | null
+}
+
+export interface PortalAiChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export type PortalAiContextType = 'contract' | 'job_order' | 'billing' | 'incidents'
+
+export interface PortalAiChatReply {
+  answer: string
+  refused: boolean
+  tools_used: { name: string; summary: string }[]
+  model: string
+  input_tokens: number
+  output_tokens: number
+}
+
 export const portalApi = {
   me: () => request<PortalMe>('/me'),
   contracts: () => request<PortalContract[]>('/contracts'),
@@ -205,4 +229,7 @@ export const portalApi = {
     }),
   invoices: () => request<PortalInvoice[]>('/invoices'),
   payments: () => request<PortalPayment[]>('/payments'),
+  aiPersona: () => request<PortalAiPersona>('/ai/persona'),
+  aiChat: (messages: PortalAiChatMessage[], context?: { type: PortalAiContextType; id?: string | null } | null) =>
+    request<PortalAiChatReply>('/ai/chat', { method: 'POST', body: JSON.stringify({ messages, context: context ?? null }) }),
 }

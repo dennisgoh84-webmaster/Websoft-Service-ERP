@@ -808,10 +808,13 @@ Built 2026-09-15 (slice 1, see [planned-work.md #12](planned-work.md)):
 **incident triage + resolution suggestions** — for a logged Incident,
 suggest the customer, contract, priority and route, the similar
 resolved incidents and what fixed them, and a draft reply; staff apply
-it through the existing Incident actions; and (slice 2) a **chat
+it through the existing Incident actions; (slice 2) a **chat
 panel** on the Incidents, Company / Individual, Contract, Job Order
 and Service Records screens answering in the language asked, over
-read-only tools that run as the user. Rule: the assistant calls
+read-only tools that run as the user; and (slice 3) the same
+assistant as a **chat widget on the Customer Helpdesk Portal**, its
+own auth realm and its own tools hard-scoped to the signed-in portal
+user's own customer. Rule: the assistant calls
 the tested services and narrates, never does arithmetic on money or
 hours, and proposes rather than commits. Candidates not yet built:
 Service Record drafting, AR collections, natural-language reporting,

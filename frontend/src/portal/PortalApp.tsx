@@ -47,6 +47,7 @@ import {
   type PortalServiceRecord,
 } from '../lib/portalApi'
 import { formatDate, formatDateTime } from '../lib/format'
+import PortalAiChatWidget, { type PortalAiContext } from './PortalAiChatWidget'
 
 const MAROON = '#7a1f2e'
 const WHITE = '#ffffff'
@@ -1053,6 +1054,15 @@ function PortalSignedInApp() {
   const [showNewIncident, setShowNewIncident] = useState(false)
   const [contractDrilldown, setContractDrilldown] = useState<{ id: string; number: string } | null>(null)
 
+  // AI Assistant slice 3: what the widget should treat as "currently looking at".
+  const aiContext: PortalAiContext = (() => {
+    if (tab === 'jobOrders' && selectedJobOrderId) return { type: 'job_order', id: selectedJobOrderId }
+    if (tab === 'contracts' && contractDrilldown) return { type: 'contract', id: contractDrilldown.id, label: contractDrilldown.number }
+    if (tab === 'billing') return { type: 'billing' }
+    if (tab === 'incidents') return { type: 'incidents' }
+    return null
+  })()
+
   function goTab(t: Tab) {
     setSelectedJobOrderId(null)
     setShowNewIncident(false)
@@ -1100,6 +1110,7 @@ function PortalSignedInApp() {
         )}
         </div>
       </div>
+      <PortalAiChatWidget context={aiContext} />
     </div>
   )
 }

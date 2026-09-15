@@ -2009,7 +2009,14 @@ screen; no server-side refusal fallback is configured.
    browser holds the conversation and the server keeps only the
    tokens / tools / answer record. The assistant's name and avatar are
    install-level settings (`ai_settings`); the avatar image is
-   generated outside the system. **Open:** whether the assistant should
-   also serve customers on the Helpdesk Portal (a separate auth realm
-   and scope — see planned-work #12 Tier 2 item 6).
+   generated outside the system.
+
+42.6. **Chat widget on the Customer Helpdesk Portal (slice 3, same
+   day).** "Yes on helpdesk portal is good" — settling 42.5's open
+   question. Built as its own auth realm (`auth.portal`) with its own
+   tools (`App\Services\Ai\AiPortalTools`), every one hard-scoped to
+   the signed-in portal user's own customer — no id is ever accepted
+   from the model as "which customer", matching `PortalController`'s
+   own discipline. She cannot raise an Incident on the customer's
+   behalf; the existing submission flow is unchanged.
 

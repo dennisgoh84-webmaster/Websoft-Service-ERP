@@ -20,6 +20,8 @@ class AiInteraction extends Model
 
     public const FEATURE_CHAT = 'chat';
 
+    public const FEATURE_PORTAL_CHAT = 'portal_chat';
+
     public const STATUS_OK = 'ok';
 
     public const STATUS_REFUSED = 'refused';
@@ -29,7 +31,7 @@ class AiInteraction extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'company_id', 'user_id', 'feature', 'entity_type', 'entity_id', 'model', 'status', 'error',
+        'company_id', 'user_id', 'portal_user_id', 'feature', 'entity_type', 'entity_id', 'model', 'status', 'error',
         'input_tokens', 'output_tokens', 'response', 'created_at',
     ];
 

@@ -8,6 +8,7 @@ use App\Http\Middleware\Authenticate;
 use App\Models\AiInteraction;
 use App\Models\AiSetting;
 use App\Models\Incident;
+use App\Models\PortalUser;
 use App\Models\User;
 use App\Services\Ai\AiChat;
 use App\Services\Ai\AiClient;
@@ -180,6 +181,9 @@ class AiAssistantController extends Controller
 
         $recent = (clone $base)->orderByDesc('created_at')->limit(20)->get();
         $names = User::whereIn('id', $recent->pluck('user_id')->filter()->unique())->pluck('full_name', 'id');
+        $portalUserIds = $recent->pluck('portal_user_id')->filter()->unique();
+        $portalNames = $portalUserIds->isEmpty() ? collect() : PortalUser::with('contact')
+            ->whereIn('id', $portalUserIds)->get()->mapWithKeys(fn (PortalUser $p) => [$p->id => $p->contact?->name ?? $p->email]);
 
         return response()->json([
             'this_month' => $sum((clone $base)->where('created_at', '>=', $monthStart)),
@@ -187,7 +191,10 @@ class AiAssistantController extends Controller
             'recent' => $recent->map(fn (AiInteraction $i) => [
                 'id' => $i->id,
                 'created_at' => optional($i->created_at)->toJSON(),
-                'user_name' => $names->get($i->user_id, ''),
+                'user_name' => $i->portal_user_id
+                    ? ($portalNames->get($i->portal_user_id, '').' (portal)')
+                    : $names->get($i->user_id, ''),
+                'channel' => $i->portal_user_id ? 'portal' : 'staff',
                 'feature' => $i->feature,
                 'entity_type' => $i->entity_type,
                 'entity_id' => $i->entity_id,

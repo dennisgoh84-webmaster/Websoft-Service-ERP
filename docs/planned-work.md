@@ -786,3 +786,53 @@ The /imagine prompt (Midjourney or similar; adjust to taste):
 a different auth realm and a different scope, deliberately left for
 its own decision), and any write action through the chat.
 
+### Built 2026-09-15 — slice 3: the chat widget on the Customer Helpdesk Portal
+
+Dennis: "Yes on helpdesk portal is good" — confirming Tier 2 item 6,
+left open when slice 2 shipped.
+
+- **A floating chat bubble** (`frontend/src/portal/PortalAiChatWidget.tsx`)
+  on every tab of the portal, using the assistant's name and avatar set
+  under Maintenance → AI Assistant. It answers in whatever language the
+  customer writes in, same as the staff chat.
+- **Its own auth realm and its own tools, on purpose.** PORTAL-003's
+  rule ("never a relaxed mode of the staff path") applies to the
+  assistant too: `App\Http\Controllers\Api\PortalAiController` sits
+  behind `auth.portal`, and `App\Services\Ai\AiPortalTools` never
+  takes a customer id as input — every tool is hard-scoped to the
+  signed-in portal user's own customer (`get_my_contracts`,
+  `get_my_job_orders` / `get_my_job_order`, `get_my_service_records`,
+  `get_my_invoices`, `get_my_payments`, `get_my_incidents`), mirroring
+  `PortalController`'s own queries and its "deliberately not exposed"
+  list (no quotation/rate internals, no GP/cost figures, no other
+  contacts). A job order id belonging to another customer is "not
+  found", never "forbidden" (design §9.4). Engineer names are masked
+  under the existing 12.1 toggle before reaching the model, since a
+  portal customer's own browser session is a different trust boundary
+  from the external model provider.
+- **The system prompt says plainly that she is an assistant, not a
+  staff member**, and that she cannot raise an Incident herself — she
+  can help word one, but the customer still submits it from the
+  Incidents tab (propose, never commit, same rule as every other
+  slice).
+- **Licensing**: the same `ai_assistant` module key gates the portal;
+  there is no owner-bypass concept on the portal side, so it is a
+  plain enabled/disabled check.
+- **Its own `ai_interactions.portal_user_id` column** (a portal call
+  can't use the staff `user_id` foreign key), audited as
+  `ai_portal_chat_answered` / `_refused` with the contact's name and
+  "(portal)", same pattern as portal-raised Incidents. The staff usage
+  screen labels these rows "(portal)" and adds a channel field.
+
+Tests (`PortalAiChatTest.php`) keep a second customer in the same
+company throughout, the same discipline `PortalDataTest.php` uses:
+every list is asserted to exclude the other customer's rows, a
+cross-customer job order id 404s, a staff token is refused on the
+portal endpoint and a portal token on the staff one, and the licence
+gate is proven both on and off. Browser-checked end to end against a
+stand-in provider.
+
+**Now built: both Tier 1's incident triage and Tier 2 item 6.**
+Remaining candidates (Tier 1 items 3–4, the rest of Tier 2, Tier 3)
+are unbuilt.
+

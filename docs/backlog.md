@@ -451,10 +451,17 @@ shipped and when.
   aging) — plus the assistant's name and avatar under Maintenance →
   AI Assistant (image generated outside from the /imagine prompt kept
   there and in planned-work #12).
+  **Slice 3, same day ("Yes on helpdesk portal is good"):** the same
+  assistant as a floating chat widget on every Customer Helpdesk
+  Portal tab, its own auth realm and its own hard-scoped read-only
+  tools (never a customer id as input — always the signed-in portal
+  user's own customer), the same "propose, never commit" rule (she
+  cannot raise an Incident, only help word one), and its own audit
+  trail (`ai_interactions.portal_user_id`).
   **Still open for Dennis:** 12.1 (is masked text to a US-hosted API
   acceptable, or is a regional / self-hosted model needed?) and a cost
-  cap once usage is visible (12.2). Tier 1 items 3–4, the portal
-  assistant and Tier 3 not built.
+  cap once usage is visible (12.2). Tier 1 items 3–4 and Tier 3 not
+  built.
   → [planned-work.md #12](planned-work.md#12-ai-assistant--where-ai-fits-this-system-and-what-it-must-not-do-raised-2026-09-15),
   [open-business-decisions.md #42](open-business-decisions.md#42-ai-assistant-slice-1--defaults-taken-for-the-four-open-decisions-built-2026-09-15)
 
@@ -525,4 +532,4 @@ shipped and when.
   → [open-business-decisions.md #7-8](open-business-decisions.md#7-projects)
 
 ---
-Last updated: 2026-09-15 (Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006; Maintenance / Company-Individual batch; eight-character company code; Service Record rules SRV-019/020, SLA removed; AI Assistant slices 1 and 2)
+Last updated: 2026-09-15 (Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006; Maintenance / Company-Individual batch; eight-character company code; Service Record rules SRV-019/020, SLA removed; AI Assistant slices 1, 2 and 3)

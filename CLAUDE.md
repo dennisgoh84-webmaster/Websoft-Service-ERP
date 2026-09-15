@@ -45,8 +45,8 @@ eventual project.
   built; further commission business rules remain deferred (see
   [docs/open-business-decisions.md](docs/open-business-decisions.md))
 - Management Reporting
-- AI Assistant — slices 1 (incident triage) and 2 (multi-language chat
-  panel) built 2026-09-15; see
+- AI Assistant — slices 1 (incident triage), 2 (multi-language staff
+  chat) and 3 (Customer Helpdesk Portal chat) built 2026-09-15; see
   [docs/planned-work.md #12](docs/planned-work.md)
 
 "Ticket"/"Timesheet" terminology has been renamed throughout to "Job
@@ -522,7 +522,13 @@ day:** a chat panel on the Incidents, Company/Individual, Contract,
 Job Order and Service Records screens — any language in, the same
 language out — over read-only tools (`App\Services\Ai\AiTools`)
 that run as the signed-in user through the same module keys as the
-screens, plus the assistant's name and avatar as settings.
+screens, plus the assistant's name and avatar as settings. **Slice 3,
+same day ("Yes on helpdesk portal is good"):** a chat widget on the
+Customer Helpdesk Portal, its own auth realm (`auth.portal`) and its
+own hard-scoped read-only tools (`App\Services\Ai\AiPortalTools`,
+never a customer id as input) so a portal customer can only ever see
+their own contracts, job orders, service records, invoices, payments
+and incidents; she never raises an Incident herself.
 
 No other business area has application code yet. **Further commission
 business rules beyond what is built (the report, its rate and

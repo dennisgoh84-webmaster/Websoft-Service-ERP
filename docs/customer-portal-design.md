@@ -198,3 +198,15 @@ the portal per client like any other module.
 - Customer-side attachments on incidents.
 - Multiple customers per contact (a person who works for two clients).
 - SSO / social login.
+
+## 10. AI Assistant on the portal (added 2026-09-15)
+
+The portal's chat widget (`docs/planned-work.md #12` slice 3) is bound
+by the same rules as everything else in this document: its own auth
+realm (`auth.portal`, never a relaxed mode of the staff path), and
+every one of its tools scoped to `contact.customer_id` exactly like
+`PortalController` -- no id is ever accepted from the model as "which
+customer". A job order id belonging to another customer is "not
+found", per §9.4. It cannot raise an Incident on the customer's
+behalf; §5's own submission flow is unchanged.
+
