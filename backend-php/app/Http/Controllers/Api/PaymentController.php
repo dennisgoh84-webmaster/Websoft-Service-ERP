@@ -343,6 +343,7 @@ class PaymentController extends Controller
             ."Regards,\n{$companyName}";
 
         $result = $this->emailDocument(
+            $company,
             $customer->billing_email,
             "Receipt {$payment->voucher_number} - {$companyName}",
             $body,

@@ -238,6 +238,7 @@ class ServiceRecordController extends Controller
             ."Regards,\n{$companyName}";
 
         $result = $this->emailDocument(
+            $company,
             $customer->billing_email,
             "Service Record {$record->service_record_number} - {$companyName}",
             $body,

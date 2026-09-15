@@ -308,6 +308,7 @@ class QuotationController extends Controller
             ."Regards,\n{$companyName}";
 
         $result = $this->emailDocument(
+            $company,
             $customer->billing_email,
             "Quotation {$quotation->quotation_number} - {$companyName}",
             $body,

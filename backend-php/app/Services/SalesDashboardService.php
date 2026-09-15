@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\Invoice;
 use Illuminate\Support\Carbon;
@@ -34,15 +35,55 @@ use Illuminate\Support\Collection;
  */
 class SalesDashboardService
 {
-    /** @return array{start: Carbon, end: Carbon} */
-    public static function financialYearRange(?int $year = null): array
+    /**
+     * The company's financial year, as a date range.
+     *
+     * CONFIRMED 2026-09-15, replacing the calendar-year assumption this
+     * service previously carried as a KNOWN GAP ("no fiscal-year-start
+     * field exists anywhere in the system"). It does now:
+     * `companies.financial_year_start_month`.
+     *
+     * A FINANCIAL YEAR IS LABELLED BY THE CALENDAR YEAR IT ENDS IN, so
+     * with a July start, FY2027 runs 1 Jul 2026 - 30 Jun 2027. A
+     * January start makes the financial year identical to the calendar
+     * year, which is why the old behaviour is still exactly reproduced
+     * for any company configured that way.
+     *
+     * @return array{start: Carbon, end: Carbon}
+     */
+    public static function financialYearRange(string $companyId, ?int $year = null): array
     {
-        $year ??= (int) Carbon::today()->year;
+        $startMonth = (int) (Company::find($companyId)?->financial_year_start_month ?? 1);
+        $startMonth = $startMonth >= 1 && $startMonth <= 12 ? $startMonth : 1;
+
+        $year ??= self::currentFinancialYear($companyId);
+
+        // Labelled by the ending year, so the range STARTS in the
+        // previous calendar year unless the year begins in January.
+        $start = $startMonth === 1
+            ? Carbon::create($year, 1, 1)->startOfDay()
+            : Carbon::create($year - 1, $startMonth, 1)->startOfDay();
 
         return [
-            'start' => Carbon::create($year, 1, 1)->startOfDay(),
-            'end' => Carbon::create($year, 12, 31)->endOfDay(),
+            'start' => $start,
+            'end' => $start->copy()->addYear()->subDay()->endOfDay(),
         ];
+    }
+
+    /**
+     * Which financial year today falls in, by that same
+     * labelled-by-its-end rule.
+     */
+    public static function currentFinancialYear(string $companyId): int
+    {
+        $startMonth = (int) (Company::find($companyId)?->financial_year_start_month ?? 1);
+        $today = Carbon::today();
+
+        // On or after the start month, we are already in the year that
+        // ends next calendar year.
+        return $startMonth === 1 || $today->month < $startMonth
+            ? (int) $today->year
+            : (int) $today->year + 1;
     }
 
     public static function contractsDueForRenewalCount(string $companyId): int
@@ -108,7 +149,7 @@ class SalesDashboardService
      */
     public static function topBillingCustomers(string $companyId, ?int $year = null, int $limit = 10): Collection
     {
-        ['start' => $start, 'end' => $end] = self::financialYearRange($year);
+        ['start' => $start, 'end' => $end] = self::financialYearRange($companyId, $year);
         $invoices = Invoice::where('company_id', $companyId)
             ->whereBetween('issued_at', [$start, $end])
             ->get();
@@ -136,7 +177,7 @@ class SalesDashboardService
      */
     public static function bottomNonActiveCustomers(string $companyId, ?int $year = null, int $limit = 10): Collection
     {
-        ['start' => $start, 'end' => $end] = self::financialYearRange($year);
+        ['start' => $start, 'end' => $end] = self::financialYearRange($companyId, $year);
         $billedCustomerIds = Invoice::where('company_id', $companyId)
             ->whereBetween('issued_at', [$start, $end])
             ->pluck('customer_id')

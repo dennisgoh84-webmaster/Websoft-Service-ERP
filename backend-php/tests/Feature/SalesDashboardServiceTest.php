@@ -46,19 +46,32 @@ class SalesDashboardServiceTest extends TestCase
         ]), fn (Invoice $i) => $i->forceFill(['issued_at' => $issuedAt])->save());
     }
 
-    // ---- Financial-year boundary (calendar-year pragmatic default) ------
+    // ---- Financial-year boundary --------------------------------------
+    //
+    // The financial year is a Company Setup value since 2026-09-15 (it
+    // was a hardcoded calendar year before, recorded as a KNOWN GAP).
+    // These cases pin the RANKING logic, so they set a January start to
+    // hold the window still; the year definition itself has its own
+    // coverage in CompanyMailAndFinancialYearTest.
 
-    public function test_financial_year_range_is_calendar_year(): void
+    public function test_financial_year_range_follows_the_company_setting(): void
     {
-        $range = SalesDashboardService::financialYearRange(2026);
-
+        $calendar = Company::factory()->create(['financial_year_start_month' => 1]);
+        $range = SalesDashboardService::financialYearRange($calendar->id, 2026);
         $this->assertSame('2026-01-01', $range['start']->toDateString());
         $this->assertSame('2026-12-31', $range['end']->toDateString());
+
+        // Webmaster's own July start: FY2026 ends in 2026, so it starts
+        // in 2025.
+        $july = Company::factory()->create(['financial_year_start_month' => 7]);
+        $range = SalesDashboardService::financialYearRange($july->id, 2026);
+        $this->assertSame('2025-07-01', $range['start']->toDateString());
+        $this->assertSame('2026-06-30', $range['end']->toDateString());
     }
 
     public function test_top_billing_customers_excludes_invoices_outside_the_financial_year(): void
     {
-        $company = Company::factory()->create();
+        $company = Company::factory()->create(['financial_year_start_month' => 1]);
         $customer = CompanyIndividual::factory()->for($company)->create();
         $this->invoice($company, $customer, 1000, Carbon::parse('2025-12-31 23:59:59')); // last year -- excluded
         $this->invoice($company, $customer, 500, Carbon::parse('2026-01-01 00:00:00')); // in range

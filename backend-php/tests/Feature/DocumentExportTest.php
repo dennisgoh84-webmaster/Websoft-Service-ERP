@@ -152,7 +152,7 @@ class DocumentExportTest extends TestCase
         $response = $this->postJson("/api/invoices/{$invoice->id}/email", [], $this->headers($token));
 
         $response->assertStatus(422);
-        $this->assertStringContainsString('Email sending is not configured yet', $response->json('detail'));
+        $this->assertStringContainsString('Email is not configured for', $response->json('detail'));
         // Nothing was sent, so nothing is recorded as sent.
         $this->assertSame(0, AuditLogEntry::where('action', 'emailed')->count());
     }

@@ -332,6 +332,7 @@ class SupplierPaymentController extends Controller
             ."Regards,\n{$companyName}";
 
         $result = $this->emailDocument(
+            $company,
             $supplier->billing_email,
             "Payment Voucher {$payment->voucher_number} - {$companyName}",
             $body,

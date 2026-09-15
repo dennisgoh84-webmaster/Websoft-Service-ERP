@@ -268,6 +268,7 @@ class PurchaseOrderController extends Controller
             ."Regards,\n{$companyName}";
 
         $result = $this->emailDocument(
+            $company,
             $supplier->billing_email,
             "Purchase Order {$po->po_number} - {$companyName}",
             $body,

@@ -2233,6 +2233,63 @@ recorded in docs/backlog.md for Dennis to scope rather than assumed.
   scheduling system. The one structured follow-up exists so a task can
   actually chase someone.
 
+### Company financial year + per-company mailbox (2026-09-15)
+
+New scope from Dennis, not a conversion -- `backend/` has neither.
+
+**FINANCIAL YEAR.** `companies.financial_year_start_month` (default 7).
+A financial year is **labelled by the calendar year it ENDS in**, so
+with a July start FY2027 is Jul 2026 - Jun 2027.
+`SalesDashboardService::financialYearRange()` now takes a company and
+derives the window from it, replacing the hardcoded calendar year it
+carried as a KNOWN GAP ("no fiscal-year-start field exists anywhere in
+the system"). `currentFinancialYear()` answers which year today falls
+in by the same rule. Decision recorded at
+docs/open-business-decisions.md #40.1.
+
+**This changes existing figures**, deliberately: the Sales Dashboard's
+Top 10 / Bottom 10 customer listings were reporting Jan-Dec for a
+company that actually runs Jul-Jun. A January start reproduces the old
+behaviour exactly, and the existing tests were re-pointed at an
+explicit January-start company so they keep pinning the RANKING logic
+rather than the window.
+
+**PER-COMPANY MAILBOX.** Seven SMTP columns on `companies`, and
+`App\Services\Mailer` now has two independent paths with **no fallback
+in either direction**:
+
+| | System mailbox | Company mailbox |
+|---|---|---|
+| Source | `.env` -> `config/websoft.php` | the company's own row |
+| Used by | login OTP, password reset | Email Invoice / Quotation / PO / Receipt / Statement |
+| Entry point | `send()` / `isConfigured()` | `sendAs()` / `isConfiguredFor()` |
+
+Why no fallback: auth email runs BEFORE a company is chosen, so it
+could not resolve a company mailbox even in principle; and a
+customer-facing invoice sent from the system mailbox would come from
+the wrong domain, failing SPF/DKIM at the receiving server -- so it
+lands in spam or is rejected, and if it arrives it carries the wrong
+brand. A clear "not configured for this company" error is strictly
+better than a silently misdelivered invoice. The accepted cost is that
+a newly created company has document email switched off until someone
+fills its mailbox in.
+
+**THIS IS A DELIBERATE DIVERGENCE FROM `backend/`**, which sends every
+document email from the single system mailbox.
+
+SECURITY: the SMTP password is `encrypted` at rest, listed in the
+Company model's `$hidden` so it is never serialised (Company Setup
+returns the model directly, so without that it would be handed back on
+every read), and the audit trail records only `(set)` / `(none)` rather
+than the credential. All three are pinned by tests.
+
+A **Send test email** endpoint (`POST /companies/{id}/test-email`,
+FULL) proves a mailbox works at setup time rather than letting it be
+discovered broken on a real customer invoice; an SMTP failure there is
+a 502, an unconfigured mailbox a 422.
+
+13 dedicated tests.
+
 ## Not yet converted (pending, in rough priority order)
 
 Everything below still only exists in `backend/` (Python). Each is a

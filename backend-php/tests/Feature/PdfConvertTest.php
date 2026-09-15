@@ -115,16 +115,25 @@ class PdfConvertTest extends TestCase
         // have sent anything. There is no SMTP server in the test
         // environment, so this is the send path that can be exercised
         // end to end -- the PDF really is built and attached first.
-        config(['websoft.smtp_host' => null, 'websoft.smtp_from_email' => null]);
+        // Since 2026-09-15 a document email sends from the COMPANY's own
+        // mailbox, not the system one, so an unconfigured company is
+        // what makes this path unconfigured -- clearing the .env values
+        // no longer has any bearing on it.
+        $company = Company::factory()->create();
 
         try {
             DocumentEmail::sendDocumentEmail(
+                $company,
                 'ap@acme.example', 'Purchase Order PO-2026-0001', 'Body', $this->purchaseOrderDocx(), 'PO-2026-0001',
             );
             $this->fail('Expected a DocumentEmailError');
         } catch (DocumentEmailError $e) {
             $this->assertSame(422, $e->statusCode);
-            $this->assertStringContainsString('Email sending is not configured yet', $e->getMessage());
+            // The message now names the COMPANY whose mailbox is
+            // missing, which is what tells an administrator where to go
+            // and fix it -- Company Setup, not the server's .env.
+            $this->assertStringContainsString('Email is not configured for', $e->getMessage());
+            $this->assertStringContainsString($company->name, $e->getMessage());
         }
     }
 }

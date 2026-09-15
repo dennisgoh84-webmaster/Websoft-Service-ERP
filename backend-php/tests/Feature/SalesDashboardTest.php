@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\UserCompanyAccess;
 use App\Services\Numbering;
 use App\Services\PasswordPolicy;
+use App\Services\SalesDashboardService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -72,7 +73,12 @@ class SalesDashboardTest extends TestCase
             'issued_at' => now(),
         ]);
 
-        $response = $this->getJson('/api/sales-dashboard/top-billing-customers?year='.now()->year, $this->headers($token));
+        // Ask for the CURRENT financial year rather than the current
+        // calendar year: with Webmaster's July start those are
+        // different labels, and an invoice issued today falls in the
+        // one that ends next year.
+        $financialYear = SalesDashboardService::currentFinancialYear($company->id);
+        $response = $this->getJson("/api/sales-dashboard/top-billing-customers?year={$financialYear}", $this->headers($token));
 
         $response->assertOk()->assertJsonCount(1);
         $this->assertSame($customer->id, $response->json('0.customer_id'));
@@ -126,7 +132,12 @@ class SalesDashboardTest extends TestCase
             'issued_at' => now(),
         ]);
 
-        $response = $this->getJson('/api/sales-dashboard/top-billing-customers?year='.now()->year, $this->headers($token));
+        // Ask for the CURRENT financial year rather than the current
+        // calendar year: with Webmaster's July start those are
+        // different labels, and an invoice issued today falls in the
+        // one that ends next year.
+        $financialYear = SalesDashboardService::currentFinancialYear($companyA->id);
+        $response = $this->getJson("/api/sales-dashboard/top-billing-customers?year={$financialYear}", $this->headers($token));
 
         $response->assertOk()->assertJsonCount(0);
     }

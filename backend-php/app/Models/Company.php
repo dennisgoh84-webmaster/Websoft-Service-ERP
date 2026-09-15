@@ -27,7 +27,20 @@ class Company extends Model
         'gst_registration_no', 'phone', 'website', 'uen',
         'write_off_approval_threshold_sgd', 'credit_note_approval_threshold_sgd',
         'po_approval_threshold_sgd', 'is_active',
+        // Financial year + this company's own outbound mailbox
+        // (2026-09-15) -- see the migration for why the company mailbox
+        // is separate from the system one with no fallback.
+        'financial_year_start_month',
+        'smtp_host', 'smtp_port', 'smtp_username', 'smtp_password',
+        'smtp_use_tls', 'smtp_from_email', 'smtp_from_name',
     ];
+
+    /**
+     * NEVER serialised. Company Setup returns the model directly, so
+     * without this the SMTP password would be handed back on every
+     * read. It is write-only: set it, never read it back.
+     */
+    protected $hidden = ['smtp_password'];
 
     // Money fields: the Postgres column is `numeric(12,2)` (set in the
     // migration) so on-disk storage is always exact -- never a float.
@@ -38,8 +51,16 @@ class Company extends Model
     // string). A field a *service* computes with (rates, totals,
     // allocations) instead uses 'decimal:2' + App\Support\Money -- see
     // docs/php-conversion-plan.md's Decimal/money handling convention.
+    protected $attributes = ['financial_year_start_month' => 7];
+
     protected $casts = [
         'is_active' => 'boolean',
+        'financial_year_start_month' => 'integer',
+        'smtp_port' => 'integer',
+        'smtp_use_tls' => 'boolean',
+        // Encrypted at rest: a stolen database dump does not hand over
+        // the mail account.
+        'smtp_password' => 'encrypted',
         'created_at' => 'datetime',
         'write_off_approval_threshold_sgd' => 'float',
         'credit_note_approval_threshold_sgd' => 'float',

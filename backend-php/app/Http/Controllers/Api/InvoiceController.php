@@ -140,6 +140,7 @@ class InvoiceController extends Controller
             ."Regards,\n{$companyName}";
 
         $result = $this->emailDocument(
+            $company,
             $customer->billing_email,
             "Invoice {$invoice->invoice_number} - {$companyName}",
             $body,

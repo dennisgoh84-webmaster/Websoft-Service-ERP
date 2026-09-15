@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Concerns;
 
 use App\Exceptions\ApiException;
+use App\Models\Company;
 use App\Services\DocumentEmail;
 use App\Services\DocumentEmailError;
 use Illuminate\Http\Response;
@@ -35,14 +36,24 @@ trait SendsDocuments
      * @return array{sent: bool, to: string} the Python routers' own response body
      */
     protected function emailDocument(
+        ?Company $company,
         string $toEmail,
         string $subject,
         string $bodyText,
         string $docxBytes,
         string $filenameStem,
     ): array {
+        // Python tolerates a missing Company when interpolating its
+        // name, but a document email has to be SENT FROM one, so a
+        // missing company is a clear 422 rather than a TypeError.
+        if ($company === null) {
+            throw new ApiException(422, 'No company is set up to send this from.');
+        }
+
         try {
-            DocumentEmail::sendDocumentEmail($toEmail, $subject, $bodyText, $docxBytes, $filenameStem);
+            // Sent from THIS company's own mailbox, never the system one
+            // -- see App\Services\Mailer.
+            DocumentEmail::sendDocumentEmail($company, $toEmail, $subject, $bodyText, $docxBytes, $filenameStem);
         } catch (DocumentEmailError $e) {
             throw new ApiException($e->statusCode, $e->getMessage());
         }

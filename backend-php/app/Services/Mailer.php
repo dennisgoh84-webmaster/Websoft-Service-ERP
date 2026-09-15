@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Company;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Symfony\Component\Mailer\Transport;
 use Symfony\Component\Mime\Email;
@@ -19,6 +20,27 @@ use Symfony\Component\Mime\Email;
  * arguments -- see App\Services\DocumentEmail, which is the only caller
  * that passes them. The 3-argument calls (OTP, password reset) are
  * unchanged.
+ *
+ * TWO MAILBOXES, DELIBERATELY SEPARATE (Dennis, 2026-09-15), with NO
+ * fallback in either direction:
+ *
+ *   send() / isConfigured()          -- the SYSTEM mailbox from
+ *     .env. Used by login OTP and password reset, which run BEFORE a
+ *     company is chosen, so they could not resolve a company mailbox
+ *     even in principle.
+ *
+ *   sendAs() / isConfiguredFor()     -- the COMPANY's own mailbox from
+ *     its Company Setup row. Used by the customer-facing document
+ *     emails.
+ *
+ * Why no fallback: a customer-facing invoice sent from the system
+ * mailbox would come from the wrong domain, failing SPF/DKIM at the
+ * receiving server -- so it lands in spam or is rejected, and if it
+ * does arrive it carries the wrong brand. A clear "not configured for
+ * this company" error is strictly better than a silently misdelivered
+ * invoice. The cost, accepted knowingly, is that a newly created
+ * company has document email switched off until someone fills its
+ * mailbox in.
  */
 class Mailer
 {
@@ -51,15 +73,86 @@ class Mailer
      */
     public static function dsn(): string
     {
+        return self::dsnFor(self::systemSettings());
+    }
+
+    /**
+     * @param  array<string, mixed>  $s
+     */
+    public static function dsnFor(array $s): string
+    {
         $dsn = sprintf(
             'smtp://%s:%s@%s:%d',
-            rawurlencode((string) config('websoft.smtp_username')),
-            rawurlencode((string) config('websoft.smtp_password')),
-            config('websoft.smtp_host'),
-            config('websoft.smtp_port'),
+            rawurlencode((string) ($s['username'] ?? '')),
+            rawurlencode((string) ($s['password'] ?? '')),
+            $s['host'],
+            (int) ($s['port'] ?? 587),
         );
 
-        return $dsn.(config('websoft.smtp_use_tls') ? '?require_tls=true' : '?auto_tls=false');
+        return $dsn.(($s['use_tls'] ?? true) ? '?require_tls=true' : '?auto_tls=false');
+    }
+
+    /** @return array<string, mixed> */
+    private static function systemSettings(): array
+    {
+        return [
+            'host' => config('websoft.smtp_host'),
+            'port' => config('websoft.smtp_port'),
+            'username' => config('websoft.smtp_username'),
+            'password' => config('websoft.smtp_password'),
+            'use_tls' => config('websoft.smtp_use_tls'),
+            'from_email' => config('websoft.smtp_from_email'),
+            'from_name' => config('websoft.smtp_from_name'),
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private static function companySettings(Company $company): array
+    {
+        return [
+            'host' => $company->smtp_host,
+            'port' => $company->smtp_port,
+            'username' => $company->smtp_username,
+            'password' => $company->smtp_password,
+            'use_tls' => $company->smtp_use_tls,
+            'from_email' => $company->smtp_from_email,
+            // Falls back to the company's own name, not to the system
+            // sender -- it is still this company's mailbox either way.
+            'from_name' => $company->smtp_from_name ?: $company->name,
+        ];
+    }
+
+    /** Has this company had its own mailbox set up? */
+    public static function isConfiguredFor(Company $company): bool
+    {
+        return (bool) ($company->smtp_host && $company->smtp_from_email);
+    }
+
+    /**
+     * Send from THIS COMPANY's mailbox. Never falls back to the system
+     * one -- see the class docblock.
+     */
+    public static function sendAs(
+        Company $company,
+        string $toEmail,
+        string $subject,
+        string $bodyText,
+        ?string $attachmentFilename = null,
+        ?string $attachmentBytes = null,
+        string $attachmentContentType = 'application/pdf',
+    ): void {
+        if (! self::isConfiguredFor($company)) {
+            throw new MailerNotConfiguredException(
+                "Email is not configured for {$company->name}. Set its SMTP host and "
+                .'From address under Company Setup -> Maintenance.'
+            );
+        }
+
+        self::dispatch(
+            self::companySettings($company),
+            $toEmail, $subject, $bodyText,
+            $attachmentFilename, $attachmentBytes, $attachmentContentType,
+        );
     }
 
     public static function send(
@@ -77,8 +170,31 @@ class Mailer
             );
         }
 
+        self::dispatch(
+            self::systemSettings(),
+            $toEmail, $subject, $bodyText,
+            $attachmentFilename, $attachmentBytes, $attachmentContentType,
+        );
+    }
+
+    /**
+     * The one place a message is actually handed to a transport --
+     * shared so the system and company paths cannot drift in how they
+     * build or send a message, only in which settings they use.
+     *
+     * @param  array<string, mixed>  $settings
+     */
+    private static function dispatch(
+        array $settings,
+        string $toEmail,
+        string $subject,
+        string $bodyText,
+        ?string $attachmentFilename,
+        ?string $attachmentBytes,
+        string $attachmentContentType,
+    ): void {
         $email = (new Email)
-            ->from(sprintf('%s <%s>', config('websoft.smtp_from_name'), config('websoft.smtp_from_email')))
+            ->from(sprintf('%s <%s>', $settings['from_name'], $settings['from_email']))
             ->to($toEmail)
             ->subject($subject)
             ->text($bodyText);
@@ -88,7 +204,7 @@ class Mailer
         }
 
         try {
-            Transport::fromDsn(self::dsn())->send($email);
+            Transport::fromDsn(self::dsnFor($settings))->send($email);
         } catch (TransportExceptionInterface $e) {
             throw new MailerException("Could not send email: {$e->getMessage()}", previous: $e);
         }

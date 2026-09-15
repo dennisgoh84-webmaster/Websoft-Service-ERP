@@ -14,6 +14,8 @@ use App\Models\User;
 use App\Models\UserCompanyAccess;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\Mailer;
+use App\Services\MailerException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -160,6 +162,20 @@ class CompanyController extends Controller
             'write_off_approval_threshold_sgd' => 'sometimes|nullable|numeric',
             'credit_note_approval_threshold_sgd' => 'sometimes|nullable|numeric',
             'po_approval_threshold_sgd' => 'sometimes|nullable|numeric',
+            // Financial year: 1-12. Labelled by the calendar year it
+            // ENDS in, so 7 (July) means FY2027 = Jul 2026 - Jun 2027.
+            'financial_year_start_month' => 'sometimes|integer|min:1|max:12',
+            // This company's own outbound mailbox, for customer-facing
+            // document email. Separate from the system mailbox in .env
+            // that sends login OTP and password resets, with no
+            // fallback either way -- see App\Services\Mailer.
+            'smtp_host' => 'sometimes|nullable|string|max:255',
+            'smtp_port' => 'sometimes|integer|min:1|max:65535',
+            'smtp_username' => 'sometimes|nullable|string|max:255',
+            'smtp_password' => 'sometimes|nullable|string',
+            'smtp_use_tls' => 'sometimes|boolean',
+            'smtp_from_email' => 'sometimes|nullable|email|max:255',
+            'smtp_from_name' => 'sometimes|nullable|string|max:255',
         ]);
         if (array_key_exists('logo', $fields)) {
             self::validateLogo($fields['logo']);
@@ -176,6 +192,10 @@ class CompanyController extends Controller
                 // Never dump base64 image data into the audit trail.
                 $oldValue[$field] = $old ? '(image set)' : '(none)';
                 $newValue[$field] = $new ? '(image set)' : '(none)';
+            } elseif ($field === 'smtp_password') {
+                // Record THAT it changed, never the credential itself.
+                $oldValue[$field] = $old ? '(set)' : '(none)';
+                $newValue[$field] = $new ? '(set)' : '(none)';
             } else {
                 $oldValue[$field] = $old;
                 $newValue[$field] = $new;
@@ -231,5 +251,53 @@ class CompanyController extends Controller
         if (strlen($logo) > self::MAX_LOGO_CHARS) {
             throw new ApiException(400, 'Logo image is too large -- please use an image under ~300 KB.');
         }
+    }
+
+    /**
+     * Send a test email from this company's own mailbox.
+     *
+     * Exists so a mailbox is proven working AT SETUP TIME rather than
+     * discovered broken when someone emails a real invoice to a real
+     * customer. Reports the failure verbatim, since that is what tells
+     * an administrator whether the host, the credentials or TLS is
+     * wrong.
+     */
+    public function testEmail(Request $request, string $companyId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, GroupModuleAuthority::FULL);
+
+        $company = Company::find($companyId);
+        if (! $company) {
+            throw new ApiException(404, 'Company not found');
+        }
+        if (! in_array($company->id, self::accessibleCompanyIds($user), true)) {
+            throw new ApiException(403, 'You cannot manage this company.');
+        }
+
+        $data = $request->validate(['to_email' => 'required|email']);
+
+        if (! Mailer::isConfiguredFor($company)) {
+            throw new ApiException(422, "Email is not configured for {$company->name}. "
+                .'Set its SMTP host and From address first.');
+        }
+
+        try {
+            Mailer::sendAs(
+                $company,
+                $data['to_email'],
+                "Test email from {$company->name}",
+                "This is a test message confirming {$company->name}'s outbound email settings are working.\n\n"
+                ."If you received this, document emails from this company will send correctly.\n",
+            );
+        } catch (MailerException $e) {
+            // 502: the settings were accepted, the mail server refused.
+            throw new ApiException(502, $e->getMessage());
+        }
+
+        Audit::record('company', $company->id, 'smtp_test_sent', $user->id,
+            details: "Test email sent to {$data['to_email']}");
+
+        return response()->json(['sent' => true, 'to' => $data['to_email']]);
     }
 }

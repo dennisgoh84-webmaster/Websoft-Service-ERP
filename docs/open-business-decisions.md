@@ -1863,6 +1863,25 @@ several customers, SSO. Design:
 
 ## 40. Sales module enhancements: Financial Year definition, and Contract–Quotation link (raised 2026-09-22)
 
+**40.1 FINANCIAL YEAR — DECIDED AND BUILT 2026-09-15.** Webmaster
+Consultancy's financial year runs **1 July – 30 June**, and a financial
+year is **labelled by the calendar year it ENDS in**, so FY2027 is
+Jul 2026 – Jun 2027. Stored per company as
+`companies.financial_year_start_month` (default 7) and editable in
+Company Setup. This replaces the calendar-year assumption the Sales
+Dashboard carried as a pragmatic default, which was recorded in
+`SalesDashboardService` as a KNOWN GAP because no fiscal-year-start
+field existed anywhere. **Note this CHANGES existing figures:** "Top 10
+Sales Billing Customer" and "Bottom 10 Non-Active Customer" were
+reporting Jan–Dec and now report Jul–Jun. A company configured with a
+January start reproduces the old behaviour exactly.
+
+**40.2 Contract–Quotation link — still open.** Unchanged: the link is
+still a free-text `quotation_reference` rather than a real linked
+record. Quotations is now converted, so nothing blocks replacing it,
+but that reconciliation has not been done.
+
+
 Dennis's feature list ("Product - To add in Job Implementation
 Template", "Job Order - To allow choosing of multiple Products...",
 "Service Contract - To have selection of Sharing of Hours...", "Service

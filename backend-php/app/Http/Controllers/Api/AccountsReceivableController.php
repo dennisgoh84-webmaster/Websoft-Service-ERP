@@ -261,6 +261,7 @@ class AccountsReceivableController extends Controller
             ."Regards,\n{$companyName}";
 
         $result = $this->emailDocument(
+            $company,
             $customer->billing_email,
             "Statement of Accounts as at {$statement['as_at']} - {$companyName}",
             $body,
