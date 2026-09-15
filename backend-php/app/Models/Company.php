@@ -18,36 +18,61 @@ use Illuminate\Database\Eloquent\Model;
  */
 class Company extends Model
 {
+    use HasFactory, HasUuidPrimaryKey;
+
+    public $timestamps = false;
+
     /**
-     * System-generated company code: C001, C002, ... in creation order.
-     * Assigned here on create, deliberately NOT fillable, so it is never
-     * typed in or changed -- a stable short identifier for the entity
-     * where a UUID is unwieldy and a name can be edited.
+     * System-generated company code, in the form Dennis gave 2026-09-15
+     * ("3221"): the first THREE letters of the name's first word, the
+     * first TWO of the second, the first TWO of the third, then a
+     * running number from 1 -- "Webmaster Consultancy Pte Ltd" is
+     * WEBCOPT1. Letters only, upper-cased; a shorter name gives a
+     * shorter prefix ("Acme Manufacturing" -> ACMMA1, "Acme" -> ACM1);
+     * the number runs per prefix, so a second company whose name yields
+     * WEBCOPT becomes WEBCOPT2. Assigned here on create, deliberately
+     * NOT fillable, so it is never typed in or changed -- a stable
+     * short identifier for the entity where a UUID is unwieldy and a
+     * name can be edited (renaming a company does not change its code).
      */
     protected static function booted(): void
     {
         static::creating(function (Company $company) {
             if (empty($company->code)) {
-                $company->code = self::nextCode();
+                $company->code = self::nextCode((string) $company->name);
             }
         });
     }
 
-    public static function nextCode(): string
+    /** The letters part of a code for this name: 3 + 2 + 2 from its first three words. */
+    public static function codePrefix(string $name): string
     {
+        $words = preg_split('/\s+/', trim($name)) ?: [];
+        $parts = [];
+        foreach ([3, 2, 2] as $i => $take) {
+            $word = preg_replace('/[^A-Za-z]/', '', $words[$i] ?? '');
+            if ($word !== '') {
+                $parts[] = strtoupper(substr($word, 0, $take));
+            }
+        }
+        $prefix = implode('', $parts);
+
+        // A name with no letters at all still needs a code.
+        return $prefix !== '' ? $prefix : 'CO';
+    }
+
+    public static function nextCode(string $name): string
+    {
+        $prefix = self::codePrefix($name);
         $max = 0;
-        foreach (self::query()->whereNotNull('code')->pluck('code') as $code) {
-            if (preg_match('/^C(\d+)$/', (string) $code, $m)) {
+        foreach (self::query()->where('code', 'like', $prefix.'%')->pluck('code') as $code) {
+            if (preg_match('/^'.preg_quote($prefix, '/').'(\d+)$/', (string) $code, $m)) {
                 $max = max($max, (int) $m[1]);
             }
         }
 
-        return sprintf('C%03d', $max + 1);
+        return $prefix.($max + 1);
     }
-
-    use HasFactory, HasUuidPrimaryKey;
-
-    public $timestamps = false;
 
     protected $fillable = [
         'name', 'country', 'currency', 'timezone', 'logo', 'address',

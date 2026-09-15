@@ -144,7 +144,7 @@ class ContractQuotationLinkTest extends TestCase
 
     public function test_hours_finishing_makes_a_contract_due_even_with_months_left_on_the_date(): void
     {
-        // 20 contracted, 18.5 used: 1.5 left = 7.5%, under the 10% threshold.
+        // 20 contracted, 18.5 used: 1.5 left = 7.5%, under the 20% threshold.
         $contract = $this->contract(200, ['consumed_minutes' => (int) (18.5 * 60)]);
 
         $this->getJson("/api/contracts/{$contract->id}", $this->h())
@@ -157,9 +157,9 @@ class ContractQuotationLinkTest extends TestCase
         $this->assertEquals(20, $q->json('lines.0.quantity'));
 
         // Exactly at the threshold counts; just above it does not.
-        $atThreshold = $this->contract(200, ['consumed_minutes' => 18 * 60]); // 2.0 left = 10%
+        $atThreshold = $this->contract(200, ['consumed_minutes' => 16 * 60]); // 4.0 left = 20%
         $this->getJson("/api/contracts/{$atThreshold->id}", $this->h())->assertJsonPath('renewal_quotation_eligible', true);
-        $above = $this->contract(200, ['consumed_minutes' => 17 * 60 + 45]); // 2.25 left
+        $above = $this->contract(200, ['consumed_minutes' => 15 * 60 + 45]); // 4.25 left
         $this->getJson("/api/contracts/{$above->id}", $this->h())->assertJsonPath('renewal_quotation_eligible', false)
             ->assertJsonPath('renewal_due_reason', null);
 

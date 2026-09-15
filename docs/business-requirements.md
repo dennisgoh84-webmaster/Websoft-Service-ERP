@@ -634,9 +634,8 @@ conversion" note on this set of rules). Decision record:
     Contract to New Quotation when it's going to due / hrs finishing…
     date going to due". Coming due means any of: within SRV-014's
     30-day pre-expiry window; **hours finishing** (a Service Support
-    contract with 10% or less of its contracted hours left — the 10%
-    is a **pragmatic default**, no figure was given, see
-    open-business-decisions #40); already expired; or exceeded. It
+    contract with **20% or less** of its contracted hours left —
+    confirmed by Dennis 2026-09-15); already expired; or exceeded. It
     raises a draft quotation for the same customer carrying the
     contract's current terms as its line (contracted hours × blended
     rate for Service Support; the annual value for Annual), marked as

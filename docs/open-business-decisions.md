@@ -1912,7 +1912,7 @@ requirements have not been provided":
 | Open point | Pragmatic default applied | Status |
 |---|---|---|
 | What counts as "this Financial Year" for the Sales Dashboard's Top 10 / Bottom 10 listings? | ~~Calendar year (1 Jan – 31 Dec) — no fiscal-year-start field exists anywhere in the system.~~ | **DECIDED with Dennis, built 2026-09-15** — a real Company Setup value, `financial_year_start_month` (Webmaster: 1 Jul – 30 Jun, a year labelled by the year it ends in). Editable on the Company Setup screen since the same day; the Sales Dashboard and Year-End Closing read it. |
-| What counts as a contract's hours "finishing" for the purpose of generating its renewal quotation? | 10% or less of contracted hours remaining (`Contract::RENEWAL_HOURS_FINISHING_FRACTION`), alongside the SRV-014 30-day date window. | **OPEN — pragmatic default (2026-09-15).** Dennis asked for "hrs finishing" as a trigger but gave no figure; 10% is a placeholder, one constant to change once he names the number (or a percentage vs. a fixed number of hours). |
+| What counts as a contract's hours "finishing" for the purpose of generating its renewal quotation? | **20% or less** of contracted hours remaining (`Contract::RENEWAL_HOURS_FINISHING_FRACTION`), alongside the SRV-014 30-day date window. | **DECIDED with Dennis, 2026-09-15** — 20% (a 10% placeholder stood for a few hours). |
 | How does a Contract link to the Sales Quotation that renewed it? | ~~A plain free-text `quotation_reference` field on Contract, settable once Renewed/Expired — **not** a real linked record.~~ | **DECIDED with Dennis, built 2026-09-15** — a real `contracts.quotation_id` link, set by accepting a quotation or by hand, plus "Create renewal quotation" on an expiring contract whose acceptance renews it (SALES-006). The remainder of this cell is history: **OPEN, partially unblocked 2026-09-14** — Quotations has since been converted to `backend-php/` (see [php-conversion-plan.md](php-conversion-plan.md)), so a real `Quotation` model now exists to link against. The free-text field hasn't been swapped for a real foreign key yet — that conversion pass was scoped to `QuotationController` only and deliberately didn't touch `Contract`/`ContractController` — so this is now a small, reachable follow-up rather than something blocked on a missing module. Still needs doing. |
 
 Also corrects an imprecise premise this feature set's build brief
@@ -1930,3 +1930,31 @@ row above for the current state.
 Everything else in the feature list (SALES-001..005) was implemented as
 clarified, directly in `backend-php/` + `frontend/` (new feature work,
 not part of the Python→PHP conversion). → [planned-work.md #11](planned-work.md#11-sales-module-enhancements-job-implementation-template-multi-product-job-orders-contract-hour-sharing-contract-filters-contract-operation-report-contractquotation-reference-sales-dashboard-raised-earlier-built-2026-09-22).
+
+---
+
+## 41. System-generated company code (raised and settled 2026-09-15)
+
+Dennis asked for Company Setup to display a system-generated company
+code. Built first as `C001, C002, …` as a placeholder format; Dennis
+then specified the form: **"3221"** — the first **three** letters of
+the name's first word, the first **two** of the second, the first
+**two** of the third, then a running number starting from **1**, so
+"Webmaster Consultancy Pte Ltd" is **WEBCOPT1**.
+
+**DECIDED with Dennis, built 2026-09-15.** Reading of the parts he
+did not spell out, applied as pragmatic defaults:
+
+- Letters only, upper-cased; punctuation and case in the name never
+  affect the code ("web-master consultancy, pte. LTD" → WEBCOPT).
+- A name with fewer than three words gives a shorter prefix ("Acme
+  Manufacturing" → ACMMA1, "Acme" → ACM1).
+- The running number is **per prefix**: a second company whose name
+  yields WEBCOPT becomes WEBCOPT2; a different name starts its own
+  sequence at 1.
+- The code is assigned once, on create, from the name at that moment,
+  and **renaming the company does not change it** — it identifies the
+  entity, not the current spelling of its name.
+- `App\Models\Company::codePrefix()` / `nextCode()`; existing
+  companies were recoded from their names by migration
+  `2026_09_30_000600`.

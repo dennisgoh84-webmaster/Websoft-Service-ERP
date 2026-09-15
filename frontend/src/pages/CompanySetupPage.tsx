@@ -162,7 +162,8 @@ function CompanyCard({ company, onSaved }: { company: Company; onSaved: () => vo
       </h2>
       <p className="muted" style={{ marginTop: -6 }}>
         Company code <strong>{company.code}</strong> -- assigned by the system when the company was
-        created, in creation order; it identifies this entity where a name could change.
+        created: three letters of the first word of the name, two of the second, two of the
+        third, then a running number. It never changes, even if the name does.
       </p>
       {error && <div className="error-banner">{error}</div>}
       <form onSubmit={onSave}>
@@ -350,7 +351,8 @@ export default function CompanySetupPage() {
         <p className="muted">
           A new company starts with the same module catalog (built modules enabled), no customers or
           contracts of its own, and you added as a user who can switch into it. It receives the next
-          company code automatically. Set its logo and details above once created.
+          company code automatically from its name (e.g. Websoft Digital Pte Ltd becomes WEBDIPT1).
+          Set its logo and details above once created.
         </p>
         <form onSubmit={onCreate}>
           <div className="form-row">

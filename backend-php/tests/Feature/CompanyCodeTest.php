@@ -7,53 +7,57 @@ use App\Models\CompanyModule;
 use App\Models\ModuleCatalog;
 use App\Models\User;
 use App\Services\PasswordPolicy;
+use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-/** The system-generated company code shown on Company Setup (2026-09-15). */
+/**
+ * The system-generated company code shown on Company Setup, in the
+ * form Dennis specified 2026-09-15: 3 + 2 + 2 letters of the first
+ * three words, then a running number from 1 -- WEBCOPT1.
+ */
 class CompanyCodeTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_codes_are_assigned_in_creation_order_and_never_typed_in(): void
+    public function test_the_code_is_three_two_two_letters_of_the_name_then_a_number_from_one(): void
     {
-        $first = Company::factory()->create();
-        $second = Company::factory()->create();
-
-        $this->assertSame('C001', $first->code);
-        $this->assertSame('C002', $second->code);
-
-        // Mass assignment cannot set or change it.
-        $third = Company::create(['name' => 'Attempt', 'code' => 'ZZZ']);
-        $this->assertSame('C003', $third->fresh()->code);
+        $this->assertSame('WEBCOPT1', Company::factory()->create(['name' => 'Webmaster Consultancy Pte Ltd'])->code);
+        // Same prefix, next number.
+        $this->assertSame('WEBCOPT2', Company::factory()->create(['name' => 'Webmaster Consulting Pte Ltd'])->code);
+        // Different name, its own sequence.
+        $this->assertSame('ACMMA1', Company::factory()->create(['name' => 'Acme Manufacturing'])->code);
+        $this->assertSame('ACM1', Company::factory()->create(['name' => 'Acme'])->code);
+        // Letters only, case-insensitive: punctuation and case never change the code.
+        $this->assertSame('WEBCOPT3', Company::factory()->create(['name' => 'web-master consultancy, pte. LTD'])->code);
     }
 
-    public function test_the_code_is_returned_by_the_api_and_a_patch_cannot_change_it(): void
+    public function test_the_code_is_never_typed_in_never_changed_and_survives_a_rename(): void
     {
-        $company = Company::factory()->create();
+        $company = Company::create(['name' => 'Webmaster Consultancy Pte Ltd', 'code' => 'HACK1']);
+        $this->assertSame('WEBCOPT1', $company->fresh()->code);
+
         ModuleCatalog::firstOrCreate(['key' => 'core_administration'], ['name' => 'Core', 'is_built' => true]);
         CompanyModule::updateOrCreate(['company_id' => $company->id, 'module_key' => 'core_administration'], ['enabled' => true]);
         $owner = User::factory()->for($company)->create(['role' => User::ROLE_OWNER, 'hashed_password' => PasswordPolicy::hash('demo1234')]);
         $token = $this->post('/api/auth/login', ['username' => $owner->email, 'password' => 'demo1234'])->json('access_token');
         $h = ['Authorization' => "Bearer {$token}"];
 
-        $this->getJson('/api/companies', $h)->assertOk()->assertJsonPath('0.code', 'C001');
+        $this->getJson('/api/companies', $h)->assertOk()->assertJsonPath('0.code', 'WEBCOPT1');
 
-        $this->patchJson("/api/companies/{$company->id}", ['code' => 'HACK', 'name' => 'Renamed'], $h)
-            ->assertOk()->assertJsonPath('code', 'C001')->assertJsonPath('name', 'Renamed');
+        // A rename keeps the code: it identifies the entity, not the current spelling of its name.
+        $this->patchJson("/api/companies/{$company->id}", ['code' => 'HACK2', 'name' => 'Webmaster Digital Pte Ltd'], $h)
+            ->assertOk()->assertJsonPath('code', 'WEBCOPT1')->assertJsonPath('name', 'Webmaster Digital Pte Ltd');
 
-        // A company created through the screen gets the next code.
+        // A company created through the screen gets its own code.
         $this->postJson('/api/companies', ['name' => 'Websoft Digital Pte Ltd'], $h)
-            ->assertOk()->assertJsonPath('code', 'C002');
+            ->assertOk()->assertJsonPath('code', 'WEBDIPT1');
     }
 
-    public function test_numbering_continues_from_the_highest_code_never_reusing_one(): void
+    public function test_the_seeded_company_is_webcopt1(): void
     {
-        Company::factory()->create(); // C001
-        // A code set out of sequence (a migrated or renumbered entity):
-        // the sequence carries on from the highest, never fills in below it.
-        Company::factory()->create()->forceFill(['code' => 'C010'])->save();
+        $this->seed(DatabaseSeeder::class);
 
-        $this->assertSame('C011', Company::factory()->create()->code);
+        $this->assertSame('WEBCOPT1', Company::where('name', 'Webmaster Consultancy Pte Ltd')->firstOrFail()->code);
     }
 }

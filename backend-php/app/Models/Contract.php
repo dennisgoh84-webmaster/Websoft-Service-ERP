@@ -55,11 +55,10 @@ class Contract extends Model
      * "Hours finishing" (Dennis, 2026-09-15: a contract is coming due
      * when its hours are running out, not only when its date is): a
      * Service Support contract with this fraction or less of its
-     * contracted hours left can raise its renewal quotation. PRAGMATIC
-     * DEFAULT -- no figure was given, so 10% is a placeholder for
-     * Dennis to confirm or change (docs/open-business-decisions.md #40).
+     * contracted hours left can raise its renewal quotation. 20%,
+     * confirmed by Dennis 2026-09-15 (docs/open-business-decisions.md #40).
      */
-    public const RENEWAL_HOURS_FINISHING_FRACTION = 0.10;
+    public const RENEWAL_HOURS_FINISHING_FRACTION = 0.20;
 
     public const STATUS_DRAFT = 'draft';
 
