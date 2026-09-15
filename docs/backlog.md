@@ -423,11 +423,19 @@ shipped and when.
   `Mailer`'s own error told people to fill it in under Company Setup,
   and no such fields existed. Now an "Outbound email" card with Send
   test email, and the FY start month select.
-- [ ] **Cutover: `backend/` (Python) is still the documented system of
-  record**, but the test server runs `backend-php/` only, from
-  `deploy/docker-compose.php.yml`. Dennis's call when the PHP stack
-  becomes production and `backend/` is retired -- at which point the
-  two `backend/` bugs noted under the conversion above stop mattering.
+- [x] **Cutover -- Python backend retired 2026-09-15.** Dennis's
+  instruction: "settle all python coding in the system and ensure all
+  retired, make sure only backend-php". `backend/` removed from the
+  tree (in git history); `deploy/docker-compose.php.yml` became the
+  root `docker-compose.yml` with the same project name and volume
+  names, so the test server's data is adopted on its next upgrade;
+  install/upgrade scripts, `.env.example`, DEPLOY.md, DEV_SETUP.md,
+  README, CLAUDE.md and the architecture/contract docs rewritten
+  PHP-only. Not ported on purpose: `seed_demo.py`'s larger demo
+  dataset and the one-off `post_backlog.py` GL back-fill. **One
+  follow-up outside this repo:** Central Command checks
+  `alembic_version` to version a client database; it must read
+  Laravel's `migrations` table now (docs/central-command-schema-contract.md).
 - [ ] **Smaller things noticed, not done:** the SMTP transport has no
   connect timeout, so "Send test email" against an unreachable host
   spins until PHP's socket default (60s) rather than failing fast; the

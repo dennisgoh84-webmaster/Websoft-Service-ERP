@@ -27,9 +27,9 @@ before application coding begins.
 - Detailed component structure, state management approach, and UI library
   choices are not yet decided.
 
-### Backend — FastAPI
+### Backend — PHP / Laravel
 
-- Python backend built with FastAPI.
+- PHP 8.4 / Laravel 11 backend (`backend-php/`).
 - Expected to be organized into modules/services aligned with the business
   areas in CLAUDE.md, keeping business logic separate from the API/HTTP
   layer per the development rules.
@@ -87,12 +87,12 @@ before application coding begins.
 
 ### API architecture
 
-- FastAPI backend exposes APIs consumed by the React frontend and
+- The Laravel backend exposes APIs consumed by the React frontend and
   potentially other future integrations.
 - Expected to be organized per business module, versioned appropriately,
   and validated on the backend (per the development rules) in addition to
   frontend validation.
-- Whether the API is a single monolithic FastAPI service or split further
+- Whether the API is a single monolithic service or split further
   has not yet been decided; a modular monolith is the likely starting
   point given the phased Odoo replacement strategy, but this is not yet
   finalized.
@@ -190,19 +190,15 @@ approval workflows) without changing the shape described here.
 
 ### Backend architecture
 
-**Backend language conversion in progress (started 2026-09-14):** the
-backend is being converted from Python/FastAPI to **PHP 8.4 / Laravel
-11**, for a team/hosting constraint rather than a technical problem
-with FastAPI — see [php-conversion-plan.md](php-conversion-plan.md)
-for the reason, approach, and current status. This is a
-backend-language change only: the modular-monolith structure, module
-boundaries, PostgreSQL schema design, and API contract described below
-all carry across unchanged so the React frontend is unaffected either
-way. The conversion is phased and module-by-module (the same pattern
-already used for the Odoo replacement strategy), with the existing
-Python backend kept running as the system of record until each
-module's PHP equivalent is converted and verified. Everything below
-describes the target architecture, which both implementations follow.
+**Backend language: PHP 8.4 / Laravel 11** (`backend-php/`). The
+backend was converted from Python/FastAPI between 2026-09-14 and
+2026-09-15, for a team/hosting constraint rather than a technical
+problem with FastAPI — see [php-conversion-plan.md](php-conversion-plan.md)
+for the reason, approach and findings. It was a backend-language
+change only: the modular-monolith structure, module boundaries,
+PostgreSQL schema design and API contract described below carried
+across unchanged, so the React frontend was unaffected. The Python
+backend was retired and removed from the tree on 2026-09-15.
 
 - A backend structured as a **modular monolith**: one
   deployable service, internally organized into modules that mirror
@@ -323,9 +319,10 @@ describes the target architecture, which both implementations follow.
     [open-business-decisions.md](open-business-decisions.md) (§8.1–8.3).
   - Implementation: `Group` + `GroupModuleAuthority` (per-module access
     level per Group) plus `User.group_id`, enforced backend-side via a
-    `require_module_access(module_key, min_level)` dependency applied to
-    each route — see `backend/app/models/groups.py` and
-    `backend/app/services/authority.py`.
+    `Authority::requireModuleAccess($user, $moduleKey, $minLevel)` check
+    at the top of each controller action — see
+    `backend-php/app/Models/Group.php`, `GroupModuleAuthority.php` and
+    `backend-php/app/Services/Authority.php`.
 - RBAC must be enforced in the backend (the authority), with the frontend
   using the same role/permission data only to shape what it displays —
   consistent with backend validation being the security boundary.
@@ -427,8 +424,8 @@ anticipated multiple entities; this is how it works in practice.
   physical device -- the closest practical equivalent without installing
   a native agent on staff machines, which has not been requested.
 - Request-scoped context (IP/User-Agent/device id) is captured once per
-  request by a FastAPI middleware into a `contextvar`, and
-  `audit.record()` reads it back automatically -- so business-logic
+  request by a middleware into request-scoped state, and
+  `Audit::record()` reads it back automatically -- so business-logic
   functions deep in the call stack (contract activation, service record
   approval, etc.) don't each need a `Request` object threaded through
   just to log an action.
@@ -504,7 +501,7 @@ anticipated multiple entities; this is how it works in practice.
 
 ### API design
 
-- The FastAPI backend exposes APIs organized per business module,
+- The backend exposes APIs organized per business module,
   consumed primarily by the React frontend, and designed so the same
   APIs can later serve other consumers (e.g. a future customer portal,
   the AI Assistant, or integrations) without a separate API surface.

@@ -71,9 +71,7 @@ in either script deletes them — neither ever runs `down -v`.
 ## Day to day
 
 ```bash
-# --env-file is needed: compose reads .env from the directory of the
-# first -f file (deploy/), not from the repo root where it lives.
-C="docker compose --env-file .env -f deploy/docker-compose.php.yml"
+C="docker compose"          # from the repo root, where .env is
 
 $C ps                         # what is running
 $C logs -f backend-php        # application log
@@ -102,12 +100,6 @@ easy to miss.
 **Migrations fail.** Nothing is half-applied — Laravel wraps each
 migration in a transaction. Read `$C logs migrate-php`, fix, and
 re-run `./deploy/upgrade.sh --no-pull`.
-
-**You need the old Python backend instead.** This stack does not run
-it. Use the repo's own `docker-compose.yml` — see
-[DEPLOY.md](../DEPLOY.md). Note the two backends are no longer
-equivalent: Sales Invoicing, Management Reporting, Commission Payouts
-and the Sales Dashboard exist only in `backend-php/`.
 
 ---
 

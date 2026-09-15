@@ -15,13 +15,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
-# --env-file is REQUIRED, not a nicety. Compose derives its project
-# directory from the FIRST -f file, so with `-f deploy/...yml` it looks
-# for .env in deploy/, never finds the one this script writes at the
-# repo root, and dies with "required variable APP_KEY is missing a
-# value". --env-file names the file explicitly while leaving the project
-# directory alone, so the relative build contexts still resolve.
-COMPOSE="docker compose --env-file $ROOT/.env -f deploy/docker-compose.php.yml"
+# Plain `docker compose`: the stack is the repo root's docker-compose.yml,
+# and this script has already cd'd there, so Compose finds .env by itself.
+COMPOSE="docker compose"
 
 say()  { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[33m    %s\033[0m\n' "$*"; }
@@ -102,7 +98,7 @@ $COMPOSE run --rm --entrypoint php backend-php \
 echo "    A random password was generated -- it is printed once, below."
 # Kept out of the report heredoc: that heredoc is unquoted, so a
 # backslash line-continuation inside it would fold the lines together.
-ADMIN_PW_CMD="docker compose --env-file .env -f deploy/docker-compose.php.yml exec backend-php php artisan user:set-password $ADMIN_EMAIL '<new password>'"
+ADMIN_PW_CMD="docker compose exec backend-php php artisan user:set-password $ADMIN_EMAIL '<new password>'"
 
 say "Starting the application"
 $COMPOSE up -d
@@ -126,8 +122,8 @@ cat <<REPORT
   from inside the app, or from this server:
     $ADMIN_PW_CMD
 
-  Status        docker compose --env-file .env -f deploy/docker-compose.php.yml ps
-  Logs          docker compose --env-file .env -f deploy/docker-compose.php.yml logs -f backend-php
+  Status        docker compose ps
+  Logs          docker compose logs -f backend-php
   Upgrade       ./deploy/upgrade.sh
 
 REPORT

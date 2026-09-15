@@ -1,7 +1,24 @@
-# Single-VPS staging/production deploy -- see DEPLOY.md for the full
-# runbook. Frontend (nginx) is the only exposed port; it serves the
-# built React app and reverse-proxies /api/* to `backend`, so both
-# share one origin and the backend needs no CORS configuration.
+# The Websoft Service ERP stack: Postgres, the PHP/Laravel backend, and
+# nginx serving the React frontend and proxying /api/* to it.
+#
+#     docker compose up -d --build
+#
+# Run from the repository root, where .env lives (deploy/install.sh
+# writes it). deploy/install.sh and deploy/upgrade.sh wrap this file;
+# see deploy/README.md.
+#
+# This was deploy/docker-compose.php.yml until 2026-09-15, when the
+# Python backend was retired and this became the only stack. The
+# project name and volume names below are unchanged from that file ON
+# PURPOSE: an existing server's database and uploads live in
+# websoft-erp_db_data / websoft-erp_uploads_data, and an `up` from this
+# file adopts them rather than starting a second, empty set.
+#
+# `backend-php` keeps the network alias `backend`, which is what the
+# frontend's nginx proxies to (frontend/nginx.conf). The PHP image
+# serves HTTP on 8000 for the same reason.
+name: websoft-erp
+
 services:
   db:
     image: postgres:16
@@ -18,67 +35,17 @@ services:
       timeout: 5s
       retries: 10
 
-  migrate:
-    build: ./backend
-    command: ["uv", "run", "alembic", "upgrade", "head"]
-    environment:
-      database_url: postgresql+psycopg://websoft_app:${POSTGRES_PASSWORD:?set a real password in .env}@db:5432/websoft_service_erp
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: "no"
-
-  backend:
-    build: ./backend
-    restart: unless-stopped
-    environment:
-      database_url: postgresql+psycopg://websoft_app:${POSTGRES_PASSWORD:?set a real password in .env}@db:5432/websoft_service_erp
-      jwt_secret_key: ${JWT_SECRET_KEY:?set a real random secret in .env}
-      uploads_dir: /app/uploads
-      smtp_host: ${SMTP_HOST:-}
-      smtp_port: ${SMTP_PORT:-587}
-      smtp_username: ${SMTP_USERNAME:-}
-      smtp_password: ${SMTP_PASSWORD:-}
-      smtp_from_email: ${SMTP_FROM_EMAIL:-}
-      smtp_from_name: ${SMTP_FROM_NAME:-Web Master Consultancy}
-    volumes:
-      - uploads_data:/app/uploads
-    depends_on:
-      db:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-
-  # ---- PHP backend (the Python->PHP conversion, complete 2026-09-15) ----
-  #
-  # Both backends are in this file on purpose. The conversion plan is a
-  # parallel run (see docs/php-conversion-plan.md), so the Python
-  # `backend` above stays the one `frontend` proxies to until Dennis
-  # says to switch; these two are behind the `php` profile and do not
-  # start with a plain `docker compose up`. To run them alongside:
-  #
-  #     docker compose --profile php up -d --build
-  #
-  # To cut the frontend over, point frontend/nginx.conf's `proxy_pass`
-  # at `backend-php:8000` (the PHP image speaks HTTP on the same port
-  # for exactly this reason) and rebuild `frontend`. That is a
-  # deliberate, reversible switch, not a default.
-  #
-  # NOTE both share the SAME database as the Python backend. The two
-  # schemas are the same schema -- that is the point of the conversion
-  # -- but it also means only ONE of the two migration services should
-  # ever be run against a given database. Running Laravel's migrations
-  # over an Alembic-managed database (or the reverse) is not supported
-  # by either tool and would not end well.
+  # Migrations run as a one-shot service, separately from the app, so a
+  # rolling restart never re-runs them. Laravel wraps each migration in
+  # a transaction, so a failure leaves nothing half-applied.
   migrate-php:
     build: ./backend-php
-    profiles: ["php"]
-    command: ["php", "artisan", "migrate", "--force"]
     entrypoint: []
+    command: ["php", "artisan", "migrate", "--force"]
     environment: &backend_php_env
       APP_ENV: production
       APP_DEBUG: "false"
-      APP_KEY: ${APP_KEY:?generate one with `php artisan key:generate --show`}
+      APP_KEY: ${APP_KEY:?generate one with deploy/install.sh}
       APP_TIMEZONE: Asia/Singapore
       DB_CONNECTION: pgsql
       DB_HOST: db
@@ -101,13 +68,14 @@ services:
 
   backend-php:
     build: ./backend-php
-    profiles: ["php"]
     restart: unless-stopped
     environment: *backend_php_env
     volumes:
-      # The same uploads volume the Python backend uses: documents
-      # attached under one backend must still be there under the other.
       - uploads_data:/var/www/html/storage/app/uploads
+    networks:
+      default:
+        aliases:
+          - backend
     depends_on:
       db:
         condition: service_healthy
@@ -120,7 +88,7 @@ services:
     ports:
       - "${HTTP_PORT:-80}:80"
     depends_on:
-      - backend
+      - backend-php
 
 volumes:
   db_data:

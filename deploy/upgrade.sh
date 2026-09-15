@@ -22,13 +22,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
-# --env-file is REQUIRED, not a nicety. Compose derives its project
-# directory from the FIRST -f file, so with `-f deploy/...yml` it looks
-# for .env in deploy/, never finds the one this script writes at the
-# repo root, and dies with "required variable APP_KEY is missing a
-# value". --env-file names the file explicitly while leaving the project
-# directory alone, so the relative build contexts still resolve.
-COMPOSE="docker compose --env-file $ROOT/.env -f deploy/docker-compose.php.yml"
+# Plain `docker compose`: the stack is the repo root's docker-compose.yml,
+# and this script has already cd'd there, so Compose finds .env by itself.
+COMPOSE="docker compose"
 BACKUP_DIR="$ROOT/backups"
 
 say()  { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
@@ -94,7 +90,7 @@ cat <<REPORT
 
     git checkout <previous-commit>
     gunzip -c $DUMP \\
-      | docker compose --env-file .env -f deploy/docker-compose.php.yml exec -T db \\
+      | docker compose exec -T db \\
           psql -U websoft_app -d websoft_service_erp
     ./deploy/upgrade.sh --no-pull
 

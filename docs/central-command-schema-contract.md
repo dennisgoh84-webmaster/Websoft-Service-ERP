@@ -37,7 +37,7 @@ Command, not at the client side.
 (`is_active = false`).  The client ERP reads `WHERE is_active = true
 ORDER BY sort_order` to render the announcement list.
 
-**Source model**: `backend/app/models/announcements.py :: Announcement`
+**Source model**: `backend-php/app/Models/Announcement.php`
 
 ### `ad_banner_settings` table
 
@@ -50,7 +50,7 @@ ORDER BY sort_order` to render the announcement list.
 **Central Command writes**: `UPDATE` on the singleton row (id = 1) to
 set or change the promo video URL.
 
-**Source model**: `backend/app/models/announcements.py :: AdBannerSettings`
+**Source model**: `backend-php/app/Models/AdBannerSettings.php`
 
 ---
 
@@ -79,7 +79,7 @@ restore it.  May also update `license_type` and `notes`.
 **Unique constraint**: `(company_id, module_key)` — one row per module
 per company.
 
-**Source model**: `backend/app/models/licensing.py :: CompanyModule`
+**Source model**: `backend-php/app/Models/CompanyModule.php`
 
 ### `modules` table (read-only reference)
 
@@ -93,7 +93,7 @@ per company.
 **Central Command reads**: to discover the available module keys when
 building UI for license management.  Does not write to this table.
 
-**Source model**: `backend/app/models/licensing.py :: Module`
+**Source model**: `backend-php/app/Models/ModuleCatalog.php`
 
 ---
 
@@ -110,14 +110,14 @@ building UI for license management.  Does not write to this table.
 Central Command uses the `companies` table to identify which companies
 exist in a client database and map them to its own client registry.
 
-**Source model**: `backend/app/models/core.py :: Company`
+**Source model**: `backend-php/app/Models/Company.php`
 
 ---
 
 ## 4. How the client ERP enforces licenses
 
-The enforcement point is `backend/app/services/authority.py ::
-require_module_access()`.  On every API call that touches a gated
+The enforcement point is `App\Services\Authority::requireModuleAccess()`
+(`backend-php/app/Services/Authority.php`).  On every API call that touches a gated
 module, this function:
 
 1. Looks up `CompanyModule` for `(current_user.company_id, module_key)`
@@ -137,13 +137,18 @@ no cache to invalidate.
 Central Command should verify it understands the client database's
 schema before writing.  Options (open question #3 from planned-work):
 
-- Check Alembic's `alembic_version` table for the current migration head
+- Check Laravel's `migrations` table for the latest applied migration (`SELECT migration FROM migrations ORDER BY batch DESC, id DESC LIMIT 1`)
 - Verify expected columns exist via `information_schema.columns`
 - Maintain a version registry in Central Command that maps migration
   heads to compatible Central Command versions
 
-Current Alembic head: see `backend/alembic/versions/` for the latest
-migration file.
+Current head: the last file in `backend-php/database/migrations/`.
+
+> **Contract change 2026-09-15.** The Python backend was retired, so
+> there is no `alembic_version` table on any ERP database any more.
+> Central Command's version check (decision 3 below, and its `clients`
+> registry) must read Laravel's `migrations` table instead. This is a
+> change on the Central Command side that has NOT been made yet.
 
 ---
 
@@ -158,9 +163,9 @@ repository
    password, TLS flag per client.  Admin adds clients via the UI.
 2. **Network access** → DECIDED: Internet with TLS + auth.  Each
    client's PostgreSQL is exposed with TLS encryption and credentials.
-3. **Schema versioning** → DECIDED: Check `alembic_version` table.
-   Read the client's migration head before writing, refuse if
-   incompatible.
+3. **Schema versioning** → DECIDED: read the client's migration head
+   before writing, refuse if incompatible. ~~`alembic_version` table~~
+   → Laravel's `migrations` table since 2026-09-15 (see section 5).
 4. **Ad targeting rules** → DECIDED: Manual per-client.  Admin assigns
    ads to specific client instances via the UI.
 5. **Audit trail** → DECIDED: Central Command's own `push_logs` table

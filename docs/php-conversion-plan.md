@@ -1,9 +1,30 @@
 # Backend Language Conversion: Python/FastAPI → PHP/Laravel
 
-Status: **IN PROGRESS**, started 2026-09-14. Tracks the backend
-language conversion requested by Dennis, and records the reason per
-CLAUDE.md's "do not change the approved architecture without
-explaining the reason first" rule.
+Status: **COMPLETE 2026-09-15, and the Python backend RETIRED the same
+day.** Started 2026-09-14. Tracks the backend language conversion
+requested by Dennis, and records the reason per CLAUDE.md's "do not
+change the approved architecture without explaining the reason first"
+rule.
+
+> **Retirement note (2026-09-15).** At Dennis's instruction, once the
+> PHP stack was installed and running on the test server, `backend/`
+> was removed from the tree (commit "Retire the Python backend"); it
+> remains in git history. `deploy/docker-compose.php.yml` became the
+> root `docker-compose.yml`, keeping the `websoft-erp` project name
+> and volume names so an existing server's data is adopted, not
+> orphaned. Every `backend/...py` path cited below is therefore a
+> historical reference. **Not ported, deliberately:**
+> `scripts/seed_demo.py`'s larger demo dataset (second company, four
+> staff, contracts, job orders, invoices) -- `DatabaseSeeder` seeds the
+> company with its letterhead and logo, Dennis, the Chart of Accounts,
+> a bank account, one customer and the announcements; and
+> `scripts/post_backlog.py`, the one-off GL back-fill for databases
+> that pre-date GL posting, which no PHP database does. The two
+> `backend/` bugs recorded below (Commission Payouts' keyword-only
+> call; the Job Orders report's `resolved` status) are moot now that
+> nothing runs it. **Central Command's schema-version check** must
+> move from `alembic_version` to Laravel's `migrations` table -- see
+> docs/central-command-schema-contract.md.
 
 ## Reason
 

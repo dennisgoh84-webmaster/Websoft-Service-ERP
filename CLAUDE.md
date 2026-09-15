@@ -56,16 +56,16 @@ The following architecture decisions have been approved for the initial
 Websoft Service ERP Solution project. These decisions must not be changed without
 explaining the reason first (see Development Rules below).
 
-1. **Backend:** PHP 8.4 / Laravel 11 (**changed 2026-09-14, in progress**
-   -- was Python + FastAPI. Reason: a team/hosting constraint, not a
-   technical problem with FastAPI. Same PostgreSQL schema design and
-   the same JSON API contract, so the frontend is unaffected. Being
-   carried out as a phased, module-by-module conversion, the same
-   pattern already used for the Odoo replacement strategy below, with
-   the existing Python backend (`backend/`) kept running unchanged
-   until each module's PHP equivalent (`backend-php/`) is converted and
-   verified -- see [docs/php-conversion-plan.md](docs/php-conversion-plan.md)
-   for what has been converted so far and what remains.)
+1. **Backend:** PHP 8.4 / Laravel 11 (`backend-php/`). **Changed
+   2026-09-14** from Python + FastAPI for a team/hosting constraint,
+   not a technical problem with FastAPI; converted module by module
+   with the same PostgreSQL schema and the same JSON API contract, so
+   the frontend was unaffected; **conversion complete and the Python
+   backend retired and removed from the tree 2026-09-15**, at Dennis's
+   instruction, once the PHP stack was running on the test server.
+   `backend-php/` is the only backend. See
+   [docs/php-conversion-plan.md](docs/php-conversion-plan.md) for the
+   conversion's findings.
 2. **Frontend:** React + TypeScript
 3. **Database:** PostgreSQL
 4. **Initial deployment:** Cloud/VPS deployment, with the architecture kept
@@ -123,14 +123,14 @@ explaining the reason first (see Development Rules below).
 - [docs/backlog.md](docs/backlog.md) — short, checkable summary of everything pending, linking into the detail docs above
 - [docs/walkthrough/index.html](docs/walkthrough/index.html) — a 46-step guided walkthrough of every built module (Operations → Stock → Accounts → Maintenance), with screenshots captured from the running application. Regenerate the screenshots by running the app and re-capturing; they are not auto-built.
 - [docs/ui-guidelines.md](docs/ui-guidelines.md) — screen label conventions and the Export (CSV/Excel) / Print (PDF/Word) pattern every screen follows
-- [docs/php-conversion-plan.md](docs/php-conversion-plan.md) — the backend Python→PHP language conversion: reason, approach, stack, and what's converted so far vs. pending
+- [docs/php-conversion-plan.md](docs/php-conversion-plan.md) — the backend Python→PHP language conversion (complete; Python retired 2026-09-15): reason, approach, stack, findings
 - [DEV_SETUP.md](DEV_SETUP.md) — how to run the application locally
 
 ## Status
 
-Active development has begun. A first working slice exists: the
-**Service Operations core** (`backend/`, FastAPI + PostgreSQL; `frontend/`,
-React + TypeScript), implementing the confirmed Service Operations and
+Active development has begun. The application is `backend-php/`
+(PHP 8.4 / Laravel 11 + PostgreSQL) and `frontend/` (React +
+TypeScript). It started as the **Service Operations core**, implementing the confirmed Service Operations and
 Billing/AR/Purchasing/Inventory rules end-to-end (Customer → Contract →
 Job Order → Service Record → Contract Hour Validation → Excess Review →
 Invoice). It also includes Module Control / multi-company licensing
@@ -358,9 +358,16 @@ one. Those five downloads change from `.xls` to a genuine `.xlsx`
 [docs/ui-guidelines.md](docs/ui-guidelines.md) section 2 had specified
 all along.
 
-`backend/` (Python) is untouched and keeps running as the system of
-record until each remaining module is converted, module by module,
-the same way.
+**The Python backend (`backend/`) was retired and removed from the
+tree on 2026-09-15** at Dennis's instruction, the conversion being
+complete and the PHP stack running on the test server. References to
+`backend/...py` files in `backend-php/` docblocks and in the docs are
+history -- what each module was converted from -- and resolve in git
+history, not in the working tree. Two things were deliberately not
+ported: `scripts/seed_demo.py`'s larger demo dataset (a second company,
+four staff, contracts, invoices) beyond what `DatabaseSeeder` seeds,
+and `scripts/post_backlog.py`, a one-off GL back-fill for databases
+that pre-date GL posting, which no PHP database does.
 
 Also converted (2026-09-15), the last six small maintenance modules: **Tax Types**, **GL
 Types**, the **Currency Rate Table**, **Setup Lists** (Nationality /

@@ -8,7 +8,7 @@
 //
 // Run with: node record_demo.cjs
 // (requires the backend + frontend dev servers running, and a freshly
-// seeded DB -- see backend/scripts/seed_demo.py)
+// seeded DB -- `php artisan migrate:fresh --seed` in backend-php/)
 const { chromium } = require('playwright')
 const fs = require('fs')
 const path = require('path')

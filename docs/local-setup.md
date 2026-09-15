@@ -29,7 +29,7 @@ Download from: **https://www.docker.com/products/docker-desktop/**
   installed, macOS will prompt you to install the Xcode Command Line
   Tools (say yes). Or install via **https://git-scm.com/download/mac**.
 
-That's it — no Python, Node, or Postgres install needed. Docker handles
+That's it — no PHP, Node, or Postgres install needed. Docker handles
 all of that inside the containers.
 
 ---
@@ -89,9 +89,9 @@ docker compose up --build -d
 This does four things automatically, in order:
 
 1. **Postgres** starts and waits until healthy.
-2. **Migrate** runs all Alembic migrations against the empty database,
+2. **migrate-php** runs every migration against the empty database,
    then exits.
-3. **Backend** (FastAPI) starts on an internal port.
+3. **backend-php** (Laravel) starts on an internal port.
 4. **Frontend** (nginx + React) starts and reverse-proxies `/api/*` to
    the backend — this is the only container with a host port mapping.
 
@@ -104,31 +104,28 @@ dependencies). Subsequent starts are fast.
 docker compose ps
 ```
 
-You should see `db`, `backend`, and `frontend` all showing `running`
-(and `migrate` showing `exited (0)` — that's expected, it runs once and
-stops).
+You should see `db`, `backend-php`, and `frontend` all showing `running`
+(and `migrate-php` showing `exited (0)` — that's expected, it runs once
+and stops).
 
 ## 4. Seed demo data
 
-The database starts empty. To get demo companies, users, contracts, job
-orders, invoices, and everything else needed to click around immediately:
+The database starts empty. To get the demo company (with its letterhead
+and logo), the owner login, the Chart of Accounts, a sample customer and
+the announcements:
 
 ```bash
-docker compose exec backend uv run python scripts/seed_demo.py
+docker compose run --rm --entrypoint php backend-php artisan db:seed --force
 ```
 
-### Demo logins
+### Demo login
 
 | User | Email | Password | Role |
 |---|---|---|---|
-| Dennis Goh | dennis@websoft.local | demo1234 | Owner |
-| Nico | nico@websoft.local | demo1234 | Service Lead |
-| Cherish | cherish@websoft.local | demo1234 | Sales Manager |
-| Wei Ling | weiling@websoft.local | demo1234 | Support Engineer |
+| Dennis Goh | dennis@websoft.example | demo1234 | Owner |
 
-> **Note:** First login with a seeded account will prompt a forced
-> password change (security policy). Pick any new password that's at
-> least 8 characters with letters and numbers.
+Add further staff from **Staff Master** once signed in. (On a real
+server, `deploy/install.sh` replaces this password with a random one.)
 
 ## 5. Open in browser
 
@@ -147,10 +144,10 @@ http://localhost
 | Start the stack | `docker compose up -d` |
 | Stop the stack | `docker compose down` |
 | Stop and **delete all data** | `docker compose down -v` |
-| View backend logs | `docker compose logs -f backend` |
+| View backend logs | `docker compose logs -f backend-php` |
 | View all logs | `docker compose logs -f` |
-| Re-run migrations (after a pull) | `docker compose up migrate` |
-| Re-seed from scratch | `docker compose down -v && docker compose up --build -d && docker compose exec backend uv run python scripts/seed_demo.py` |
+| Re-run migrations (after a pull) | `docker compose up migrate-php` |
+| Re-seed from scratch | `docker compose down -v && docker compose up --build -d && docker compose run --rm --entrypoint php backend-php artisan db:seed --force` |
 | Rebuild after code changes | `docker compose up --build -d` |
 
 ---
@@ -162,7 +159,7 @@ When new code is pushed to the repo:
 ```bash
 git pull origin main
 docker compose up --build -d
-docker compose up migrate        # runs any new migrations
+docker compose up migrate-php    # runs any new migrations
 ```
 
 If the schema changed in a way that's incompatible with existing data
@@ -171,7 +168,7 @@ If the schema changed in a way that's incompatible with existing data
 ```bash
 docker compose down -v
 docker compose up --build -d
-docker compose exec backend uv run python scripts/seed_demo.py
+docker compose run --rm --entrypoint php backend-php artisan db:seed --force
 ```
 
 ---

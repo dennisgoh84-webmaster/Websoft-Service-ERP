@@ -10,7 +10,7 @@ Pte Ltd** (Singapore), built to replace Odoo module by module.
 | **Backend** | PHP 8.4 / Laravel 11 (`backend-php/`) |
 | **Frontend** | React 19 + TypeScript (`frontend/`) |
 | **Database** | PostgreSQL 16 |
-| **Tests** | 802 passing (`cd backend-php && php artisan test`) |
+| **Tests** | 810 passing (`cd backend-php && php artisan test`) |
 
 ---
 
@@ -100,30 +100,18 @@ cd frontend && npm install && npm run dev
 
 ---
 
-## Two backends, one API
+## One backend
 
-`backend/` (Python / FastAPI) was the original implementation.
-`backend-php/` (PHP 8.4 / Laravel 11) is a **complete conversion** of
-it — same PostgreSQL schema, same JSON API — done module by module and
-finished 2026-09-15. Every Python router and every export route now
-has a PHP equivalent.
-
-**They are not equivalent going forward.** Work since the conversion
-has landed in `backend-php/` only, including product-based Sales
-Invoicing, Management Reporting, Commission Payouts and the Sales
-Dashboard. `backend/` is kept as the running system of record until
-the cutover, which is a deliberate decision, not a deploy side effect:
-it is one line in `frontend/nginx.conf`, described in
-[DEPLOY.md §4b](DEPLOY.md).
-
-> **Two bugs found in `backend/` during the conversion, still unfixed
-> there:** its commission service passes positional arguments to a
-> keyword-only function, so Commission Payouts cannot run and an AR
-> write-off will fail once a non-zero commission rate is set; and the
-> Job Orders report tests for a `resolved` status this system has
-> never had, so a voided job order reads as overdue. Both are correct
-> in `backend-php/`. See
-> [docs/php-conversion-plan.md](docs/php-conversion-plan.md).
+`backend-php/` (PHP 8.4 / Laravel 11) is the backend. It began as a
+module-by-module conversion of the original Python/FastAPI
+implementation -- same PostgreSQL schema, same JSON API, finished
+2026-09-15 -- and everything since (product-based Sales Invoicing,
+Management Reporting, Commission Payouts, the Sales Dashboard, the
+portal admin screen, the company mailbox) has been built here only.
+**The Python backend was retired and removed from the tree on
+2026-09-15**, once the PHP stack was running on the test server; it
+remains in git history. The conversion's findings are recorded in
+[docs/php-conversion-plan.md](docs/php-conversion-plan.md).
 
 ---
 
@@ -137,7 +125,7 @@ it is one line in `frontend/nginx.conf`, described in
 | [docs/backlog.md](docs/backlog.md) | Everything pending, checkable, linking into the detail docs |
 | [docs/open-business-decisions.md](docs/open-business-decisions.md) | Questions still waiting on a decision |
 | [docs/planned-work.md](docs/planned-work.md) | Confirmed future work, recorded but not yet designed |
-| [docs/php-conversion-plan.md](docs/php-conversion-plan.md) | The Python → PHP conversion: approach, findings, what changed |
+| [docs/php-conversion-plan.md](docs/php-conversion-plan.md) | The Python → PHP conversion (complete; Python retired 2026-09-15): approach, findings, what changed |
 | [docs/gl-posting-design.md](docs/gl-posting-design.md) | Sub-ledger → GL posting and the Bank step |
 | [docs/customer-portal-design.md](docs/customer-portal-design.md) | Customer Helpdesk Portal design (PORTAL-001..006) |
 | [docs/ui-guidelines.md](docs/ui-guidelines.md) | Screen label conventions, Export and Print patterns |

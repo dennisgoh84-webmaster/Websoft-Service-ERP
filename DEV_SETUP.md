@@ -17,7 +17,7 @@ For standing up a shared server so other staff can test it, see
 
 ## Prerequisites
 
-- Python 3.11+, [uv](https://docs.astral.sh/uv/)
+- PHP 8.4 with the `pdo_pgsql`, `gd`, `zip`, `intl`, `bcmath` extensions, and [Composer](https://getcomposer.org/)
 - Node.js 20+
 - PostgreSQL 16 (local install or any reachable instance)
 - LibreOffice Writer, headless-capable (`apt install libreoffice-writer` on
@@ -35,26 +35,25 @@ For standing up a shared server so other staff can test it, see
 ### 1a. Database
 
 ```bash
-createuser websoft_app --pwprompt   # password: websoft_dev_local (or your own — update backend/.env)
+createuser websoft_app --pwprompt   # password: websoft_dev_local (or your own -- update backend-php/.env)
 createdb websoft_service_erp -O websoft_app
 ```
 
-### 1b. Backend (FastAPI)
+### 1b. Backend (PHP / Laravel)
 
 ```bash
-cd backend
-uv sync
-uv run alembic upgrade head          # apply all migrations
-uv run python scripts/seed_demo.py   # reset + load demo data (see script docstring)
-uv run uvicorn app.main:app --reload --port 8000
+cd backend-php
+cp .env.example .env                 # then set DB_* to the database above
+composer install
+php artisan key:generate
+php artisan migrate --seed           # apply all migrations + load the demo data
+php artisan serve                    # http://127.0.0.1:8000
 ```
 
-API docs: http://127.0.0.1:8000/docs
-
-Config is read from environment variables / a local `.env` file (see
-`app/core/config.py`); defaults match the database setup above and are
-for local development only — never use the default JWT secret in any
-real deployment.
+`php artisan migrate:fresh --seed` resets the database and reseeds it.
+The seeder creates one company (Webmaster, with its letterhead and
+logo), the module catalog, the Owner/Admin group, Dennis, the Chart of
+Accounts, a bank account, one sample customer, and the announcements.
 
 ### 1c. Frontend (React + TypeScript)
 
@@ -69,14 +68,9 @@ backend on port 8000 (see `vite.config.ts`).
 
 ### Demo logins
 
-All password `demo1234`, after running `seed_demo.py`:
-
-| Email | Role |
-|---|---|
-| dennis@websoft.local | owner (also manages Module Control) |
-| nico@websoft.local | service_lead (Nico — SRV-004 excess-usage reviewer) |
-| cherish@websoft.local | sales_manager (Cherish — SRV-011 backup reviewer) |
-| weiling@websoft.local | support_engineer |
+After seeding: `dennis@websoft.example` / `demo1234` (owner). Add other
+staff from **Staff Master** once signed in. Under `npm run dev` the
+Login page prefills these; a production build never does.
 
 ---
 
@@ -87,7 +81,7 @@ server needed. Once Part 1 is running:
 
 - Open http://127.0.0.1:5173/mobile on a phone-sized browser or mobile
   device.
-- Login as a support engineer (e.g. `weiling@websoft.local` / `demo1234`).
+- Sign in as a staff member who has Job Orders assigned (the seeded owner works; assign a Job Order to them first).
 - The mobile app shows the engineer's assigned Job Orders, Service
   Records, Time In/Out, photo attachments, and customer sign-off with
   signature pad.
@@ -148,7 +142,7 @@ Run each command in a separate terminal (or use `&` / tmux / screen):
 
 ```bash
 # Terminal 1: ERP Backend
-cd backend && uv run uvicorn app.main:app --reload --port 8000
+cd backend-php && php artisan serve
 
 # Terminal 2: ERP Frontend (includes Mobile at /mobile)
 cd frontend && npm run dev -- --port 5173
@@ -176,57 +170,29 @@ Company/Individual flagged "Is Supplier", not a separate file — see
 docs/open-business-decisions.md #23).
 
 - **Email** sends for real over SMTP, with the document as a PDF
-  attachment (converted from the same .docx used for its Word export —
-  see `app/services/pdf_convert.py` and `app/services/document_email.py`
-  in `backend/`, or `App\Services\PdfConvert` and
-  `App\Services\DocumentEmail` in `backend-php/`: the shared helper
-  every document type's Email button calls). It is unconfigured by
-  default: until the backend's `.env` carries real settings, the button
-  fails with a clear "Email sending is not configured yet" error
-  instead of pretending to send.
+  attachment converted from the same .docx used for its Word export
+  (`App\Services\PdfConvert`, `App\Services\DocumentEmail`). There
+  are two mailboxes, deliberately separate, neither falling back to the
+  other (`App\Services\Mailer`):
 
-  **Python backend** — add to `backend/.env` (lowercase keys):
-
-  ```
-  smtp_host=smtp.office365.com
-  smtp_port=587
-  smtp_username=...
-  smtp_password=...
-  smtp_use_tls=true
-  smtp_from_email=...
-  smtp_from_name=Web Master Consultancy
-  ```
-
-  **PHP backend** — add to `backend-php/.env` (uppercase keys, same
-  settings; templated in `backend-php/.env.example`):
-
-  ```
-  SMTP_HOST=smtp.office365.com
-  SMTP_PORT=587
-  SMTP_USERNAME=...
-  SMTP_PASSWORD=...
-  SMTP_USE_TLS=true
-  SMTP_FROM_EMAIL=...
-  SMTP_FROM_NAME="Web Master Consultancy"
-  ```
+  - **Company mailbox** -- Company Setup → *Outbound email*, in the
+    app. What every document "Email" button sends from, so the mail
+    comes from the company's own domain and passes SPF/DKIM. Until it
+    is filled in the button fails with a clear "Email is not configured
+    for <company>" error instead of pretending to send. Has a "Send
+    test email" button.
+  - **System mailbox** -- `SMTP_*` in `backend-php/.env` (templated in
+    `backend-php/.env.example`): login one-time codes, password resets
+    and portal invites, which run before any company is chosen.
 
   `SMTP_USE_TLS=true` means a plain connection upgraded with STARTTLS
-  (port 587), and the send fails if the server will not upgrade —
-  matching the Python backend's unconditional `starttls()`. Set it to
-  `false` only for a server that genuinely has no TLS. It is not
-  implicit TLS-on-connect (SMTPS, port 465); neither backend supports
-  that today.
+  (port 587), and the send fails if the server will not upgrade. Set it
+  to `false` only for a server that genuinely has no TLS. Implicit
+  TLS-on-connect (SMTPS, port 465) is not supported.
 
-  One shared mailbox for the whole install, not per-company. Do not
-  commit real credentials — `.env` is gitignored.
-
-  > Planned change: [docs/planned-work.md #8c](docs/planned-work.md)
-  > records that these system SMTP settings should eventually be owned
-  > in Central Command and pushed down, and that customer-facing
-  > document email should move to a per-company mailbox configured in
-  > Company Setup → Maintenance. Neither is built yet — today both the
-  > login OTP and every document Email button use the one mailbox
-  > above, in both backends.
+  > [docs/planned-work.md #8c](docs/planned-work.md) records that the
+  > system mailbox should eventually be owned in Central Command and
+  > pushed down rather than hand-edited in `.env`.
 - **WhatsApp** opens a `wa.me` chat link pre-filled with a short message
   (no API/account needed) — you attach the PDF yourself in the chat.
   Needs a phone number set on the relevant Company/Individual record.
@@ -254,31 +220,20 @@ Docker image runs, so a failure here is a failed deploy.
 
 ### 2. Migrations from an *empty* database
 
-`alembic upgrade head` against your existing dev database only replays
+`php artisan migrate` against your existing dev database only replays
 the migrations added since you last ran it. A fresh server applies
 **every** migration to an empty database, which is a different code
 path -- and the only one that catches a migration that disagrees with
-the models.
+the models or the seeder.
 
 ```bash
 createdb migration_check -O websoft_app
-database_url="postgresql+psycopg://websoft_app:websoft_dev_local@localhost:5432/migration_check" \
-  uv run alembic upgrade head
-database_url="postgresql+psycopg://websoft_app:websoft_dev_local@localhost:5432/migration_check" \
-  uv run python scripts/seed_demo.py
+DB_DATABASE=migration_check php artisan migrate:fresh --seed
 dropdb migration_check
 ```
 
-**Native enums are the usual culprit.** A column declared as
-`Enum(SomePyEnum, name="some_type")` persists the member **NAME**
-(`SUPPORT`), not its value (`support`) -- SQLAlchemy's default for
-native enums. A migration that does `CREATE TYPE some_type AS ENUM
-('support', ...)` therefore builds a type the application can never
-write to, and every insert fails on a fresh database with
-`invalid input value for enum some_type: "SUPPORT"`. Existing databases
-are unaffected (the type already has the right labels), so this only
-ever shows up on a brand-new deploy. Create enum types with the
-uppercase member names unless the model passes `values_callable`.
+The test suite does this on every run (`RefreshDatabase`), so a green
+`php artisan test` is the same proof.
 
 ---
 
@@ -288,8 +243,8 @@ uppercase member names unless the model passes `values_callable`.
 walkthrough of the confirmed workflow (login → contract hours →
 approve a Service Record that exhausts the contract → Nico's
 excess-usage review → resulting invoice). Run `node record_demo.cjs`
-from `frontend/` with both servers running; re-run `seed_demo.py` first
-for a clean, repeatable recording.
+from `frontend/` with both servers running; run
+`php artisan migrate:fresh --seed` first for a clean, repeatable recording.
 
 ---
 
