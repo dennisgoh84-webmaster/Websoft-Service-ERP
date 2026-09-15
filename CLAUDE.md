@@ -138,10 +138,11 @@ Invoice). It also includes Module Control / multi-company licensing
 a summary dashboard, and dynamic filters on the main list views. See
 [DEV_SETUP.md](DEV_SETUP.md) to run it.
 
-**Backend language conversion to PHP/Laravel is in progress
-(`backend-php/`, started 2026-09-14)** — see
+**Backend language conversion to PHP/Laravel: complete, and the Python
+backend retired 2026-09-15** (`backend-php/`, started 2026-09-14) — see
 [docs/php-conversion-plan.md](docs/php-conversion-plan.md) for the
-reason, approach, and status. Converted and verified so far: Core /
+reason, approach, and findings. The module-by-module record follows,
+kept as the history of what was converted and what was found. Core /
 Administration (auth, audit logging, Group Authority, Module Control,
 Company Setup, Users/Staff Master), CompanyIndividual Management
 (Customer/Supplier master, Contacts, Branches, Relationships, PDPA
@@ -455,19 +456,26 @@ settled:** "this Financial Year" was taken as the calendar year because
 no fiscal-year-start field existed; since 2026-09-15 it is a real
 Company Setup value (`financial_year_start_month`, Webmaster runs
 1 Jul - 30 Jun, labelled by the year it ends in), so those listings now
-report the real financial year. Still open: the Contract-Quotation link
-is a free-text `quotation_reference` field, not a real linked record --
-both recorded in
-[docs/open-business-decisions.md #40](docs/open-business-decisions.md#40-sales-module-enhancements-financial-year-definition-and-contractquotation-link-raised-2026-09-22).
-Quotations has since been converted to `backend-php/` (below), which
-unblocks replacing that free-text field with a real link, but that
-reconciliation hasn't been done yet -- the conversion pass was scoped
-to Quotations only and deliberately didn't touch `Contract`. The Sales
-Dashboard's two Quotations-pending KPIs still report not-available
-regardless: `Quotation`'s status enum has no state distinguishing
-"pending internal approval" from "sent, awaiting client confirmation,"
-so there is nothing for either tile to count until that's a confirmed
-business rule.
+report the real financial year. **The other is settled too (2026-09-15,
+SALES-006):** the Contract-Quotation link is a real
+`contracts.quotation_id`, set by accepting a quotation or by hand, and
+an expiring contract can raise its renewal as a quotation whose
+acceptance renews it. The free-text `quotation_reference` it replaced is
+kept read-only where recorded. **And the Sales Dashboard's two
+Quotations-pending tiles count real rows (SALES-008):** the Quotation
+status model gained `pending_approval` and `approved` -- BILL-006's
+Sales Manager approval before sending -- so "pending approval" and
+"sent, awaiting the client" are distinct states. Both recorded in
+[docs/open-business-decisions.md #40](docs/open-business-decisions.md#40-sales-module-enhancements-financial-year-definition-and-contractquotation-link-raised-2026-09-22)
+and docs/business-requirements.md.
+
+**Also 2026-09-15:** the system mailboxes moved out of `.env` into a
+`system_mail_settings` table with a Maintenance → System Email screen
+-- an OTP mailbox (sign-in codes, resets, portal invites; `.env`
+remains its bootstrap fallback) and a Helpdesk mailbox from which the
+Outlook Add-in's Incident / Job Order conversions acknowledge the
+sender. Neither borrows the other nor the company document mailbox on
+Company Setup (`App\Services\Mailer`).
 
 **Product-based Sales Invoicing landed 2026-09-15**, also directly in
 `backend-php/` + `frontend/` rather than as a conversion (`backend/`
