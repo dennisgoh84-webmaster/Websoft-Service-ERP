@@ -2048,6 +2048,57 @@ recorded in docs/backlog.md for Dennis to scope rather than assumed.
 
   With this, the Incidents module has no KNOWN GAPs left.
 
+### Event Logs + Bank Book (converted 2026-09-15)
+
+- **Event Logs** (`app/routers/event_logs.py` ->
+  `App\Http\Controllers\Api\EventLogController`, 9 dedicated tests):
+  the readable face of the audit trail every other module writes to.
+  List with filters (entity type, action, actor, date range, free text
+  across details/reason/actor/entity/action), plus both exports.
+  Read-only by design -- there is no create, update or delete endpoint,
+  which is what makes the trail worth having. Gated on `event_logs`.
+
+  DETAILS CARRIED ACROSS, each pinned: `date_to` compares against the
+  START of the following day, so it includes everything logged on that
+  date; the list limit is clamped to 1..500 and an export to 5000 rows
+  rather than refused; and entries with a **null company_id** (written
+  before company stamping existed) are shown to EVERYONE rather than
+  hidden -- hiding them would silently shorten an audit trail.
+
+  **Exporting the trail is itself audited**, with the filters used and
+  the row count, because bulk-reading the audit trail would otherwise
+  be the one action it does not record.
+
+- **Bank Book -- transactions and reconciliation**
+  (`app/routers/bank_transactions.py` + `services/bank_book.py` ->
+  `App\Http\Controllers\Api\BankTransactionController` +
+  `App\Services\BankBook`, 11 dedicated tests): the ledger with its
+  running balance, adding a line, voiding one, per-line
+  toggle-reconciled, and full reconciliation sessions. Adds the
+  `bank_reconciliations` table; `bank_transactions` already existed,
+  created by the GL posting + Bank step conversion, but nothing had
+  ever recorded a reconciliation against it.
+
+  DELIBERATELY ITS OWN LEDGER, separate from the General Ledger's
+  Journal Vouchers -- nothing auto-posts to the GL except manually
+  entered Journal Vouchers, so tying a day-to-day Bank Book to it would
+  mean keying every bank line as a JV first.
+
+  RULES PINNED BY TESTS: a line is either a debit or a credit, never
+  both and never neither (the same convention `JournalLine` uses); a
+  **voided line stays visible in the ledger but stops moving the
+  balance** and no longer counts as unreconciled, since CLAUDE.md
+  forbids deleting financial records; a reconciliation snapshots the
+  ledger balance AS AT THE STATEMENT DATE, so a later-dated transaction
+  does not distort it; and reconciling a transaction belonging to
+  another account is refused whole.
+
+  **REFACTOR, not a straight port:** `BankAccountController` computed
+  the account list's current balance inline. That logic now lives in
+  `App\Services\BankBook` and both callers read it -- mirroring why
+  Python keeps `bank_book.py` shared, and pinned by a test asserting
+  the account list and the ledger closing balance agree.
+
 ## Not yet converted (pending, in rough priority order)
 
 Everything below still only exists in `backend/` (Python). Each is a

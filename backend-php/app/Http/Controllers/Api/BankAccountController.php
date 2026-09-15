@@ -6,10 +6,9 @@ use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\BankAccount;
-use App\Models\BankTransaction;
 use App\Services\Audit;
 use App\Services\Authority;
-use App\Support\Money;
+use App\Services\BankBook;
 use Illuminate\Http\Request;
 
 /**
@@ -23,9 +22,10 @@ class BankAccountController extends Controller
 
     private function present(BankAccount $bank): array
     {
-        $movement = BankTransaction::where('bank_account_id', $bank->id)->where('is_voided', false)->get()
-            ->reduce(fn (Money $carry, BankTransaction $t) => $carry->plus(Money::of($t->debit_sgd))->minus(Money::of($t->credit_sgd)), Money::of(0));
-        $balance = Money::of($bank->opening_balance_sgd)->plus($movement);
+        // Shared with the Bank Book ledger's running balance, so the
+        // account list and the ledger can never report different
+        // numbers for the same account.
+        $balance = BankBook::currentBalance($bank);
 
         return [
             'id' => $bank->id,
