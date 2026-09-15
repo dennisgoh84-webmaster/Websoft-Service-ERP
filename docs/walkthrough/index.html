@@ -1,0 +1,1510 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A 46-step guided test path through Websoft Service ERP - operations, stock, accounting and the maintenance tables.">
+<title>Websoft ERP Walkthrough</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap">
+<style>
+  :root {
+    /* Light palette — neutrals carry a faint green-grey bias toward the
+       ledger accent, so nothing reads as an inherited mid-grey. */
+    --ground: #F6F8F7;
+    --surface: #FFFFFF;
+    --surface-sunk: #EFF3F1;
+    --ink: #101B24;
+    --ink-soft: #46555C;
+    --ink-faint: #718086;
+    --rule: #DCE4E1;
+    --rule-firm: #C3CEC9;
+    --accent: #0F6E5C;
+    --accent-soft: #E3F0EC;
+    --flag: #B4741A;
+    --flag-soft: #FBF1E2;
+    --debit: #1C5F8A;
+    --credit: #8A3D1C;
+
+    --step: clamp(2.6rem, 1.8rem + 2vw, 3.2rem);
+    --shell: 1180px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0E1518;
+      --surface: #151E22;
+      --surface-sunk: #1B262A;
+      --ink: #E7EDEA;
+      --ink-soft: #A7B6B8;
+      --ink-faint: #7D8C8F;
+      --rule: #263336;
+      --rule-firm: #36474B;
+      --accent: #56B9A1;
+      --accent-soft: #14312C;
+      --flag: #D9A055;
+      --flag-soft: #2E2413;
+      --debit: #69AEDA;
+      --credit: #D98A62;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0E1518;
+    --surface: #151E22;
+    --surface-sunk: #1B262A;
+    --ink: #E7EDEA;
+    --ink-soft: #A7B6B8;
+    --ink-faint: #7D8C8F;
+    --rule: #263336;
+    --rule-firm: #36474B;
+    --accent: #56B9A1;
+    --accent-soft: #14312C;
+    --flag: #D9A055;
+    --flag-soft: #2E2413;
+    --debit: #69AEDA;
+    --credit: #D98A62;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.62;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3 {
+    font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  code, .mono, .num {
+    font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  a { color: var(--accent); }
+
+  /* ---- shell ------------------------------------------------------ */
+
+  .wrap {
+    max-width: var(--shell);
+    margin: 0 auto;
+    padding-inline: 20px;
+    padding-block: 0 72px;
+  }
+
+  header.masthead {
+    border-bottom: 1px solid var(--rule);
+    background: var(--surface);
+  }
+  .masthead .wrap { padding-block: 40px 34px; }
+
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    margin: 0 0 14px;
+  }
+
+  h1 {
+    font-size: clamp(2.1rem, 1.5rem + 2.6vw, 3.1rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.08;
+    margin-bottom: 16px;
+  }
+
+  .standfirst {
+    font-size: 1.06rem;
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0;
+  }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 34px;
+    margin-top: 28px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+  }
+  .fact { display: flex; flex-direction: column; gap: 2px; }
+  .fact dt {
+    font-size: 10.5px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+  }
+  .fact dd { margin: 0; font-size: 14px; }
+
+  /* ---- two-column body -------------------------------------------- */
+
+  .layout {
+    display: grid;
+    grid-template-columns: 218px minmax(0, 1fr);
+    gap: 52px;
+    align-items: start;
+    margin-top: 40px;
+  }
+
+  nav.contents {
+    position: sticky;
+    top: calc(env(safe-area-inset-top, 0px) + 20px);
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    font-size: 13.5px;
+  }
+  .contents-group { display: flex; flex-direction: column; gap: 5px; }
+  .contents-head {
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--rule);
+  }
+  nav.contents a {
+    text-decoration: none;
+    color: var(--ink-soft);
+    padding: 1px 0;
+  }
+  nav.contents a:hover { color: var(--accent); }
+
+  .progress {
+    font-size: 12px;
+    color: var(--ink-faint);
+    border-top: 1px solid var(--rule);
+    padding-top: 12px;
+  }
+  .progress strong { color: var(--accent); font-weight: 600; }
+
+  /* ---- stages ------------------------------------------------------ */
+
+  .stage { margin-bottom: 64px; scroll-margin-top: 24px; }
+
+  .stage-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 10px;
+    margin-bottom: 8px;
+  }
+  .stage-num {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .stage-head h2 {
+    font-size: clamp(1.5rem, 1.2rem + 1vw, 1.95rem);
+    font-weight: 600;
+    letter-spacing: -0.012em;
+    flex: 1;
+  }
+  .stage-menu {
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    white-space: nowrap;
+  }
+  .stage-intro {
+    color: var(--ink-soft);
+    max-width: 66ch;
+    margin: 0 0 26px;
+  }
+
+  /* ---- steps ------------------------------------------------------- */
+
+  ol.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+
+  .step {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr);
+    gap: 14px;
+    padding: 16px 0;
+    border-top: 1px solid var(--rule);
+  }
+  .step:first-child { border-top: none; padding-top: 4px; }
+
+  .step-check {
+    margin: 3px 0 0;
+    width: 15px;
+    height: 15px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .step-check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .step-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+
+  .step-title {
+    font-size: 15.5px;
+    font-weight: 600;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .where {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    font-weight: 400;
+    color: var(--ink-faint);
+    background: var(--surface-sunk);
+    border-radius: 3px;
+    padding: 1px 6px;
+  }
+  .step p { margin: 0; color: var(--ink-soft); max-width: 66ch; }
+  .step p + p { margin-top: 2px; }
+
+  .expect {
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    border-left: 2px solid var(--rule-firm);
+    padding-left: 12px;
+  }
+  .expect b { color: var(--ink); font-weight: 600; }
+
+  /* Rule callout — the confirmed business rule a step demonstrates. */
+  .ruleref {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    background: var(--flag-soft);
+    border-left: 3px solid var(--flag);
+    padding: 9px 13px;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    max-width: 66ch;
+  }
+  .ruleref .tag {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--flag);
+    white-space: nowrap;
+  }
+
+  /* ---- tables ------------------------------------------------------ */
+
+  .tablewrap { overflow-x: auto; margin: 22px 0 4px; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 13.5px;
+    min-width: 520px;
+  }
+  caption {
+    text-align: left;
+    font-size: 11px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    padding-bottom: 8px;
+  }
+  th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border-bottom: 1px solid var(--rule-firm);
+    padding: 0 14px 7px 0;
+  }
+  td {
+    padding: 8px 14px 8px 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+    color: var(--ink-soft);
+  }
+  td:first-child { color: var(--ink); }
+  td.dr { color: var(--debit); }
+  td.cr { color: var(--credit); }
+
+  /* ---- panels ------------------------------------------------------ */
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 22px 24px;
+    margin: 0 0 40px;
+  }
+  .panel h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .panel p { color: var(--ink-soft); max-width: 66ch; margin: 0 0 10px; }
+  .panel p:last-child { margin-bottom: 0; }
+
+  .panel.warn { border-left: 3px solid var(--flag); }
+
+  .credentials {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    background: var(--surface-sunk);
+    padding: 10px 14px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px;
+    margin-top: 4px;
+  }
+
+  .grid2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 18px 32px;
+    margin-top: 6px;
+  }
+  .maint { display: flex; flex-direction: column; gap: 3px; }
+  .maint dt { font-weight: 600; font-size: 14px; }
+  .maint dd { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
+
+  footer.tail {
+    border-top: 1px solid var(--rule);
+    margin-top: 8px;
+    padding-top: 22px;
+    font-size: 13px;
+    color: var(--ink-faint);
+    max-width: 66ch;
+  }
+
+  /* ---- screenshots -------------------------------------------------- */
+
+  figure.shot { margin: 4px 0 2px; max-width: 100%; }
+  figure.shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+    border: 1px solid var(--rule-firm);
+    background: var(--surface);
+  }
+  figure.shot figcaption {
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    padding-top: 7px;
+    max-width: 66ch;
+  }
+  figure.shot figcaption b { color: var(--ink-soft); font-weight: 600; }
+
+  .panel figure.shot { margin-top: 14px; }
+
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; gap: 30px; }
+    nav.contents {
+      position: static;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 18px 26px;
+      background: var(--surface);
+      border: 1px solid var(--rule);
+      padding: 18px 20px;
+    }
+    .progress { grid-column: 1 / -1; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">Websoft Service ERP · Test walkthrough</p>
+    <h1>Websoft ERP Walkthrough</h1>
+    <p class="standfirst">
+      A guided path through the whole system in the order the documents
+      actually flow — a customer becomes a contract, a contract becomes
+      work, work becomes stock movements and an invoice, and the invoice
+      lands in the General Ledger. Follow it top to bottom on the test
+      server and you will have exercised every built module.
+    </p>
+    <dl class="facts">
+      <div class="fact"><dt>Sign in</dt><dd class="mono">dennis@websoft.example / demo1234</dd></div>
+      <div class="fact"><dt>Currency</dt><dd>SGD · GST 9%</dd></div>
+      <div class="fact"><dt>Stages</dt><dd>5 · 46 steps</dd></div>
+      <div class="fact"><dt>Backend</dt><dd>PHP&nbsp;8.4 / Laravel&nbsp;11</dd></div>
+    </dl>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="layout">
+
+    <nav class="contents" aria-label="Walkthrough contents">
+      <div class="contents-group">
+        <div class="contents-head">Stages</div>
+        <a href="#stage-0">0 · Signing in</a>
+        <a href="#stage-1">1 · Operations</a>
+        <a href="#stage-2">2 · Stock Inventory</a>
+        <a href="#stage-3">3 · Accounts</a>
+        <a href="#stage-4">4 · Maintenance</a>
+      </div>
+      <div class="contents-group">
+        <div class="contents-head">Reference</div>
+        <a href="#posting">GL posting pairs</a>
+        <a href="#numbering">Document numbers</a>
+      </div>
+      <div class="progress">
+        <strong id="done-count">0</strong> of <span id="total-count">0</span> steps ticked
+      </div>
+    </nav>
+
+    <main>
+
+      <div class="panel warn">
+        <h3>Read this first</h3>
+        <p>
+          The walkthrough runs Operations → Stock → Accounts → Maintenance,
+          which is how the work flows day to day. On a <em>fresh</em>
+          install the dependency runs the other way: a tax code has to
+          exist before an invoice can charge GST, and a warehouse before
+          stock can be received. The demo seed already creates all of it,
+          so you can start at stage&nbsp;1 — but if you wipe the database
+          and start clean, do <a href="#stage-4">stage&nbsp;4</a> first.
+        </p>
+        <p>
+          Two gates sit in front of everything. <b>Module Control</b>
+          (Company Setup) switches whole modules on and off per company,
+          and <b>Group Authority</b> grants VIEW / EDIT / FULL within each
+          one. If a menu entry is missing, it is one of those two — not a
+          bug. The owner account bypasses Module Control by design, so
+          test permission behaviour with a non-owner.
+        </p>
+        <div class="credentials">
+          <span>dennis@websoft.example</span><span>demo1234</span>
+        </div>
+      </div>
+
+      <!-- ============ STAGE 0 ============ -->
+      <section class="stage" id="stage-0">
+        <div class="stage-head">
+          <span class="stage-num">Stage 0</span>
+          <h2>Signing in</h2>
+          <span class="stage-menu">Login · Main menu</span>
+        </div>
+        <p class="stage-intro">
+          Three minutes to get oriented. Every screen below is the real
+          application running against the demo seed — what you see on your
+          test server should match, allowing for your own data.
+        </p>
+
+        <ol class="steps">
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s0-1" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Sign in<span class="where">/</span></div>
+              <p>
+                The login page carries the platform announcements and the
+                promo banner — both come from Maintenance ›
+                Announcements &amp; Ad Banner, and both render before any
+                company is chosen.
+              </p>
+              <figure class="shot">
+                <img src="shots/login.png" alt="The Websoft Service ERP login page: email and password fields, with platform announcements listed beside them." width="1080" height="660">
+                <figcaption><b>Login.</b> Email and password, with a one-time code option, and the platform announcements beside them. Five wrong passwords locks the account for 15&nbsp;minutes — the same policy applies to customer portal logins. <b>Note:</b> the form prefills <span class="mono">dennis@websoft.local</span>, which the demo seed does not create — type the address below instead.</figcaption>
+              </figure>
+              <div class="credentials">
+                <span>dennis@websoft.example</span><span>demo1234</span>
+              </div>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s0-2" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Open the main menu<span class="where">☰ Menu, top left</span></div>
+              <p>
+                The sidebar is hidden by default and peeks out on demand, so
+                a wide screen gives the working area to the data. Four
+                sections, in the order the business uses them.
+              </p>
+              <figure class="shot">
+                <img src="shots/menu.png" alt="The main menu expanded, showing Company Dashboard, Sales Dashboard, My Ops Dashboard, then the Operations and Accounts sections." width="1560" height="940">
+                <figcaption><b>The menu.</b> Three dashboards at the top, then <b>Operations</b>, <b>Accounts</b>, <b>Stock Inventory</b> and <b>Maintenance</b>. Sections collapse, and entries can be dragged to reorder. A missing entry means Module Control or Group Authority, not a bug.</figcaption>
+              </figure>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s0-3" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Read the Company Dashboard<span class="where">Company Dashboard</span></div>
+              <p>
+                The landing page. Every tile is a real query — none is a
+                placeholder — and each aggregates through the service that
+                owns the figure, so a tile can never disagree with the screen
+                behind it.
+              </p>
+              <figure class="shot">
+                <img src="shots/dashboard.png" alt="Company Dashboard showing AR outstanding, AP outstanding, net receivable position, invoiced to date, GL trial balance status, and service operations tiles." width="1560" height="940">
+                <figcaption><b>Company Dashboard.</b> Financial summary across the top — including whether the <b>GL trial balance balances</b> — then service operations: active contracts, contracts expiring within the SRV-014 window, open job orders, excess awaiting review, and SRV-015 late service records.</figcaption>
+              </figure>
+              <p class="expect">
+                <b>Expect:</b> this page is deliberately ungated by Module
+                Control — it is the one screen everybody lands on.
+              </p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <!-- ============ STAGE 1 ============ -->
+      <section class="stage" id="stage-1">
+        <div class="stage-head">
+          <span class="stage-num">Stage 1</span>
+          <h2>Operations</h2>
+          <span class="stage-menu">Operations menu</span>
+        </div>
+        <p class="stage-intro">
+          The service business end to end: who the customer is, what they
+          bought, the work done against it, and what happens when the work
+          exceeds what they bought. Every step here feeds the invoice you
+          will raise in stage&nbsp;3.
+        </p>
+
+        <ol class="steps">
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s1-1" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Create a Company / Individual<span class="where">Operations › Company / Individual</span></div>
+              <p>
+                The customer and supplier master, one record for both roles.
+                Set <b>Is customer</b>, and set <b>Is supplier</b> too if you
+                want to raise purchase orders against them later. Give it
+                payment terms — that is what sets an invoice's due date.
+              </p>
+              <figure class="shot">
+                <img src="shots/company-individual.png" alt="Company / Individual list showing Acme Manufacturing Pte Ltd and Northlight Hardware Supply with type, contact and status columns." loading="lazy" width="1560" height="940">
+                <figcaption><b>Company / Individual.</b> One master for customers and suppliers — the flags decide which role a record plays. Free-text search runs across name, email, phone, UEN, legacy code and tags.</figcaption>
+              </figure>
+              <p class="expect">
+                <b>Expect:</b> tabs for Contacts, Branches and Relationships,
+                and a PDPA consent control. Consent gates the Customer Portal
+                login, so record it if you plan to test the portal.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s1-2" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Raise a Service Contract<span class="where">Operations › Service Contracts</span></div>
+              <p>
+                Pick the customer, a contract kind, contracted hours and a
+                value. Contract kinds behave differently: Service Support
+                carries hours, Annual carries a value, Ad Hoc carries neither
+                upfront.
+              </p>
+              <figure class="shot">
+                <img src="shots/contracts.png" alt="Service Contracts list showing a contract with contracted, consumed and remaining hours, value and status." loading="lazy" width="1560" height="940">
+                <figcaption><b>Service Contracts.</b> Contracted, consumed and remaining hours are shown per contract. The remaining-hours and expiry-date filters on this list drive the renewal conversation.</figcaption>
+              </figure>
+              <div class="ruleref"><span class="tag">SRV-002 / 012</span><span>Minimum 10 contracted hours, and there is no override — try 5 and it is refused.</span></div>
+              <div class="ruleref"><span class="tag">SRV-001</span><span>Standard duration is 12 months.</span></div>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s1-3" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Activate the contract<span class="where">Contract detail</span></div>
+              <p>
+                Activation is the accounting event, not creation.
+              </p>
+              <div class="ruleref"><span class="tag">BILL-001</span><span>Activating an Annual contract issues its full 12-month invoice immediately, and that invoice posts to the General Ledger in the same step. Ad Hoc issues nothing — there is no upfront value to bill.</span></div>
+              <p class="expect">
+                <b>Expect:</b> a new invoice under Accounts › Sales Invoice,
+                already showing <span class="mono">posted</span> with a GL
+                voucher number.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s1-4" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Add hour-sharing customers<span class="where">Contract detail</span></div>
+              <p>
+                A contract keeps its own list of other companies allowed to
+                draw on its hours — a parent company buying hours its
+                subsidiaries consume. Opening a Job Order against the
+                contract for a customer not on that list is refused.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s1-5" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Log an Incident<span class="where">Operations › Incidents</span></div>
+              <p>
+                The Helpdesk front door — an incoming call or email before
+                anyone has decided what it is. Enter a customer email and it
+                matches the Company / Individual automatically.
+              </p>
+              <p class="expect">
+                <b>Expect:</b> Convert buttons for Job Order, Sales Quotation
+                and Software Task. Each creates the real record with a
+                back-reference, not just a routing flag.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s1-6" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Convert the Incident to a Job Order<span class="where">Incident detail</span></div>
+              <p>
+                Conversion needs a valid contract. Pick products on the Job
+                Order and each one imports its Job Implementation Template —
+                an ordered task checklist, deduped by name across products.
+              </p>
+              <figure class="shot">
+                <img src="shots/job-orders.png" alt="Job Orders list showing an open firewall replacement job and a closed quarterly health check, with assignee, priority and due date." loading="lazy" width="1560" height="940">
+                <figcaption><b>Job Orders.</b> Numbered <span class="mono">JO-2026-nnnn</span>, against a customer and a contract. Budget overrun is computed live from approved service records, not stored.</figcaption>
+              </figure>
+              <p class="expect">
+                <b>Expect:</b> the Job Order numbered
+                <span class="mono">JO-2026-nnnn</span>, with imported tasks.
+                Ticking a task off is restricted to Sales Manager or Owner.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s1-7" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Submit a Service Record<span class="where">Operations › Service Records</span></div>
+              <p>
+                The engineer's record of work done. Enter raw minutes, mark
+                whether the visit completed the job, and whether it was after
+                hours.
+              </p>
+              <figure class="shot">
+                <img src="shots/service-records.png" alt="Service Records list showing three submitted records with work date, employee, raw and rounded minutes, status and outcome." loading="lazy" width="1560" height="940">
+                <figcaption><b>Service Records.</b> Raw minutes as keyed, rounded minutes as deducted — the difference is SRV-007 rounding up to the next 15 minutes.</figcaption>
+              </figure>
+              <div class="ruleref"><span class="tag">SRV-007</span><span>Hours round <em>up</em> to the nearest 15 minutes before deduction — key 23 minutes and 30 is deducted.</span></div>
+              <div class="ruleref"><span class="tag">SRV-015</span><span>Records are due within 3 business days. A later one is flagged late, and stays visible as late.</span></div>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s1-8" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Approve it<span class="where">Operations › Service Record Approval</span></div>
+              <p>
+                The approver keys the deduction themselves; the form offers a
+                suggested multiplier (after-hours work costs the contract
+                more) but never enforces it. Approving splits the time between
+                what the contract absorbs and what becomes excess.
+              </p>
+              <div class="ruleref"><span class="tag">SRV-003</span><span>No grace period. Once contracted hours are gone, further time is excess — it does not quietly overdraw.</span></div>
+              <p class="expect">
+                <b>Expect:</b> if the record completed the job, the Job Order
+                auto-closes. Contract remaining hours drop on the contract
+                detail page.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s1-9" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Decide an Excess Usage record<span class="where">Operations › Excess Review</span></div>
+              <p>
+                Anything beyond the contract lands here undecided. Choose a
+                treatment — Billable, Approved non-billable, Warranty /
+                goodwill, Internal write-off, or Other — always with a reason.
+              </p>
+              <div class="ruleref"><span class="tag">SRV-008</span><span>A <b>Billable</b> decision issues its own invoice at the contract's blended rate (contract value ÷ contracted hours), and posts to the GL.</span></div>
+              <p class="expect">
+                <b>Expect:</b> reviewers are limited to Service Lead, Sales
+                Manager and Owner. The reason is recorded to Event Logs.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s1-10" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Check the operational reports<span class="where">Operations › Operations Reports</span></div>
+              <p>
+                Four reports — Contracts, Job Orders, Service Records, and
+                Company / Individual Product Usage — each with CSV and Excel
+                export. Also here: the Contract Expiry and Renewal Due
+                listings.
+              </p>
+              <div class="ruleref"><span class="tag">SRV-014</span><span>The Renewal Due listing reuses the pre-expiry window exactly, so it can never disagree with the flag on the contract itself.</span></div>
+              <p class="expect">
+                <b>Expect:</b> an export returns <em>what is on screen</em> —
+                apply a filter, export, and the excluded rows are absent from
+                the file. Every export is written to Event Logs with its row
+                count.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s1-11" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Try the Mobile Web App<span class="where"><span class="mono">/mobile</span></span></div>
+              <p>
+                The engineer's view: their own Job Orders only, time in / time
+                out instead of keyed minutes, work photos and videos, and
+                customer sign-off with a watermarked chop photo.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s1-12" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Try the Customer Portal<span class="where"><span class="mono">/portal</span></span></div>
+              <p>
+                Enable a contact's portal login from the Company / Individual
+                page (PDPA consent must be recorded first). The customer sees
+                only their own contracts, hour balance, job orders, service
+                records, invoices and payments, and can raise an Incident that
+                lands in the staff queue.
+              </p>
+              <p class="expect">
+                <b>Expect:</b> a separate auth realm. A staff token is refused
+                by every portal endpoint and vice versa; another customer's
+                document id returns <span class="mono">404</span>, never
+                <span class="mono">403</span>.
+              </p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <!-- ============ STAGE 2 ============ -->
+      <section class="stage" id="stage-2">
+        <div class="stage-head">
+          <span class="stage-num">Stage 2</span>
+          <h2>Stock Inventory</h2>
+          <span class="stage-menu">Stock Inventory menu</span>
+        </div>
+        <p class="stage-intro">
+          Six movement types, one valuation rule. Everything here is
+          quantity <em>and</em> cost, and the two are never allowed to
+          disagree — which is what the last two steps are for.
+        </p>
+
+        <ol class="steps">
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s2-1" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Set up the stock masters<span class="where">Maintenance › Warehouses, Categories, Groups, Brands / Models, Usages</span></div>
+              <p>
+                Five small tables behind the stock item. At minimum you need
+                one warehouse before anything can be received.
+              </p>
+              <p class="expect">
+                <b>Expect:</b> Activate / Deactivate works on Warehouses and
+                Stock Items — it never did against the old Python backend.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s2-2" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Create a Stock Item<span class="where">Stock Inventory › Stock Master</span></div>
+              <p>
+                Code, name, unit of measure, reorder level, and the extended
+                fields — barcode, part number, invoice description, memo,
+                dimensions. Link it to a catalogue Product so a Sales Invoice
+                can find it. Picture and document attachments live here too.
+              </p>
+              <figure class="shot">
+                <img src="shots/stock-master.png" alt="Stock Master list showing two stock items with code, name, unit of measure, reorder level and status." loading="lazy" width="1560" height="940">
+                <figcaption><b>Stock Master.</b> The item list. Open an item for its extended fields, per-warehouse levels, and the Avg Cost and Cost Value that every movement maintains.</figcaption>
+              </figure>
+              <p class="expect">
+                <b>Expect:</b> <b>Avg Cost</b> and <b>Cost Value</b> on the
+                item, both zero until the first receipt. Stock levels are
+                shown per warehouse, read-only — levels move only through
+                documents.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s2-3" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Receive stock — GRN<span class="where">Stock Inventory › Goods Receive</span></div>
+              <p>
+                Receive 10 units at $10.00. Then receive 10 more at $20.00.
+              </p>
+              <figure class="shot">
+                <img src="shots/grn.png" alt="Goods Receive Note screen, ready to record a receipt against a warehouse." loading="lazy" width="1560" height="940">
+                <figcaption><b>Goods Receive.</b> The only document that re-weights the average. Receive 10 at $10.00 then 10 at $20.00 and the item settles at $15.0000.</figcaption>
+              </figure>
+              <div class="ruleref"><span class="tag">INV-002</span><span>Weighted average: after the second receipt the item's average is <b>$15.0000</b>, not $20. Only a receipt re-weights it.</span></div>
+              <p class="expect">
+                <b>Expect:</b> Avg Cost and Cost Value both update on the item,
+                and each movement records the quantity, average and cost value
+                <em>after</em> it — so any recalculation can be tallied back.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s2-4" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Transfer between warehouses — GTN<span class="where">Stock Inventory › Goods Transfer</span></div>
+              <p>
+                Move 5 units to a second warehouse.
+              </p>
+              <div class="ruleref"><span class="tag">INV-002</span><span>A transfer moves quantity only. It carries the source warehouse's cost across rather than revaluing — the item's average is unchanged afterwards.</span></div>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s2-5" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Return to supplier — GRTN<span class="where">Stock Inventory › Goods Return</span></div>
+              <p>Stock leaving the building back to where it came from.</p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s2-6" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Raise a Stock Adjustment and leave it in draft<span class="where">Stock Inventory › Stock Adjustment</span></div>
+              <p>
+                For discrepancy, damage or loss. Raise one, then check the
+                stock level before approving it.
+              </p>
+              <div class="ruleref"><span class="tag">INV-001</span><span>An adjustment moves nothing until it is approved. A draft or rejected one provably never touches a stock level.</span></div>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s2-7" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Sell stock on a Sales Invoice<span class="where">Accounts › Sales Invoice › Raise Sales Invoice</span></div>
+              <p>
+                This is the join between stock and accounting. Pick a
+                catalogue product and the linked stock item is selected for
+                you; choose a warehouse and the form shows on-hand quantity as
+                you type.
+              </p>
+              <figure class="shot">
+                <img src="shots/raise-invoice.png" alt="Raise Sales Invoice form with a product selected, its linked stock item auto-filled, a warehouse chosen, On hand showing 18, quantity 3 and a net of $3,750.00." loading="lazy" width="1560" height="940">
+                <figcaption><b>Raise Sales Invoice.</b> Choosing the product auto-selects its linked stock item; choosing the warehouse fills in <b>On hand</b> — here 18 — so the refusal is visible before you submit, not only afterwards as a 422.</figcaption>
+              </figure>
+              <p class="expect">
+                <b>Expect:</b> issuing deducts the stock at the item's weighted
+                average, and the line stores that average <em>as at issue</em>
+                — so a later receipt re-weighting the item cannot move this
+                invoice's gross profit.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s2-8" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Now try to over-sell it<span class="where">Raise Sales Invoice</span></div>
+              <p>
+                Ask for more units than the warehouse holds, and submit.
+              </p>
+              <div class="ruleref"><span class="tag">INV-002</span><span>Refused outright — <span class="mono">Insufficient stock: have 6, need 99</span>. The <em>whole</em> invoice is refused, never partly issued, and on-hand quantity can never go negative.</span></div>
+              <p class="expect">
+                <b>Expect:</b> add a second line that <em>can</em> be filled
+                plus one that cannot. Neither deducts — the refusal unwinds
+                the earlier line with it.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s2-9" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Read the stock reports<span class="where">Stock Inventory › Stock Reports</span></div>
+              <p>
+                Valuation (quantity × weighted average), reorder alert, and the
+                movements journal. These sit on their own module key, so a
+                manager can be given the reports without any right to move
+                stock.
+              </p>
+              <p class="expect">
+                <b>Expect:</b> the movements journal in true chronological
+                order, including same-second movements — a transfer's receipt
+                can never appear above the receipt that funded it.
+              </p>
+            </div>
+          </li>
+        </ol>
+
+        <div class="tablewrap">
+          <table>
+            <caption>The six stock movement types</caption>
+            <thead>
+              <tr><th>Movement</th><th>Raised by</th><th>Quantity</th><th>Effect on average cost</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Receive</td><td>Goods Receive Note</td><td>+</td><td>Re-weights the average</td></tr>
+              <tr><td>Transfer out / in</td><td>Goods Transfer Note</td><td>− then +</td><td>None — cost carries across</td></tr>
+              <tr><td>Return out</td><td>Goods Return Note</td><td>−</td><td>None</td></tr>
+              <tr><td>Adjustment</td><td>Stock Adjustment <em>(once approved)</em></td><td>±</td><td>None</td></tr>
+              <tr><td>Issue</td><td>Goods Issue Note · Sales Invoice line</td><td>−</td><td>None — leaves at the average</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============ STAGE 3 ============ -->
+      <section class="stage" id="stage-3">
+        <div class="stage-head">
+          <span class="stage-num">Stage 3</span>
+          <h2>Accounts</h2>
+          <span class="stage-menu">Accounts menu</span>
+        </div>
+        <p class="stage-intro">
+          Sales one way, purchases the other, both landing in the same
+          double-entry ledger. Nothing here is ever deleted — a mistake is
+          corrected by a reversal that leaves both the error and the fix on
+          record.
+        </p>
+
+        <ol class="steps">
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s3-1" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Quote, then convert<span class="where">Accounts › Sales Quotation</span></div>
+              <p>
+                Build a quotation with lines, send it, and accept it.
+                Acceptance converts it to contracts automatically — lines
+                measured in <em>Hours</em> sum into one Service Support
+                contract, everything else into one Annual contract.
+              </p>
+              <p class="expect">
+                <b>Expect:</b> a quotation mixing both produces two contracts,
+                never one blended one.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s3-2" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Review the Sales Invoice list<span class="where">Accounts › Sales Invoice</span></div>
+              <p>
+                By now it holds the contract-activation invoice, the
+                excess-usage invoice, and the stock invoice you raised in
+                stage 2. Each shows its GST, its outstanding balance and its
+                GL status.
+              </p>
+              <figure class="shot">
+                <img src="shots/invoices.png" alt="Invoices list showing an issued sales invoice with its lines, net, GST, total, outstanding balance and posted GL status." loading="lazy" width="1560" height="940">
+                <figcaption><b>Sales Invoice.</b> Lines appear under the description on a manually raised invoice; the auto-issued ones show none. The GL badge and voucher number sit on every row.</figcaption>
+              </figure>
+              <div class="ruleref"><span class="tag">BILL-002</span><span>No approval before issue — invoices are issued directly, which is why there is no draft state.</span></div>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s3-3" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Print, Word and Email an invoice<span class="where">Invoice row actions</span></div>
+              <p>
+                The Word button serves a <span class="mono">.docx</span>; the
+                Email button converts that <em>same</em> file to PDF and
+                attaches it, so the two can never drift apart.
+              </p>
+              <p class="expect">
+                <b>Expect:</b> Email needs SMTP configured in Company Setup and
+                <span class="mono">libreoffice-writer</span> installed on the
+                server. Without LibreOffice the Word download still works while
+                Email fails — a one-sided failure worth checking deliberately.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s3-4" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Record a Receipt Voucher<span class="where">Accounts › Receipt Voucher</span></div>
+              <p>
+                Money in. Allocate it against one or more invoices by hand —
+                allocation is deliberate, never automatic. Then use the
+                explicit <b>Bank</b> step to mark it banked.
+              </p>
+              <p class="expect">
+                <b>Expect:</b> the invoice moves to partially paid or paid, and
+                the AR aging figure drops accordingly.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s3-5" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Write off an invoice<span class="where">Invoice row actions</span></div>
+              <p>Always with a reason.</p>
+              <div class="ruleref"><span class="tag">AR-002</span><span>The owner always may. Anyone else only below the threshold set in Company Setup — and while that threshold is unset, nobody but the owner can.</span></div>
+              <div class="ruleref"><span class="tag">AR-003</span><span>Flagging an invoice disputed records the dispute but <em>never</em> holds collections — it keeps aging normally.</span></div>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s3-6" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Raise a Purchase Order<span class="where">Accounts › Purchase Order</span></div>
+              <p>
+                Against a Company / Individual flagged as a supplier. Approval
+                follows the same owner / threshold pattern as write-offs.
+              </p>
+              <div class="ruleref"><span class="tag">PUR-001</span><span>PO approval: owner always; others only below the configured threshold.</span></div>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s3-7" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Match a supplier bill against it<span class="where">Accounts › Accounts Payable</span></div>
+              <p>
+                Enter the bill, then match. Try it twice: once with amounts
+                that agree with the PO, once with amounts that do not.
+              </p>
+              <div class="ruleref"><span class="tag">PUR-002 / 003</span><span>2-way matching against the purchase order only. A match auto-approves for payment; a mismatch raises an EXCEPTION spelling out exactly what differs.</span></div>
+              <p class="expect">
+                <b>Expect:</b> auto-approval posts the bill to the GL in the
+                same step. "Confirm and import to AP" brings a PO across
+                without re-keying it.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s3-8" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Pay it — Payment Voucher<span class="where">Accounts › Payment Voucher</span></div>
+              <p>
+                Money out, the mirror of the Receipt Voucher: allocate against
+                bills, then Bank. Both directions also support Unbank and
+                UNGL.
+              </p>
+              <div class="ruleref"><span class="tag">ACC-004</span><span>UNGL is a <em>reversal</em>, never a delete — it writes a mirror entry and marks the original reversed. The mistake and the correction both stay on record.</span></div>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s3-9" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Raise a manual Journal Voucher<span class="where">Accounts › Journal Voucher</span></div>
+              <p>
+                For an adjustment nothing else covers. Enter lines, check it
+                balances, then post.
+              </p>
+              <p class="expect">
+                <b>Expect:</b> an unbalanced voucher is refused whole, writing
+                nothing. Raising a draft needs EDIT; committing it to the
+                ledger needs FULL. A reversal needs a reason.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s3-10" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Follow it into the ledger<span class="where">Accounts › GL Transactions, Chart of Accounts</span></div>
+              <p>
+                Open the per-account transaction ledger with its running
+                balance. Trial balance rows drill through to the transactions
+                behind them.
+              </p>
+              <figure class="shot">
+                <img src="shots/chart-of-accounts.png" alt="Chart of Accounts listing asset, liability, equity, revenue and expense accounts with codes and names." loading="lazy" width="1560" height="940">
+                <figcaption><b>Chart of Accounts.</b> Seeded as a Singapore SME starting point and yours to adjust — this is where you remap where revenue lands.</figcaption>
+              </figure>
+              <p class="expect">
+                <b>Expect:</b> the trial balance balances. The Company
+                Dashboard reports whether it does, as a tile.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s3-11" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Close an accounting period<span class="where">Accounts › GST and Account Period</span></div>
+              <p>
+                Create a period, then use the lock matrix — every document type
+                against every operation, with Close All / Open All and
+                single-cell toggling.
+              </p>
+              <p class="expect">
+                <b>Expect:</b> with a period closed, posting into it is
+                refused. Reopening is owner-only.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s3-12" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Run Year-End Closing<span class="where">Accounts › Year-End Closing</span></div>
+              <p>
+                Available only once every period in the fiscal year is closed.
+                It posts one balanced journal entry zeroing every revenue and
+                expense account's movement into a chosen equity account.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s3-13" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Work the Accounting Reports<span class="where">Accounts › Accounting Reports</span></div>
+              <p>
+                AR aging, AP aging, trial balance, GST return, Sales GP, and
+                Commission. All with CSV and Excel export.
+              </p>
+              <figure class="shot">
+                <img src="shots/accounting-reports.png" alt="Accounting Reports screen with the report selector and a trial balance showing debit, credit and balance columns." loading="lazy" width="1560" height="940">
+                <figcaption><b>Accounting Reports.</b> AR aging, AP aging, trial balance, GST return, Sales GP and Commission, each with CSV and Excel export.</figcaption>
+              </figure>
+              <p class="expect">
+                <b>Expect:</b> the aging figures here are the <em>same</em>
+                figures as the AR and AP screens — they call the same code, so
+                they cannot drift. On Sales GP, your stock invoice shows a
+                measured margin; an invoice with no known cost shows no cost
+                rather than a fictitious 100%.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s3-14" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Set a commission rate, then run payouts<span class="where">Accounting Reports › Commission, then Commission Payouts</span></div>
+              <p>
+                The rate starts at <b>zero</b> and is never invented — set it
+                first, or the report correctly returns nothing. Then generate a
+                month's payouts, submit, approve and pay.
+              </p>
+              <p class="expect">
+                <b>Expect:</b> generating twice for the same month is refused —
+                cancel the batch first. A paid payout can never be cancelled.
+                Writing off an invoice raises an automatic negative clawback.
+                The batch total matches the Commission report for the same
+                month exactly.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s3-15" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Reconcile the Bank Book<span class="where">Accounts › Bank</span></div>
+              <p>
+                Bank transactions, voiding with a reason, per-line reconcile
+                and full reconciliation sessions.
+              </p>
+            </div>
+          </li>
+        </ol>
+
+        <div class="tablewrap" id="posting">
+          <table>
+            <caption>What each document posts to the General Ledger</caption>
+            <thead>
+              <tr><th>Document</th><th>Posted when</th><th>Debit</th><th>Credit</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Sales Invoice</td><td>On issue</td>
+                <td class="dr">1100 Accounts receivable <em>(total)</em></td>
+                <td class="cr">Revenue <em>(net)</em> · 2100 GST output</td>
+              </tr>
+              <tr>
+                <td>Supplier Bill</td><td>On reaching approved</td>
+                <td class="dr">Expense <em>(net)</em> · 2110 GST input</td>
+                <td class="cr">2000 Accounts payable <em>(total)</em></td>
+              </tr>
+              <tr>
+                <td>Receipt Voucher</td><td>On save</td>
+                <td class="dr">Bank GL account</td>
+                <td class="cr">1100 Accounts receivable</td>
+              </tr>
+              <tr>
+                <td>Payment Voucher</td><td>On save</td>
+                <td class="dr">2000 Accounts payable</td>
+                <td class="cr">Bank GL account</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="expect" style="margin-top:14px;max-width:66ch">
+          Revenue lands by invoice type: <span class="mono">4000</span> service
+          contract, <span class="mono">4010</span> excess usage,
+          <span class="mono">4030</span> hardware sales for a manually raised
+          Sales Invoice. Remap them in the Chart of Accounts if Webmaster wants
+          them elsewhere.
+        </p>
+      </section>
+
+      <!-- ============ STAGE 4 ============ -->
+      <section class="stage" id="stage-4">
+        <div class="stage-head">
+          <span class="stage-num">Stage 4</span>
+          <h2>Maintenance tables</h2>
+          <span class="stage-menu">Maintenance menu</span>
+        </div>
+        <p class="stage-intro">
+          Seventeen screens that govern everything above. On a fresh
+          database this is where you start — a tax code has to exist before
+          an invoice can charge GST, and a warehouse before stock can be
+          received.
+        </p>
+
+        <ol class="steps">
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s4-1" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Company Setup<span class="where">Maintenance › Company Setup</span></div>
+              <p>
+                Company details and logo, the write-off and PO approval
+                thresholds, <b>Module Control</b>, the <b>financial year start
+                month</b> (Webmaster runs 1 Jul – 30 Jun, labelled by the year
+                it ends in), and the company mailbox.
+              </p>
+              <p class="expect">
+                <b>Expect:</b> two separate mailboxes that never fall back on
+                each other — the <em>system</em> mailbox in
+                <span class="mono">.env</span> sends login OTP and password
+                resets (it runs before login, so no company is known yet),
+                while this <em>company</em> mailbox sends customer-facing
+                documents from the right domain.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s4-2" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Staff Master<span class="where">Maintenance › Staff Master</span></div>
+              <p>
+                Everyone who can sign in. Create a user with a real role —
+                Owner, Service Lead, Sales Manager, Support Engineer or
+                Finance — and a starting password. Roles are not the same
+                thing as permissions: the role decides who may review a
+                service record or an excess-usage decision, while what a
+                person can <em>open</em> comes from their group.
+              </p>
+              <figure class="shot">
+                <img src="shots/staff.png" alt="Staff Master listing Dennis as owner plus service lead, sales manager and support engineer users, each with email, role, group and status." loading="lazy" width="1560" height="940">
+                <figcaption><b>Staff Master.</b> Each user carries a role, a group, and an active flag. Deactivating writes an audit entry; a password reset forces a change at next sign-in.</figcaption>
+              </figure>
+              <p class="expect">
+                <b>Expect:</b> creating a user needs FULL on Core /
+                Administration. Assigning a group belonging to another company
+                is refused.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s4-3" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Group Authority<span class="where">Maintenance › Group Authority</span></div>
+              <p>
+                Groups hold the permissions. Create one, grant it VIEW on a
+                single module, put your new user in it, and sign in as them.
+              </p>
+              <figure class="shot">
+                <img src="shots/groups.png" alt="Group Authority screen showing the Owner / Admin group and a per-module access grid with view, edit and full levels." loading="lazy" width="1560" height="940">
+                <figcaption><b>Group Authority.</b> One row per module, one of VIEW / EDIT / FULL. A group with members cannot be deleted — the members have to be moved first.</figcaption>
+              </figure>
+              <p class="expect">
+                <b>Expect:</b> the menu shrinks to what they hold, and a direct
+                URL to a module they lack returns 403. This is the only
+                reliable way to test permissions — the owner deliberately
+                bypasses Module Control so they can never be locked out of
+                their own system.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s4-4" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Tax Types<span class="where">Maintenance › Tax Types</span></div>
+              <p>
+                The GST codes. <span class="mono">SR</span> standard-rated at
+                9% is what every invoice and quotation applies. GST is charged
+                once on the invoice total, not per line.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s4-5" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Document Control<span class="where">Maintenance › Document Control</span></div>
+              <p>
+                The running-number counters and each document kind's number
+                format — prefix, digits, whether the year is included.
+              </p>
+              <p class="expect">
+                <b>Expect:</b> both are FULL-only and both require a reason
+                recorded to Event Logs. A format change only ever affects
+                numbers issued from that point on — never renumbers history.
+              </p>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s4-6" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Walk the remaining tables<span class="where">Maintenance menu</span></div>
+              <p>Each governs a dropdown or a rule used elsewhere:</p>
+              <dl class="grid2">
+                <div class="maint"><dt>Product Catalog</dt><dd>Products and services, their prices, and the Job Implementation Template each one carries.</dd></div>
+                <div class="maint"><dt>Chart of Accounts</dt><dd>The GL accounts every posting lands in. Seeded as a Singapore SME starting point, yours to adjust.</dd></div>
+                <div class="maint"><dt>GL Types</dt><dd>Optional reporting sub-classification on an account.</dd></div>
+                <div class="maint"><dt>Reference Monitor</dt><dd>Reference codes, pre-fillable from a product's default onto a quotation line.</dd></div>
+                <div class="maint"><dt>Currency Rate Table</dt><dd>Rates for reporting. SGD is the base throughout.</dd></div>
+                <div class="maint"><dt>Setup Lists</dt><dd>Nationality, Country, State, Area Code, Currency, Industry — global, not per company, since a country's name does not differ by company.</dd></div>
+                <div class="maint"><dt>Approval Authority</dt><dd>eApproval rules and the people who hold them. Any rejection rejects the whole request immediately.</dd></div>
+                <div class="maint"><dt>Announcements &amp; Ad Banner</dt><dd>The notice on the Login page and on every page after sign-in.</dd></div>
+                <div class="maint"><dt>Warehouses</dt><dd>Where stock is held. Needed before any receipt.</dd></div>
+                <div class="maint"><dt>Stock Categories, Groups, Brands / Models, Usages</dt><dd>The four classification tables behind a stock item.</dd></div>
+                <div class="maint"><dt>Event Logs</dt><dd>The read-only face of the audit trail. Exporting it is itself audited.</dd></div>
+              </dl>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s4-7" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Finish at the Event Logs<span class="where">Maintenance › Event Logs</span></div>
+              <p>
+                Everything you did in stages 1–3 should be here: who, when,
+                what changed, and the reason where one was required. Filter by
+                entity type to follow one document's whole life.
+              </p>
+              <figure class="shot">
+                <img src="shots/event-logs.png" alt="Event Logs listing audit entries with timestamp, actor, entity type, action and details." loading="lazy" width="1560" height="940">
+                <figcaption><b>Event Logs.</b> The read-only face of the audit trail — who, when, what changed, and the reason where one was required. Exporting this screen is itself audited.</figcaption>
+              </figure>
+              <p class="expect">
+                <b>Expect:</b> this is the single best check that the
+                walkthrough worked. If an action you took is missing from the
+                log, that is worth reporting.
+              </p>
+            </div>
+          </li>
+        </ol>
+
+        <div class="tablewrap" id="numbering">
+          <table>
+            <caption>Document number prefixes</caption>
+            <thead>
+              <tr><th>Prefix</th><th>Document</th><th>Prefix</th><th>Document</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="mono">QUO</td><td>Sales Quotation</td><td class="mono">PO</td><td>Purchase Order</td></tr>
+              <tr><td class="mono">CON</td><td>Service Contract</td><td class="mono">BILL</td><td>Supplier Bill</td></tr>
+              <tr><td class="mono">JO</td><td>Job Order</td><td class="mono">PV</td><td>Payment Voucher</td></tr>
+              <tr><td class="mono">SR</td><td>Service Record</td><td class="mono">RV</td><td>Receipt Voucher</td></tr>
+              <tr><td class="mono">INV</td><td>Sales Invoice</td><td class="mono">JV</td><td>Journal Voucher</td></tr>
+              <tr><td class="mono">INC</td><td>Incident</td><td class="mono">BT</td><td>Bank Transaction</td></tr>
+              <tr><td class="mono">CP</td><td>Commission Payout</td><td></td><td></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer class="tail">
+        <p>
+          Every figure and rule in this walkthrough comes from the running
+          system, not from a specification. Where a rule code is cited
+          (<span class="mono">SRV-</span>, <span class="mono">BILL-</span>,
+          <span class="mono">AR-</span>, <span class="mono">PUR-</span>,
+          <span class="mono">INV-</span>), it is a confirmed business rule
+          pinned by an automated test — see
+          <span class="mono">docs/business-requirements.md</span>.
+        </p>
+        <p>
+          Anything that behaves differently from what is described here is
+          worth reporting, including the reverse: a rule that does
+          <em>not</em> refuse what it should.
+        </p>
+      </footer>
+
+    </main>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('.step-check'));
+    var doneEl = document.getElementById('done-count');
+    var totalEl = document.getElementById('total-count');
+    var KEY = 'websoft-walkthrough-progress';
+
+    totalEl.textContent = String(boxes.length);
+
+    // Per-viewer convenience only: your own progress through your own
+    // test run. Storage can be unavailable (private window, blocked site
+    // data), so every access is guarded and the page works without it.
+    function load() {
+      try {
+        return JSON.parse(localStorage.getItem(KEY) || '{}') || {};
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function save(state) {
+      try {
+        localStorage.setItem(KEY, JSON.stringify(state));
+      } catch (e) {
+        /* nothing to do — progress just won't persist */
+      }
+    }
+
+    function count() {
+      var n = boxes.filter(function (b) { return b.checked; }).length;
+      doneEl.textContent = String(n);
+    }
+
+    var state = load();
+    boxes.forEach(function (box) {
+      if (state[box.id]) box.checked = true;
+      box.addEventListener('change', function () {
+        var next = load();
+        if (box.checked) { next[box.id] = 1; } else { delete next[box.id]; }
+        save(next);
+        count();
+      });
+    });
+    count();
+  })();
+</script>
+
+</body>
+</html>

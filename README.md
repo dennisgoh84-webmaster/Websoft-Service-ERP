@@ -88,6 +88,9 @@ archival), InvoiceNow / Peppol, and financial audit trails.
 - **Deploy it to a server** → [DEPLOY.md](DEPLOY.md)
 - **Install or upgrade a test server in one command** →
   [deploy/README.md](deploy/README.md)
+- **See what the system actually does** →
+  [docs/walkthrough/](docs/walkthrough/index.html) — a 46-step guided
+  path with screenshots of every screen. Open `index.html` in a browser.
 
 ```bash
 # Local, once Postgres is running (see DEV_SETUP.md for the full setup)
@@ -128,6 +131,7 @@ it is one line in `frontend/nginx.conf`, described in
 
 | Document | What it covers |
 |---|---|
+| [docs/walkthrough/](docs/walkthrough/index.html) | Guided walkthrough of every module, with screenshots — open `index.html` in a browser |
 | [docs/business-requirements.md](docs/business-requirements.md) | Confirmed business rules (SRV / BILL / AR / PUR / INV / HW series) |
 | [docs/system-architecture.md](docs/system-architecture.md) | Architecture, Module Control, Group Authority |
 | [docs/backlog.md](docs/backlog.md) | Everything pending, checkable, linking into the detail docs |
