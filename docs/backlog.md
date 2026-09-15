@@ -273,6 +273,15 @@ shipped and when.
   push for tax rate changes, new defaults), full push activity log.
   Admin login: `admin` / `Admin123`.
   → [planned-work.md #8](planned-work.md#8-server-company-central-command----remote-adbanner-push--license-enforcement-raised-2026-09-12)
+- [ ] **Server/system config pushed from Central Command, not set per
+  client** -- raised 2026-09-15. The system SMTP settings (login OTP,
+  password reset) should be owned in Central Command and pushed down,
+  instead of hand-edited in each install's `backend-php/.env`. Central
+  Command already pushes config by SQL, so the blocker is on this
+  side: `.env` is a file and no push can reach it, so the settings
+  must move into a database table first. Distinct from the
+  per-company mailbox in Company Setup, which stays client-side.
+  → [planned-work.md #8c](planned-work.md#8c-serversystem-configuration-push-raised-2026-09-15)
 
 ## Partially open
 

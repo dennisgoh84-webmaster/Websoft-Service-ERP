@@ -323,6 +323,66 @@ Command writes directly to the client's database to disable/expire module
 access (the existing `module_controls` table is the likely target -- it
 already has `is_active` and `expires_at` fields per module per company).
 
+### 8c. Server/system configuration push (raised 2026-09-15)
+
+**Dennis's instruction: build the server/system configuration in
+Central Command and push it down to each client deployment, rather
+than configuring it locally on each client.**
+
+The immediate case is the **system SMTP settings** (login OTP and
+password-reset email). Today these live in each install's
+`backend-php/.env` (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`,
+`SMTP_PASSWORD`, `SMTP_USE_TLS`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`
+-> `config/websoft.php`), hand-edited per deployment. Central Command
+should own them centrally and push them out instead.
+
+Note this is specifically the **system/install** mailbox, not the
+per-company one. Those are deliberately separate and neither falls
+back to the other (decided 2026-09-15, see Company Setup work):
+
+| | System mail | Company mail |
+|---|---|---|
+| Used by | login OTP, password reset | Email Invoice/Quotation/PO/Receipt/Statement |
+| Why | runs before login, so no company context exists | customer-facing, must send from that entity's own domain |
+| Owner | **Central Command (this item)** | the client, in Company Setup -> Maintenance |
+
+**Central Command already has the push mechanism.** It was built
+2026-09-12 and moved to its own repository 2026-09-13
+([websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command)),
+and already does config updates by SQL push (used for tax rate changes
+and new defaults), plus module-license push and a full push activity
+log. So this is an extension of an existing capability, not new
+plumbing.
+
+**What blocks it on THIS side: `.env` cannot be the target.** Every
+Central Command push writes **directly into the client's PostgreSQL
+database**. `.env` is a file on the client's filesystem, which that
+mechanism cannot reach. So adopting this means the system
+configuration must move out of `.env` and into a database table
+(e.g. `server_settings` / `system_config`) that the existing SQL push
+can write, the same way it already writes announcements and
+`module_controls`. That is a change to how this client app reads its
+own configuration -- client-side work in this repo, not only a
+Central Command feature.
+
+**Spans two repositories.** The client half (move config to a table,
+read it from there, keep a safe fallback while empty) is work in this
+repo; the SMTP settings screen and push action are work in
+`websoft-central-command`.
+
+Open questions, not yet decided:
+1. **Which settings** beyond SMTP are centrally owned vs. left local.
+2. **Precedence** -- if a client install also has a local value, does
+   the pushed one win, or is local override allowed at all?
+3. **Secret handling** -- the SMTP password would sit in the client
+   database rather than a root-only `.env` file. It should be
+   encrypted at rest, with Central Command holding the master copy;
+   otherwise anyone with client DB access can read it.
+4. **Bootstrap** -- if the client reads mail config from its database
+   and that database has never been pushed to, there is no way to
+   send a password-reset email to recover the first admin. Decide
+   whether `.env` stays as a bootstrap fallback for exactly this.
+
 ### Confirmed architecture decisions
 
 | Decision | Answer |
