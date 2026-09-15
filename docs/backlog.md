@@ -340,6 +340,15 @@ shipped and when.
   link itself already exists (`stock_items.product_id`).
   → [php-conversion-plan.md](php-conversion-plan.md)
 
+- [ ] **AI Assistant — scoped 2026-09-15**, not yet built. Tiered
+  candidates, the architectural rule they must be built under (AI never
+  does arithmetic on money; it calls the tested services and narrates,
+  and proposes rather than commits), and four open decisions (PDPA/data
+  residency, cost model, audit of AI interactions, licensing as a paid
+  module key). Recommended start: incident triage + resolution
+  suggestions.
+  → [planned-work.md #12](planned-work.md#12-ai-assistant--where-ai-fits-this-system-and-what-it-must-not-do-raised-2026-09-15)
+
 ## Partially open
 
 - [x] **Commission Management** -- ~~the GP-based report is built;

@@ -552,3 +552,103 @@ template `CompanyIndividualTest.php` set for the PHP conversion work —
 happy path, 403 no-Group, 403 VIEW-only on a write, 403 Module Control
 disabled, 404 cross-company. `./vendor/bin/pint` and the full
 `php artisan test` suite stayed green throughout.
+
+---
+
+## 12. AI Assistant — where AI fits this system, and what it must not do (raised 2026-09-15)
+
+Dennis asked what kind of AI could be built in and what it would do for
+the client. `module-map.md` §19 already sketches an AI Assistant;
+`system-architecture.md` records that any AI must respect PDPA, RBAC and
+audit. This item makes that concrete enough to choose from.
+
+**Precedent already set.** Open decision 35.1 asked for AI grammar
+checking on Service Records. Dennis chose the browser's native
+spellcheck instead, specifically to avoid a live API call's latency,
+per-call cost and new dependency. The bar here is therefore business
+value per call, not novelty. Note that everything in Tier 1 below is
+**per-event** (an incident arrives) rather than per-keystroke, so the
+economics are not the ones that decision rejected.
+
+### What makes AI viable here — the data, not the model
+
+Structured, tested, company-scoped data across contracts, job orders,
+service records, incidents, invoices, AR/AP aging, GL, stock and
+quotations; an audit trail on every material action; Group Authority and
+Module Control gating every endpoint; and a document generation + email
+stack. That combination is what separates a useful assistant from a
+chatbot.
+
+### Tier 1 — highest value, lowest risk (existing module, existing human decision point)
+
+1. **Incident triage and routing.** Incidents already has the manual
+   "convert to Quotation or Job Order" decision. AI suggests the
+   customer, contract, priority and route; staff confirm. The Outlook
+   add-in already ingests email but does only ONE exact-email customer
+   match — AI handles the rest.
+2. **Resolution suggestions.** Every closed incident and service record
+   is a solved-problem record: surface "3 similar issues, here is what
+   fixed them" when a new one is logged.
+3. **Service Record drafting.** Engineers write shorthand;
+   `work_description` already exists (added by decision 35.2). Turn it
+   into a customer-presentable summary — arguably the right answer to
+   what 35.1 originally asked for.
+4. **AR collections assistant.** Aging buckets are computed and tested
+   and the email + statement stack now exists: draft the chase email,
+   prioritise by amount and age.
+
+### Tier 2 — high value, more design work
+
+5. **Natural-language reporting** ("how many hours has Acme burned this
+   quarter?"). The hard part is not the query — it is that it must run
+   AS THE USER, through Group Authority and Module Control, never
+   around them.
+6. **Customer Portal self-service.** PORTAL-005 already scopes a
+   customer to their own contracts, hours and invoices; an assistant
+   over exactly that scope answers "how many hours do I have left?"
+   without a staff member.
+7. **Renewal / churn prioritisation.** SRV-014's renewal window, hour
+   burn rate and the non-active customer listing already exist — AI
+   ranks and explains rather than recomputing.
+8. **Supplier bill capture.** PUR-002 two-way matching exists; extract
+   from the PDF and pre-fill, letting the tested matcher decide.
+
+### Tier 3 — later
+
+Anomaly detection (stock valuation drift, trial balance imbalance,
+unusual excess usage); quotation drafting from the catalogue and
+history.
+
+### The architectural rule this must be built under
+
+**AI must never do arithmetic on money.** It calls the existing,
+tested services — `AccountsReceivableService`, the trial balance, stock
+valuation — and narrates what they return, citing the figures. A
+language model re-deriving an aging bucket is not tested, and a
+confidently wrong AR figure in front of a customer is worse than no
+figure. The same applies to writes: **propose, never commit.** Every AI
+action goes through the same endpoint, RBAC check and audit entry a
+human action would.
+
+### Decisions still open
+
+12.1. **PDPA and data residency** — customer data leaving Singapore for
+   a model provider is a business decision, not a technical detail.
+   Options: a provider with regional hosting, redaction before the
+   call, or a self-hosted model for anything touching personal data.
+12.2. **Cost model** — see decision 35.1. Tier 1 is per-event, not
+   per-keystroke, so the economics differ from what was rejected there.
+12.3. **Audit of AI interactions** — `module-map.md` §19 records this as
+   undecided. Recommendation: log them like everything else.
+12.4. **Licensing** — Module Control already supports per-company
+   enable/disable with expiry, and Central Command can push licences,
+   so "AI Assistant" fits naturally as a PAID ADD-ON MODULE KEY per
+   client rather than something bundled.
+
+### Recommended starting point
+
+**Incident triage + resolution suggestions.** One module, an existing
+human decision point, per-event cost, no money arithmetic, and it
+directly reduces the Helpdesk workload that Support Monitoring already
+measures — so the value is provable from data the system already
+collects.
