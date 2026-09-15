@@ -238,9 +238,12 @@ shipped and when.
   the same day; and the Contract–Quotation link
   is free text only, not a real linked record -- both recorded in
   [open-business-decisions.md #40](open-business-decisions.md#40-sales-module-enhancements-financial-year-definition-and-contractquotation-link-raised-2026-09-22).
-  (Quotations has since been converted to `backend-php/`, which
+  ~~(Quotations has since been converted to `backend-php/`, which
   unblocks a real link; the free-text field itself hasn't been swapped
-  out for one yet.) ~~Two Quotations-dependent Sales Dashboard KPIs
+  out for one yet.)~~ **Built 2026-09-15 (SALES-006):** a real
+  `contracts.quotation_id`, set on accept or by hand, and "Create
+  renewal quotation" on an expiring contract whose acceptance renews
+  it. ~~Two Quotations-dependent Sales Dashboard KPIs
   ("Pending Approval" / "Pending Confirmation by Client") still always
   report not-available.~~ **Settled 2026-09-15 (SALES-008):** the
   Quotation status model gained `pending_approval` and `approved`
@@ -465,4 +468,4 @@ shipped and when.
   → [open-business-decisions.md #7-8](open-business-decisions.md#7-projects)
 
 ---
-Last updated: 2026-09-15 (first real deployment of backend-php on the test server: deploy fixes, portal admin screen, seeder parity, desktop portal, Company Setup mailbox)
+Last updated: 2026-09-15 (Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006)

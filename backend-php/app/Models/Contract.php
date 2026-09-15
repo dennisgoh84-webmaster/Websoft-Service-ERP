@@ -19,17 +19,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * NEW FEATURE FIELDS (not part of the Python->PHP conversion -- built
  * directly in backend-php per Dennis's request, see docs/backlog.md /
  * docs/planned-work.md):
- * - `quotation_reference` (+ its set_at/set_by pair): "Service
- *   Contract - To be able to link to Sales Quotation upon Renewal or
- *   Expired". PRAGMATIC DEFAULT / KNOWN GAP, flagged for Dennis's
- *   confirmation rather than silently assumed: a real Sales Quotation
- *   module exists in backend/ (Python) but has NOT been converted to
- *   backend-php yet, and this work is scoped to backend-php only, so
- *   this is a plain free-text reference a human types in -- NOT a
- *   real linked/validated record. Settable via
- *   App\Http\Controllers\Api\ContractController::setQuotationReference()
- *   while the contract is Renewed or Expired, or inline on ::renew().
- *   Replace with a real foreign key once Quotations is converted.
+ * - `quotation_id`: the Sales Quotation this contract came from -- a
+ *   REAL link since 2026-09-15 (SALES-006), set by accepting a
+ *   quotation or by hand. `quotation_reference` (+ its set_at/set_by
+ *   pair) is the free-text stand-in it replaced: kept where a value
+ *   was recorded, no longer entered. `renewalQuotations()` are the
+ *   quotations raised FROM this contract as its renewal (Create
+ *   renewal quotation); accepting one renews this contract.
  * - `sharedCustomers()` below: "Service Contract - To have selection
  *   of Sharing of Hours with multiple company". See
  *   App\Models\ContractSharedCustomer.
@@ -78,6 +74,7 @@ class Contract extends Model
         // NEW FEATURE (not a Python->PHP conversion) -- see this
         // class's quotation_reference note below.
         'quotation_reference', 'quotation_reference_set_at', 'quotation_reference_set_by',
+        'quotation_id',
     ];
 
     // Money fields use 'decimal:2' (not 'float') because the service
@@ -141,6 +138,18 @@ class Contract extends Model
     public function renewedFrom(): BelongsTo
     {
         return $this->belongsTo(self::class, 'renewed_from_contract_id');
+    }
+
+    /** The Sales Quotation this contract came from (SALES-006). */
+    public function quotation(): BelongsTo
+    {
+        return $this->belongsTo(Quotation::class, 'quotation_id');
+    }
+
+    /** Quotations raised from this contract as its renewal. */
+    public function renewalQuotations(): HasMany
+    {
+        return $this->hasMany(Quotation::class, 'renews_contract_id');
     }
 
     public function remainingMinutes(): int

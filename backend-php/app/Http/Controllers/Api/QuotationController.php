@@ -80,6 +80,9 @@ class QuotationController extends Controller
             'approved_by_user_id' => $quotation->approved_by_user_id,
             'sent_at' => optional($quotation->sent_at)->toJSON(),
             'returned_reason' => $quotation->returned_reason,
+            // SALES-006: set when this was raised from a contract as its renewal.
+            'renews_contract_id' => $quotation->renews_contract_id,
+            'renews_contract_number' => $quotation->renewsContract?->contract_number,
             'lines' => $quotation->lines->map(fn (QuotationLine $l) => [
                 'id' => $l->id,
                 'product_id' => $l->product_id,

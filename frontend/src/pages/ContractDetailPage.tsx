@@ -8,6 +8,7 @@ import {
   type Invoice,
   type LicenseDeploymentType,
   type Product,
+  type Quotation,
   type StaffUser,
 } from '../lib/api'
 import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
@@ -33,12 +34,14 @@ export default function ContractDetailPage() {
   const [renewHours, setRenewHours] = useState('10')
   const [renewValue, setRenewValue] = useState('2400')
   const [renewRate, setRenewRate] = useState('150')
-  const [renewQuotationReference, setRenewQuotationReference] = useState('')
+  const [renewQuotationId, setRenewQuotationId] = useState('')
 
-  // NEW FEATURE (not a Python->PHP conversion) -- see
-  // docs/backlog.md / docs/planned-work.md.
-  const [quotationReferenceDraft, setQuotationReferenceDraft] = useState('')
-  const [savingQuotationReference, setSavingQuotationReference] = useState(false)
+  // Contract <-> Sales Quotation, a real link since 2026-09-15: the
+  // customer's quotations for the picker, and the two actions.
+  const [customerQuotations, setCustomerQuotations] = useState<Quotation[]>([])
+  const [linkQuotationId, setLinkQuotationId] = useState('')
+  const [savingQuotationLink, setSavingQuotationLink] = useState(false)
+  const [creatingRenewalQuotation, setCreatingRenewalQuotation] = useState(false)
   const [sharedCustomerToAdd, setSharedCustomerToAdd] = useState('')
   const [savingSharedCustomer, setSavingSharedCustomer] = useState(false)
 
@@ -52,6 +55,8 @@ export default function ContractDetailPage() {
   // license fields shouldn't require re-submitting the whole coverage list.
   const [licenseDrafts, setLicenseDrafts] = useState<Record<string, { type: string; count: string }>>({})
   const [savingLicenseFor, setSavingLicenseFor] = useState<string | null>(null)
+
+  const customerName = (customerId: string) => customers.find((c) => c.id === customerId)?.name ?? 'this customer'
 
   function refresh() {
     if (!id) return
@@ -67,7 +72,7 @@ export default function ContractDetailPage() {
           ]),
         ),
       )
-      setQuotationReferenceDraft(c.quotation_reference ?? '')
+      api.listQuotations({ customer_id: c.customer_id }).then(setCustomerQuotations).catch(() => setCustomerQuotations([]))
     })
     api.listContractExcessUsage(id).then(setExcessUsage)
     api.listInvoices({ contract_id: id }).then(setInvoices)
@@ -98,7 +103,7 @@ export default function ContractDetailPage() {
         contracted_hours: parseFloat(renewHours),
         contract_value_sgd: contract.contract_kind === 'ad_hoc' ? 0 : parseFloat(renewValue),
         hourly_rate_sgd: contract.contract_kind === 'ad_hoc' ? parseFloat(renewRate) : null,
-        quotation_reference: renewQuotationReference || undefined,
+        quotation_id: renewQuotationId || undefined,
       })
       refresh()
     } catch (err) {
@@ -106,22 +111,35 @@ export default function ContractDetailPage() {
     }
   }
 
-  // NEW FEATURE (not a Python->PHP conversion) -- see
-  // docs/backlog.md / docs/planned-work.md. KNOWN GAP: free-text
-  // stand-in for a real Sales Quotation link -- see Contract's model
-  // docblock in backend-php.
-  async function onSaveQuotationReference(e: FormEvent) {
+  async function onLinkQuotation(e: FormEvent) {
     e.preventDefault()
-    if (!id || !quotationReferenceDraft) return
+    if (!id || !linkQuotationId) return
     setError(null)
-    setSavingQuotationReference(true)
+    setSavingQuotationLink(true)
     try {
-      await api.setContractQuotationReference(id, quotationReferenceDraft)
+      await api.linkContractQuotation(id, linkQuotationId)
+      setLinkQuotationId('')
       refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to set quotation reference')
+      setError(err instanceof Error ? err.message : 'Failed to link quotation')
     } finally {
-      setSavingQuotationReference(false)
+      setSavingQuotationLink(false)
+    }
+  }
+
+  async function onCreateRenewalQuotation() {
+    if (!id) return
+    setError(null)
+    setMessage(null)
+    setCreatingRenewalQuotation(true)
+    try {
+      const r = await api.createContractRenewalQuotation(id)
+      setMessage(`Renewal quotation ${r.quotation_number} raised as a draft -- price it on the Sales Quotation screen, then submit for approval. Accepting it renews this contract.`)
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create the renewal quotation')
+    } finally {
+      setCreatingRenewalQuotation(false)
     }
   }
 
@@ -429,12 +447,19 @@ export default function ContractDetailPage() {
               </div>
             )}
             <div className="form-row">
-              <label>Sales Quotation reference (optional)</label>
-              <input
-                value={renewQuotationReference}
-                onChange={(e) => setRenewQuotationReference(e.target.value)}
-                placeholder="e.g. QUO-2026-0100"
-              />
+              <label>Sales Quotation this renewal is from (optional)</label>
+              <select value={renewQuotationId} onChange={(e) => setRenewQuotationId(e.target.value)}>
+                <option value="">-- none --</option>
+                {customerQuotations.map((q) => (
+                  <option key={q.id} value={q.id}>
+                    {q.quotation_number} · {q.status} · {money(q.total_amount_sgd)}
+                  </option>
+                ))}
+              </select>
+              <span className="muted">
+                Renewing here is the manual path. If a renewal quotation was raised from this contract
+                below, accepting that quotation renews it automatically instead.
+              </span>
             </div>
             <button type="submit">Renew</button>
           </form>
@@ -442,37 +467,73 @@ export default function ContractDetailPage() {
       )}
 
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <h2>Sales Quotation reference</h2>
-            <p className="muted" style={{ marginTop: -6 }}>
-              KNOWN GAP: free-text only, not a real linked record -- the Quotations module does not
-              exist in backend-php yet. Settable once this contract has been Renewed or Expired.
-            </p>
-          </div>
-        </div>
-        {contract.quotation_reference && (
+        <h2>Sales Quotation</h2>
+        <p className="muted" style={{ marginTop: -6 }}>
+          The quotation this contract came from, and the renewal quotation raised from it when it
+          nears expiry. Accepting a renewal quotation renews this contract (SRV-010 / SRV-016
+          apply exactly as they do to Renew above).
+        </p>
+
+        {contract.quotation_id ? (
           <p>
-            <strong>{contract.quotation_reference}</strong>
-            {contract.quotation_reference_set_at && (
-              <span className="muted"> -- set {formatDate(contract.quotation_reference_set_at)}</span>
-            )}
+            From quotation{' '}
+            <Link to={`/quotations/${contract.quotation_id}/print`}>
+              <strong>{contract.quotation_number}</strong>
+            </Link>
+          </p>
+        ) : (
+          <p className="muted">Not linked to a quotation.</p>
+        )}
+        {contract.quotation_reference && !contract.quotation_id && (
+          <p className="muted">
+            Free-text reference recorded earlier: <strong>{contract.quotation_reference}</strong>
+            {contract.quotation_reference_set_at && <> -- set {formatDate(contract.quotation_reference_set_at)}</>}
           </p>
         )}
-        {(contract.status === 'renewed' || contract.status === 'expired') && (
-          <form onSubmit={onSaveQuotationReference} className="form-row" style={{ margin: 0 }}>
-            <input
-              value={quotationReferenceDraft}
-              onChange={(e) => setQuotationReferenceDraft(e.target.value)}
-              placeholder="e.g. QUO-2026-0100"
-            />
-            <button type="submit" disabled={savingQuotationReference || !quotationReferenceDraft}>
-              {savingQuotationReference ? 'Saving...' : 'Save quotation reference'}
+
+        <form onSubmit={onLinkQuotation} className="form-row" style={{ margin: '8px 0 16px' }}>
+          <label>Link an existing quotation for {customerName(contract.customer_id)}</label>
+          <select value={linkQuotationId} onChange={(e) => setLinkQuotationId(e.target.value)}>
+            <option value="">-- choose --</option>
+            {customerQuotations
+              .filter((q) => q.id !== contract.quotation_id)
+              .map((q) => (
+                <option key={q.id} value={q.id}>
+                  {q.quotation_number} · {q.status} · {money(q.total_amount_sgd)}
+                </option>
+              ))}
+          </select>
+          <button type="submit" disabled={savingQuotationLink || !linkQuotationId}>
+            {savingQuotationLink ? 'Saving...' : contract.quotation_id ? 'Replace link' : 'Link quotation'}
+          </button>
+        </form>
+
+        <h3 style={{ marginBottom: 4 }}>Renewal</h3>
+        {contract.renewal_quotation_id ? (
+          <p>
+            Renewal quotation{' '}
+            <Link to={`/quotations/${contract.renewal_quotation_id}/print`}>
+              <strong>{contract.renewal_quotation_number}</strong>
+            </Link>{' '}
+            <span className="badge draft">{contract.renewal_quotation_status}</span>
+            <span className="muted"> -- accepting it renews this contract.</span>
+          </p>
+        ) : contract.renewal_quotation_eligible ? (
+          <>
+            <p className="muted">
+              This contract is within 30 days of expiry or has expired. Raise its renewal as a
+              quotation to price and send to the customer.
+            </p>
+            <button type="button" disabled={creatingRenewalQuotation} onClick={onCreateRenewalQuotation}>
+              {creatingRenewalQuotation ? 'Creating...' : 'Create renewal quotation'}
             </button>
-          </form>
-        )}
-        {contract.status !== 'renewed' && contract.status !== 'expired' && !contract.quotation_reference && (
-          <p className="muted">Not set -- only settable once this contract is Renewed or Expired.</p>
+          </>
+        ) : (
+          <p className="muted">
+            {contract.status === 'renewed'
+              ? 'Already renewed.'
+              : 'A renewal quotation can be raised once this contract is within 30 days of expiry, or after it expires.'}
+          </p>
         )}
       </div>
 

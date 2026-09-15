@@ -162,6 +162,14 @@ class QuotationService
         $hourlyLines = $quotation->lines->filter(fn ($line) => self::isHourly($line->unit_of_measure));
         $otherLines = $quotation->lines->reject(fn ($line) => self::isHourly($line->unit_of_measure));
 
+        // A renewal quotation (raised from an expiring contract, SALES-006)
+        // renews THAT contract through the same path the Renew form
+        // uses, so SRV-010/016 apply exactly; it never creates a fresh
+        // one beside it.
+        if ($quotation->renews_contract_id) {
+            return self::acceptRenewal($quotation, $hourlyLines, $otherLines, $actorUserId);
+        }
+
         $messages = [];
 
         if ($hourlyLines->isNotEmpty()) {
@@ -177,6 +185,8 @@ class QuotationService
                     actorUserId: $actorUserId,
                     contractKind: Contract::KIND_SERVICE_SUPPORT,
                 );
+                $contract->quotation_id = $quotation->id;
+                $contract->save();
                 $quotation->converted_contract_id = $contract->id;
                 $messages[] = sprintf('Service Support contract created (%s hrs).', self::formatG($hourlyQty->toFloat()));
             } catch (ContractRuleViolation $e) {
@@ -195,12 +205,65 @@ class QuotationService
                 actorUserId: $actorUserId,
                 contractKind: Contract::KIND_ANNUAL,
             );
+            $annualContract->quotation_id = $quotation->id;
+            $annualContract->save();
             $quotation->converted_annual_contract_id = $annualContract->id;
             $messages[] = sprintf('Annual contract created (SGD %.2f, 12-month term).', $otherValue->toFloat());
         }
 
         $message = $messages ? 'Quotation accepted. '.implode(' ', $messages) : 'Quotation accepted.';
 
+        Audit::record('quotation', $quotation->id, 'accepted', $actorUserId, details: $message);
+
+        return $message;
+    }
+
+    /**
+     * Accepting a renewal quotation: the prior contract is renewed with
+     * the quotation's hours (its hourly lines) and value (all lines),
+     * of the prior contract's own kind. If SRV-010/016 refuse -- most
+     * often because the SRV-016 2-week backdating window has passed
+     * and SRV-018 wants a human decision -- the acceptance stands, the
+     * contract is left as it was, and the message says so, so the
+     * Renew form (with this quotation picked) is the next step.
+     */
+    private static function acceptRenewal(Quotation $quotation, $hourlyLines, $otherLines, string $actorUserId): string
+    {
+        $prior = Contract::findOrFail($quotation->renews_contract_id);
+        $hours = $hourlyLines->reduce(fn (Money $c, $l) => $c->plus(Money::of($l->quantity)), Money::of(0));
+        $value = $quotation->lines->reduce(fn (Money $c, $l) => $c->plus(Money::of($l->line_total_sgd)), Money::of(0));
+
+        try {
+            $new = ContractService::renewContract(
+                priorContract: $prior,
+                contractedHours: $hours->toFloat(),
+                contractValueSgd: $value->toFloat(),
+                actorUserId: $actorUserId,
+            );
+        } catch (ContractRuleViolation $e) {
+            $message = "Quotation accepted, but {$prior->contract_number} was not renewed: {$e->getMessage()} "
+                .'Renew it from the contract page, picking this quotation.';
+            Audit::record('quotation', $quotation->id, 'accepted', $actorUserId, details: $message);
+
+            return $message;
+        }
+
+        $new->quotation_id = $quotation->id;
+        $new->save();
+        if ($new->contract_kind === Contract::KIND_SERVICE_SUPPORT) {
+            $quotation->converted_contract_id = $new->id;
+        } else {
+            $quotation->converted_annual_contract_id = $new->id;
+        }
+
+        $message = sprintf(
+            'Quotation accepted. %s renewed as %s (%s).',
+            $prior->contract_number,
+            $new->contract_number,
+            $new->contract_kind === Contract::KIND_SERVICE_SUPPORT
+                ? self::formatG($hours->toFloat()).' hrs'
+                : sprintf('SGD %.2f, 12-month term', $value->toFloat()),
+        );
         Audit::record('quotation', $quotation->id, 'accepted', $actorUserId, details: $message);
 
         return $message;

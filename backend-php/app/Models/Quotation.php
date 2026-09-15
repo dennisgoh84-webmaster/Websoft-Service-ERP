@@ -52,6 +52,7 @@ class Quotation extends Model
         'total_amount_sgd', 'converted_contract_id', 'converted_annual_contract_id',
         'created_by_user_id',
         'submitted_at', 'submitted_by_user_id', 'approved_at', 'approved_by_user_id', 'sent_at', 'returned_reason',
+        'renews_contract_id',
     ];
 
     // Mirrors the DB column defaults (see the migration) so a freshly
@@ -103,4 +104,15 @@ class Quotation extends Model
     {
         return $this->hasMany(QuotationLine::class)->orderBy('id');
     }
+
+    /** The contract this quotation was raised to renew, if any (SALES-006). */
+    public function renewsContract(): BelongsTo
+    {
+        return $this->belongsTo(Contract::class, 'renews_contract_id');
+    }
+
+    /** Still in play: not yet accepted, rejected or expired. */
+    public const OPEN_STATUSES = [
+        self::STATUS_DRAFT, self::STATUS_PENDING_APPROVAL, self::STATUS_APPROVED, self::STATUS_SENT,
+    ];
 }

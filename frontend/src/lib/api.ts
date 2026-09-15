@@ -517,9 +517,18 @@ export interface Contract {
   products: ContractProductCoverage[]
   /** NEW FEATURE (not a Python->PHP conversion) -- see docs/backlog.md / docs/planned-work.md. */
   shared_customers: ContractSharedCustomer[]
-  /** KNOWN GAP / pragmatic stand-in for a real Sales Quotation link -- free text only, see docs/planned-work.md. */
+  /** Legacy free-text reference from before the real link existed (2026-09-15); shown when set, no longer entered. */
   quotation_reference: string | null
   quotation_reference_set_at: string | null
+  /** The Sales Quotation this contract came from -- set by accepting a quotation, or linked by hand. */
+  quotation_id: string | null
+  quotation_number: string | null
+  /** The open renewal quotation raised from this contract, if any (Create renewal quotation). */
+  renewal_quotation_id: string | null
+  renewal_quotation_number: string | null
+  renewal_quotation_status: QuotationStatus | null
+  /** Within SRV-014's 30-day pre-expiry window, or already expired/exceeded, with no open renewal quotation. */
+  renewal_quotation_eligible: boolean
 }
 
 export type JobOrderPriority = 'low' | 'normal' | 'high' | 'critical'
@@ -1576,6 +1585,9 @@ export interface Quotation {
   sent_at: string | null
   /** Why the approver sent it back to draft; cleared on the next submit. */
   returned_reason: string | null
+  /** Set when this quotation was raised from a contract as its renewal: accepting it renews that contract. */
+  renews_contract_id: string | null
+  renews_contract_number: string | null
   lines: QuotationLine[]
 }
 
@@ -2185,7 +2197,7 @@ export const api = {
       contract_value_sgd: number
       force_start_date?: string
       hourly_rate_sgd?: number | null
-      quotation_reference?: string | null
+      quotation_id?: string | null
     },
   ) => request<Contract>(`/contracts/${id}/renew`, { method: 'POST', body: JSON.stringify(payload) }),
   listContractExcessUsage: (id: string) =>
@@ -2195,6 +2207,15 @@ export const api = {
   // docs/backlog.md / docs/planned-work.md.
   setContractQuotationReference: (id: string, quotation_reference: string) =>
     request<Contract>(`/contracts/${id}/quotation-reference`, { method: 'POST', body: JSON.stringify({ quotation_reference }) }),
+  /** Link an existing Sales Quotation (same customer) to this contract. */
+  linkContractQuotation: (id: string, quotation_id: string) =>
+    request<Contract>(`/contracts/${id}/quotation`, { method: 'POST', body: JSON.stringify({ quotation_id }) }),
+  /** Raise a draft renewal quotation from an expiring or expired contract; accepting it renews the contract. */
+  createContractRenewalQuotation: (id: string) =>
+    request<{ contract: Contract; quotation_id: string; quotation_number: string }>(
+      `/contracts/${id}/renewal-quotation`,
+      { method: 'POST' },
+    ),
   addContractSharedCustomer: (id: string, customer_id: string) =>
     request<Contract>(`/contracts/${id}/shared-customers`, { method: 'POST', body: JSON.stringify({ customer_id }) }),
   removeContractSharedCustomer: (id: string, sharedCustomerId: string) =>

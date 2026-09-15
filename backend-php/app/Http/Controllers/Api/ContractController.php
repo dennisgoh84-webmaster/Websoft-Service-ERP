@@ -13,6 +13,7 @@ use App\Models\ContractProduct;
 use App\Models\ContractSharedCustomer;
 use App\Models\ExcessUsageRecord;
 use App\Models\Product;
+use App\Models\Quotation;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\BillingService;
@@ -54,6 +55,8 @@ class ContractController extends Controller
 
     private function present(Contract $contract): array
     {
+        $renewal = ContractService::openRenewalQuotation($contract);
+
         return [
             'id' => $contract->id,
             'contract_number' => $contract->contract_number,
@@ -84,6 +87,13 @@ class ContractController extends Controller
             ])->values(),
             'quotation_reference' => $contract->quotation_reference,
             'quotation_reference_set_at' => optional($contract->quotation_reference_set_at)->toIso8601String(),
+            // Contract <-> Sales Quotation, the real link (SALES-006).
+            'quotation_id' => $contract->quotation_id,
+            'quotation_number' => $contract->quotation?->quotation_number,
+            'renewal_quotation_id' => $renewal?->id,
+            'renewal_quotation_number' => $renewal?->quotation_number,
+            'renewal_quotation_status' => $renewal?->status,
+            'renewal_quotation_eligible' => $renewal === null && ContractService::renewalQuotationBlocker($contract) === null,
         ];
     }
 
@@ -370,10 +380,20 @@ class ContractController extends Controller
             // Renewal or Expired". KNOWN GAP / pragmatic default:
             // free text only -- see Contract's class docblock.
             'quotation_reference' => 'sometimes|nullable|string|max:50',
+            // SALES-006: the quotation this renewal is from -- linked to
+            // the NEW contract, the one it produced.
+            'quotation_id' => 'sometimes|nullable|uuid',
         ]);
+        $quotation = null;
+        if (! empty($data['quotation_id'])) {
+            $quotation = Quotation::find($data['quotation_id']);
+            if (! $quotation || $quotation->company_id !== $user->company_id) {
+                throw new ApiException(404, 'Quotation not found');
+            }
+        }
 
         try {
-            $newContract = DB::transaction(function () use ($prior, $data, $user) {
+            $newContract = DB::transaction(function () use ($prior, $data, $user, $quotation) {
                 $newContract = ContractService::renewContract(
                     priorContract: $prior,
                     contractedHours: (float) $data['contracted_hours'],
@@ -389,6 +409,9 @@ class ContractController extends Controller
                 if (! empty($data['quotation_reference'])) {
                     ContractService::setQuotationReference($prior, $data['quotation_reference'], $user->id);
                 }
+                if ($quotation) {
+                    ContractService::linkQuotation($newContract, $quotation, $user->id);
+                }
 
                 return $newContract;
             });
@@ -399,11 +422,55 @@ class ContractController extends Controller
         return response()->json($this->present($newContract->fresh('products.product')));
     }
 
+    /** SALES-006: link an existing Sales Quotation of the same customer to this contract. */
+    public function linkQuotation(Request $request, string $contractId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $contract = $this->contractOrFail($user->company_id, $contractId);
+        $data = $request->validate(['quotation_id' => 'required|uuid']);
+        $quotation = Quotation::find($data['quotation_id']);
+        if (! $quotation || $quotation->company_id !== $user->company_id) {
+            throw new ApiException(404, 'Quotation not found');
+        }
+
+        try {
+            ContractService::linkQuotation($contract, $quotation, $user->id);
+        } catch (ContractRuleViolation $e) {
+            throw new ApiException(422, $e->getMessage());
+        }
+
+        return response()->json($this->present($contract->fresh('products.product', 'sharedCustomers.customer')));
+    }
+
     /**
-     * NEW FEATURE (not a Python->PHP conversion) -- see
-     * docs/backlog.md / docs/planned-work.md. Settable directly (not
-     * only inline on ::renew()) once the contract has transitioned to
-     * Renewed or Expired -- see App\Services\ContractService::setQuotationReference().
+     * SALES-006: raise this contract's renewal as a draft Sales
+     * Quotation. Allowed within SRV-014's pre-expiry window or once
+     * expired/exceeded; accepting the quotation renews the contract.
+     */
+    public function createRenewalQuotation(Request $request, string $contractId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $contract = $this->contractOrFail($user->company_id, $contractId);
+        try {
+            $quotation = ContractService::createRenewalQuotation($contract, $user->id);
+        } catch (ContractRuleViolation $e) {
+            throw new ApiException(422, $e->getMessage());
+        }
+
+        return response()->json([
+            'contract' => $this->present($contract->fresh('products.product', 'sharedCustomers.customer')),
+            'quotation_id' => $quotation->id,
+            'quotation_number' => $quotation->quotation_number,
+        ]);
+    }
+
+    /**
+     * The free-text reference that preceded the real link above. Kept
+     * for anything still calling it; the screen no longer offers it.
      */
     public function setQuotationReference(Request $request, string $contractId)
     {

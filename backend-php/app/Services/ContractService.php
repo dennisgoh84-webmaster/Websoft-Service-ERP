@@ -7,8 +7,12 @@ use App\Models\Contract;
 use App\Models\ContractProduct;
 use App\Models\ExpiredHoursRecord;
 use App\Models\Product;
+use App\Models\Quotation;
+use App\Models\QuotationLine;
+use App\Support\Money;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Service Contracts business logic -- the single place that enforces
@@ -289,6 +293,127 @@ class ContractService
             oldValue: ['quotation_reference' => $old],
             newValue: ['quotation_reference' => $contract->quotation_reference],
         );
+
+        return $contract;
+    }
+
+    // ── Contract <-> Sales Quotation (SALES-006, 2026-09-15) ────────
+
+    /** The renewal quotation raised from this contract that is still in play, if any. */
+    public static function openRenewalQuotation(Contract $contract): ?Quotation
+    {
+        return Quotation::where('renews_contract_id', $contract->id)
+            ->whereIn('status', Quotation::OPEN_STATUSES)
+            ->orderByDesc('quotation_date')->orderByDesc('quotation_number')
+            ->first();
+    }
+
+    /**
+     * Why a renewal quotation cannot be raised right now, or null when
+     * it can: the contract is Ad Hoc (no upfront value to quote),
+     * already renewed, not yet within SRV-014's 30-day pre-expiry
+     * window, or already has an open renewal quotation.
+     */
+    public static function renewalQuotationBlocker(Contract $contract): ?string
+    {
+        if ($contract->contract_kind === Contract::KIND_AD_HOC) {
+            return 'An Ad Hoc Rate contract has no upfront value to quote -- renew it directly.';
+        }
+        if ($contract->status === Contract::STATUS_RENEWED) {
+            return "{$contract->contract_number} has already been renewed.";
+        }
+        $due = in_array($contract->status, [Contract::STATUS_EXPIRED, Contract::STATUS_EXCEEDED], true)
+            || ($contract->status === Contract::STATUS_ACTIVE && self::needsPreExpiryCheck($contract));
+        if (! $due) {
+            return "{$contract->contract_number} is not within ".Contract::PRE_EXPIRY_CHECK_LEAD_DAYS
+                .' days of expiry yet (SRV-014), so a renewal quotation cannot be raised for it.';
+        }
+        if ($open = self::openRenewalQuotation($contract)) {
+            return "{$contract->contract_number} already has an open renewal quotation, {$open->quotation_number} ({$open->status}).";
+        }
+
+        return null;
+    }
+
+    /**
+     * Raise a draft Sales Quotation carrying this contract's current
+     * terms as its line, marked as renewing it. From there it goes
+     * through the ordinary approval and sending (SALES-008); accepting
+     * it renews the contract -- see QuotationService::acceptQuotation.
+     */
+    public static function createRenewalQuotation(Contract $contract, string $actorUserId): Quotation
+    {
+        if ($blocker = self::renewalQuotationBlocker($contract)) {
+            throw new ContractRuleViolation($blocker);
+        }
+
+        $hours = $contract->contracted_minutes / 60;
+        $value = Money::of($contract->contract_value_sgd);
+
+        if ($contract->contract_kind === Contract::KIND_SERVICE_SUPPORT) {
+            // Hours at the contract's blended rate, so accepting it
+            // yields the same hours and value the contract has now;
+            // Sales reprice the line before sending if terms change.
+            $line = [
+                'description' => "Renewal of {$contract->contract_number}: support hours",
+                'unit_of_measure' => 'Hours',
+                'quantity' => Money::of($hours)->toString(),
+                'unit_price_sgd' => $value->dividedBy($hours)->quantize()->toString(),
+            ];
+        } else {
+            $line = [
+                'description' => "Renewal of {$contract->contract_number}: annual contract",
+                'unit_of_measure' => null,
+                'quantity' => Money::of(1)->toString(),
+                'unit_price_sgd' => $value->quantize()->toString(),
+            ];
+        }
+
+        return DB::transaction(function () use ($contract, $actorUserId, $line) {
+            $quotation = Quotation::create([
+                'company_id' => $contract->company_id,
+                'quotation_number' => Numbering::next($contract->company_id, 'quotation'),
+                'customer_id' => $contract->customer_id,
+                'quotation_date' => Carbon::today()->toDateString(),
+                'notes' => "Renewal of contract {$contract->contract_number} (expires "
+                    .Carbon::parse($contract->end_date)->toDateString().').',
+                'created_by_user_id' => $actorUserId,
+                'renews_contract_id' => $contract->id,
+            ]);
+            QuotationLine::create($line + [
+                'quotation_id' => $quotation->id,
+                'line_total_sgd' => Money::of($line['quantity'])->multipliedByMoney(Money::of($line['unit_price_sgd']))->quantize()->toString(),
+            ]);
+            $quotation->load('lines');
+            QuotationService::recomputeTotals($quotation);
+            $quotation->save();
+
+            Audit::record('quotation', $quotation->id, 'created', $actorUserId,
+                details: "{$quotation->quotation_number}: renewal of {$contract->contract_number}",
+                newValue: ['renews_contract_id' => $contract->id, 'total_amount_sgd' => (float) $quotation->total_amount_sgd]);
+            Audit::record('contract', $contract->id, 'renewal_quotation_raised', $actorUserId,
+                details: "{$quotation->quotation_number}",
+                newValue: ['quotation_id' => $quotation->id]);
+
+            return $quotation;
+        });
+    }
+
+    /** Link a quotation to this contract by hand. Same customer, or it is not this contract's quotation. */
+    public static function linkQuotation(Contract $contract, Quotation $quotation, string $actorUserId): Contract
+    {
+        if ($quotation->customer_id !== $contract->customer_id) {
+            throw new ContractRuleViolation(
+                "{$quotation->quotation_number} belongs to a different Company/Individual than {$contract->contract_number}."
+            );
+        }
+        $old = $contract->quotation_id;
+        $contract->quotation_id = $quotation->id;
+        $contract->save();
+
+        Audit::record('contract', $contract->id, 'quotation_linked', $actorUserId,
+            details: $quotation->quotation_number,
+            oldValue: ['quotation_id' => $old], newValue: ['quotation_id' => $quotation->id]);
 
         return $contract;
     }

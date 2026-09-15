@@ -21,6 +21,9 @@ Route::middleware('auth.jwt')->prefix('contracts')->group(function () {
     // NEW FEATURE (not a Python->PHP conversion -- see
     // docs/backlog.md / docs/planned-work.md).
     Route::post('/{contract}/quotation-reference', [ContractController::class, 'setQuotationReference']);
+    // SALES-006 (2026-09-15): the real Contract <-> Quotation link.
+    Route::post('/{contract}/quotation', [ContractController::class, 'linkQuotation']);
+    Route::post('/{contract}/renewal-quotation', [ContractController::class, 'createRenewalQuotation']);
     Route::post('/{contract}/shared-customers', [ContractController::class, 'addSharedCustomer']);
     Route::delete('/{contract}/shared-customers/{sharedCustomer}', [ContractController::class, 'removeSharedCustomer']);
 });

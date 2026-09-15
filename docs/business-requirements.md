@@ -597,19 +597,36 @@ conversion" note on this set of rules). Decision record:
   **Contract due for Renewal Listing**, which reuses SRV-014's 30-day
   pre-expiry window exactly (never a second, disagreeing window).
 
-### SALES-006 — Contract–Quotation Reference — pragmatic default / KNOWN GAP
+### SALES-006 — Contract–Quotation link — CONFIRMED and built (2026-09-15)
 
-- A contract can record a free-text Sales Quotation reference, settable
-  once it has transitioned to Renewed or Expired. This is **not** a real
-  linked record. **Update 2026-09-14:** Quotations has since been
-  converted to `backend-php/` (see
-  [php-conversion-plan.md](php-conversion-plan.md)), so a real
-  `Quotation` model now exists to link against — the free-text field is
-  no longer blocked on that, it just hasn't been swapped for a real
-  foreign key yet. That reconciliation is left as follow-up work for
-  the Sales module enhancements, not done as part of converting
-  Quotations itself (which touched `QuotationController` only, not
-  `Contract`/`ContractController`).
+- Dennis, 2026-09-15: "Contract renewal link to quotation and contract
+  expiry option to link/convert to quotation." Built as a **real
+  link**, replacing the free-text reference that stood in for it:
+  - `contracts.quotation_id` → the Sales Quotation the contract came
+    from. Set automatically when a quotation is accepted (both the
+    Service Support and the Annual contract it creates point back at
+    it), or linked by hand on the contract page to any quotation of
+    the same customer. The old free-text `quotation_reference` is kept
+    read-only where it was recorded; nothing new is entered into it.
+  - **Create renewal quotation** on a contract that is within
+    SRV-014's 30-day pre-expiry window, or already expired or
+    exceeded: raises a draft quotation for the same customer carrying
+    the contract's current terms as its line (hours × blended rate for
+    Service Support; the annual value for Annual), marked as renewing
+    that contract (`quotations.renews_contract_id`). It then goes
+    through SALES-008's approval and sending like any other quotation.
+  - **Accepting a renewal quotation renews the contract** through the
+    same `renewContract()` Renew uses -- SRV-010 (new record, own
+    allocation) and SRV-016 (2-week backdating window) apply exactly;
+    beyond the window the acceptance stands but the contract is not
+    renewed, and the message says so, so a human makes the SRV-018
+    case-by-case call on the Renew form (which now takes the quotation
+    as a picker rather than free text).
+  - Ad Hoc Rate contracts have no upfront value to quote, so they get
+    no renewal quotation; they are renewed directly, as before.
+  - One open renewal quotation per contract at a time: while one is
+    draft / pending approval / approved / sent, the button is replaced
+    by a link to it.
 
 ### SALES-007 — Sales Dashboard KPIs — CONFIRMED, with two pragmatic defaults
 
