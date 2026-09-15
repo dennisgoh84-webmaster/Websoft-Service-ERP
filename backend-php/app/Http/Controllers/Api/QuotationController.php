@@ -59,6 +59,10 @@ class QuotationController extends Controller
 
     private function present(Quotation $quotation): array
     {
+        $revision = $quotation->status === Quotation::STATUS_TO_REVISE
+            ? $quotation->revisions()->orderByDesc('quotation_number')->first()
+            : null;
+
         return [
             'id' => $quotation->id,
             'quotation_number' => $quotation->quotation_number,
@@ -83,6 +87,15 @@ class QuotationController extends Controller
             // SALES-006: set when this was raised from a contract as its renewal.
             'renews_contract_id' => $quotation->renews_contract_id,
             'renews_contract_number' => $quotation->renewsContract?->contract_number,
+            // To revise (2026-09-15): what the customer asked for, and the
+            // revision raised from this / the original this revises.
+            'to_revise_at' => optional($quotation->to_revise_at)->toJSON(),
+            'revision_reason' => $quotation->revision_reason,
+            'revised_from_quotation_id' => $quotation->revised_from_quotation_id,
+            'revised_from_quotation_number' => $quotation->revisedFrom?->quotation_number,
+            'revision_id' => $revision?->id,
+            'revision_number' => $revision?->quotation_number,
+            'revision_status' => $revision?->status,
             'lines' => $quotation->lines->map(fn (QuotationLine $l) => [
                 'id' => $l->id,
                 'product_id' => $l->product_id,
@@ -295,6 +308,31 @@ class QuotationController extends Controller
     {
         return $this->transition($request, $quotationId, 'edit',
             fn (Quotation $q, User $u) => QuotationService::send($q, $u->id));
+    }
+
+    /** sent -> to_revise, with what the customer asked to change. */
+    public function toRevise(Request $request, string $quotationId)
+    {
+        $data = $request->validate(['reason' => 'required|string|min:1|max:2000']);
+
+        return $this->transition($request, $quotationId, 'edit',
+            fn (Quotation $q, User $u) => QuotationService::markToRevise($q, $u->id, $data['reason']));
+    }
+
+    /** to_revise -> a new draft revision, returned. */
+    public function revise(Request $request, string $quotationId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $original = $this->quotationOrFail($user->company_id, $quotationId);
+        try {
+            $revision = QuotationService::createRevision($original, $user->id);
+        } catch (QuotationRuleViolation $e) {
+            throw new ApiException(409, $e->getMessage());
+        }
+
+        return response()->json($this->present($revision->fresh('lines')));
     }
 
     public function reject(Request $request, string $quotationId)

@@ -662,6 +662,16 @@ conversion" note on this set of rules). Decision record:
   - **Accept** (sent → accepted): only a quotation the customer has
     actually been sent can be accepted; the accept-to-Contract
     conversion (11.1) is unchanged.
+  - **To revise** (sent → `to_revise`, with what the customer asked to
+    change) — Dennis, 2026-09-15: "the status come back is Accepted /
+    Rejected / To Revise". Quotation lines are not editable once
+    raised, so **Create revision** raises a **new draft quotation**
+    copying the lines (and the contract it renews, if any), linked
+    back to the original, which then goes through approval and
+    sending again. The original stays `to_revise` showing its
+    revision; one open revision at a time. A `to_revise` quotation
+    cannot be accepted — its revision is what gets accepted — but it
+    can be rejected.
   - **Reject**: from any state before acceptance — a customer can
     decline, or Sales can withdraw, at any point up to acceptance.
   - Who submitted / approved / sent, and when, are recorded on the

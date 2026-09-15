@@ -18,6 +18,9 @@ Route::middleware('auth.jwt')->prefix('quotations')->group(function () {
     Route::post('/{quotation}/approve', [QuotationController::class, 'approve']);
     Route::post('/{quotation}/send-back', [QuotationController::class, 'sendBack']);
     Route::post('/{quotation}/send', [QuotationController::class, 'send']);
+    // After sending: accept / reject / to-revise, and the revision itself.
+    Route::post('/{quotation}/to-revise', [QuotationController::class, 'toRevise']);
+    Route::post('/{quotation}/revise', [QuotationController::class, 'revise']);
     Route::post('/{quotation}/accept', [QuotationController::class, 'accept']);
     Route::post('/{quotation}/reject', [QuotationController::class, 'reject']);
     Route::get('/{quotation}/export.docx', [QuotationController::class, 'exportDocx']);

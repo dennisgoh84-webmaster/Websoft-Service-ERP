@@ -37,6 +37,9 @@ class Quotation extends Model
 
     public const STATUS_SENT = 'sent';
 
+    /** The customer asked for changes: a revision (a new quotation) follows. */
+    public const STATUS_TO_REVISE = 'to_revise';
+
     public const STATUS_ACCEPTED = 'accepted';
 
     public const STATUS_REJECTED = 'rejected';
@@ -53,6 +56,7 @@ class Quotation extends Model
         'created_by_user_id',
         'submitted_at', 'submitted_by_user_id', 'approved_at', 'approved_by_user_id', 'sent_at', 'returned_reason',
         'renews_contract_id',
+        'to_revise_at', 'revision_reason', 'revised_from_quotation_id',
     ];
 
     // Mirrors the DB column defaults (see the migration) so a freshly
@@ -78,6 +82,7 @@ class Quotation extends Model
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
         'sent_at' => 'datetime',
+        'to_revise_at' => 'datetime',
     ];
 
     public function company(): BelongsTo
@@ -111,8 +116,20 @@ class Quotation extends Model
         return $this->belongsTo(Contract::class, 'renews_contract_id');
     }
 
-    /** Still in play: not yet accepted, rejected or expired. */
+    /** Still in play: not yet accepted, rejected or expired (to_revise is awaiting its revision). */
     public const OPEN_STATUSES = [
-        self::STATUS_DRAFT, self::STATUS_PENDING_APPROVAL, self::STATUS_APPROVED, self::STATUS_SENT,
+        self::STATUS_DRAFT, self::STATUS_PENDING_APPROVAL, self::STATUS_APPROVED, self::STATUS_SENT, self::STATUS_TO_REVISE,
     ];
+
+    /** The quotation this one revises, if it was raised as a revision. */
+    public function revisedFrom(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'revised_from_quotation_id');
+    }
+
+    /** Revisions raised from this quotation (normally one). */
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(self::class, 'revised_from_quotation_id');
+    }
 }

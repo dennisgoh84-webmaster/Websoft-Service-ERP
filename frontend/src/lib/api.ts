@@ -1545,6 +1545,8 @@ export type QuotationStatus =
   | 'pending_approval'
   | 'approved'
   | 'sent'
+  /** The customer asked for changes; a revision (a new quotation) follows. */
+  | 'to_revise'
   | 'accepted'
   | 'rejected'
   | 'expired'
@@ -1588,6 +1590,14 @@ export interface Quotation {
   /** Set when this quotation was raised from a contract as its renewal: accepting it renews that contract. */
   renews_contract_id: string | null
   renews_contract_number: string | null
+  /** To revise: what the customer asked to change, and the revision / original links. */
+  to_revise_at: string | null
+  revision_reason: string | null
+  revised_from_quotation_id: string | null
+  revised_from_quotation_number: string | null
+  revision_id: string | null
+  revision_number: string | null
+  revision_status: QuotationStatus | null
   lines: QuotationLine[]
 }
 
@@ -2816,6 +2826,10 @@ export const api = {
   sendBackQuotation: (id: string, reason: string) =>
     request<Quotation>(`/quotations/${id}/send-back`, { method: 'POST', body: JSON.stringify({ reason }) }),
   sendQuotation: (id: string) => request<Quotation>(`/quotations/${id}/send`, { method: 'POST' }),
+  toReviseQuotation: (id: string, reason: string) =>
+    request<Quotation>(`/quotations/${id}/to-revise`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  /** Raises the revision: a new draft copy of a to-revise quotation, linked back to it. */
+  reviseQuotation: (id: string) => request<Quotation>(`/quotations/${id}/revise`, { method: 'POST' }),
   acceptQuotation: (id: string) =>
     request<{ quotation: Quotation; message: string }>(`/quotations/${id}/accept`, { method: 'POST' }),
   rejectQuotation: (id: string) => request<Quotation>(`/quotations/${id}/reject`, { method: 'POST' }),

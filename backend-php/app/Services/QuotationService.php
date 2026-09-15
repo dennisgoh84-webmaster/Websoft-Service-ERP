@@ -6,9 +6,11 @@ use App\Exceptions\ContractRuleViolation;
 use App\Exceptions\QuotationRuleViolation;
 use App\Models\Contract;
 use App\Models\Quotation;
+use App\Models\QuotationLine;
 use App\Models\User;
 use App\Support\Money;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Sales Quotation business logic: totals and the accept -> auto-
@@ -128,6 +130,77 @@ class QuotationService
     }
 
     /**
+     * sent -> to_revise: the customer wants changes. What they asked
+     * for is recorded so the revision is raised against it.
+     */
+    public static function markToRevise(Quotation $quotation, string $actorUserId, string $reason): void
+    {
+        self::requireStatus($quotation, [Quotation::STATUS_SENT], 'marked to revise');
+        $quotation->status = Quotation::STATUS_TO_REVISE;
+        $quotation->to_revise_at = Carbon::now('UTC');
+        $quotation->revision_reason = trim($reason);
+        Audit::record('quotation', $quotation->id, 'to_revise', $actorUserId, reason: $reason);
+    }
+
+    /**
+     * Raise the revision: a new DRAFT quotation with the same customer,
+     * notes and lines (and the same contract to renew, if it was a
+     * renewal quotation), linked back to this one. Lines are not
+     * editable once a quotation exists, so a revision is always a new
+     * document -- which is also what the customer receives: a new
+     * number, never a silently altered one. It goes through approval
+     * and sending again from the top.
+     */
+    public static function createRevision(Quotation $original, string $actorUserId): Quotation
+    {
+        self::requireStatus($original, [Quotation::STATUS_TO_REVISE], 'revised');
+        if ($existing = $original->revisions()->whereIn('status', Quotation::OPEN_STATUSES)->first()) {
+            throw new QuotationRuleViolation(
+                "{$original->quotation_number} already has an open revision, {$existing->quotation_number} ({$existing->status})."
+            );
+        }
+
+        return DB::transaction(function () use ($original, $actorUserId) {
+            $revision = Quotation::create([
+                'company_id' => $original->company_id,
+                'quotation_number' => Numbering::next($original->company_id, 'quotation'),
+                'customer_id' => $original->customer_id,
+                'quotation_date' => Carbon::today()->toDateString(),
+                'valid_until' => null,
+                'notes' => $original->notes,
+                'created_by_user_id' => $actorUserId,
+                'renews_contract_id' => $original->renews_contract_id,
+                'revised_from_quotation_id' => $original->id,
+            ]);
+            foreach ($original->lines as $line) {
+                QuotationLine::create([
+                    'quotation_id' => $revision->id,
+                    'product_id' => $line->product_id,
+                    'description' => $line->description,
+                    'unit_of_measure' => $line->unit_of_measure,
+                    'quantity' => $line->quantity,
+                    'unit_price_sgd' => $line->unit_price_sgd,
+                    'line_total_sgd' => $line->line_total_sgd,
+                    'reference_code_id' => $line->reference_code_id,
+                    'cost_sgd' => $line->cost_sgd,
+                ]);
+            }
+            $revision->load('lines');
+            self::recomputeTotals($revision);
+            $revision->save();
+
+            Audit::record('quotation', $revision->id, 'created', $actorUserId,
+                details: "{$revision->quotation_number}: revision of {$original->quotation_number}",
+                newValue: ['revised_from_quotation_id' => $original->id]);
+            Audit::record('quotation', $original->id, 'revised', $actorUserId,
+                details: "revised as {$revision->quotation_number}",
+                newValue: ['revision_id' => $revision->id]);
+
+            return $revision;
+        });
+    }
+
+    /**
      * -> rejected, from any state before acceptance: a customer can
      * decline, or Sales can withdraw, at any point up to acceptance.
      */
@@ -135,7 +208,7 @@ class QuotationService
     {
         self::requireStatus($quotation, [
             Quotation::STATUS_DRAFT, Quotation::STATUS_PENDING_APPROVAL,
-            Quotation::STATUS_APPROVED, Quotation::STATUS_SENT,
+            Quotation::STATUS_APPROVED, Quotation::STATUS_SENT, Quotation::STATUS_TO_REVISE,
         ], 'rejected');
         $quotation->status = Quotation::STATUS_REJECTED;
         Audit::record('quotation', $quotation->id, 'rejected', $actorUserId);

@@ -26,6 +26,7 @@ const STATUS_BADGE: Record<QuotationStatus, string> = {
   pending_approval: 'exceeded',
   approved: 'active',
   sent: 'exceeded',
+  to_revise: 'draft',
   accepted: 'active',
   rejected: 'expired',
   expired: 'expired',
@@ -36,6 +37,7 @@ const STATUS_LABEL: Record<QuotationStatus, string> = {
   pending_approval: 'Pending approval',
   approved: 'Approved',
   sent: 'Sent -- pending client',
+  to_revise: 'To revise',
   accepted: 'Accepted',
   rejected: 'Rejected',
   expired: 'Expired',
@@ -217,6 +219,30 @@ export default function QuotationsPage() {
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to approve quotation')
+    }
+  }
+
+  async function onToRevise(q: Quotation) {
+    const reason = prompt(`${q.quotation_number} -- what did the customer ask to change?`)
+    if (!reason) return
+    setError(null)
+    try {
+      await api.toReviseQuotation(q.id, reason)
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to mark quotation to revise')
+    }
+  }
+
+  async function onRevise(q: Quotation) {
+    setError(null)
+    setMessage(null)
+    try {
+      const rev = await api.reviseQuotation(q.id)
+      setMessage(`${rev.quotation_number} raised as the revision of ${q.quotation_number} -- a draft with the same lines; adjust it and submit for approval.`)
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to raise the revision')
     }
   }
 
@@ -451,6 +477,7 @@ export default function QuotationsPage() {
               <option value="pending_approval">Pending approval</option>
               <option value="approved">Approved</option>
               <option value="sent">Sent -- pending client</option>
+              <option value="to_revise">To revise</option>
               <option value="accepted">Accepted</option>
               <option value="rejected">Rejected</option>
               <option value="expired">Expired</option>
@@ -520,6 +547,19 @@ export default function QuotationsPage() {
                     {q.status === 'draft' && q.returned_reason && (
                       <div className="muted">Sent back: {q.returned_reason}</div>
                     )}
+                    {q.status === 'to_revise' && (
+                      <div className="muted">
+                        Customer asked: {q.revision_reason}
+                        {q.revision_number && (
+                          <>
+                            {' '}-- revised as <strong>{q.revision_number}</strong> ({q.revision_status})
+                          </>
+                        )}
+                      </div>
+                    )}
+                    {q.revised_from_quotation_number && (
+                      <div className="muted">Revision of {q.revised_from_quotation_number}</div>
+                    )}
                     {q.converted_contract_id && (
                       <div className="muted">
                         <Link to={`/contracts/${q.converted_contract_id}`}>Service Support contract</Link>
@@ -579,8 +619,22 @@ export default function QuotationsPage() {
                         Send to customer
                       </button>
                     )}
-                    {q.status === 'sent' && <button onClick={() => onAccept(q)}>Accept</button>}
-                    {(q.status === 'draft' || q.status === 'pending_approval' || q.status === 'approved' || q.status === 'sent') && (
+                    {q.status === 'sent' && (
+                      <>
+                        <button onClick={() => onAccept(q)}>Accept</button>
+                        <button className="secondary" onClick={() => onToRevise(q)}>
+                          To revise
+                        </button>
+                      </>
+                    )}
+                    {q.status === 'to_revise' && !q.revision_id && (
+                      <button onClick={() => onRevise(q)}>Create revision</button>
+                    )}
+                    {(q.status === 'draft' ||
+                      q.status === 'pending_approval' ||
+                      q.status === 'approved' ||
+                      q.status === 'sent' ||
+                      q.status === 'to_revise') && (
                       <button className="secondary" onClick={() => onReject(q)}>
                         Reject
                       </button>

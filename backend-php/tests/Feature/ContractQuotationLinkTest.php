@@ -209,6 +209,29 @@ class ContractQuotationLinkTest extends TestCase
         $this->assertSame(2, Contract::where('customer_id', $this->customer->id)->count());
     }
 
+    public function test_a_renewal_quotation_sent_back_to_revise_is_revised_and_the_revision_renews_the_contract(): void
+    {
+        $prior = $this->contract(10);
+        $originalId = $this->postJson("/api/contracts/{$prior->id}/renewal-quotation", [], $this->h())->json('quotation_id');
+        $this->walkToSent($originalId);
+        $this->postJson("/api/quotations/{$originalId}/to-revise", ['reason' => 'More hours'], $this->h())->assertOk();
+
+        // While it awaits its revision the contract still shows it, and will not raise a second one.
+        $this->getJson("/api/contracts/{$prior->id}", $this->h())
+            ->assertJsonPath('renewal_quotation_id', $originalId)
+            ->assertJsonPath('renewal_quotation_status', 'to_revise')
+            ->assertJsonPath('renewal_quotation_eligible', false);
+
+        $revisionId = $this->postJson("/api/quotations/{$originalId}/revise", [], $this->h())->assertOk()->json('id');
+        $this->getJson("/api/quotations/{$revisionId}", $this->h())->assertJsonPath('renews_contract_id', $prior->id);
+        $this->getJson("/api/contracts/{$prior->id}", $this->h())->assertJsonPath('renewal_quotation_id', $revisionId);
+
+        $this->walkToSent($revisionId);
+        $accept = $this->postJson("/api/quotations/{$revisionId}/accept", [], $this->h())->assertOk();
+        $this->assertStringContainsString('renewed as', $accept->json('message'));
+        $this->assertSame(Contract::STATUS_RENEWED, $prior->fresh()->status);
+    }
+
     public function test_accepting_a_renewal_quotation_past_the_backdating_window_leaves_the_decision_to_a_human(): void
     {
         $prior = $this->contract(-30, ['status' => Contract::STATUS_EXPIRED]); // well past SRV-016's 2 weeks
