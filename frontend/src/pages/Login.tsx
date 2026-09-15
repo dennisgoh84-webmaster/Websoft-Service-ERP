@@ -16,8 +16,16 @@ export default function Login() {
   const navigate = useNavigate()
   const [step, setStep] = useState<Step>('credentials')
 
-  const [email, setEmail] = useState('dennis@websoft.local')
-  const [password, setPassword] = useState('demo1234')
+  // Deliberately empty. These used to prefill dennis@websoft.local /
+  // demo1234, which caused two problems: the password shipped pre-typed
+  // into every deployment's sign-in form, and the address stopped being
+  // correct -- backend/scripts/seed_demo.py seeds @websoft.local while
+  // backend-php's DatabaseSeeder seeds @websoft.example, so a hardcoded
+  // prefill is wrong against whichever backend it was not written for.
+  // Demo credentials belong in DEV_SETUP.md and deploy/README.md, where
+  // they can say which backend they apply to.
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
 
   const [otpToken, setOtpToken] = useState('')
   const [otpCode, setOtpCode] = useState('')
@@ -176,7 +184,18 @@ export default function Login() {
             <form onSubmit={onSubmitCredentials}>
               <div className="form-row">
                 <label>Email</label>
-                <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
+                {/* autoComplete lets a password manager fill these, which
+                    is the convenience the removed hardcoded prefill was
+                    standing in for -- and it fills the right account
+                    rather than one guessed at build time. */}
+                <input
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  type="email"
+                  autoComplete="username"
+                  autoFocus
+                  required
+                />
               </div>
               <div className="form-row">
                 <label>Password</label>
@@ -184,6 +203,7 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   type="password"
+                  autoComplete="current-password"
                   required
                 />
               </div>
