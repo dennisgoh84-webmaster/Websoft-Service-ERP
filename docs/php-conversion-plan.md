@@ -1865,6 +1865,50 @@ against the constructed Symfony transport, not by connecting.
 
   14 dedicated tests cover both modules.
 
+### Support Monitoring (converted 2026-09-15)
+
+- **Support Monitoring** (`app/routers/monitoring.py` +
+  `app/services/monitoring.py` -> `App\Services\Monitoring` +
+  `App\Http\Controllers\Api\MonitoringController`, 12 dedicated
+  tests): the per-staff Job Order workload and contract-hours
+  throughput board, so a supervisor can see who is overloaded. One
+  read-only endpoint, gated on `reporting` at VIEW.
+
+  PYTHON BEHAVIOURS CARRIED ACROSS DELIBERATELY, each pinned by a test:
+  - The **owner is excluded** from the staff rows (`role != OWNER`), as
+    are inactive users -- it is a board of the staff being supervised.
+  - A Job Order **assigned to someone outside that staff map** (the
+    owner, or a deactivated user) counts in the summary totals but
+    appears in **nobody's row** -- it is not the same as unassigned,
+    because `assigned_to_user_id` is set, so it does not reach the
+    Un-Assigned row either.
+  - `avg_daily_contract_hours` divides by the number of days **elapsed
+    so far this month**, not by the number of days actually worked, so
+    it reads as "how many hours a day is this person contributing on
+    average" rather than being inflated by counting only active days.
+  - That averaging loop runs over the staff rows **only**, so the
+    synthetic Un-Assigned row keeps `0.0` even when it has open job
+    orders.
+  - Only `contract_deduction` records contribute hours; excess-usage
+    records still count as records for the month.
+
+  OPEN ITEM carried across unchanged, not guessed: "due soon" has no
+  confirmed lead time. `DUE_SOON_LEAD_DAYS = 2` is a pragmatic default
+  (SRV-009 remains deferred), used only to bucket a Job Order that
+  already has a manually-set `due_date`.
+
+  **KNOWN GAP: "Un-Test S/T" always reports 0.** The metric counts
+  Software Task rows assigned to a tester but not yet marked tested.
+  The Software Tasks module is not converted, so there is no
+  `software_tasks` table to count. The field is present and zero so the
+  screen renders and the response shape is unchanged; a test pins it
+  explicitly so the zero cannot later be mistaken for a verified real
+  count. When Software Tasks lands, the counting loop in
+  `App\Services\Monitoring` is the only thing that needs filling in --
+  Python's loop increments the summary total for **every** untested
+  task whether or not it has a tester assigned, and that detail is
+  recorded in the code comment there.
+
 ## New feature work landed directly in `backend-php/` (not a conversion)
 
 2026-09-22: Dennis asked for a set of new Sales-area features (Job
