@@ -16,6 +16,7 @@ use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\MobileFileStorage;
 use App\Services\Numbering;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -245,9 +246,16 @@ class MobileController extends Controller
             ->where('employee_user_id', $user->id)
             ->whereNotNull('time_in')->whereNull('time_out')->first();
 
-        // Python returns a bare null when there is nothing open.
+        // Python returns a bare null when there is nothing open, and the
+        // frontend is written against that: MobileApp.tsx does
+        // `{openTimeIn && ...}` and then reads .time_in off it.
+        // response()->json(null) does NOT produce it -- Symfony's
+        // JsonResponse constructor does `$data ??= new \ArrayObject()`,
+        // so null is encoded as `{}`, which is truthy in JS and blanked
+        // the whole Mobile screen with a TypeError for every engineer
+        // with no open time-in. fromJsonString writes the literal null.
         if (! $open) {
-            return response()->json(null);
+            return JsonResponse::fromJsonString('null');
         }
 
         $jo = JobOrder::find($open->job_order_id);
@@ -484,7 +492,8 @@ class MobileController extends Controller
 
         $signoff = ServiceRecordSignoff::where('service_record_id', $record->id)->first();
         if (! $signoff) {
-            return response()->json(null);
+            // Literal null, not `{}` -- see myOpenTimeIn above.
+            return JsonResponse::fromJsonString('null');
         }
 
         return response()->json([

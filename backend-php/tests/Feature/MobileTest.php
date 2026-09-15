@@ -210,9 +210,20 @@ class MobileTest extends TestCase
             ->assertJsonPath('detail', 'This Service Record belongs to another staff member');
     }
 
+    /**
+     * The "nothing open" answer must be a LITERAL null, not `{}`.
+     * MobileApp.tsx guards on `{openTimeIn && ...}` and then reads
+     * fields off it, so `{}` is truthy there and blanks the whole
+     * screen with a TypeError. assertExactJson([]) cannot tell the two
+     * apart -- json_decode('{}', true) is also [] -- so these assert
+     * the raw response body instead.
+     */
     public function test_my_open_timein_reports_the_open_record_then_null(): void
     {
-        $this->getJson('/api/mobile/my-open-timein', $this->headers())->assertOk()->assertExactJson([]);
+        $this->assertSame(
+            'null',
+            $this->getJson('/api/mobile/my-open-timein', $this->headers())->assertOk()->getContent(),
+        );
 
         $jo = $this->jobOrder(['subject' => 'On site now']);
         $started = $this->postJson("/api/mobile/job-orders/{$jo->id}/time-in", [], $this->headers())->assertOk()->json();
@@ -222,7 +233,10 @@ class MobileTest extends TestCase
             ->assertJsonPath('job_order_subject', 'On site now');
 
         $this->postJson("/api/mobile/service-records/{$started['id']}/time-out", [], $this->headers())->assertOk();
-        $this->getJson('/api/mobile/my-open-timein', $this->headers())->assertOk()->assertExactJson([]);
+        $this->assertSame(
+            'null',
+            $this->getJson('/api/mobile/my-open-timein', $this->headers())->assertOk()->getContent(),
+        );
     }
 
     public function test_photos_and_videos_are_accepted_and_anything_else_refused(): void
@@ -313,8 +327,12 @@ class MobileTest extends TestCase
         $jo = $this->jobOrder();
         $started = $this->postJson("/api/mobile/job-orders/{$jo->id}/time-in", [], $this->headers())->assertOk()->json();
 
-        $this->getJson("/api/mobile/service-records/{$started['id']}/signoff", $this->headers())
-            ->assertOk()->assertExactJson([]);
+        // Literal null, for the same reason as my-open-timein above.
+        $this->assertSame(
+            'null',
+            $this->getJson("/api/mobile/service-records/{$started['id']}/signoff", $this->headers())
+                ->assertOk()->getContent(),
+        );
     }
 
     public function test_the_job_order_detail_counts_attachments_and_flags_signoff(): void

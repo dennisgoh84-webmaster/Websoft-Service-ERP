@@ -2,7 +2,7 @@
 #
 # Used with -f ON ITS OWN, not layered over ../docker-compose.yml:
 #
-#     docker compose -f deploy/docker-compose.php.yml up -d --build
+#     docker compose --env-file .env -f deploy/docker-compose.php.yml up -d --build
 #
 # Self-contained on purpose. Layering an override would mean relying on
 # Compose's merge rules to switch `frontend`'s depends_on and disable

@@ -53,8 +53,26 @@ COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-interaction --prefer-dist --no-scripts --no-autoloader
 
 COPY . .
-RUN composer dump-autoload --optimize --no-dev \
-    && mkdir -p storage/app/uploads storage/framework/{cache,sessions,views} storage/logs bootstrap/cache \
+# The writable directories MUST be created BEFORE composer runs. They are
+# not in the image: .dockerignore excludes bootstrap/cache/ and the
+# storage/framework/* directories on purpose (a host's caches must never
+# be baked in), and composer's post-autoload-dump script runs
+# `artisan package:discover`, which writes bootstrap/cache/packages.php.
+# With the mkdir after it, the build failed on a clean checkout.
+#
+# The paths are also spelled out one by one rather than written as
+# storage/framework/{cache,sessions,views}: RUN uses /bin/sh, which is
+# dash on Debian, and dash has no brace expansion -- that form created a
+# single literal directory named "{cache,sessions,views}" and left the
+# three real ones missing.
+RUN mkdir -p \
+        storage/app/uploads \
+        storage/framework/cache \
+        storage/framework/sessions \
+        storage/framework/views \
+        storage/logs \
+        bootstrap/cache \
+    && composer dump-autoload --optimize --no-dev \
     && chown -R www-data:www-data storage bootstrap/cache
 
 COPY docker/nginx.conf /etc/nginx/sites-available/default

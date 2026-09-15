@@ -15,7 +15,13 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
-COMPOSE="docker compose -f deploy/docker-compose.php.yml"
+# --env-file is REQUIRED, not a nicety. Compose derives its project
+# directory from the FIRST -f file, so with `-f deploy/...yml` it looks
+# for .env in deploy/, never finds the one this script writes at the
+# repo root, and dies with "required variable APP_KEY is missing a
+# value". --env-file names the file explicitly while leaving the project
+# directory alone, so the relative build contexts still resolve.
+COMPOSE="docker compose --env-file $ROOT/.env -f deploy/docker-compose.php.yml"
 
 say()  { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[33m    %s\033[0m\n' "$*"; }
@@ -82,6 +88,22 @@ $COMPOSE run --rm migrate-php
 say "Seeding demo data"
 $COMPOSE run --rm --entrypoint php backend-php artisan db:seed --force
 
+# The seeder sets the published demo password (demo1234), which is right
+# for a laptop and wrong for a server anyone else can reach -- telling
+# the operator to change it afterwards leaves a window where a known
+# password is live. Generate one instead, and print it once below. The
+# hex half guarantees digits and the suffix guarantees a letter, so this
+# always satisfies PasswordPolicy's alphanumeric rule.
+say "Setting the owner's password"
+ADMIN_EMAIL="dennis@websoft.example"
+ADMIN_PASSWORD="$(openssl rand -hex 10)Ws"
+$COMPOSE run --rm --entrypoint php backend-php \
+  artisan user:set-password "$ADMIN_EMAIL" "$ADMIN_PASSWORD" >/dev/null
+echo "    A random password was generated -- it is printed once, below."
+# Kept out of the report heredoc: that heredoc is unquoted, so a
+# backslash line-continuation inside it would fold the lines together.
+ADMIN_PW_CMD="docker compose --env-file .env -f deploy/docker-compose.php.yml exec backend-php php artisan user:set-password $ADMIN_EMAIL '<new password>'"
+
 say "Starting the application"
 $COMPOSE up -d
 
@@ -97,14 +119,17 @@ cat <<REPORT
   Mobile     http://${IP:-<server-ip>}${PORT_SUFFIX}/mobile
   Portal     http://${IP:-<server-ip>}${PORT_SUFFIX}/portal
 
-  Sign in as   dennis@websoft.example
-  Password     demo1234
+  Sign in as   $ADMIN_EMAIL
+  Password     $ADMIN_PASSWORD
 
-  Status        docker compose -f deploy/docker-compose.php.yml ps
-  Logs          docker compose -f deploy/docker-compose.php.yml logs -f backend-php
+  Generated just now and shown ONLY here -- write it down. Change it
+  from inside the app, or from this server:
+    $ADMIN_PW_CMD
+
+  Status        docker compose --env-file .env -f deploy/docker-compose.php.yml ps
+  Logs          docker compose --env-file .env -f deploy/docker-compose.php.yml logs -f backend-php
   Upgrade       ./deploy/upgrade.sh
 
 REPORT
-warn "CHANGE THAT PASSWORD before anyone else can reach this server."
 warn "This is a TEST server recipe: plain HTTP, and it seeds demo data."
 warn "For anything real, add HTTPS first -- DEPLOY.md section 6."

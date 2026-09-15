@@ -71,7 +71,9 @@ in either script deletes them — neither ever runs `down -v`.
 ## Day to day
 
 ```bash
-C="docker compose -f deploy/docker-compose.php.yml"
+# --env-file is needed: compose reads .env from the directory of the
+# first -f file (deploy/), not from the repo root where it lives.
+C="docker compose --env-file .env -f deploy/docker-compose.php.yml"
 
 $C ps                         # what is running
 $C logs -f backend-php        # application log
@@ -147,11 +149,20 @@ cp -r ../websoft-service-erp-<old>/backups . 2>/dev/null || true
 
 ## Security note
 
-This recipe is for a **test server**: plain HTTP, seeded demo data, and
-a published demo password (`dennis@websoft.example` / `demo1234`).
-Change that password as soon as the server is reachable by anyone else,
-and put HTTPS in front before it holds anything real —
+This recipe is for a **test server**: plain HTTP and seeded demo data.
+Put HTTPS in front before it holds anything real —
 [DEPLOY.md section 6](../DEPLOY.md).
+
+The owner account is `dennis@websoft.example`. The seeder's password is
+published in this repository, so `install.sh` replaces it with a
+randomly generated one and prints it once, at the end of the install —
+write it down, it is not stored anywhere you can read it back. To set a
+different one at any time:
+
+```bash
+$C exec backend-php php artisan user:set-password \
+    dennis@websoft.example '<new password>'
+```
 
 `.env` is written mode 600 and holds `APP_KEY`, which encrypts stored
 mailbox passwords. Keep it: without it those cannot be read back.
