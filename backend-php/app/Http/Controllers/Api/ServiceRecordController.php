@@ -74,6 +74,8 @@ class ServiceRecordController extends Controller
             'completion_status' => $record->completion_status,
             'is_after_hours' => $record->is_after_hours,
             'is_late' => $record->isLate(),
+            'approval_due_at' => $record->approvalDueAt()?->toIso8601String(),
+            'is_approval_overdue' => $record->isApprovalOverdue(),
             'work_description' => $record->work_description,
         ];
     }
@@ -156,7 +158,10 @@ class ServiceRecordController extends Controller
                     $r->rounded_minutes, $jo?->is_urgent ?? false, $r->is_after_hours,
                 ),
                 'contract_remaining_minutes' => $contract?->remainingMinutes(),
+                'billing_classification' => $jo?->billing_classification ?? JobOrder::BILLING_CONTRACT,
                 'is_late' => $r->isLate(),
+                'approval_due_at' => $r->approvalDueAt()?->toIso8601String(),
+                'is_approval_overdue' => $r->isApprovalOverdue(),
             ];
         })->values();
     }

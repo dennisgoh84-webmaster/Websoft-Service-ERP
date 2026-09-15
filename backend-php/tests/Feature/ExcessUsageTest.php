@@ -60,7 +60,10 @@ class ExcessUsageTest extends TestCase
             jobOrderId: $jobOrder->id, employeeUserId: $employee->id, workDate: now()->toDateString(),
             rawMinutes: 60, actorUserId: $employee->id,
         );
-        ServiceRecordService::approveServiceRecord($record->fresh(), $jobOrder, $approver, 60);
+        // SRV-019: only Nico / Cherish approve Service Records; the owner
+        // passed in here reviews the resulting excess usage (SRV-004/011).
+        $nico = User::factory()->for($company)->create(['role' => User::ROLE_SERVICE_LEAD]);
+        ServiceRecordService::approveServiceRecord($record->fresh(), $jobOrder, $nico, 60);
 
         return [ExcessUsageRecord::where('service_record_id', $record->id)->firstOrFail(), $company];
     }

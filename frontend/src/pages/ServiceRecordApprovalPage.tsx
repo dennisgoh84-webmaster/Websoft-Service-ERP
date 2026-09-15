@@ -56,10 +56,14 @@ export default function ServiceRecordApprovalPage() {
     <div>
       <h1>Service Record Approval</h1>
       <p className="muted">
-        Every Submitted Service Record, oldest first. Approving keys in the actual minutes to
-        deduct from the contract -- a suggestion is prefilled (rounded minutes x the Urgent/
-        after-hours multiplier, higher one wins if both apply) but you can key in any value, e.g.
-        actual 240min logged, 220min or 360min deducted.
+        Every Submitted Service Record, oldest first. Only Nico (Service Lead) or Cherish (Sales
+        Manager) can approve, and each record should be approved within a week of submission
+        (SRV-019) -- anything past that is marked overdue here and counted on the Company
+        Dashboard. Approving keys in the actual minutes to deduct from the contract -- a suggestion
+        is prefilled (rounded minutes x the Urgent/after-hours multiplier, higher one wins if both
+        apply) but you can key in any value, e.g. actual 240min logged, 220min or 360min deducted.
+        On a job order classified Billable or Non-billable the figure is recorded but nothing is
+        deducted from contract hours (SRV-020).
       </p>
       {error && <div className="error-banner">{error}</div>}
 
@@ -91,6 +95,11 @@ export default function ServiceRecordApprovalPage() {
                 <td>
                   {r.work_date}
                   {r.is_late && <span className="badge exceeded" style={{ marginLeft: 6 }}>late</span>}
+                  {r.is_approval_overdue && (
+                    <span className="badge exceeded" style={{ marginLeft: 6 }} title="Submitted more than a week ago (SRV-019)">
+                      approval overdue
+                    </span>
+                  )}
                 </td>
                 <td>
                   {r.raw_minutes}m &rarr; {r.rounded_minutes}m
@@ -103,7 +112,15 @@ export default function ServiceRecordApprovalPage() {
                     </span>
                   )}
                 </td>
-                <td>{r.contract_remaining_minutes != null ? `${r.contract_remaining_minutes}m` : 'n/a'}</td>
+                <td>
+                  {r.billing_classification === 'contract'
+                    ? r.contract_remaining_minutes != null
+                      ? `${r.contract_remaining_minutes}m`
+                      : 'n/a'
+                    : r.billing_classification === 'billable'
+                      ? 'Billable -- not deducted'
+                      : 'Non-billable -- not deducted'}
+                </td>
                 <td>
                   <input
                     type="number"

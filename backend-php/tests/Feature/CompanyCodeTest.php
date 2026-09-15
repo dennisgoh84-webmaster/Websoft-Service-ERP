@@ -71,7 +71,11 @@ class CompanyCodeTest extends TestCase
         Company::factory()->create(['name' => 'Acme Manufacturing']);
         Company::factory()->create(['name' => 'Acme']);
 
-        Artisan::call('migrate:rollback', ['--step' => 2, '--force' => true]);
+        // Roll back every migration from the first recoding one onward,
+        // however many have been added since, so this stays valid.
+        $files = collect(glob(database_path('migrations/*.php')))->map(fn ($f) => basename($f))->sort()->values();
+        $steps = $files->count() - $files->search(fn ($f) => str_starts_with($f, '2026_09_30_000600'));
+        Artisan::call('migrate:rollback', ['--step' => $steps, '--force' => true]);
         $this->assertSame(['C001', 'C002', 'C003'], Company::query()->orderBy('code')->pluck('code')->all());
 
         Artisan::call('migrate', ['--force' => true]);

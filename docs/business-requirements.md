@@ -160,7 +160,9 @@ SRV-001 through SRV-006 directly resolve open items 1.2 and 1.3 in
 [open-business-decisions.md](open-business-decisions.md). A second round
 of decisions (SRV-007 through SRV-015 below, confirmed 2026-09-06)
 resolves the remaining Service Operations items from that document: 1.1,
-1.4, 1.5 (deferred), 1.6, 1.8, 1.9, 1.10, 1.11, and 9.3.
+1.4, 1.5 (SLA — since removed altogether, 2026-09-15), 1.6, 1.8, 1.9,
+1.10, 1.11, and 9.3. A third round (SRV-019 and SRV-020, confirmed
+2026-09-15) resolves 9.1 and 9.2.
 
 ### SRV-007 — Hour Rounding — CONFIRMED
 
@@ -181,16 +183,13 @@ resolves the remaining Service Operations items from that document: 1.1,
   excess usage: the customer is invoiced and then notified, not asked to
   approve in advance.
 
-### SRV-009 — SLA Targets Deferred — CONFIRMED (deferred)
+### SRV-009 — SLA Targets — REMOVED (2026-09-15)
 
-- Formal SLA response/resolution time targets by job order priority are
-  **not defined at this time** — this is an explicit decision to defer,
-  not an oversight.
-- The system still tracks job order priority and relevant timestamps (e.g.
-  logged, assigned, resolved) so that formal targets can be layered on
-  later without a data-model change.
-- No breach-handling behaviour is defined, since no targets exist to
-  breach yet.
+- Originally a confirmed deferral ("no formal SLA targets at this
+  time"). On 2026-09-15 Dennis removed it outright: **no SLA
+  response/resolution targets, and none are planned** — "not necessary
+  to have". Job Order priority and timestamps remain, as ordinary
+  operational data, not as the groundwork for SLA tracking.
 
 ### SRV-010 — Renewal Record & Coverage Continuity — CONFIRMED
 
@@ -277,6 +276,46 @@ resolves the remaining Service Operations items from that document: 1.1,
   at the discretion of Nico, Cherish, or Dennis, depending on
   circumstances (e.g. whether to treat it as a true coverage gap, or
   make a judgment call to backdate anyway).
+
+### SRV-019 — Service Record Approval: Nico or Cherish, within a week — CONFIRMED (2026-09-15)
+
+- Only **Nico (Service Lead)** and **Cherish (Sales Manager)** may
+  approve a submitted Service Record and key in the deducted hours.
+  Nobody else — including the owner — can approve one. (Resolves open
+  item 9.1; the earlier build let the owner approve as a placeholder.)
+- A submitted record is to be approved **within a week** (7 days) of
+  submission. Past that it is flagged **approval overdue** on the
+  Service Record Approval queue and counted on the Company Dashboard.
+  Nothing is auto-approved and nothing is blocked — the flag is a
+  prompt, not an enforcement (pragmatic default: Dennis gave the
+  deadline, not a consequence).
+- Excess-usage review (SRV-004 / SRV-011) is unchanged by this rule:
+  it is about the treatment of excess hours, not the approval of the
+  record.
+
+### SRV-020 — Billable / Non-billable / Contract-covered follows the Job Order — CONFIRMED (2026-09-15)
+
+- Whether logged time is contract-covered, billable or non-billable
+  **depends on the Job Order context**, never on a choice made by the
+  staff member logging the record. (Resolves open item 9.2.)
+- Every Job Order carries a **billing classification**, set when it is
+  raised and correctable while it is still open:
+  - **Contract hours** (default, the original behaviour): the linked
+    contract's balance decides — SRV-003 deduction while hours remain,
+    Excess Usage for Nico's review beyond that (SRV-004); an Annual or
+    Ad Hoc contract meters nothing.
+  - **Billable**: chargeable work outside the contract's hour pool.
+    Nothing is deducted; the approved record is marked *billable* and
+    is charged through the Job Order's own billing — a milestone /
+    fixed-price invoice for a project (BILL-004) or a Sales Invoice
+    raised by hand. No invoice is raised automatically (pragmatic
+    default — SRV-006's "no unbilled service hours" still applies, and
+    the Operations Reports can list every billable record by outcome).
+  - **Non-billable**: internal, warranty or goodwill work. Nothing is
+    deducted and nothing is billed; the record is kept for the audit
+    trail and reports.
+- Changing a Job Order's classification affects only records approved
+  from then on; a contract deduction already made is never rewritten.
 
 ### Service Operations Workflow (CONFIRMED shape)
 
@@ -837,7 +876,7 @@ are gathered per module.
   it has Expired or been Renewed.
 - A **Job Order** belongs to a Customer, optionally references a
   **Hardware Asset**, and is checked against the Customer's active
-  **Contract** for entitlement/SLA.
+  **Contract** for entitlement.
 - A **Project** belongs to a Customer (and optionally a Sales Order), and
   is broken into **Project Tasks**.
 - A **Service Record** belongs to an Employee and references exactly one

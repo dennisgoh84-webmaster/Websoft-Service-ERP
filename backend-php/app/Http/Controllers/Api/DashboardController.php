@@ -98,11 +98,14 @@ class DashboardController extends Controller
         // days after the work was performed. (Approximation -- see
         // ServiceRecord::isLate(); detecting *never-submitted* work is
         // future scope.)
-        $missingServiceRecords = ServiceRecord::where('company_id', $companyId)
+        $submittedRecords = ServiceRecord::where('company_id', $companyId)
             ->where('status', ServiceRecord::STATUS_SUBMITTED)
-            ->get()
-            ->filter(fn (ServiceRecord $r) => $r->isLate())
-            ->count();
+            ->get();
+        $missingServiceRecords = $submittedRecords->filter(fn (ServiceRecord $r) => $r->isLate())->count();
+
+        // SRV-019: submitted more than a week ago and still not approved
+        // by Nico or Cherish.
+        $serviceRecordApprovalsOverdue = $submittedRecords->filter(fn (ServiceRecord $r) => $r->isApprovalOverdue())->count();
 
         // Every invoice ever issued, not just outstanding ones --
         // "Invoiced to date" on the frontend tile. Python sums the raw
@@ -155,6 +158,8 @@ class DashboardController extends Controller
             'excess_awaiting_review' => $excessAwaitingReview,
             'open_job_orders' => $openJobOrders,
             'missing_service_records' => $missingServiceRecords,
+            'service_records_awaiting_approval' => $submittedRecords->count(),
+            'service_record_approvals_overdue' => $serviceRecordApprovalsOverdue,
             'invoices_total_sgd' => $invoicesTotal->toFloat(),
             'invoices_count' => $invoices->count(),
             'ar_outstanding_sgd' => $arOutstanding->toFloat(),

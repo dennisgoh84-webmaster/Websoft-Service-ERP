@@ -80,7 +80,7 @@ an existing customer purchases a new contract directly.
 1. If the customer is new, a Customer Management record (and contacts/
    sites) is created or confirmed.
 2. A Service Contract is created from the sales order, with contract
-   lines defining scope, included hours/quantity, and SLA terms. The
+   lines defining scope and included hours/quantity. The
    contract starts in **Draft** status (CONFIRMED lifecycle, SRV-001:
    Draft → Active → Exceeded (if applicable) → Expired / Renewed). A
    standard contract runs for **12 months** (SRV-001) and must specify at
@@ -146,16 +146,20 @@ A customer reports an issue or service request.
 **Steps**
 1. **Job Order** is logged in Helpdesk / Service Operations, linked
    to the customer (and asset, if applicable via Hardware Management).
-2. Job Order is categorized/prioritized; SLA timers start based on the
-   customer's Service Contract.
+2. Job Order is categorized/prioritized and checked against the
+   customer's Service Contract (no SLA targets exist — removed
+   2026-09-15).
 3. **Assignment** — job order is assigned to a staff member (or escalated).
 4. **Service Work** is performed by the assigned staff member.
 5. **Service Record** — staff logs time against the job order via Service Records,
    within **3 business days** of doing the work (CONFIRMED, SRV-015);
    later than that, it is flagged as a missing service record. Service Record
    approval is required before the entry affects contract hours or
-   billing (approver/threshold not yet decided — see
-   [open-business-decisions.md](open-business-decisions.md), item 9.1).
+   billing: **only Nico or Cherish approve, within a week of
+   submission** (CONFIRMED, SRV-019); what the approved time *is* —
+   contract-covered, billable or non-billable — follows the Job
+   Order's billing classification, never the submitter's choice
+   (CONFIRMED, SRV-020).
 6. **Contract Hour Validation** (CONFIRMED, SRV-003/SRV-004/SRV-007) —
    the approved logged time is first **rounded up to the nearest 15
    minutes** (SRV-007), then checked against the contract's remaining
@@ -190,7 +194,7 @@ A customer reports an issue or service request.
 
 **Responsible user/department**
 Service/support staff (job order handling, time logging); service operations
-management (assignment/escalation, SLA oversight); **Nico** (Service &
+management (assignment/escalation); **Nico** (Service &
 Support — excess usage review and treatment decision, per SRV-004), with
 **Cherish** (Sales Manager) as the confirmed backup reviewer when Nico is
 unavailable (SRV-011); finance/billing team (billing/invoicing step).
@@ -214,9 +218,6 @@ Billing. Approved non-billable excess has no direct financial posting but
 must be recorded with its reason for audit and reporting.
 
 **Possible exceptions**
-- Job Order exceeds an SLA target — not applicable for now: no formal SLA
-  targets are defined (CONFIRMED deferral, SRV-009); priority and
-  timestamps are still tracked so this can be layered on later.
 - Contract hours are exhausted partway through a job order — CONFIRMED handling: no grace
   period, excess usage routed to Nico's (or Cherish's) review rather than
   auto-billed or auto-absorbed (SRV-003/SRV-004).
@@ -228,8 +229,6 @@ must be recorded with its reason for audit and reporting.
 
 **Automation opportunities**
 - Auto-assignment based on staff availability/skill.
-- SLA breach alerts (deferred — no targets defined yet, per SRV-009;
-  revisit once/if formal targets are set).
 - Automatic contract-hour rounding (SRV-007), validation, and deduction
   from approved service records (CONFIRMED as required behaviour; automation
   of the underlying check, not just the rule, is a future implementation

@@ -58,11 +58,10 @@ sub-detail is called out explicitly).
    *Arises in:* Billing, Helpdesk / Service Operations; Workflow C.
 
 1.5. **What SLA terms apply, and how are SLA breaches handled?**
-   **Status: DECIDED (deferred) — SRV-009.** No formal SLA response/
-   resolution targets are defined at this time; this is an explicit
-   decision to defer, not an open gap. Job Order priority and timestamps
-   are still tracked so targets can be added later without a data-model
-   change.
+   **Status: REMOVED (2026-09-15).** Was a confirmed deferral
+   (SRV-009); Dennis then removed SLA targets altogether — "not
+   necessary to have". No response/resolution targets, no breach
+   handling, none planned.
    *Arises in:* Service Contracts, Helpdesk / Service Operations;
    Workflow C.
 
@@ -496,21 +495,31 @@ Status: **DECIDED / BUILT** (2026-09-12) — all five items resolved.
 
 9.1. **Who approves submitted service records**, and within what time frame
    (e.g. weekly approval by a direct manager)?
-   **Status: DEFERRED** (2026-09-10, at Dennis's request) — not being
-   decided for now. The current build uses a pragmatic default (any user
-   with role service_lead, sales_manager, or owner can approve) purely so
-   the application functions end-to-end; this is not a business decision
-   and should be revisited when this area is finalized.
+   **Status: DECIDED — SRV-019 (2026-09-15).** "Only Nico and Cherish
+   can approve the deduct hrs and within a week." Built: the approver
+   set is the Service Lead (Nico) and Sales Manager (Cherish) roles
+   only — the owner, who the earlier pragmatic default included, is
+   out; a record still Submitted a week after submission is flagged
+   *approval overdue* on the approval queue and the Company Dashboard.
+   Pragmatic default within it: the week is a flag, not an
+   enforcement — nothing is auto-approved or blocked once it passes.
+   ~~DEFERRED (2026-09-10).~~
    *Arises in:* Service Records; Workflows C, D.
 
 9.2. **How is time classified as billable, non-billable, or
    contract-covered**, and can staff choose, or is it determined by the
-   job order/project/contract context automatically? **Status: PARTIALLY
-   DECIDED** — SRV-003/SRV-004 confirm that the contract balance itself
-   determines whether logged time is contract-covered or Excess Usage
-   requiring Nico's review; still open is how billable vs. non-billable
-   is classified once work is not tied to a contract at all (e.g. pure
-   project time).
+   job order/project/contract context automatically? **Status: DECIDED — SRV-020
+   (2026-09-15).** "It depends on the job order context." Built: every
+   Job Order carries a billing classification (Contract hours — the
+   default and original behaviour, the contract balance deciding
+   deduction vs. Excess Usage per SRV-003/SRV-004; Billable — nothing
+   deducted, charged through the Job Order's own billing; Non-billable
+   — nothing deducted, nothing billed). Staff logging a record never
+   choose; the outcome is derived from the Job Order at approval.
+   Pragmatic default within it: a Billable record raises no invoice by
+   itself — BILL-004 milestone billing or a hand-raised Sales Invoice
+   covers it, and the Operations Reports list billable records by
+   outcome so none is lost (SRV-006).
    *Arises in:* Service Records, Helpdesk / Service Operations, Projects,
    Service Contracts; Workflow C.
 

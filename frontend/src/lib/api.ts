@@ -542,6 +542,8 @@ export type JobOrderPriority = 'low' | 'normal' | 'high' | 'critical'
  * been raised (duplicate, raised in error). */
 export type JobOrderStatus = 'open' | 'assigned' | 'closed' | 'void'
 export type JobOrderType = 'support' | 'project'
+/** SRV-020: what an approved Service Record's time on this Job Order is. */
+export type JobOrderBillingClassification = 'contract' | 'billable' | 'non_billable'
 
 export type MilestoneType = 'installation' | 'training' | 'repeat_training' | 'handover' | 'completion_signoff'
 export type MilestoneStatus = 'pending' | 'in_progress' | 'completed' | 'skipped'
@@ -601,6 +603,10 @@ export interface JobOrder {
   contract_id: string | null
   subject: string
   job_order_type: JobOrderType
+  /** SRV-020: contract (the contract balance decides), billable (charged
+   * outside the hour pool, never deducted) or non_billable (nothing
+   * deducted, nothing billed). Staff never choose this per record. */
+  billing_classification: JobOrderBillingClassification
   priority: JobOrderPriority
   status: JobOrderStatus
   /** "Tick as Urgent" -- suggests a x1.5 deduction-minutes multiplier on approval. */
@@ -755,7 +761,14 @@ export interface IncidentFromEmailResult {
 }
 
 export type ServiceRecordStatus = 'submitted' | 'approved'
-export type ServiceRecordOutcome = 'pending' | 'contract_deduction' | 'excess_usage' | 'not_hour_metered'
+export type ServiceRecordOutcome =
+  | 'pending'
+  | 'contract_deduction'
+  | 'excess_usage'
+  | 'not_hour_metered'
+  /** SRV-020: the Job Order was classified billable / non-billable. */
+  | 'billable'
+  | 'non_billable'
 /** 'C' = Completed (this visit finished the job), 'U' = Uncompleted
  * (another visit is needed) -- set by the submitter, drives Job Order
  * auto-close. */
@@ -776,6 +789,10 @@ export interface ServiceRecord {
   completion_status: ServiceRecordCompletion
   is_after_hours: boolean
   is_late: boolean
+  /** SRV-019: submitted_at + 7 days; null until submitted. */
+  approval_due_at: string | null
+  /** SRV-019: still Submitted more than a week after submission. */
+  is_approval_overdue: boolean
   /** Free text describing the work done this session (2026-09-12) --
    * optional, spellchecked in the browser as it's typed. */
   work_description: string | null
@@ -800,7 +817,10 @@ export interface PendingServiceRecord {
   is_after_hours: boolean
   suggested_deducted_minutes: number
   contract_remaining_minutes: number | null
+  billing_classification: JobOrderBillingClassification
   is_late: boolean
+  approval_due_at: string | null
+  is_approval_overdue: boolean
 }
 
 export type ExcessTreatment =
@@ -1475,6 +1495,9 @@ export interface DashboardSummary {
   excess_awaiting_review: number
   open_job_orders: number
   missing_service_records: number
+  service_records_awaiting_approval: number
+  /** SRV-019: submitted more than a week ago and still not approved. */
+  service_record_approvals_overdue: number
   invoices_total_sgd: number
   invoices_count: number
   ar_outstanding_sgd: number
@@ -2311,6 +2334,7 @@ export const api = {
     contract_id: string
     subject: string
     job_order_type?: JobOrderType
+    billing_classification?: JobOrderBillingClassification
     priority?: JobOrderPriority
     due_date?: string | null
     is_urgent?: boolean
@@ -2318,6 +2342,11 @@ export const api = {
     // docs/backlog.md / docs/planned-work.md.
     product_ids?: string[]
   }) => request<JobOrder>('/job-orders', { method: 'POST', body: JSON.stringify(payload) }),
+  setJobOrderBillingClassification: (id: string, billing_classification: JobOrderBillingClassification) =>
+    request<JobOrder>(`/job-orders/${id}/billing-classification`, {
+      method: 'POST',
+      body: JSON.stringify({ billing_classification }),
+    }),
   assignJobOrder: (id: string, assigned_to_user_id: string) =>
     request<JobOrder>(`/job-orders/${id}/assign`, { method: 'POST', body: JSON.stringify({ assigned_to_user_id }) }),
   setJobOrderDueDate: (id: string, due_date: string | null) =>

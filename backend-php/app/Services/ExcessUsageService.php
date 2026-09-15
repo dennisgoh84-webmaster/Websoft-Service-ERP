@@ -22,10 +22,13 @@ use Illuminate\Support\Carbon;
  */
 class ExcessUsageService
 {
-    // Same set as ServiceRecordService::APPROVER_ROLES (Python imports
-    // EXCESS_REVIEWER_ROLES from service_records.py, i.e. the same
-    // constant reused under a different name).
-    public const REVIEWER_ROLES = ServiceRecordService::APPROVER_ROLES;
+    // SRV-004/SRV-011: Nico, or Cherish as backup, with the owner able
+    // to stand in (a pragmatic default kept from the conversion). This
+    // used to alias ServiceRecordService::APPROVER_ROLES; it is its own
+    // list since SRV-019 (2026-09-15) narrowed Service Record approval
+    // to Nico and Cherish alone -- that decision was about approving
+    // deducted hours, not about who reviews excess usage.
+    public const REVIEWER_ROLES = [User::ROLE_SERVICE_LEAD, User::ROLE_SALES_MANAGER, User::ROLE_OWNER];
 
     public static function decideExcessUsage(
         ExcessUsageRecord $record,

@@ -417,6 +417,21 @@ shipped and when.
   → [open-business-decisions.md #41](open-business-decisions.md#41-system-generated-company-code-raised-and-settled-2026-09-15),
   [business-requirements.md PDPA-001](business-requirements.md)
 
+- [x] **Service Record rules 9.1 / 9.2 settled, SLA removed** --
+  2026-09-15. SRV-019: only Nico (Service Lead) or Cherish (Sales
+  Manager) approve a Service Record -- the owner no longer can -- and
+  a record still unapproved a week after submission is flagged
+  "approval overdue" on the approval queue and counted on the Company
+  Dashboard (a flag, not an enforcement). SRV-020: every Job Order
+  carries a billing classification (Contract hours / Billable /
+  Non-billable) that decides what its approved time becomes; Billable
+  and Non-billable never touch the contract hour pool, and staff never
+  choose per record. SRV-009 (SLA targets) is removed from the
+  requirements and every doc at Dennis's instruction -- not deferred,
+  gone.
+  → [business-requirements.md SRV-019 / SRV-020](business-requirements.md),
+  [open-business-decisions.md #9](open-business-decisions.md#9-service-records--approval)
+
 - [ ] **AI Assistant — scoped 2026-09-15**, not yet built. Tiered
   candidates, the architectural rule they must be built under (AI never
   does arithmetic on money; it calls the tested services and narrates,
@@ -493,4 +508,4 @@ shipped and when.
   → [open-business-decisions.md #7-8](open-business-decisions.md#7-projects)
 
 ---
-Last updated: 2026-09-15 (Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006; Maintenance / Company-Individual batch; eight-character company code)
+Last updated: 2026-09-15 (Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006; Maintenance / Company-Individual batch; eight-character company code; Service Record rules SRV-019/020, SLA removed)

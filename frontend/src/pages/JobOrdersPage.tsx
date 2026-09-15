@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
-import { api, downloadBlob, type Contract, type CompanyIndividual, type JobOrder, type JobOrderPriority, type JobOrderType, type Product } from '../lib/api'
+import { api, downloadBlob, type Contract, type CompanyIndividual, type JobOrder, type JobOrderBillingClassification, type JobOrderPriority, type JobOrderType, type Product } from '../lib/api'
 
 export default function JobOrdersPage() {
   const [jobOrders, setJobOrders] = useState<JobOrder[]>([])
@@ -15,6 +15,8 @@ export default function JobOrdersPage() {
   const [contractId, setContractId] = useState('')
   const [subject, setSubject] = useState('')
   const [jobOrderType, setJobOrderType] = useState<JobOrderType>('support')
+  // SRV-020: the Job Order's context decides what its approved time is.
+  const [billingClassification, setBillingClassification] = useState<JobOrderBillingClassification>('contract')
   const [priority, setPriority] = useState<JobOrderPriority>('normal')
   const [dueDate, setDueDate] = useState('')
   const [isUrgent, setIsUrgent] = useState(false)
@@ -61,6 +63,7 @@ export default function JobOrdersPage() {
         contract_id: contractId,
         subject,
         job_order_type: jobOrderType,
+        billing_classification: billingClassification,
         priority,
         due_date: dueDate || undefined,
         is_urgent: isUrgent,
@@ -68,6 +71,7 @@ export default function JobOrdersPage() {
       })
       setSubject('')
       setJobOrderType('support')
+      setBillingClassification('contract')
       setDueDate('')
       setIsUrgent(false)
       setProductIds([])
@@ -166,6 +170,21 @@ export default function JobOrdersPage() {
               <option value="support">Support (ad-hoc)</option>
               <option value="project">Project (milestone schedule)</option>
             </select>
+          </div>
+          <div className="form-row">
+            <label>Billing</label>
+            <select
+              value={billingClassification}
+              onChange={(e) => setBillingClassification(e.target.value as JobOrderBillingClassification)}
+            >
+              <option value="contract">Contract hours (the contract balance decides deduction / excess)</option>
+              <option value="billable">Billable (charged separately, never deducted from contract hours)</option>
+              <option value="non_billable">Non-billable (internal / goodwill, nothing deducted or billed)</option>
+            </select>
+            <span className="muted" style={{ fontSize: 12 }}>
+              Decides what every approved Service Record on this job order becomes (SRV-020). Staff
+              logging time never choose this themselves.
+            </span>
           </div>
           <div className="form-row">
             <label>Priority</label>

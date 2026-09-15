@@ -6,6 +6,7 @@ import {
   type ServiceRecord,
   type ServiceRecordCompletion,
   type JobOrder,
+  type JobOrderBillingClassification,
   type Product,
 } from '../lib/api'
 import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
@@ -13,6 +14,13 @@ import ProjectSchedulePanel from '../components/ProjectSchedulePanel'
 import SignaturePanel from '../components/SignaturePanel'
 import { useAuth } from '../lib/AuthContext'
 import { formatDateTime } from '../lib/format'
+
+/** SRV-020 labels. */
+const BILLING_LABELS: Record<JobOrderBillingClassification, string> = {
+  contract: 'Contract hours',
+  billable: 'Billable',
+  non_billable: 'Non-billable',
+}
 
 export default function JobOrderDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -136,6 +144,22 @@ export default function JobOrderDetailPage() {
     }
   }
 
+  // SRV-020: correctable while the job order is open; records already
+  // approved keep the outcome they were given.
+  async function onChangeBilling(value: JobOrderBillingClassification) {
+    if (!id || !jobOrder || value === jobOrder.billing_classification) return
+    setError(null)
+    setWorking(true)
+    try {
+      await api.setJobOrderBillingClassification(id, value)
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update billing classification')
+    } finally {
+      setWorking(false)
+    }
+  }
+
   async function onToggleUrgent() {
     if (!id || !jobOrder) return
     setError(null)
@@ -215,7 +239,8 @@ export default function JobOrderDetailPage() {
         <span className={`badge ${statusBadgeClass}`}>{jobOrder.status}</span>{' '}
         {jobOrder.job_order_type === 'project' && <span className="badge active">PROJECT</span>}{' '}
         {jobOrder.is_urgent && <span className="badge exceeded">URGENT</span>}{' '}
-        <span className="muted">Priority: {jobOrder.priority} (SRV-009: no formal SLA target yet)</span>
+        <span className="muted">Priority: {jobOrder.priority}</span>{' '}
+        &middot; <span className="muted">Billing: {BILLING_LABELS[jobOrder.billing_classification]}</span>
         {jobOrder.due_date && (
           <>
             {' '}
@@ -248,6 +273,20 @@ export default function JobOrderDetailPage() {
           <button className="secondary" onClick={onVoid} disabled={working}>
             Void job order
           </button>
+        )}
+        {isOpenOrAssigned && (
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span className="muted">Billing</span>
+            <select
+              value={jobOrder.billing_classification}
+              onChange={(e) => onChangeBilling(e.target.value as JobOrderBillingClassification)}
+              disabled={working}
+            >
+              <option value="contract">Contract hours</option>
+              <option value="billable">Billable</option>
+              <option value="non_billable">Non-billable</option>
+            </select>
+          </label>
         )}
         {(isClosed || isVoid) && user?.role === 'owner' && (
           <button className="secondary" onClick={onReopen} disabled={working}>

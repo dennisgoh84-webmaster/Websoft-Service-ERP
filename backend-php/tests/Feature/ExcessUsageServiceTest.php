@@ -32,7 +32,7 @@ class ExcessUsageServiceTest extends TestCase
         $company = Company::factory()->create();
         $customer = CompanyIndividual::factory()->for($company)->create();
         $employee = User::factory()->for($company)->create();
-        $approver = User::factory()->for($company)->create(['role' => User::ROLE_OWNER]);
+        $approver = User::factory()->for($company)->create(['role' => User::ROLE_SERVICE_LEAD]);
         $contract = Contract::factory()->for($company)->create([
             'customer_id' => $customer->id, 'contracted_minutes' => 600, 'status' => Contract::STATUS_ACTIVE,
         ]);

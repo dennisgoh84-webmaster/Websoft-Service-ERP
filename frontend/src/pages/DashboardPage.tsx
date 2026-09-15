@@ -141,6 +141,12 @@ function CompanyDashboardSummary({ summary }: { summary: DashboardSummary }) {
           value={summary.missing_service_records}
           hint="submitted >3 business days late (SRV-015)"
         />
+        <Stat
+          label="Approvals overdue"
+          value={summary.service_record_approvals_overdue}
+          hint={`of ${summary.service_records_awaiting_approval} awaiting approval; >1 week since submission (SRV-019)`}
+          to="/service-record-approval"
+        />
         <Stat label="Invoices issued" value={summary.invoices_count} to="/invoices" />
       </div>
 

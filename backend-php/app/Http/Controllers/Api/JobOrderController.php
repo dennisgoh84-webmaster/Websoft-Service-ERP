@@ -114,6 +114,7 @@ class JobOrderController extends Controller
             'contract_id' => $jobOrder->contract_id,
             'subject' => $jobOrder->subject,
             'job_order_type' => $jobOrder->job_order_type,
+            'billing_classification' => $jobOrder->billing_classification,
             'priority' => $jobOrder->priority,
             'status' => $jobOrder->status,
             'is_urgent' => $jobOrder->is_urgent,
@@ -183,6 +184,8 @@ class JobOrderController extends Controller
             'contract_id' => 'required|uuid',
             'subject' => 'required|string',
             'job_order_type' => 'sometimes|in:support,project',
+            // SRV-020: what this Job Order's approved time is.
+            'billing_classification' => 'sometimes|in:contract,billable,non_billable',
             'priority' => 'sometimes|in:low,normal,high,critical',
             'due_date' => 'sometimes|nullable|date',
             'is_urgent' => 'sometimes|boolean',
@@ -192,6 +195,7 @@ class JobOrderController extends Controller
             'product_ids.*' => 'uuid',
         ]);
         $data['job_order_type'] ??= JobOrder::TYPE_SUPPORT;
+        $data['billing_classification'] ??= JobOrder::BILLING_CONTRACT;
         $data['priority'] ??= JobOrder::PRIORITY_NORMAL;
         $data['is_urgent'] ??= false;
         $productIds = $data['product_ids'] ?? [];
@@ -395,6 +399,36 @@ class JobOrderController extends Controller
         $oldValue = $jobOrder->is_urgent;
         $jobOrder->is_urgent = $data['is_urgent'];
         Audit::record('job_order', $jobOrder->id, 'urgent_set', $user->id, oldValue: ['is_urgent' => $oldValue], newValue: ['is_urgent' => $jobOrder->is_urgent]);
+        $jobOrder->save();
+
+        return response()->json($this->present($jobOrder->fresh('milestones')));
+    }
+
+    /**
+     * SRV-020: the billing classification can be corrected while the
+     * Job Order is still open, since it decides what every Service
+     * Record approved from then on becomes. Records already approved
+     * keep the outcome they were given -- changing this never rewrites
+     * a contract deduction. Audited, like Urgent.
+     */
+    public function setBillingClassification(Request $request, string $jobOrderId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $jobOrder = $this->jobOrderOrFail($user->company_id, $jobOrderId);
+        $data = $request->validate(['billing_classification' => 'required|in:contract,billable,non_billable']);
+        if (! in_array($jobOrder->status, [JobOrder::STATUS_OPEN, JobOrder::STATUS_ASSIGNED], true)) {
+            throw new ApiException(409, 'Only an open or assigned Job Order can have its billing classification changed.');
+        }
+
+        $oldValue = $jobOrder->billing_classification;
+        $jobOrder->billing_classification = $data['billing_classification'];
+        Audit::record(
+            'job_order', $jobOrder->id, 'billing_classification_set', $user->id,
+            oldValue: ['billing_classification' => $oldValue],
+            newValue: ['billing_classification' => $jobOrder->billing_classification],
+        );
         $jobOrder->save();
 
         return response()->json($this->present($jobOrder->fresh('milestones')));

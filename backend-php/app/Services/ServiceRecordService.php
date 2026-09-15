@@ -19,10 +19,13 @@ use Illuminate\Support\Carbon;
  */
 class ServiceRecordService
 {
-    // Pragmatic default pending open decision 9.1 (who approves Service
-    // Records, and within what timeframe) -- deferred for now. Revisit
-    // once that is decided.
-    public const APPROVER_ROLES = [User::ROLE_SERVICE_LEAD, User::ROLE_SALES_MANAGER, User::ROLE_OWNER];
+    // SRV-019 (Dennis, 2026-09-15, settling open item 9.1): "only Nico
+    // and Cherish can approve the deduct hrs" -- Nico is the Service
+    // Lead role, Cherish the Sales Manager role, as everywhere else in
+    // this system. The owner is deliberately NOT in this list any more
+    // (the earlier pragmatic default let Dennis approve too). Within a
+    // week: ServiceRecord::APPROVAL_DEADLINE_DAYS.
+    public const APPROVER_ROLES = [User::ROLE_SERVICE_LEAD, User::ROLE_SALES_MANAGER];
 
     // Confirmed 2026-09-11: Urgent x1.5, After-Office-Hours/Weekend/
     // Holiday x2.0. When a record is both, the higher one wins rather
@@ -81,6 +84,9 @@ class ServiceRecordService
             'rounded_minutes' => $roundedMinutes, // SRV-007
             'status' => ServiceRecord::STATUS_SUBMITTED,
             'outcome' => ServiceRecord::OUTCOME_PENDING,
+            // Set here rather than left to the column's DB default so the
+            // SRV-019 approval deadline runs off the application clock.
+            'submitted_at' => Carbon::now('UTC'),
             'completion_status' => $completionStatus,
             'is_after_hours' => $isAfterHours,
             'work_description' => $workDescription,
@@ -140,8 +146,8 @@ class ServiceRecordService
     ): ?ExcessUsageRecord {
         if (! in_array($approver->role, self::APPROVER_ROLES, true)) {
             throw new ContractRuleViolation(
-                "This user's role cannot approve Service Records (pending decision on "
-                .'open item 9.1; current default roles: service_lead, sales_manager, owner).'
+                'Only Nico (service_lead) or Cherish (sales_manager) may approve a Service '
+                .'Record and key in the deducted hours (SRV-019).'
             );
         }
         if ($record->status !== ServiceRecord::STATUS_SUBMITTED) {
@@ -164,6 +170,24 @@ class ServiceRecordService
 
         $contract = Contract::findOrFail($jobOrder->contract_id);
         $excessRecord = null;
+
+        // SRV-020: the Job Order's context decides what this time is.
+        // BILLABLE and NON_BILLABLE never touch the contract's hour
+        // pool; only CONTRACT falls through to the SRV-003/004 check.
+        $classification = $jobOrder->billing_classification ?? JobOrder::BILLING_CONTRACT;
+        if ($classification !== JobOrder::BILLING_CONTRACT) {
+            $record->outcome = $classification === JobOrder::BILLING_BILLABLE
+                ? ServiceRecord::OUTCOME_BILLABLE
+                : ServiceRecord::OUTCOME_NON_BILLABLE;
+            $record->save();
+            Audit::record(
+                'service_record', $record->id, 'approved', $approver->id,
+                details: "outcome={$record->outcome}, deducted_minutes={$deductedMinutes} (job order classified {$classification}, SRV-020)",
+            );
+            self::maybeAutoCloseJobOrder($jobOrder, $approver);
+
+            return null;
+        }
 
         if (in_array($contract->contract_kind, [Contract::KIND_ANNUAL, Contract::KIND_AD_HOC], true)) {
             // Confirmed 2026-09-10 (ANNUAL) / 2026-09-11 (AD_HOC):

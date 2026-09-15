@@ -336,8 +336,8 @@ see the Customer Helpdesk Portal entry below.)
   `app/routers/job_orders.py` → `App\Models\JobOrder`/`ProjectMilestone`,
   `App\Http\Controllers\Api\JobOrderController`): create (auto-creates
   the 5-step PROJECT milestone template), list/get, assign, manual due
-  date (SRV-009 -- no SLA target derived from priority, confirmed
-  deferred), urgent flag, void (reason required, audit-logged),
+  date (no SLA target derived from priority -- SLA targets were
+  deferred then, and removed outright 2026-09-15), urgent flag, void (reason required, audit-logged),
   owner-only reopen, budget-overrun approval (7.1, Sales Manager/Owner
   only) and PROJECT milestone CRUD + re-init template, with milestone
   completion gated to Sales Manager/Owner (7.3).

@@ -506,11 +506,14 @@ answer it quietly.
 
 No other business area has application code yet. **Further commission
 business rules beyond what is built (the report, its rate and
-Payouts), further Service Record business-rule decisions (open item
-9.1), and Odoo migration planning are deferred for now at Dennis's
+Payouts) and Odoo migration planning are deferred for now at Dennis's
 request** — see [docs/open-business-decisions.md](docs/open-business-decisions.md)
 — and will be revisited once Service Operations and related areas are
-finalized. Further modules are otherwise built incrementally, resolving
+finalized. The last two open Service Record rules were settled
+2026-09-15 (SRV-019: only Nico or Cherish approve, within a week;
+SRV-020: contract-covered / billable / non-billable follows the Job
+Order's billing classification), and SLA targets (SRV-009) were
+removed outright rather than deferred. Further modules are otherwise built incrementally, resolving
 open decisions as each area is reached rather than blocking all
 development on them upfront — pragmatic implementation defaults taken in
 the meantime are called out in code comments, not silently assumed.

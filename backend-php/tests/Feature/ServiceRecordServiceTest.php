@@ -113,7 +113,7 @@ class ServiceRecordServiceTest extends TestCase
         $company = Company::factory()->create();
         $customer = CompanyIndividual::factory()->for($company)->create();
         $employee = User::factory()->for($company)->create();
-        $approver = User::factory()->for($company)->create(['role' => User::ROLE_OWNER]);
+        $approver = User::factory()->for($company)->create(['role' => User::ROLE_SERVICE_LEAD]);
         $jobOrder = JobOrder::factory()->for($company)->create(['customer_id' => $customer->id, 'contract_id' => null]);
         $record = $this->submitRecord($jobOrder, $employee, 60);
 
@@ -167,7 +167,7 @@ class ServiceRecordServiceTest extends TestCase
     {
         $company = Company::factory()->create();
         $customer = CompanyIndividual::factory()->for($company)->create();
-        $approver = User::factory()->for($company)->create(['role' => User::ROLE_OWNER]);
+        $approver = User::factory()->for($company)->create(['role' => User::ROLE_SERVICE_LEAD]);
         $contract = ContractService::createContract(
             companyId: $company->id, customerId: $customer->id, contractedHours: 0,
             contractValueSgd: 5000, startDate: now()->toDateString(), actorUserId: $approver->id,
@@ -229,7 +229,7 @@ class ServiceRecordServiceTest extends TestCase
         $company = Company::factory()->create();
         $customer = CompanyIndividual::factory()->for($company)->create();
         $employee = User::factory()->for($company)->create();
-        $approver = User::factory()->for($company)->create(['role' => User::ROLE_OWNER]);
+        $approver = User::factory()->for($company)->create(['role' => User::ROLE_SERVICE_LEAD]);
 
         $contract = Contract::factory()->for($company)->create([
             'customer_id' => $customer->id,

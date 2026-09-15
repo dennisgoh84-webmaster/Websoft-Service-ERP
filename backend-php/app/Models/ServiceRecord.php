@@ -10,12 +10,12 @@ use Illuminate\Support\Carbon;
 
 /**
  * Service Records (formerly "Timesheets"), implementing SRV-007
- * (15-min rounding) and SRV-015 (3-business-day submission deadline).
- * Mirrors backend/app/models/service_records.py's ServiceRecord --
- * see that file's docstring for open item 9.1 (who approves, still
- * deferred; SERVICE_RECORD_APPROVER_ROLES in
- * App\Services\ServiceRecordService is a pragmatic default, not a
- * confirmed rule).
+ * (15-min rounding), SRV-015 (3-business-day submission deadline),
+ * SRV-019 (approval by Nico or Cherish only, within a week of
+ * submission -- Dennis, 2026-09-15, settling open item 9.1; see
+ * App\Services\ServiceRecordService::APPROVER_ROLES) and SRV-020
+ * (the Job Order's billing classification decides the outcome).
+ * Converted from backend/app/models/service_records.py's ServiceRecord.
  */
 class ServiceRecord extends Model
 {
@@ -30,6 +30,12 @@ class ServiceRecord extends Model
     // treated as calendar days for this build).
     public const SUBMISSION_DEADLINE_DAYS = 3;
 
+    // SRV-019: a submitted record is to be approved within a week. Past
+    // that it is flagged as overdue for approval -- never auto-approved
+    // (nobody asked for that), just surfaced on the approval queue and
+    // the Company Dashboard.
+    public const APPROVAL_DEADLINE_DAYS = 7;
+
     public const STATUS_SUBMITTED = 'submitted';
 
     public const STATUS_APPROVED = 'approved';
@@ -42,6 +48,15 @@ class ServiceRecord extends Model
 
     public const OUTCOME_NOT_HOUR_METERED = 'not_hour_metered';
 
+    // SRV-020: the Job Order was classified BILLABLE -- nothing deducted
+    // from contract hours, the time is charged through the Job Order's
+    // own billing.
+    public const OUTCOME_BILLABLE = 'billable';
+
+    // SRV-020: the Job Order was classified NON_BILLABLE -- nothing
+    // deducted, nothing billed; recorded for the audit trail only.
+    public const OUTCOME_NON_BILLABLE = 'non_billable';
+
     public const COMPLETED = 'C';
 
     public const UNCOMPLETED = 'U';
@@ -49,7 +64,7 @@ class ServiceRecord extends Model
     protected $fillable = [
         'company_id', 'job_order_id', 'employee_user_id', 'service_record_number',
         'work_date', 'raw_minutes', 'rounded_minutes', 'status', 'outcome',
-        'completion_status', 'is_after_hours', 'deducted_minutes', 'work_description',
+        'completion_status', 'is_after_hours', 'deducted_minutes', 'work_description', 'submitted_at',
         'time_in', 'time_out', 'approved_at', 'approved_by_user_id',
     ];
 
@@ -96,5 +111,23 @@ class ServiceRecord extends Model
         $workDate = Carbon::parse($this->work_date)->startOfDay();
 
         return $workDate->diffInDays($submittedDate, false) > self::SUBMISSION_DEADLINE_DAYS;
+    }
+
+    /** SRV-019: the date by which a submitted record should have been approved. */
+    public function approvalDueAt(): ?Carbon
+    {
+        if ($this->submitted_at === null) {
+            return null;
+        }
+
+        return Carbon::parse($this->submitted_at)->addDays(self::APPROVAL_DEADLINE_DAYS);
+    }
+
+    /** SRV-019: still awaiting approval more than a week after submission. */
+    public function isApprovalOverdue(): bool
+    {
+        $due = $this->approvalDueAt();
+
+        return $this->status === self::STATUS_SUBMITTED && $due !== null && Carbon::now('UTC')->greaterThan($due);
     }
 }

@@ -384,6 +384,8 @@ export default function OperationsReportsPage() {
                   <option value="contract_deduction">Contract deduction</option>
                   <option value="excess_usage">Excess usage</option>
                   <option value="not_hour_metered">Not hour-metered (annual)</option>
+                  <option value="billable">Billable (job order classified billable)</option>
+                  <option value="non_billable">Non-billable (job order classified non-billable)</option>
                 </select>
               </div>
               <div className="form-row" style={{ margin: 0 }}>

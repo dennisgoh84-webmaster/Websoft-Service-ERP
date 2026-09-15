@@ -39,6 +39,23 @@ class ServiceRecordTest extends TestCase
         return [$owner, $login->json('access_token')];
     }
 
+    /** SRV-019: Service Records are approved by Nico (Service Lead) or Cherish (Sales Manager), never the owner. */
+    private function nicoToken(Company $company): array
+    {
+        ModuleCatalog::firstOrCreate(['key' => 'service_records'], ['name' => 'Service Records', 'is_built' => true]);
+        CompanyModule::firstOrCreate(['company_id' => $company->id, 'module_key' => 'service_records'], ['enabled' => true]);
+        $group = Group::factory()->for($company)->create();
+        GroupModuleAuthority::create(['group_id' => $group->id, 'module_key' => 'service_records', 'access_level' => GroupModuleAuthority::FULL]);
+        $nico = User::factory()->for($company)->create([
+            'role' => User::ROLE_SERVICE_LEAD,
+            'hashed_password' => PasswordPolicy::hash('demo1234'),
+        ]);
+        UserCompanyAccess::create(['user_id' => $nico->id, 'company_id' => $company->id, 'group_id' => $group->id]);
+        $login = $this->post('/api/auth/login', ['username' => $nico->email, 'password' => 'demo1234']);
+
+        return [$nico, $login->json('access_token')];
+    }
+
     private function headers(string $token): array
     {
         return ['Authorization' => "Bearer {$token}"];
@@ -122,10 +139,11 @@ class ServiceRecordTest extends TestCase
             'work_date' => now()->toDateString(), 'raw_minutes' => 60,
         ], $this->headers($token));
 
+        [, $nicoToken] = $this->nicoToken($company);
         $response = $this->postJson(
             "/api/service-records/{$create->json('id')}/approve",
             ['deducted_minutes' => 60],
-            $this->headers($token),
+            $this->headers($nicoToken),
         );
 
         $response->assertOk()->assertJson(['status' => 'approved', 'outcome' => 'contract_deduction']);
@@ -142,10 +160,11 @@ class ServiceRecordTest extends TestCase
             'work_date' => now()->toDateString(), 'raw_minutes' => 60,
         ], $this->headers($token));
 
+        [, $nicoToken] = $this->nicoToken($company);
         $this->postJson(
             "/api/service-records/{$create->json('id')}/approve",
             ['deducted_minutes' => 0],
-            $this->headers($token),
+            $this->headers($nicoToken),
         )->assertStatus(422);
     }
 

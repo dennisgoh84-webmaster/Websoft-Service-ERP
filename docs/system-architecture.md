@@ -485,7 +485,8 @@ anticipated multiple entities; this is how it works in practice.
 ### Notifications
 
 - The system needs to notify users of events across modules — e.g. job order
-  assignment, SLA breach warnings, service record approval requests, contract
+  assignment, service record approval requests (and approvals overdue
+  past SRV-019's week), contract
   renewal reminders, invoice approval requests, commission approval
   requests.
 - Notifications are treated as a cross-cutting capability triggered by

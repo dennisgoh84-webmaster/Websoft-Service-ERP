@@ -15,6 +15,7 @@ Route::middleware('auth.jwt')->prefix('job-orders')->group(function () {
     Route::post('/{jobOrder}/assign', [JobOrderController::class, 'assign']);
     Route::post('/{jobOrder}/due-date', [JobOrderController::class, 'setDueDate']);
     Route::post('/{jobOrder}/urgent', [JobOrderController::class, 'setUrgent']);
+    Route::post('/{jobOrder}/billing-classification', [JobOrderController::class, 'setBillingClassification']);
     Route::post('/{jobOrder}/void', [JobOrderController::class, 'void']);
     Route::post('/{jobOrder}/reopen', [JobOrderController::class, 'reopen']);
     Route::post('/{jobOrder}/approve-overrun', [JobOrderController::class, 'approveOverrun']);

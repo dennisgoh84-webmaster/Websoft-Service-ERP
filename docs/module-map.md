@@ -231,7 +231,7 @@ every customer-facing module.
 
 **Purpose**
 Manage recurring service commitments to customers: contract terms,
-included hours/scope, SLAs, and the renewal cycle.
+included hours/scope, and the renewal cycle.
 
 **Main users**
 Sales (at contract setup/renewal), service operations, contract
@@ -241,7 +241,7 @@ administration, finance (for recurring billing terms).
 - Contract creation from a sales order/quotation, starting in **Draft**
   status.
 - Definition of contract lines (services covered, included hours/quantity,
-  SLA terms). A standard contract runs **12 months** and requires a
+  scope). A standard contract runs **12 months** and requires a
   **minimum of 10 contracted support hours** (CONFIRMED, SRV-001/SRV-002
   — see
   [business-requirements.md](business-requirements.md#service-operations-business-rules-confirmed));
@@ -278,7 +278,7 @@ administration, finance (for recurring billing terms).
 
 **Information managed**
 Contracts (with lifecycle status, start/expiry dates), contract lines,
-contract terms/SLAs, Contract Hour Consumption Records, Excess Usage
+contract terms, Contract Hour Consumption Records, Excess Usage
 Records (with Nico's decision and reason), Expired Hours Records, renewal
 history.
 
@@ -304,10 +304,9 @@ eventually raise job orders via a portal (not yet decided).
 
 **Key functions**
 - Job Order intake, categorization, and prioritization.
-- Tracking job order priority and timestamps; **no formal SLA response/
-  resolution targets are defined at this time** (CONFIRMED deferral,
-  SRV-009) — the data is captured so targets can be added later without
-  a data-model change.
+- Tracking job order priority and timestamps. There are **no SLA
+  targets and none are planned** (removed 2026-09-15, Dennis: "not
+  necessary to have").
 - Staff assignment and escalation.
 - Linking job orders to the relevant contract (for hour validation) and/or
   hardware asset.
@@ -320,12 +319,12 @@ eventually raise job orders via a portal (not yet decided).
   "Unaccounted Service Activity" check (CONFIRMED, SRV-006).
 
 **Information managed**
-Job Orders, job order status/history, SLA timers, assignment records,
+Job Orders, job order status/history, assignment records,
 job order-to-contract links, and job order-to-asset links.
 
 **Depends on**
 Core / Administration; Customer Management; Service Contracts (to know
-entitlement/hours and SLA); Hardware Management (when a job order relates to
+entitlement/hours); Hardware Management (when a job order relates to
 a specific asset).
 
 **Depended on by**
