@@ -130,9 +130,19 @@ export default function AnnouncementsPage() {
       <div className="card">
         <h2>Advertisement video</h2>
         <p className="muted">
-          A link to a hosted video file (e.g. an .mp4 URL) -- not an upload. Video files are far
-          too large to store the way a logo or photo is; point this at wherever your video is
-          hosted. Leave blank to show just the items below on a plain colour panel, no video.
+          A <strong>direct link to a video file</strong> (an .mp4 or .webm URL that plays when
+          pasted into a browser tab) -- not an upload, and not a YouTube / Vimeo / Google Drive
+          page link, which will not play. Video files are far too large to store the way a logo
+          or photo is; point this at wherever your video is hosted. Leave blank to show just the
+          items below on a plain colour panel, no video.
+        </p>
+        <p className="muted">
+          No size or resolution limit is enforced -- the viewer's browser streams it straight
+          from the link. It plays muted, looped, in a narrow column: 220px wide on the Login
+          page, 150px on every other page, so 720p is more than enough and anything larger only
+          costs bandwidth on every page load. A short loop of a few MB is ideal; H.264 .mp4 plays
+          everywhere. If it fails to load, the panel quietly hides the video rather than showing
+          an error.
         </p>
         <form onSubmit={onSaveVideo}>
           <div className="form-row">
