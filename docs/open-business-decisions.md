@@ -1756,6 +1756,18 @@ the real target record (confirmed 2026-09-11), not just an assignment.
    something more structured than "staff picks a button" here, that's
    still open.
 
+36.7. **DECIDED with Dennis (2026-09-15) — Outlook Add-in acknowledgement.**
+   When the Outlook Add-in turns an email into an Incident or a Job
+   Order, the sender gets a reply from the **Helpdesk mailbox**
+   (Maintenance → System Email) quoting the INC number and, when one was
+   opened, the JO number. Built as the reading of "SMTP for the MS
+   Outlook add-in to convert to Incident/Job Order" and confirmed:
+   "Agreed for the response reply to the sender from outlook." The
+   acknowledgement never fails the conversion — an unconfigured mailbox
+   or a refused send leaves the records as created and the add-in
+   reports that no acknowledgement went out. Recorded as HELP-001 in
+   business-requirements.md.
+
 ---
 
 ## 37. Mobile Web App for Support Staff (raised 2026-09-11, all settled 2026-09-12)

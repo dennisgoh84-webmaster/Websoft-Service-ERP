@@ -544,6 +544,27 @@ Status: **CONFIRMED / DECIDED** (2026-09-14). Full design in
   company-wide list. Explains where the consumed hours on a
   SERVICE_SUPPORT contract actually went.
 
+## Helpdesk Business Rules (CONFIRMED)
+
+### HELP-001 — Outlook Add-in acknowledgement — CONFIRMED (2026-09-15)
+
+- When the Outlook Add-in converts an email into an Incident ("Log as
+  Incident") or into a Job Order ("Convert to Job Order"), the sender
+  receives an acknowledgement email from the **Helpdesk mailbox**
+  (Maintenance → System Email), quoting the Incident number and, when
+  a Job Order was opened, its number.
+- The Helpdesk mailbox is the system's support-desk sender, separate
+  from the sign-in/OTP mailbox and from each company's document
+  mailbox; none of the three ever borrows another.
+- The acknowledgement never blocks the conversion: if the mailbox is
+  not configured or the send is refused, the Incident / Job Order are
+  created exactly as they would have been and the add-in shows that no
+  acknowledgement was sent. A sent acknowledgement is recorded in the
+  audit trail on the Incident.
+- Confirmed by Dennis 2026-09-15 ("Agreed for the response reply to
+  the sender from outlook") after being built as the reading of "SMTP
+  for the MS Outlook add-in to convert to Incident/Job Order".
+
 ## Sales Module Enhancements Business Rules (CONFIRMED)
 
 Status: **CONFIRMED / DECIDED**, clarified with Dennis prior to this
