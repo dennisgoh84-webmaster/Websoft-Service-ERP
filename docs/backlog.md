@@ -355,16 +355,28 @@ shipped and when.
   disagreed, because they did.
   → [php-conversion-plan.md](php-conversion-plan.md)
 
-- [ ] **Product-based Sales Invoicing (blocks "Sales Invoice picks
-  stock")** -- raised 2026-09-15. Dennis asked that a Sales Invoice
-  refuse to update when stock is insufficient and deduct at average
-  cost. The stock side is built (Goods Issue Note does exactly this),
-  but the invoice side cannot be: `invoices` is header-only -- no line
-  items, no product selection, no manual raise-an-invoice flow. Every
-  invoice today is auto-issued from a contract activation or an
-  excess-usage decision with a single amount. This needs invoice lines
-  and a product-picking flow designed first; the Product -> Stock Master
-  link itself already exists (`stock_items.product_id`).
+- [x] **Product-based Sales Invoicing** -- built 2026-09-15, closing
+  the blocker recorded the same day. `invoices` was header-only, so
+  "Sales Invoice picks stock" had nowhere to put a product. There is
+  now an `invoice_lines` table, `POST /invoices` raises a Sales
+  Invoice by hand, and the Invoices page has a "Raise Sales Invoice"
+  form that shows on-hand quantity per line as it is filled in.
+  **Lines are optional** (confirmed): every existing header-only
+  invoice keeps working untouched, no backfill, and the auto-issued
+  ones (contract activation, excess-usage decision) still issue a
+  single amount.
+  A stock line deducts through the same
+  `InventoryService::deductStock()` a Goods Issue Note uses, so
+  INV-002 holds by construction -- insufficient stock refuses the
+  WHOLE invoice, quantity never goes negative, and units leave at
+  weighted average without re-weighting it. The line records the
+  average AS AT ISSUE, so a later receipt cannot move a past
+  invoice's gross profit; that also gives these invoices a real
+  `cost_sgd`, so Sales GP shows a measured margin on them.
+  Verified end to end against the running app, not only by tests.
+  **Deliberately NOT done:** no COGS/inventory journal is posted --
+  whether stock movements post to the GL is still an open question
+  below, and this was not the place to answer it quietly.
   → [php-conversion-plan.md](php-conversion-plan.md)
 
 - [ ] **AI Assistant — scoped 2026-09-15**, not yet built. Tiered

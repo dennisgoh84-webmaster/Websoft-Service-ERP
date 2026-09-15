@@ -1,11 +1,49 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { EmailIcon, PrintIcon, WhatsAppIcon } from '../components/DocActionIcons'
 import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
-import { api, downloadBlob, type AgingReport, type CompanyIndividual, type CompanyIndividualStatement, type Invoice, type InvoiceStatus } from '../lib/api'
+import {
+  api,
+  downloadBlob,
+  type AgingReport,
+  type CompanyIndividual,
+  type CompanyIndividualStatement,
+  type Invoice,
+  type InvoiceStatus,
+  type Product,
+  type StockItemRow,
+  type StockLevelRow,
+  type Warehouse,
+} from '../lib/api'
 import { formatMoney as money, formatDate } from '../lib/format'
+
+/**
+ * A line on the "Raise Sales Invoice" form. Held as strings while the
+ * user types -- a half-typed number is not a number yet.
+ */
+interface DraftLine {
+  productId: string
+  stockItemId: string
+  warehouseId: string
+  description: string
+  unitOfMeasure: string
+  quantity: string
+  unitPrice: string
+}
+
+function emptyLine(): DraftLine {
+  return {
+    productId: '',
+    stockItemId: '',
+    warehouseId: '',
+    description: '',
+    unitOfMeasure: '',
+    quantity: '1',
+    unitPrice: '',
+  }
+}
 
 const STATUS_BADGE: Record<InvoiceStatus, string> = {
   outstanding: 'draft',
@@ -27,13 +65,105 @@ export default function InvoicesPage() {
   const [busyInvoiceId, setBusyInvoiceId] = useState<string | null>(null)
   const [docPanelId, setDocPanelId] = useState<string | null>(null)
 
+  // Raise Sales Invoice form
+  const [showRaise, setShowRaise] = useState(false)
+  const [raiseCustomerId, setRaiseCustomerId] = useState('')
+  const [raiseDescription, setRaiseDescription] = useState('')
+  const [lines, setLines] = useState<DraftLine[]>([emptyLine()])
+  const [saving, setSaving] = useState(false)
+  const [catalog, setCatalog] = useState<Product[]>([])
+  const [stockItems, setStockItems] = useState<StockItemRow[]>([])
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([])
+  const [levels, setLevels] = useState<StockLevelRow[]>([])
+
   function refresh() {
     api.listInvoices({ customer_id: filterCompanyIndividual || undefined }).then(setInvoices)
     api.listCompanyIndividuals().then(setCustomers)
     api.arAging().then(setAging).catch((e) => setError(e.message))
   }
 
+  // Only needed by the Raise form; fetched once it is opened so the
+  // page costs nothing extra for the people who only read invoices.
+  useEffect(() => {
+    if (!showRaise || catalog.length > 0 || stockItems.length > 0) return
+    api.listCatalog().then(setCatalog).catch(() => setCatalog([]))
+    api.listStockItems().then(setStockItems).catch(() => setStockItems([]))
+    api.listWarehouses().then(setWarehouses).catch(() => setWarehouses([]))
+    api.listStockLevels().then(setLevels).catch(() => setLevels([]))
+  }, [showRaise])
+
   useEffect(refresh, [filterCompanyIndividual])
+
+  function updateLine(index: number, patch: Partial<DraftLine>) {
+    setLines((prev) => prev.map((l, i) => (i === index ? { ...l, ...patch } : l)))
+  }
+
+  /** Picking a catalogue product fills the line in; it stays editable. */
+  function pickProduct(index: number, productId: string) {
+    const product = catalog.find((p) => p.id === productId)
+    if (!product) {
+      updateLine(index, { productId: '' })
+      return
+    }
+    // A stock item linked to this product is the one the line should
+    // draw from, so selecting the product picks it too.
+    const linked = stockItems.find((i) => i.product_id === productId)
+    updateLine(index, {
+      productId,
+      description: product.name,
+      unitOfMeasure: product.unit_of_measure ?? '',
+      unitPrice: String(product.sales_price_sgd),
+      stockItemId: linked?.id ?? '',
+    })
+  }
+
+  /** What this warehouse currently holds of this item, or null if unknown. */
+  function onHand(stockItemId: string, warehouseId: string): number | null {
+    if (!stockItemId || !warehouseId) return null
+    const level = levels.find((l) => l.stock_item_id === stockItemId && l.warehouse_id === warehouseId)
+    return level ? level.quantity : 0
+  }
+
+  const draftNet = lines.reduce(
+    (sum, l) => sum + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0),
+    0,
+  )
+
+  async function onRaise(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setMessage(null)
+    setSaving(true)
+    try {
+      const invoice = await api.createSalesInvoice({
+        customer_id: raiseCustomerId,
+        description: raiseDescription || undefined,
+        lines: lines
+          .filter((l) => l.description && l.quantity && l.unitPrice !== '')
+          .map((l) => ({
+            description: l.description,
+            quantity: parseInt(l.quantity, 10),
+            unit_price_sgd: parseFloat(l.unitPrice),
+            product_id: l.productId || undefined,
+            stock_item_id: l.stockItemId || undefined,
+            warehouse_id: l.warehouseId || undefined,
+            unit_of_measure: l.unitOfMeasure || undefined,
+          })),
+      })
+      setMessage(`${invoice.invoice_number} issued, ${money(invoice.total_amount_sgd)}.`)
+      setShowRaise(false)
+      setRaiseCustomerId('')
+      setRaiseDescription('')
+      setLines([emptyLine()])
+      // Stock levels moved, so re-read them for the next invoice.
+      api.listStockLevels().then(setLevels).catch(() => setLevels([]))
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to raise the invoice')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const customerName = (id: string) => customers.find((c) => c.id === id)?.name ?? id.slice(0, 8)
   const visible = filterType ? invoices.filter((i) => i.invoice_type === filterType) : invoices
@@ -189,6 +319,187 @@ export default function InvoicesPage() {
           {message}
         </p>
       )}
+
+      <div className="card">
+        <div className="filter-bar">
+          <h2 style={{ margin: 0 }}>Raise Sales Invoice</h2>
+          <button className="secondary" onClick={() => setShowRaise((v) => !v)}>
+            {showRaise ? 'Cancel' : 'New Sales Invoice'}
+          </button>
+        </div>
+        {!showRaise && (
+          <p className="muted" style={{ marginBottom: 0 }}>
+            Most invoices here are issued automatically -- by activating a contract (BILL-001) or
+            deciding an excess-usage record is billable (SRV-008). Use this to raise one by hand,
+            with lines that can pick stock. A line drawing stock leaves it at the item's weighted
+            average cost, and the whole invoice is refused if any line asks for more than that
+            warehouse holds -- stock is never issued in part.
+          </p>
+        )}
+        {showRaise && (
+          <form onSubmit={onRaise}>
+            <div className="form-grid">
+              <label>
+                Company / Individual
+                <select
+                  value={raiseCustomerId}
+                  onChange={(e) => setRaiseCustomerId(e.target.value)}
+                  required
+                >
+                  <option value="">Select...</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Description <span className="muted">(optional)</span>
+                <input
+                  value={raiseDescription}
+                  onChange={(e) => setRaiseDescription(e.target.value)}
+                  placeholder="Defaults to the first line"
+                />
+              </label>
+            </div>
+
+            <div className="report-table-wrap" style={{ overflowX: 'auto' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Description</th>
+                    <th>Stock item</th>
+                    <th>Warehouse</th>
+                    <th>On hand</th>
+                    <th>Qty</th>
+                    <th>Unit price</th>
+                    <th>Amount</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((line, i) => {
+                    const held = onHand(line.stockItemId, line.warehouseId)
+                    const wanted = parseInt(line.quantity, 10) || 0
+                    const short = held !== null && wanted > held
+                    return (
+                      <tr key={i}>
+                        <td>
+                          <select value={line.productId} onChange={(e) => pickProduct(i, e.target.value)}>
+                            <option value="">-</option>
+                            {catalog.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <input
+                            value={line.description}
+                            onChange={(e) => updateLine(i, { description: e.target.value })}
+                            required
+                          />
+                        </td>
+                        <td>
+                          <select
+                            value={line.stockItemId}
+                            onChange={(e) => updateLine(i, { stockItemId: e.target.value })}
+                          >
+                            <option value="">None (no stock)</option>
+                            {stockItems.map((it) => (
+                              <option key={it.id} value={it.id}>
+                                {it.code} - {it.name}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            value={line.warehouseId}
+                            onChange={(e) => updateLine(i, { warehouseId: e.target.value })}
+                            required={!!line.stockItemId}
+                            disabled={!line.stockItemId}
+                          >
+                            <option value="">-</option>
+                            {warehouses.map((w) => (
+                              <option key={w.id} value={w.id}>
+                                {w.name}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          {held === null ? (
+                            <span className="muted">-</span>
+                          ) : (
+                            <span className={short ? 'badge exceeded' : undefined}>{held}</span>
+                          )}
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            style={{ width: 70 }}
+                            value={line.quantity}
+                            onChange={(e) => updateLine(i, { quantity: e.target.value })}
+                            required
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            style={{ width: 100 }}
+                            value={line.unitPrice}
+                            onChange={(e) => updateLine(i, { unitPrice: e.target.value })}
+                            required
+                          />
+                        </td>
+                        <td>
+                          {money((parseFloat(line.quantity) || 0) * (parseFloat(line.unitPrice) || 0))}
+                        </td>
+                        <td>
+                          {lines.length > 1 && (
+                            <button
+                              type="button"
+                              className="secondary"
+                              onClick={() => setLines((prev) => prev.filter((_, j) => j !== i))}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="filter-bar" style={{ marginTop: 12 }}>
+              <button type="button" className="secondary" onClick={() => setLines((prev) => [...prev, emptyLine()])}>
+                Add line
+              </button>
+              <span className="muted">
+                Net <strong>{money(draftNet)}</strong> &middot; GST is added at the company's
+                standard rate when the invoice is issued.
+              </span>
+              <button type="submit" disabled={saving || !raiseCustomerId}>
+                {saving ? 'Issuing...' : 'Issue invoice'}
+              </button>
+            </div>
+            <p className="muted" style={{ marginBottom: 0 }}>
+              Issuing posts the invoice to the General Ledger and deducts any stock lines
+              immediately -- there is no draft stage, per BILL-002.
+            </p>
+          </form>
+        )}
+      </div>
 
       {aging && (
         <div className="card">
@@ -443,7 +754,29 @@ export default function InvoicesPage() {
                 <td>{customerName(inv.customer_id)}</td>
                 <td>
                   {inv.description}
-                  <div className="muted">{inv.invoice_type}</div>
+                  <div className="muted">
+                    {inv.invoice_type}
+                    {inv.lines.length > 0 && (
+                      <>
+                        {' '}
+                        &middot; {inv.lines.length} line{inv.lines.length === 1 ? '' : 's'}
+                      </>
+                    )}
+                  </div>
+                  {inv.lines.length > 0 && (
+                    <ul className="muted" style={{ margin: '4px 0 0', paddingLeft: 16 }}>
+                      {inv.lines.map((l) => (
+                        <li key={l.id}>
+                          {l.quantity}
+                          {l.unit_of_measure ? ` ${l.unit_of_measure}` : ''} &times; {l.description}
+                          {' @ '}
+                          {money(l.unit_price_sgd)}
+                          {/* Only a line that moved stock has a cost. */}
+                          {l.unit_cost_sgd !== null && <> (cost {money(l.unit_cost_sgd)} ea)</>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </td>
                 <td>{money(inv.amount_sgd)}</td>
                 <td>

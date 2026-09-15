@@ -461,6 +461,33 @@ regardless: `Quotation`'s status enum has no state distinguishing
 so there is nothing for either tile to count until that's a confirmed
 business rule.
 
+**Product-based Sales Invoicing landed 2026-09-15**, also directly in
+`backend-php/` + `frontend/` rather than as a conversion (`backend/`
+has no equivalent -- it is the behaviour Dennis asked for on stock
+costing). `invoices` had always been header-only, so a Sales Invoice
+had nowhere to put a product; there is now an `invoice_lines` table,
+`POST /invoices`, and a "Raise Sales Invoice" form on the Invoices
+page that shows on-hand quantity per line as it is filled in. **Lines
+are optional**: every existing header-only invoice keeps working
+untouched, with no backfill, and the auto-issued ones (contract
+activation, excess-usage decision) still issue a single amount. A
+stock line deducts through the same
+`InventoryService::deductStock()` a Goods Issue Note uses, so INV-002
+holds by construction rather than by a second implementation agreeing
+-- insufficient stock refuses the WHOLE invoice, on-hand quantity can
+never go negative, and units leave at the item's weighted average
+without re-weighting it. The line stores the average **as at issue**,
+so a later goods receipt cannot move a past invoice's gross profit;
+that also makes `cost_sgd` a real cost basis on these, so the Sales GP
+report shows a measured margin instead of its no-cost stand-in. GST is
+applied once to the summed net, the same single-rate treatment every
+other invoice and quotation uses -- per-line tax codes would be a new
+business rule nobody has asked for. **Deliberately not done:** no
+COGS/inventory journal is posted, because whether stock movements post
+to the General Ledger is still an open question (see
+[docs/backlog.md](docs/backlog.md)) and this was not the place to
+answer it quietly.
+
 No other business area has application code yet. **Further commission
 business rules beyond what is built (the report, its rate and
 Payouts), further Service Record business-rule decisions (open item

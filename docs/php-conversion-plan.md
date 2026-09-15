@@ -2540,6 +2540,57 @@ docs/ui-guidelines.md section 2 had specified `export.xlsx` and
 brings those two screens into line with the project's own convention
 rather than setting a new one.
 
+### Product-based Sales Invoicing (2026-09-15, NOT a conversion)
+
+New scope, built directly in `backend-php/` + `frontend/` --
+`backend/` (Python) has no equivalent. It delivers what Dennis asked
+for alongside the stock-costing work: a Sales Invoice that picks
+stock, refuses when the quantity is insufficient, and deducts at
+weighted average cost. That had been blocked because `invoices` was
+header-only: one amount, no lines, no product selection, every
+invoice auto-issued from another module's decision.
+
+- **`invoice_lines`** (new table) + `POST /invoices`
+  (`BillingService::issueSalesInvoice`), and a "Raise Sales Invoice"
+  form on the Invoices page showing on-hand quantity per line.
+
+- **Lines are OPTIONAL**, decided rather than assumed. Existing
+  header-only invoices keep working with no backfill, and the
+  auto-issued ones still issue a single amount. Nothing that reads
+  `invoices` has to learn about the new table to stay correct.
+
+- **The stock rules are not re-implemented.** Each stock line goes
+  through `App\Services\InventoryService::deductStock()` -- the same
+  call a Goods Issue Note makes -- so INV-002 holds by construction:
+  an insufficient quantity refuses the whole invoice, on-hand
+  quantity can never go negative, and units leave at the item's
+  weighted average without re-weighting it.
+
+- **No draft state.** BILL-002 already says invoices issue directly,
+  and a draft would leave stock reserved with nothing to release it.
+  The whole act is one transaction, so a refusal on line 2 unwinds
+  line 1's deduction with it -- tested explicitly.
+
+- **Cost is recorded as at issue**, not looked up later: the item's
+  average moves with every later receipt, and a past invoice's gross
+  profit must not move with it. That also gives these invoices a real
+  `cost_sgd`, so Sales GP reports a measured margin rather than the
+  stand-in it shows where no cost is known. A service-only invoice
+  keeps a null cost -- unknown is not zero.
+
+- Posts to the GL on issue like every other invoice, mapped to the
+  seeded **4030 Hardware sales** account rather than a newly invented
+  one. **Deliberately NOT posting a COGS/inventory journal:** whether
+  stock movements post to the GL is a still-open question, and a
+  conversion-adjacent build is not the place to settle it.
+
+15 tests, one per rule Dennis named plus cross-company scoping (a
+valid uuid from another company satisfies the foreign key, so the
+endpoint checks ownership itself). Verified end to end against the
+running app as well: invoice issued, GST applied, GL posted, stock
+10 -> 6 at average cost, and an over-issue refused with the level
+unchanged.
+
 ## Not yet converted (pending, in rough priority order)
 
 Everything below still only exists in `backend/` (Python). Each is a

@@ -754,6 +754,22 @@ export interface ExcessUsageRecord {
 
 export type InvoiceStatus = 'outstanding' | 'partially_paid' | 'paid' | 'written_off'
 
+export interface InvoiceLine {
+  id: string
+  line_no: number
+  description: string
+  product_id: string | null
+  stock_item_id: string | null
+  warehouse_id: string | null
+  quantity: number
+  unit_of_measure: string | null
+  unit_price_sgd: number
+  line_amount_sgd: number
+  /** Weighted average cost as at issue; null on a line moving no stock. */
+  unit_cost_sgd: number | null
+  cost_amount_sgd: number | null
+}
+
 export interface Invoice {
   id: string
   invoice_number: string
@@ -777,6 +793,13 @@ export interface Invoice {
   // GL posting (ACC-001)
   gl_status: 'posted' | 'reversed' | 'not_posted'
   gl_voucher_number: string | null
+  /** Cost basis, when one is known. Null means unknown, not zero. */
+  cost_sgd: number | null
+  /**
+   * Empty on every auto-issued invoice -- only a manually raised
+   * Sales Invoice carries lines.
+   */
+  lines: InvoiceLine[]
 }
 
 // ---- Accounts Receivable ----
@@ -2288,6 +2311,24 @@ export const api = {
   listInvoices: (filters: { customer_id?: string; contract_id?: string } = {}) =>
     request<Invoice[]>(`/invoices${qs(filters)}`),
   getInvoice: (id: string) => request<Invoice>(`/invoices/${id}`),
+  /**
+   * Raise a Sales Invoice by hand. A line naming a stock item deducts
+   * it at weighted average cost on issue, and the whole invoice is
+   * refused if any line asks for more than the warehouse holds.
+   */
+  createSalesInvoice: (payload: {
+    customer_id: string
+    description?: string
+    lines: {
+      description: string
+      quantity: number
+      unit_price_sgd: number
+      product_id?: string
+      stock_item_id?: string
+      warehouse_id?: string
+      unit_of_measure?: string
+    }[]
+  }) => request<Invoice>('/invoices', { method: 'POST', body: JSON.stringify(payload) }),
   exportInvoicesCsv: (filters: { customer_id?: string; contract_id?: string } = {}) =>
     requestBlob(`/invoices/export.csv${qs(filters)}`),
   exportInvoicesExcel: (filters: { customer_id?: string; contract_id?: string } = {}) =>
