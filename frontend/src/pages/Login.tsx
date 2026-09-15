@@ -16,16 +16,23 @@ export default function Login() {
   const navigate = useNavigate()
   const [step, setStep] = useState<Step>('credentials')
 
-  // Deliberately empty. These used to prefill dennis@websoft.local /
-  // demo1234, which caused two problems: the password shipped pre-typed
-  // into every deployment's sign-in form, and the address stopped being
-  // correct -- backend/scripts/seed_demo.py seeds @websoft.local while
-  // backend-php's DatabaseSeeder seeds @websoft.example, so a hardcoded
-  // prefill is wrong against whichever backend it was not written for.
-  // Demo credentials belong in DEV_SETUP.md and deploy/README.md, where
-  // they can say which backend they apply to.
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  // Empty in every built bundle. These used to prefill
+  // dennis@websoft.local / demo1234 unconditionally, which caused two
+  // problems: the password shipped pre-typed into every deployment's
+  // sign-in form (including the test server deploy/README.md describes,
+  // whose demo password is published), and the address was wrong --
+  // backend/scripts/seed_demo.py seeds @websoft.local while backend-php's
+  // DatabaseSeeder seeds @websoft.example, so a hardcoded prefill is
+  // wrong against whichever backend it was not written for.
+  //
+  // Under `npm run dev` only, they prefill backend-php's seeded demo
+  // owner as a local convenience (confirmed with Dennis 2026-09-15).
+  // Vite substitutes `false` for import.meta.env.DEV in `npm run build`,
+  // so neither demo string survives into a production bundle rather
+  // than merely going unused. Demo credentials for either backend are
+  // documented in DEV_SETUP.md and deploy/README.md.
+  const [email, setEmail] = useState(import.meta.env.DEV ? 'dennis@websoft.example' : '')
+  const [password, setPassword] = useState(import.meta.env.DEV ? 'demo1234' : '')
 
   const [otpToken, setOtpToken] = useState('')
   const [otpCode, setOtpCode] = useState('')
