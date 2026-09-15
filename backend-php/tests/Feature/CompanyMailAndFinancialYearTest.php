@@ -157,6 +157,19 @@ class CompanyMailAndFinancialYearTest extends TestCase
         $this->assertStringNotContainsString('super-secret', $raw);
     }
 
+    /** The screen shows a "password on file" note without ever seeing the value. */
+    public function test_reads_say_whether_a_password_is_set_without_returning_it(): void
+    {
+        $this->getJson('/api/companies', $this->headers())->assertOk()
+            ->assertJsonPath('0.smtp_password_set', false);
+
+        $this->patchJson("/api/companies/{$this->company->id}", [
+            'smtp_password' => 'super-secret',
+        ], $this->headers())->assertOk()
+            ->assertJsonPath('smtp_password_set', true)
+            ->assertJsonMissingPath('smtp_password');
+    }
+
     public function test_the_password_value_never_reaches_the_audit_trail(): void
     {
         $this->patchJson("/api/companies/{$this->company->id}", [

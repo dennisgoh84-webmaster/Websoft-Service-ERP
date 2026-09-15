@@ -200,6 +200,20 @@ export interface Company {
   write_off_approval_threshold_sgd: number | null
   credit_note_approval_threshold_sgd: number | null
   po_approval_threshold_sgd: number | null
+  /** 1-12. Labelled by the year it ENDS in: 7 means FY2027 = Jul 2026 - Jun 2027. */
+  financial_year_start_month: number
+  // This company's own outbound mailbox, for the customer-facing "Email
+  // X" document buttons. Separate from the system mailbox in .env that
+  // sends login codes and password resets; neither falls back to the
+  // other. The password is write-only: never returned, only its
+  // presence is.
+  smtp_host: string | null
+  smtp_port: number
+  smtp_username: string | null
+  smtp_use_tls: boolean
+  smtp_from_email: string | null
+  smtp_from_name: string | null
+  smtp_password_set: boolean
   is_active: boolean
   created_at: string
 }
@@ -1796,9 +1810,24 @@ export const api = {
       write_off_approval_threshold_sgd?: number | null
       credit_note_approval_threshold_sgd?: number | null
       po_approval_threshold_sgd?: number | null
+      financial_year_start_month?: number
+      smtp_host?: string | null
+      smtp_port?: number
+      smtp_username?: string | null
+      /** Omit to leave the stored password alone; null clears it. */
+      smtp_password?: string | null
+      smtp_use_tls?: boolean
+      smtp_from_email?: string | null
+      smtp_from_name?: string | null
       is_active?: boolean
     },
   ) => request<Company>(`/companies/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  /** Sends a real message through the company's own mailbox, to prove the settings at setup time. */
+  testCompanyEmail: (id: string, toEmail: string) =>
+    request<{ sent: boolean; to: string }>(`/companies/${id}/test-email`, {
+      method: 'POST',
+      body: JSON.stringify({ to_email: toEmail }),
+    }),
   switchCompany: (id: string) => request<Company>(`/companies/${id}/switch`, { method: 'POST' }),
 
   // Staff Master (full CRUD; distinct from the plain listUsers directory above)

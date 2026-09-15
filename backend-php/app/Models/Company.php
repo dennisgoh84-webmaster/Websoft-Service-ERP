@@ -42,6 +42,18 @@ class Company extends Model
      */
     protected $hidden = ['smtp_password'];
 
+    /**
+     * Because the password itself is hidden, Company Setup would
+     * otherwise have no way to show whether one is on file -- so the
+     * fact of it (never the value) rides along on every read.
+     */
+    protected $appends = ['smtp_password_set'];
+
+    public function getSmtpPasswordSetAttribute(): bool
+    {
+        return (bool) $this->smtp_password;
+    }
+
     // Money fields: the Postgres column is `numeric(12,2)` (set in the
     // migration) so on-disk storage is always exact -- never a float.
     // These three are stored config values only (never computed on),
