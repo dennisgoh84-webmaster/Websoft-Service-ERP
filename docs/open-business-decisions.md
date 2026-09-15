@@ -1896,7 +1896,7 @@ requirements have not been provided":
 
 | Open point | Pragmatic default applied | Status |
 |---|---|---|
-| What counts as "this Financial Year" for the Sales Dashboard's Top 10 / Bottom 10 listings? | Calendar year (1 Jan – 31 Dec) — no fiscal-year-start field exists anywhere in the system. | **OPEN** — needs Dennis to confirm the real FY start, or that calendar-year is fine. |
+| What counts as "this Financial Year" for the Sales Dashboard's Top 10 / Bottom 10 listings? | ~~Calendar year (1 Jan – 31 Dec) — no fiscal-year-start field exists anywhere in the system.~~ | **DECIDED with Dennis, built 2026-09-15** — a real Company Setup value, `financial_year_start_month` (Webmaster: 1 Jul – 30 Jun, a year labelled by the year it ends in). Editable on the Company Setup screen since the same day; the Sales Dashboard and Year-End Closing read it. |
 | How does a Contract link to the Sales Quotation that renewed it? | A plain free-text `quotation_reference` field on Contract, settable once Renewed/Expired — **not** a real linked record. | **OPEN, partially unblocked 2026-09-14** — Quotations has since been converted to `backend-php/` (see [php-conversion-plan.md](php-conversion-plan.md)), so a real `Quotation` model now exists to link against. The free-text field hasn't been swapped for a real foreign key yet — that conversion pass was scoped to `QuotationController` only and deliberately didn't touch `Contract`/`ContractController` — so this is now a small, reachable follow-up rather than something blocked on a missing module. Still needs doing. |
 
 Also corrects an imprecise premise this feature set's build brief

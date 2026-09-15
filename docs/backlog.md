@@ -231,8 +231,11 @@ shipped and when.
   Ops Dashboard -- not merged into the Company Dashboard as originally
   built.
   **Two pragmatic defaults, flagged for Dennis to confirm, not silently
-  assumed:** "this Financial Year" = the calendar year (no
-  fiscal-year-start field exists yet), and the Contract–Quotation link
+  assumed:** ~~"this Financial Year" = the calendar year (no
+  fiscal-year-start field exists yet)~~ -- **settled 2026-09-15**: a
+  real Company Setup value (`financial_year_start_month`, Webmaster
+  runs 1 Jul - 30 Jun), editable on the Company Setup screen since
+  the same day; and the Contract–Quotation link
   is free text only, not a real linked record -- both recorded in
   [open-business-decisions.md #40](open-business-decisions.md#40-sales-module-enhancements-financial-year-definition-and-contractquotation-link-raised-2026-09-22).
   (Quotations has since been converted to `backend-php/`, which
@@ -335,10 +338,12 @@ shipped and when.
   Cutting the frontend over is one line in `frontend/nginx.conf` and
   is **Dennis's decision, not a deploy side effect** -- see DEPLOY.md
   §4b. It installs `libreoffice-writer`, as the Python image does.
-  **Not yet built or run:** there is no Docker daemon in the
+  ~~**Not yet built or run:** there is no Docker daemon in the
   development environment it was written in, so `docker compose
   --profile php up --build` has never been executed. First run may
-  need small fixes.
+  need small fixes.~~ **Built and run on Dennis's test server
+  2026-09-15** via `deploy/install.sh` -- and the first run did need
+  fixes, three of them, see "Test server" below.
 - [x] **Two export writers now coexist** -- resolved 2026-09-15 by
   retiring `App\Services\ExportService`. There is now ONE export
   writer, `App\Services\Exports` (the faithful port of `exports.py`:
@@ -388,6 +393,49 @@ shipped and when.
   suggestions.
   → [planned-work.md #12](planned-work.md#12-ai-assistant--where-ai-fits-this-system-and-what-it-must-not-do-raised-2026-09-15)
 
+## Test server (2026-09-15) -- first real deployment of `backend-php/`
+
+- [x] **Three bugs that stopped a clean checkout deploying** -- found
+  by Dennis installing `deploy/` on a real server, fixed and verified
+  the same day (`3e27871`). Compose read `.env` from `deploy/`, not the
+  repo root (`--env-file` now passed everywhere); the Dockerfile ran
+  `mkdir` after composer needed the directory and used a brace
+  expansion `/bin/sh` (dash) does not have; and the Mobile screen was
+  blank for every engineer because `response()->json(null)` emits `{}`
+  (Symfony's JsonResponse), which the frontend treats as an open
+  time-in. Also: `install.sh` now generates a random owner password
+  (`user:set-password` artisan command) instead of leaving the
+  published `demo1234` live on a box reachable through a tunnel.
+- [x] **Portal login had no admin screen** (`fc5fd78`) -- not a
+  conversion gap: the four staff-side endpoints were converted and
+  tested, but no screen ever called them, so no portal user could be
+  created and the portal refused every sign-in. Contact Person table
+  now carries Enable / Reset / Disable + status + the one-time
+  temporary password.
+- [x] **Seeder parity** (`fc5fd78`) -- `DatabaseSeeder` now seeds the
+  real letterhead (address, UEN, GST no.) and logo, the ad banner and
+  the three announcements, ported from `seed_demo.py`; a reseed fills
+  blanks only, never overwriting entered data.
+- [x] **Portal is desktop-first** (`111318c`) -- reverses the design
+  doc's phone-first guess at Dennis's request; phone width still works.
+- [x] **Company mailbox + financial year had no screen** (`b93d01a`)
+  -- same class of gap as the portal admin: backend built and tested,
+  `Mailer`'s own error told people to fill it in under Company Setup,
+  and no such fields existed. Now an "Outbound email" card with Send
+  test email, and the FY start month select.
+- [ ] **Cutover: `backend/` (Python) is still the documented system of
+  record**, but the test server runs `backend-php/` only, from
+  `deploy/docker-compose.php.yml`. Dennis's call when the PHP stack
+  becomes production and `backend/` is retired -- at which point the
+  two `backend/` bugs noted under the conversion above stop mattering.
+- [ ] **Smaller things noticed, not done:** the SMTP transport has no
+  connect timeout, so "Send test email" against an unreachable host
+  spins until PHP's socket default (60s) rather than failing fast; the
+  promo video is a `<video src>` URL only (direct `.mp4`/`.webm` link,
+  no upload), which the Announcements screen does not say; the
+  Outlook Add-in half of Incidents is still scaffold-only, needing a
+  real Microsoft 365 tenant + HTTPS host.
+
 ## Partially open
 
 - [x] **Commission Management** -- ~~the GP-based report is built;
@@ -404,4 +452,4 @@ shipped and when.
   → [open-business-decisions.md #7-8](open-business-decisions.md#7-projects)
 
 ---
-Last updated: 2026-09-14 (GL posting + Bank step, and Customer Helpdesk Portal, both built and verified)
+Last updated: 2026-09-15 (first real deployment of backend-php on the test server: deploy fixes, portal admin screen, seeder parity, desktop portal, Company Setup mailbox)
