@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+#
+# Upgrade an existing Websoft Service ERP test server to the latest
+# code.
+#
+#   ./deploy/upgrade.sh            # pull latest main, then upgrade
+#   ./deploy/upgrade.sh --no-pull  # upgrade the code already checked out
+#
+# Order matters here and is deliberate:
+#
+#   1. Back up the database FIRST. Migrations are the one step that
+#      cannot be undone by restarting, so the backup is taken before
+#      anything touches the schema -- not after.
+#   2. Build the new images before stopping anything, so a build
+#      failure leaves the running site untouched.
+#   3. Migrate, then restart.
+#
+# Uploaded files and the database live in named Docker volumes, so
+# nothing here deletes them. This script never runs `down -v`.
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+ROOT="$(pwd)"
+COMPOSE="docker compose -f deploy/docker-compose.php.yml"
+BACKUP_DIR="$ROOT/backups"
+
+say()  { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
+warn() { printf '\033[33m    %s\033[0m\n' "$*"; }
+die()  { printf '\n\033[31mERROR: %s\033[0m\n\n' "$*" >&2; exit 1; }
+
+PULL=1
+[ "${1:-}" = "--no-pull" ] && PULL=0
+
+command -v docker >/dev/null 2>&1 || die "Docker is not installed."
+docker info >/dev/null 2>&1 || die "The Docker daemon is not running, or this user cannot reach it."
+[ -f "$ROOT/.env" ] || die "No .env here, so there is nothing to upgrade. For a fresh install: ./deploy/install.sh"
+
+# ---- 1. back up -----------------------------------------------------
+
+say "Backing up the database"
+mkdir -p "$BACKUP_DIR"
+STAMP="$(date -u '+%Y%m%d-%H%M%S')"
+DUMP="$BACKUP_DIR/websoft-$STAMP.sql.gz"
+
+if $COMPOSE ps --status running --services 2>/dev/null | grep -qx db; then
+  $COMPOSE exec -T db pg_dump -U websoft_app websoft_service_erp | gzip > "$DUMP"
+else
+  warn "db is not running -- starting it just to take the backup"
+  $COMPOSE up -d db
+  sleep 5
+  $COMPOSE exec -T db pg_dump -U websoft_app websoft_service_erp | gzip > "$DUMP"
+fi
+
+# A dump that failed halfway still leaves a file, so check it is real.
+[ -s "$DUMP" ] || die "The backup came out empty -- stopping before any migration runs. Nothing has changed."
+echo "    $DUMP ($(du -h "$DUMP" | cut -f1))"
+
+# Keep the last 10; a test server does not need an unbounded history.
+ls -1t "$BACKUP_DIR"/websoft-*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm --
+
+# ---- 2. new code, new images ----------------------------------------
+
+if [ "$PULL" -eq 1 ]; then
+  say "Pulling the latest code"
+  git rev-parse --abbrev-ref HEAD | grep -qx main \
+    || warn "Not on main -- pulling into $(git rev-parse --abbrev-ref HEAD) anyway."
+  git pull --ff-only
+fi
+echo "    now at $(git rev-parse --short HEAD) -- $(git log -1 --pretty=%s)"
+
+say "Building images (the running site is still up and serving)"
+$COMPOSE build
+
+# ---- 3. migrate and restart -----------------------------------------
+
+say "Applying migrations"
+$COMPOSE run --rm migrate-php
+
+say "Restarting the application"
+$COMPOSE up -d
+
+say "Done"
+$COMPOSE ps
+cat <<REPORT
+
+  Rollback, if this upgrade went wrong:
+
+    git checkout <previous-commit>
+    gunzip -c $DUMP \\
+      | docker compose -f deploy/docker-compose.php.yml exec -T db \\
+          psql -U websoft_app -d websoft_service_erp
+    ./deploy/upgrade.sh --no-pull
+
+  Restoring the dump replaces the database's current contents, so only
+  do it if you mean to discard everything since the backup.
+
+REPORT
