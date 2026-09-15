@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
+use App\Exceptions\QuotationRuleViolation;
 use App\Http\Controllers\Api\Concerns\SendsDocuments;
 use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
@@ -12,6 +13,7 @@ use App\Models\CompanyIndividual;
 use App\Models\Product;
 use App\Models\Quotation;
 use App\Models\QuotationLine;
+use App\Models\User;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\DocxForms;
@@ -73,6 +75,11 @@ class QuotationController extends Controller
             'converted_contract_id' => $quotation->converted_contract_id,
             'converted_annual_contract_id' => $quotation->converted_annual_contract_id,
             'created_at' => optional($quotation->created_at)->toJSON(),
+            'submitted_at' => optional($quotation->submitted_at)->toJSON(),
+            'approved_at' => optional($quotation->approved_at)->toJSON(),
+            'approved_by_user_id' => $quotation->approved_by_user_id,
+            'sent_at' => optional($quotation->sent_at)->toJSON(),
+            'returned_reason' => $quotation->returned_reason,
             'lines' => $quotation->lines->map(fn (QuotationLine $l) => [
                 'id' => $l->id,
                 'product_id' => $l->product_id,
@@ -257,19 +264,61 @@ class QuotationController extends Controller
         return response()->json($this->present($quotation->fresh('lines')));
     }
 
+    /** draft -> pending_approval. */
+    public function submit(Request $request, string $quotationId)
+    {
+        return $this->transition($request, $quotationId, 'edit',
+            fn (Quotation $q, User $u) => QuotationService::submitForApproval($q, $u->id));
+    }
+
+    /** pending_approval -> approved (Sales Manager / owner, BILL-006). */
+    public function approve(Request $request, string $quotationId)
+    {
+        return $this->transition($request, $quotationId, 'edit',
+            fn (Quotation $q, User $u) => QuotationService::approve($q, $u));
+    }
+
+    /** pending_approval -> draft, with a reason. */
+    public function sendBack(Request $request, string $quotationId)
+    {
+        $data = $request->validate(['reason' => 'required|string|min:1|max:1000']);
+
+        return $this->transition($request, $quotationId, 'edit',
+            fn (Quotation $q, User $u) => QuotationService::sendBack($q, $u, $data['reason']));
+    }
+
+    /** approved -> sent. */
     public function send(Request $request, string $quotationId)
     {
+        return $this->transition($request, $quotationId, 'edit',
+            fn (Quotation $q, User $u) => QuotationService::send($q, $u->id));
+    }
+
+    public function reject(Request $request, string $quotationId)
+    {
+        return $this->transition($request, $quotationId, 'edit',
+            fn (Quotation $q, User $u) => QuotationService::reject($q, $u->id));
+    }
+
+    /**
+     * The shared shape of every status endpoint: authority, ownership,
+     * the transition inside a transaction, a 409 when the status model
+     * refuses, the fresh record back.
+     */
+    private function transition(Request $request, string $quotationId, string $level, callable $apply)
+    {
         $user = Authenticate::user($request);
-        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+        Authority::requireModuleAccess($user, self::MODULE, $level);
 
         $quotation = $this->quotationOrFail($user->company_id, $quotationId);
-        if ($quotation->status !== Quotation::STATUS_DRAFT) {
-            throw new ApiException(409, 'Only a draft quotation can be sent.');
+        try {
+            DB::transaction(function () use ($quotation, $user, $apply) {
+                $apply($quotation, $user);
+                $quotation->save();
+            });
+        } catch (QuotationRuleViolation $e) {
+            throw new ApiException(409, $e->getMessage());
         }
-
-        $quotation->status = Quotation::STATUS_SENT;
-        Audit::record('quotation', $quotation->id, 'sent', $user->id);
-        $quotation->save();
 
         return response()->json($this->present($quotation->fresh('lines')));
     }
@@ -280,38 +329,22 @@ class QuotationController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'edit');
 
         $quotation = $this->quotationOrFail($user->company_id, $quotationId);
-        if (! in_array($quotation->status, [Quotation::STATUS_DRAFT, Quotation::STATUS_SENT], true)) {
-            throw new ApiException(409, "Cannot accept a {$quotation->status} quotation.");
+
+        try {
+            $message = DB::transaction(function () use ($quotation, $user) {
+                $msg = QuotationService::acceptQuotation($quotation, $user->id);
+                $quotation->save();
+
+                return $msg;
+            });
+        } catch (QuotationRuleViolation $e) {
+            throw new ApiException(409, $e->getMessage());
         }
-
-        $message = DB::transaction(function () use ($quotation, $user) {
-            $msg = QuotationService::acceptQuotation($quotation, $user->id);
-            $quotation->save();
-
-            return $msg;
-        });
 
         return response()->json([
             'quotation' => $this->present($quotation->fresh('lines')),
             'message' => $message,
         ]);
-    }
-
-    public function reject(Request $request, string $quotationId)
-    {
-        $user = Authenticate::user($request);
-        Authority::requireModuleAccess($user, self::MODULE, 'edit');
-
-        $quotation = $this->quotationOrFail($user->company_id, $quotationId);
-        if (! in_array($quotation->status, [Quotation::STATUS_DRAFT, Quotation::STATUS_SENT], true)) {
-            throw new ApiException(409, "Cannot reject a {$quotation->status} quotation.");
-        }
-
-        $quotation->status = Quotation::STATUS_REJECTED;
-        Audit::record('quotation', $quotation->id, 'rejected', $user->id);
-        $quotation->save();
-
-        return response()->json($this->present($quotation->fresh('lines')));
     }
 
     /** GET /quotations/{id}/export.docx -- the Word button on the Quotation print page. */

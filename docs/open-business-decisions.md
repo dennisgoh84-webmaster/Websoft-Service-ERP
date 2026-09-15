@@ -172,7 +172,10 @@ sub-detail is called out explicitly).
 2.6. **How are quotations internally approved** before being sent to a
    customer?
    **Status: DECIDED — BILL-006.** Cherish (Sales Manager) approves every
-   quotation — no threshold exemption.
+   quotation — no threshold exemption. **Built 2026-09-15** as the
+   Quotation status model (SALES-008): submit → approve / send back →
+   send → accept / reject, with the Sales Dashboard's two pending
+   tiles counting it.
    *Arises in:* Sales; Workflow A.
 
 2.7. **What is the value threshold above which a credit note requires

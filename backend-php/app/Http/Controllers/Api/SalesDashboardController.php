@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
+use App\Models\Company;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\SalesDashboardService;
@@ -43,9 +44,11 @@ class SalesDashboardController extends Controller
 
         $year = $request->filled('year') ? (int) $request->query('year') : null;
 
+        $startMonth = (int) (Company::find($user->company_id)?->financial_year_start_month ?? 1);
+
         return response()->json([
-            'financial_year' => $year ?? (int) now()->year,
-            'financial_year_is_calendar_year' => true, // see class/service docblock
+            'financial_year' => $year ?? SalesDashboardService::currentFinancialYear($user->company_id),
+            'financial_year_is_calendar_year' => $startMonth === 1,
             'contracts_due_for_renewal' => SalesDashboardService::contractsDueForRenewalCount($user->company_id),
             'ar_outstanding_total_sgd' => SalesDashboardService::arOutstandingSum($user->company_id, 'total'),
             'ar_outstanding_2_months_sgd' => SalesDashboardService::arOutstandingSum($user->company_id, '31_60'),

@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Exceptions\ContractRuleViolation;
+use App\Exceptions\QuotationRuleViolation;
 use App\Models\Contract;
 use App\Models\Quotation;
+use App\Models\User;
 use App\Support\Money;
 use Illuminate\Support\Carbon;
 
@@ -63,8 +65,98 @@ class QuotationService
      * afterwards, same as recomputeTotals() above -- see
      * QuotationController::accept()'s DB::transaction.
      */
+    // ── Status transitions (settled 2026-09-15, BILL-006) ───────────
+    //
+    // Each one checks the state it moves FROM and throws
+    // QuotationRuleViolation otherwise; the controller turns that into
+    // a 409. Callers save the quotation afterwards, inside their own
+    // transaction, same as acceptQuotation() below.
+
+    /** draft -> pending_approval. Anyone who can edit quotations. */
+    public static function submitForApproval(Quotation $quotation, string $actorUserId): void
+    {
+        self::requireStatus($quotation, [Quotation::STATUS_DRAFT], 'submitted for approval');
+        $quotation->status = Quotation::STATUS_PENDING_APPROVAL;
+        $quotation->submitted_at = Carbon::now('UTC');
+        $quotation->submitted_by_user_id = $actorUserId;
+        $quotation->returned_reason = null;
+        Audit::record('quotation', $quotation->id, 'submitted_for_approval', $actorUserId);
+    }
+
+    /**
+     * pending_approval -> approved. BILL-006: the Sales Manager, with no
+     * value threshold below which a quotation skips this; the owner
+     * can always stand in, as on every other approval in this system.
+     */
+    public static function approve(Quotation $quotation, User $approver): void
+    {
+        if (! in_array($approver->role, Quotation::APPROVER_ROLES, true)) {
+            throw new QuotationRuleViolation(
+                'Only the Sales Manager or the owner can approve a quotation (BILL-006).'
+            );
+        }
+        self::requireStatus($quotation, [Quotation::STATUS_PENDING_APPROVAL], 'approved');
+        $quotation->status = Quotation::STATUS_APPROVED;
+        $quotation->approved_at = Carbon::now('UTC');
+        $quotation->approved_by_user_id = $approver->id;
+        Audit::record('quotation', $quotation->id, 'approved', $approver->id);
+    }
+
+    /** pending_approval -> draft, with the reason, so it can be fixed and resubmitted. */
+    public static function sendBack(Quotation $quotation, User $approver, string $reason): void
+    {
+        if (! in_array($approver->role, Quotation::APPROVER_ROLES, true)) {
+            throw new QuotationRuleViolation(
+                'Only the Sales Manager or the owner can send a quotation back (BILL-006).'
+            );
+        }
+        self::requireStatus($quotation, [Quotation::STATUS_PENDING_APPROVAL], 'sent back');
+        $quotation->status = Quotation::STATUS_DRAFT;
+        $quotation->returned_reason = trim($reason);
+        $quotation->submitted_at = null;
+        $quotation->submitted_by_user_id = null;
+        Audit::record('quotation', $quotation->id, 'sent_back', $approver->id, reason: $reason);
+    }
+
+    /** approved -> sent: it is now with the customer, "pending confirmation by client". */
+    public static function send(Quotation $quotation, string $actorUserId): void
+    {
+        self::requireStatus($quotation, [Quotation::STATUS_APPROVED], 'sent');
+        $quotation->status = Quotation::STATUS_SENT;
+        $quotation->sent_at = Carbon::now('UTC');
+        Audit::record('quotation', $quotation->id, 'sent', $actorUserId);
+    }
+
+    /**
+     * -> rejected, from any state before acceptance: a customer can
+     * decline, or Sales can withdraw, at any point up to acceptance.
+     */
+    public static function reject(Quotation $quotation, string $actorUserId): void
+    {
+        self::requireStatus($quotation, [
+            Quotation::STATUS_DRAFT, Quotation::STATUS_PENDING_APPROVAL,
+            Quotation::STATUS_APPROVED, Quotation::STATUS_SENT,
+        ], 'rejected');
+        $quotation->status = Quotation::STATUS_REJECTED;
+        Audit::record('quotation', $quotation->id, 'rejected', $actorUserId);
+    }
+
+    /** @param  list<string>  $allowed */
+    private static function requireStatus(Quotation $quotation, array $allowed, string $verb): void
+    {
+        if (! in_array($quotation->status, $allowed, true)) {
+            throw new QuotationRuleViolation(
+                "A {$quotation->status} quotation cannot be {$verb}."
+            );
+        }
+    }
+
     public static function acceptQuotation(Quotation $quotation, string $actorUserId): string
     {
+        // Only a quotation the customer actually has can be accepted --
+        // acceptance is their confirmation of what was sent (BILL-006
+        // put approval before sending; this keeps acceptance after it).
+        self::requireStatus($quotation, [Quotation::STATUS_SENT], 'accepted');
         $quotation->status = Quotation::STATUS_ACCEPTED;
 
         $hourlyLines = $quotation->lines->filter(fn ($line) => self::isHourly($line->unit_of_measure));

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\Invoice;
+use App\Models\Quotation;
 use App\Models\User;
 use App\Services\ContractService;
 use App\Services\Numbering;
@@ -171,18 +172,25 @@ class SalesDashboardServiceTest extends TestCase
         $this->assertSame(1, SalesDashboardService::contractsDueForRenewalCount($company->id));
     }
 
-    // ---- Quotations KPIs: KNOWN GAP, never fabricated --------------------
+    // ---- Quotations KPIs (real since 2026-09-15, BILL-006) ---------------
 
-    public function test_quotations_pending_kpis_report_not_available_not_fabricated(): void
+    public function test_quotations_pending_kpis_count_pending_approval_and_sent(): void
     {
         $company = Company::factory()->create();
+        $customer = CompanyIndividual::factory()->for($company)->create();
+        foreach ([Quotation::STATUS_DRAFT, Quotation::STATUS_PENDING_APPROVAL, Quotation::STATUS_PENDING_APPROVAL,
+            Quotation::STATUS_APPROVED, Quotation::STATUS_SENT, Quotation::STATUS_ACCEPTED] as $status) {
+            Quotation::factory()->for($company)->create(['customer_id' => $customer->id, 'status' => $status]);
+        }
+        // Another company's quotations never count.
+        Quotation::factory()->create(['status' => Quotation::STATUS_PENDING_APPROVAL]);
 
         $approval = SalesDashboardService::quotationsPendingApproval($company->id);
         $confirmation = SalesDashboardService::quotationsPendingConfirmation($company->id);
 
-        $this->assertSame(0, $approval['count']);
-        $this->assertTrue($approval['not_available']);
-        $this->assertSame(0, $confirmation['count']);
-        $this->assertTrue($confirmation['not_available']);
+        $this->assertSame(2, $approval['count']);
+        $this->assertFalse($approval['not_available']);
+        $this->assertSame(1, $confirmation['count']);
+        $this->assertFalse($confirmation['not_available']);
     }
 }

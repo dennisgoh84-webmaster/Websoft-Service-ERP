@@ -27,6 +27,8 @@ class QuotationServiceTest extends TestCase
     private function makeQuotation(Company $company, CompanyIndividual $customer): Quotation
     {
         return Quotation::factory()->create([
+            // Accepted from SENT only, since the 2026-09-15 status model.
+            'status' => Quotation::STATUS_SENT,
             'company_id' => $company->id,
             'customer_id' => $customer->id,
         ]);

@@ -621,17 +621,37 @@ conversion" note on this set of rules). Decision record:
 - **Pragmatic default (flagged for Dennis's confirmation, not silently
   assumed):** "this Financial Year" = the **calendar year** (1 Jan – 31
   Dec) — no fiscal-year-start field exists anywhere in the system yet.
-- **Known gap, not fabricated:** "Quotations Pending Approval" and
+- ~~**Known gap, not fabricated:** "Quotations Pending Approval" and
   "Quotations Pending Confirmation by Client" always report
-  not-available. **Update 2026-09-14:** Quotations is now converted to
-  `backend-php/`, but this gap is not closed by that — `Quotation`'s
-  status enum (draft/sent/accepted/rejected/expired, ported faithfully
-  from `backend/`) has no state distinguishing "pending internal
-  approval" from "sent, awaiting the client's confirmation," so there
-  is nothing for these two tiles to count even now. Closing this needs
-  a business-rule decision (does an approval step exist before sending,
-  and how is it tracked?), not more conversion work — never assumed
-  here.
+  not-available.~~ **Closed 2026-09-15** by SALES-008 below: the two
+  tiles count `pending_approval` and `sent` quotations respectively.
+
+### SALES-008 — Quotation status model — CONFIRMED (2026-09-15)
+
+- Dennis, 2026-09-15: "Quotation status to clarify." Settled on the
+  rule already confirmed as BILL-006 (the Sales Manager approves every
+  quotation before it goes to the customer, no value threshold):
+
+  `draft` → `pending_approval` → `approved` → `sent` → `accepted` /
+  `rejected` / `expired`
+
+  - **Submit for approval** (draft → pending_approval): anyone with
+    EDIT on Sales.
+  - **Approve** (pending_approval → approved) and **Send back**
+    (pending_approval → draft, with a reason shown on the draft):
+    Sales Manager, or the owner standing in, as on every other
+    approval in the system.
+  - **Send to customer** (approved → sent): requires approval first.
+  - **Accept** (sent → accepted): only a quotation the customer has
+    actually been sent can be accepted; the accept-to-Contract
+    conversion (11.1) is unchanged.
+  - **Reject**: from any state before acceptance — a customer can
+    decline, or Sales can withdraw, at any point up to acceptance.
+  - Who submitted / approved / sent, and when, are recorded on the
+    quotation as well as in the audit trail.
+- The Sales Dashboard's "Quotations Pending Approval" = count of
+  `pending_approval`; "Pending Confirmation by Client" = count of
+  `sent`. Each tile opens the Quotations list filtered to that status.
 
 ## Conceptual Business Entities
 

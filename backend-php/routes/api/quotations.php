@@ -12,6 +12,11 @@ Route::middleware('auth.jwt')->prefix('quotations')->group(function () {
     Route::get('/export.xlsx', [QuotationController::class, 'exportExcel']);
     Route::post('/', [QuotationController::class, 'store']);
     Route::get('/{quotation}', [QuotationController::class, 'show']);
+    // Status model (BILL-006, settled 2026-09-15): submit -> approve or
+    // send-back -> send -> accept / reject.
+    Route::post('/{quotation}/submit', [QuotationController::class, 'submit']);
+    Route::post('/{quotation}/approve', [QuotationController::class, 'approve']);
+    Route::post('/{quotation}/send-back', [QuotationController::class, 'sendBack']);
     Route::post('/{quotation}/send', [QuotationController::class, 'send']);
     Route::post('/{quotation}/accept', [QuotationController::class, 'accept']);
     Route::post('/{quotation}/reject', [QuotationController::class, 'reject']);

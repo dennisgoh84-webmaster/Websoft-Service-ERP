@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\Invoice;
+use App\Models\Quotation;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -23,15 +24,12 @@ use Illuminate\Support\Collection;
  * anywhere in the system (Company has no such setting) to derive a
  * real financial year from.
  *
- * KNOWN GAP: "No. of Quotations Pending for Approval" / "... Pending
- * for Confirmation by Client" always report 0 / not_available=true --
- * the Sales Quotation module exists in backend/ (Python) but has not
- * been converted to backend-php yet (this work is scoped to
- * backend-php only, per its task brief), and even in the Python
- * source, Quotation has no "pending approval" or "pending client
- * confirmation" status distinct from its existing draft/sent/accepted/
- * rejected/expired states -- so these two figures cannot be
- * meaningfully computed from any existing data model. Never fabricated.
+ * "No. of Quotations Pending for Approval" / "... Pending for
+ * Confirmation by Client": real counts since 2026-09-15, when the
+ * Quotation status model gained pending_approval and approved
+ * (BILL-006) -- pending approval is the former, sent-not-yet-accepted
+ * the latter. Until then they reported not-available rather than a
+ * fabricated figure.
  */
 class SalesDashboardService
 {
@@ -194,16 +192,24 @@ class SalesDashboardService
     }
 
     /**
-     * KNOWN GAP -- see class docblock. Always 0/not-available; never
-     * fabricated.
+     * Quotations awaiting the Sales Manager's approval (BILL-006) --
+     * status pending_approval. Real since the status model was settled
+     * 2026-09-15; the KNOWN GAP that used to sit here is closed.
      */
     public static function quotationsPendingApproval(string $companyId): array
     {
-        return ['count' => 0, 'not_available' => true, 'reason' => 'Quotations module not yet converted to backend-php.'];
+        return [
+            'count' => Quotation::where('company_id', $companyId)->where('status', Quotation::STATUS_PENDING_APPROVAL)->count(),
+            'not_available' => false,
+        ];
     }
 
+    /** Quotations with the customer, not yet accepted or rejected -- status sent. */
     public static function quotationsPendingConfirmation(string $companyId): array
     {
-        return ['count' => 0, 'not_available' => true, 'reason' => 'Quotations module not yet converted to backend-php.'];
+        return [
+            'count' => Quotation::where('company_id', $companyId)->where('status', Quotation::STATUS_SENT)->count(),
+            'not_available' => false,
+        ];
     }
 }

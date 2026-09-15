@@ -1525,7 +1525,20 @@ export interface Product {
 }
 
 // ---- Sales Quotation ----
-export type QuotationStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired'
+/**
+ * draft -> pending_approval -> approved -> sent -> accepted / rejected /
+ * expired, with send-back from pending_approval to draft. BILL-006: the
+ * Sales Manager approves every quotation before it goes to the customer
+ * (settled 2026-09-15).
+ */
+export type QuotationStatus =
+  | 'draft'
+  | 'pending_approval'
+  | 'approved'
+  | 'sent'
+  | 'accepted'
+  | 'rejected'
+  | 'expired'
 
 export interface QuotationLine {
   id: string
@@ -1557,6 +1570,12 @@ export interface Quotation {
   converted_contract_id: string | null
   converted_annual_contract_id: string | null
   created_at: string
+  submitted_at: string | null
+  approved_at: string | null
+  approved_by_user_id: string | null
+  sent_at: string | null
+  /** Why the approver sent it back to draft; cleared on the next submit. */
+  returned_reason: string | null
   lines: QuotationLine[]
 }
 
@@ -2771,6 +2790,10 @@ export const api = {
       cost_sgd?: number | null
     }[]
   }) => request<Quotation>('/quotations', { method: 'POST', body: JSON.stringify(payload) }),
+  submitQuotation: (id: string) => request<Quotation>(`/quotations/${id}/submit`, { method: 'POST' }),
+  approveQuotation: (id: string) => request<Quotation>(`/quotations/${id}/approve`, { method: 'POST' }),
+  sendBackQuotation: (id: string, reason: string) =>
+    request<Quotation>(`/quotations/${id}/send-back`, { method: 'POST', body: JSON.stringify({ reason }) }),
   sendQuotation: (id: string) => request<Quotation>(`/quotations/${id}/send`, { method: 'POST' }),
   acceptQuotation: (id: string) =>
     request<{ quotation: Quotation; message: string }>(`/quotations/${id}/accept`, { method: 'POST' }),

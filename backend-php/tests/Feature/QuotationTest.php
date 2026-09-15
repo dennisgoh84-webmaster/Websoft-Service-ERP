@@ -116,6 +116,11 @@ class QuotationTest extends TestCase
         ], $this->headers($token));
         $id = $create->json('id');
 
+        // BILL-006 (settled 2026-09-15): submit -> approve -> send -> accept.
+        $this->postJson("/api/quotations/{$id}/submit", [], $this->headers($token))
+            ->assertOk()->assertJson(['status' => 'pending_approval']);
+        $this->postJson("/api/quotations/{$id}/approve", [], $this->headers($token))
+            ->assertOk()->assertJson(['status' => 'approved']);
         $this->postJson("/api/quotations/{$id}/send", [], $this->headers($token))
             ->assertOk()->assertJson(['status' => 'sent']);
 
@@ -136,7 +141,7 @@ class QuotationTest extends TestCase
         $response = $this->postJson("/api/quotations/{$quotation->id}/accept", [], $this->headers($token));
 
         $response->assertStatus(409);
-        $this->assertStringContainsString('Cannot accept a accepted quotation.', $response->json('detail'));
+        $this->assertStringContainsString('A accepted quotation cannot be accepted.', $response->json('detail'));
     }
 
     public function test_reject_a_draft_quotation(): void

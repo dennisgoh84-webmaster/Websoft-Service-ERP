@@ -25,7 +25,15 @@ class Quotation extends Model
 
     public $timestamps = false;
 
+    // draft -> pending_approval -> approved -> sent -> accepted/rejected/
+    // expired. BILL-006: the Sales Manager approves every quotation
+    // before it goes to the customer (settled 2026-09-15 -- see the
+    // 2026_09_30_000200 migration).
     public const STATUS_DRAFT = 'draft';
+
+    public const STATUS_PENDING_APPROVAL = 'pending_approval';
+
+    public const STATUS_APPROVED = 'approved';
 
     public const STATUS_SENT = 'sent';
 
@@ -35,11 +43,15 @@ class Quotation extends Model
 
     public const STATUS_EXPIRED = 'expired';
 
+    /** BILL-006: Cherish (Sales Manager) approves every quotation; the owner can always stand in. */
+    public const APPROVER_ROLES = [User::ROLE_SALES_MANAGER, User::ROLE_OWNER];
+
     protected $fillable = [
         'company_id', 'quotation_number', 'customer_id', 'quotation_date', 'valid_until',
         'status', 'notes', 'amount_sgd', 'tax_code', 'gst_rate', 'gst_amount_sgd',
         'total_amount_sgd', 'converted_contract_id', 'converted_annual_contract_id',
         'created_by_user_id',
+        'submitted_at', 'submitted_by_user_id', 'approved_at', 'approved_by_user_id', 'sent_at', 'returned_reason',
     ];
 
     // Mirrors the DB column defaults (see the migration) so a freshly
@@ -62,6 +74,9 @@ class Quotation extends Model
         'gst_amount_sgd' => 'decimal:2',
         'total_amount_sgd' => 'decimal:2',
         'created_at' => 'datetime',
+        'submitted_at' => 'datetime',
+        'approved_at' => 'datetime',
+        'sent_at' => 'datetime',
     ];
 
     public function company(): BelongsTo

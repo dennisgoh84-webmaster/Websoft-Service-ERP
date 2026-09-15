@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { EmailIcon, PrintIcon, WhatsAppIcon } from '../components/DocActionIcons'
 import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
@@ -14,6 +14,7 @@ import {
   type ReferenceCode,
 } from '../lib/api'
 import { formatMoney as money } from '../lib/format'
+import { useAuth } from '../lib/AuthContext'
 
 // wa.me needs digits only (country code + number, no "+", spaces or dashes).
 function waNumber(phone: string): string {
@@ -22,10 +23,22 @@ function waNumber(phone: string): string {
 
 const STATUS_BADGE: Record<QuotationStatus, string> = {
   draft: 'draft',
+  pending_approval: 'exceeded',
+  approved: 'active',
   sent: 'exceeded',
   accepted: 'active',
   rejected: 'expired',
   expired: 'expired',
+}
+
+const STATUS_LABEL: Record<QuotationStatus, string> = {
+  draft: 'Draft',
+  pending_approval: 'Pending approval',
+  approved: 'Approved',
+  sent: 'Sent -- pending client',
+  accepted: 'Accepted',
+  rejected: 'Rejected',
+  expired: 'Expired',
 }
 
 interface DraftLine {
@@ -61,8 +74,14 @@ export default function QuotationsPage() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  // BILL-006: only the Sales Manager (or the owner) approves. The
+  // backend enforces it; this just hides a button that would 409.
+  const { user } = useAuth()
+  const canApprove = user?.role === 'sales_manager' || user?.role === 'owner'
 
-  const [filterStatus, setFilterStatus] = useState('')
+  // The Sales Dashboard's two Quotation tiles link here with ?status=.
+  const [searchParams] = useSearchParams()
+  const [filterStatus, setFilterStatus] = useState(searchParams.get('status') ?? '')
   const [filterCompanyIndividual, setFilterCompanyIndividual] = useState('')
   const [docPanelId, setDocPanelId] = useState<string | null>(null)
 
@@ -178,6 +197,38 @@ export default function QuotationsPage() {
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send quotation')
+    }
+  }
+
+  async function onSubmit(q: Quotation) {
+    setError(null)
+    try {
+      await api.submitQuotation(q.id)
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit quotation')
+    }
+  }
+
+  async function onApprove(q: Quotation) {
+    setError(null)
+    try {
+      await api.approveQuotation(q.id)
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to approve quotation')
+    }
+  }
+
+  async function onSendBack(q: Quotation) {
+    const reason = prompt(`Send ${q.quotation_number} back to draft -- reason for the person who raised it:`)
+    if (!reason) return
+    setError(null)
+    try {
+      await api.sendBackQuotation(q.id, reason)
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send quotation back')
     }
   }
 
@@ -397,7 +448,9 @@ export default function QuotationsPage() {
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
               <option value="">All</option>
               <option value="draft">Draft</option>
-              <option value="sent">Sent</option>
+              <option value="pending_approval">Pending approval</option>
+              <option value="approved">Approved</option>
+              <option value="sent">Sent -- pending client</option>
               <option value="accepted">Accepted</option>
               <option value="rejected">Rejected</option>
               <option value="expired">Expired</option>
@@ -463,7 +516,10 @@ export default function QuotationsPage() {
                   <td>{q.valid_until ?? <span className="muted">-</span>}</td>
                   <td>{money(q.total_amount_sgd)}</td>
                   <td>
-                    <span className={`badge ${STATUS_BADGE[q.status]}`}>{q.status}</span>
+                    <span className={`badge ${STATUS_BADGE[q.status]}`}>{STATUS_LABEL[q.status]}</span>
+                    {q.status === 'draft' && q.returned_reason && (
+                      <div className="muted">Sent back: {q.returned_reason}</div>
+                    )}
                     {q.converted_contract_id && (
                       <div className="muted">
                         <Link to={`/contracts/${q.converted_contract_id}`}>Service Support contract</Link>
@@ -506,17 +562,28 @@ export default function QuotationsPage() {
                       <WhatsAppIcon />
                     </button>
                     {q.status === 'draft' && (
-                      <button className="secondary" onClick={() => onSend(q)}>
-                        Send
+                      <button className="secondary" onClick={() => onSubmit(q)}>
+                        Submit for approval
                       </button>
                     )}
-                    {(q.status === 'draft' || q.status === 'sent') && (
+                    {q.status === 'pending_approval' && canApprove && (
                       <>
-                        <button onClick={() => onAccept(q)}>Accept</button>
-                        <button className="secondary" onClick={() => onReject(q)}>
-                          Reject
+                        <button onClick={() => onApprove(q)}>Approve</button>
+                        <button className="secondary" onClick={() => onSendBack(q)}>
+                          Send back
                         </button>
                       </>
+                    )}
+                    {q.status === 'approved' && (
+                      <button className="secondary" onClick={() => onSend(q)}>
+                        Send to customer
+                      </button>
+                    )}
+                    {q.status === 'sent' && <button onClick={() => onAccept(q)}>Accept</button>}
+                    {(q.status === 'draft' || q.status === 'pending_approval' || q.status === 'approved' || q.status === 'sent') && (
+                      <button className="secondary" onClick={() => onReject(q)}>
+                        Reject
+                      </button>
                     )}
                   </td>
                 </tr>

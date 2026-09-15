@@ -240,10 +240,12 @@ shipped and when.
   [open-business-decisions.md #40](open-business-decisions.md#40-sales-module-enhancements-financial-year-definition-and-contractquotation-link-raised-2026-09-22).
   (Quotations has since been converted to `backend-php/`, which
   unblocks a real link; the free-text field itself hasn't been swapped
-  out for one yet.) Two Quotations-dependent Sales Dashboard KPIs
+  out for one yet.) ~~Two Quotations-dependent Sales Dashboard KPIs
   ("Pending Approval" / "Pending Confirmation by Client") still always
-  report not-available -- not because Quotations is unconverted, but
-  because its status model has no state distinguishing those two cases.
+  report not-available.~~ **Settled 2026-09-15 (SALES-008):** the
+  Quotation status model gained `pending_approval` and `approved`
+  (BILL-006's Sales Manager approval step), so both tiles now count
+  real rows.
   → [planned-work.md #11](planned-work.md#11-sales-module-enhancements-job-implementation-template-multi-product-job-orders-contract-hour-sharing-contract-filters-contract-operation-report-contractquotation-reference-sales-dashboard-raised-earlier-built-2026-09-22),
   rules SALES-001..007
 - [x] **Sub-ledger → GL posting + Bank step** -- settled and built 2026-09-14.

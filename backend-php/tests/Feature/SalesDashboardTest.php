@@ -58,7 +58,11 @@ class SalesDashboardTest extends TestCase
             'quotations_pending_approval' => ['count', 'not_available'],
             'quotations_pending_confirmation' => ['count', 'not_available'],
         ]);
-        $this->assertTrue($response->json('quotations_pending_approval.not_available'));
+        // Real counts since the Quotation status model was settled
+        // (2026-09-15, BILL-006) -- see QuotationApprovalTest for the
+        // figures themselves.
+        $this->assertFalse($response->json('quotations_pending_approval.not_available'));
+        $this->assertFalse($response->json('quotations_pending_confirmation.not_available'));
     }
 
     public function test_top_billing_customers_drill_down_list(): void

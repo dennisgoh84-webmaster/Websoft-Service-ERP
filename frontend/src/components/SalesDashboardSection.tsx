@@ -19,8 +19,9 @@ import ExportControl from './ExportControl'
  * (the Company Dashboard's /dashboard/summary endpoint is not yet
  * converted to backend-php, a pre-existing, separate gap).
  *
- * PRAGMATIC DEFAULT (flagged for Dennis's confirmation, not silently
- * assumed): "This Financial Year" = the calendar year. See
+ * "This Financial Year" follows Company Setup's financial-year start
+ * month (settled 2026-09-15); the two Quotation tiles count real
+ * statuses since the same day (BILL-006 approval step). See
  * App\Services\SalesDashboardService's docblock in backend-php.
  */
 export default function SalesDashboardSection() {
@@ -65,8 +66,12 @@ export default function SalesDashboardSection() {
     <div>
       <h2>Sales Dashboard</h2>
       <p className="muted">
-        Financial year = calendar year (1 Jan - 31 Dec) -- a pragmatic default pending Dennis's
-        confirmation of a real fiscal-year start date. Click a tile to see its breakdown.
+        {summary
+          ? summary.financial_year_is_calendar_year
+            ? `Financial year FY${summary.financial_year} (the calendar year).`
+            : `Financial year FY${summary.financial_year}, as set in Company Setup.`
+          : 'Financial year as set in Company Setup.'}{' '}
+        Click a tile to see its breakdown.
       </p>
       {error && <div className="error-banner">{error}</div>}
       {summaryError && <p className="muted">Sales Dashboard summary unavailable: {summaryError}</p>}
@@ -89,20 +94,20 @@ export default function SalesDashboardSection() {
             <div className="stat-value stat-value-text">{money(summary.ar_outstanding_3_months_sgd)}</div>
             <div className="stat-label">AR Outstanding -- 3 months</div>
           </div>
-          <div className="card stat-tile">
-            <div className="stat-value">N/A</div>
+          <Link to="/quotations?status=pending_approval" className="card stat-tile" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="stat-value">{summary.quotations_pending_approval.count}</div>
             <div className="stat-label">Quotations Pending Approval</div>
             <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>
-              Quotations module not yet converted to backend-php.
+              Awaiting the Sales Manager (BILL-006)
             </div>
-          </div>
-          <div className="card stat-tile">
-            <div className="stat-value">N/A</div>
+          </Link>
+          <Link to="/quotations?status=sent" className="card stat-tile" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="stat-value">{summary.quotations_pending_confirmation.count}</div>
             <div className="stat-label">Quotations Pending Confirmation by Client</div>
             <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>
-              Quotations module not yet converted to backend-php.
+              Sent, not yet accepted or rejected
             </div>
-          </div>
+          </Link>
         </div>
       )}
 
