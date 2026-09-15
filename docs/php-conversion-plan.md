@@ -1806,6 +1806,65 @@ against the constructed Symfony transport, not by connecting.
 
   13 dedicated tests cover both modules.
 
+### Setup Lists + Reference Codes (converted 2026-09-15)
+
+- **Setup Lists** (`app/routers/setup_lists.py` ->
+  `App\Http\Controllers\Api\SetupListController`): Nationality,
+  Country, State, Area Code, Currency and Industry, all in one generic
+  `setup_list_items` table. List (ordered by list_type, sort_order then
+  code, filterable by `list_type`, hiding inactive unless asked),
+  create, patch, and both exports.
+
+  **GLOBAL, not company-scoped** -- the one structural thing to know
+  about this module. A country's name does not differ per company, so
+  every company shares one list per `list_type`. That makes the usual
+  "another company's row is a 404" test inapplicable; its opposite is
+  pinned instead (company B sees the row company A created), the same
+  way the Announcements conversion handled being global. Still gated on
+  `core_administration`, so it remains editable only with rights to it.
+
+  PYTHON DETAILS CARRIED ACROSS: uniqueness is `(list_type, code)`, not
+  `code` alone, so the same code may exist under two different list
+  types -- pinned; `list_type` is absent from `SetupListItemUpdate`, so
+  an item cannot be moved between lists once created -- pinned;
+  `parent_code` (a State's owning Country) stays a **plain string, not
+  a foreign key**, because the parent can live in a different
+  `list_type`; and the CSV/Excel export writes a missing `parent_code`
+  as an empty string while the JSON keeps it null.
+
+- **Reference Codes / Reference Monitor**
+  (`app/routers/reference_codes.py` ->
+  `App\Http\Controllers\Api\ReferenceCodeController`): GL sub-codes
+  under one Chart of Accounts row, so one account (e.g. 45001 "Sales of
+  Software Revenue") can be broken down for document selection. List
+  (filterable by `account_id`, joining the account's code and name),
+  create, patch, and both exports. Gated on `finance_accounting`, the
+  same module as Chart of Accounts, since it is a direct extension of
+  it.
+
+  `GET /api/reference-codes` was the last remaining 404 seen in smoke
+  tests against `backend-php` -- the document-generation pass recorded
+  it as the only failing request in its whole Playwright run. It is now
+  served.
+
+  PYTHON ORDERING DETAIL CARRIED ACROSS: create checks the account
+  **before** the duplicate-code check, so a cross-company `account_id`
+  returns 404 "Account not found" even when the code would also have
+  clashed -- pinned by a test. Patch re-validates `account_id` the same
+  way, so a reference code cannot be re-pointed at another company's
+  account.
+
+  **SCHEMA GAPS CLOSED: the two deferred foreign keys.**
+  `products.default_reference_code_id` and
+  `quotation_lines.reference_code_id` have both carried their column
+  without its constraint since their own migrations, each saying so in
+  a comment and deferring "until reference_codes exists". Both
+  constraints are added here -- the same pattern the Customer Helpdesk
+  Portal used for `login_otps.portal_user_id` and
+  `incidents.raised_by_portal_user_id`.
+
+  14 dedicated tests cover both modules.
+
 ## New feature work landed directly in `backend-php/` (not a conversion)
 
 2026-09-22: Dennis asked for a set of new Sales-area features (Job
