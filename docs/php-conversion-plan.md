@@ -2419,6 +2419,62 @@ different Module Control keys, exactly as Python splits them.
   deferred module -- this converts only the report and its rate
   setting, which is all `reports.py` carries.
 
+### Commission Payouts (converted 2026-09-15)
+
+- **Commission Payouts** (`app/routers/commissions.py` +
+  `app/services/commissions.py` + `app/models/commissions.py` ->
+  `App\Http\Controllers\Api\CommissionPayoutController`,
+  `App\Services\CommissionService`, `App\Models\CommissionPayout`,
+  `routes/api/commissions.php`, 17 tests): the last router in
+  `backend/app/routers/` without a PHP equivalent. Generate a month's
+  DRAFT payouts, submit, approve, reject, pay, cancel, the two
+  month-wide batch actions, and the clawback an AR write-off raises
+  (open-business-decisions 6.3/6.4/6.5).
+
+  Gated on `accounting_reports`, the key Python uses and the one
+  `frontend/src/components/Layout.tsx` already tests for this screen.
+  The authority split is Python's: VIEW reads, EDIT submits, FULL
+  generates/approves/rejects/pays/cancels -- so preparing a batch and
+  approving it are separable duties.
+
+  RULES PINNED BY TESTS: a month cannot be generated twice (regenerating
+  would silently double what is owed -- the existing batch must be
+  cancelled first, which leaves the cancellation on record); a payout
+  reaches PAID only through PENDING_APPROVAL and APPROVED, each wrong-state
+  transition refused with a 422; a rejection returns it to DRAFT with the
+  reason appended to its notes; **a PAID payout can never be cancelled**,
+  and the row survives; the batch actions touch only their own month; a
+  clawback is a NEW NEGATIVE ROW, auto-approved, never an edit to the
+  earning it reverses (CLAUDE.md forbids deleting financial records); and
+  a generated batch sums to exactly what the Commission report reports for
+  the same month -- both call the same `CommissionService::commissionFor()`
+  rather than each carrying the arithmetic.
+
+  **A REAL BUG FOUND IN `backend/`, worth raising with Dennis:**
+  `app/services/commissions.py` allocates payout numbers with
+  `next_document_number(db, company_id, "CP")` -- three positional
+  arguments against a signature whose parameters after `db` are
+  KEYWORD-ONLY (`def next_document_number(db, *, company_id, doc_kind,
+  on=None)`). That raises `TypeError` before any number is allocated, so
+  **`generate_payouts` and `create_clawback` cannot run in `backend/` at
+  all** -- Commission Payouts has never worked there. It is worse than a
+  dead screen: `accounts_receivable.py`'s write-off endpoint calls
+  `create_clawback`, so **writing off an invoice would fail the moment a
+  non-zero commission rate is set**. A zero rate returns early, which is
+  why nobody has hit it yet. The PHP version calls
+  `App\Services\Numbering` properly.
+
+  Also corrected here: that same call passes `"CP"` -- a PREFIX -- where
+  the parameter is a document KIND, which would store `doc_kind = "CP"`
+  in `document_sequences` and only render as "CP" via the 3-letter
+  fallback. The PHP version registers `'commission_payout' => 'CP'` in
+  `Numbering::PREFIXES`, so Document Control can customise the format
+  like every other document.
+
+  This also closes the last KNOWN GAP recorded against Accounts
+  Receivable: its write-off endpoint now raises the commission clawback,
+  as Python's does.
+
 ## Not yet converted (pending, in rough priority order)
 
 Everything below still only exists in `backend/` (Python). Each is a
@@ -2426,10 +2482,9 @@ phase of its own, following the same pattern as CompanyIndividual
 Management above -- model(s) + migration(s) + controller + routes +
 smoke test:
 
-1. Anything else in `backend/app/routers/` not listed above.
-   Commission Payouts remains deferred per CLAUDE.md (the Commission
-   *report* and its rate setting are converted -- see Management
-   Reporting above).
+1. **Nothing.** Every router in `backend/app/routers/` now has a PHP
+   equivalent. What remains below is retrofitting and follow-ups, not
+   conversion.
 2. CSV/Excel export (`app/services/exports.py` plus the
    `export.csv`/`export.xlsx` route on nearly every list screen). This
    is now the only export format still missing on the converted

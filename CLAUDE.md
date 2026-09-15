@@ -40,7 +40,10 @@ eventual project.
 - Purchasing
 - Inventory
 - Hardware Management
-- Commission Management — **deferred for now** (see [docs/open-business-decisions.md](docs/open-business-decisions.md))
+- Commission Management — the commission **report**, its rate setting
+  and **Commission Payouts** (generate / approve / pay / clawback) are
+  built; further commission business rules remain deferred (see
+  [docs/open-business-decisions.md](docs/open-business-decisions.md))
 - Management Reporting
 - AI Assistant
 
@@ -379,7 +382,22 @@ Python's duplicated bucketing loop, so the figures on those screens
 can never drift apart. Commission adds a `commission_settings` table:
 the formula is confirmed but the percentage is Dennis's to set, so it
 starts at zero and a report run before it is set reports zero rather
-than an invented rate. Two things found while converting it: the Job
+than an invented rate. Also converted: **Commission Payouts**
+(generate a month's draft payouts, submit/approve/reject/pay/cancel,
+the two month-wide batch actions, and the clawback an AR write-off
+raises) -- the last router in `backend/app/routers/` without a PHP
+equivalent, so **every Python router is now converted**. A generated
+batch sums to exactly what the Commission report reports for the same
+month, because both call the same calculation. **A real bug was found
+in `backend/` while converting it:** its commission service allocates
+payout numbers with three positional arguments against a
+keyword-only signature, so `generate_payouts` and `create_clawback`
+raise TypeError -- Commission Payouts has never worked there, and
+because AR write-off calls `create_clawback`, writing off an invoice
+would fail the moment a non-zero commission rate is set (a zero rate
+returns early, which is why nobody has hit it). Worth raising with
+Dennis; the PHP version does it properly. Two more things found while
+converting the reports: the Job
 Orders export's "overdue" column tests the status against a
 `"resolved"` state that does not exist in this system, so a VOID job
 order reads as overdue there while the `overdue_only` filter beside it
@@ -389,9 +407,7 @@ match, and flagged in
 `backend/` bug worth raising; and the reports' staff-name lookup now
 resolves the ids in the result set rather than filtering `users` by
 company, which had blanked out the name of anyone reached through
-`UserCompanyAccess` rather than their home company. **Still deferred:**
-Commission Payouts, which is a separate module -- only the report and
-its rate live in `reports.py`.
+`UserCompanyAccess` rather than their home company.
 
 **Sales module enhancements landed directly in `backend-php/` +
 `frontend/`, not as part of the conversion above** (`backend/` has no
@@ -432,8 +448,9 @@ regardless: `Quotation`'s status enum has no state distinguishing
 so there is nothing for either tile to count until that's a confirmed
 business rule.
 
-No other business area has application code yet. **Commission
-Management, further Service Record business-rule decisions (open item
+No other business area has application code yet. **Further commission
+business rules beyond what is built (the report, its rate and
+Payouts), further Service Record business-rule decisions (open item
 9.1), and Odoo migration planning are deferred for now at Dennis's
 request** — see [docs/open-business-decisions.md](docs/open-business-decisions.md)
 — and will be revisited once Service Operations and related areas are

@@ -37,6 +37,7 @@ require __DIR__.'/api/reference_codes.php';
 require __DIR__.'/api/ledger.php';
 require __DIR__.'/api/reports.php';
 require __DIR__.'/api/operations_reports.php';
+require __DIR__.'/api/commissions.php';
 require __DIR__.'/api/event_logs.php';
 require __DIR__.'/api/software_tasks.php';
 require __DIR__.'/api/monitoring.php';

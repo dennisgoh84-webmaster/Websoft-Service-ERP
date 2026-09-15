@@ -31,6 +31,10 @@ class Numbering
         'service_record' => 'SR',
         'bank_transaction' => 'BT',
         'incident' => 'INC',
+        // Commission payout (6.5). Python passes the literal prefix "CP"
+        // as the document KIND instead of registering it here -- see
+        // App\Services\CommissionService's class docblock.
+        'commission_payout' => 'CP',
     ];
 
     /** Allocate the next number for this company/kind/year. */

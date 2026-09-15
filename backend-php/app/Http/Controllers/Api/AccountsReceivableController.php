@@ -14,6 +14,7 @@ use App\Models\Invoice;
 use App\Services\AccountsReceivableService;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\CommissionService;
 use App\Services\DocxForms;
 use App\Services\Posting;
 use Illuminate\Http\Request;
@@ -28,12 +29,12 @@ use Illuminate\Support\Facades\DB;
  * live in App\Http\Controllers\Api\PaymentController.
  *
  * NOT yet converted from the Python router (tracked in
- * docs/php-conversion-plan.md): CSV/Excel export, and the commission
- * clawback that Python's write-off endpoint triggers (Commission
- * Management is deferred, per CLAUDE.md). The Customer Statement
- * endpoints -- JSON, .docx and Email -- WERE the other gap here; all
- * three are converted now, see statement()/statementDocx()/
- * statementEmail() below.
+ * docs/php-conversion-plan.md): CSV/Excel export. The other two gaps
+ * recorded here are both closed now -- the Customer Statement
+ * endpoints (JSON, .docx and Email: see statement()/statementDocx()/
+ * statementEmail() below), and the commission clawback the write-off
+ * endpoint triggers (see writeOffInvoice() and
+ * App\Services\CommissionService::createClawback()).
  */
 class AccountsReceivableController extends Controller
 {
@@ -104,9 +105,31 @@ class AccountsReceivableController extends Controller
                     newValue: ['status' => 'written_off', 'outstanding_sgd' => '0.00'],
                 );
 
-                // NOT converted: commission clawback (Commission
-                // Management is deferred, per CLAUDE.md) -- see this
-                // controller's class docblock.
+                // Commission clawback (6.4): commission already
+                // earned on receipts against this invoice is reversed
+                // by a NEGATIVE payout record, never by editing the
+                // earning it reverses. Null when nothing was earned
+                // (no rate set, no salesperson on the contract, or no
+                // receipts allocated).
+                $clawback = CommissionService::createClawback(
+                    $user->company_id,
+                    $invoice,
+                    $user->id,
+                    "Write-off of {$invoice->invoice_number}: {$data['reason']}",
+                );
+                if ($clawback !== null) {
+                    Audit::record(
+                        entityType: 'commission_payout',
+                        entityId: $clawback->id,
+                        action: 'clawback_created',
+                        actorUserId: $user->id,
+                        newValue: [
+                            'payout_number' => $clawback->payout_number,
+                            'amount_sgd' => (float) $clawback->amount_sgd,
+                            'invoice' => $invoice->invoice_number,
+                        ],
+                    );
+                }
             });
         } catch (ARRuleViolation $e) {
             throw new ApiException(422, $e->getMessage());
