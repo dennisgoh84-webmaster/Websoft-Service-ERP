@@ -1761,6 +1761,51 @@ against the constructed Symfony transport, not by connecting.
   to force it. The test asserts the value is not a *string*, which is
   the part that would actually break the frontend.
 
+### GL Types + Currency Rate Table (converted 2026-09-15)
+
+- **GL Types** (`app/routers/gl_types.py` ->
+  `App\Http\Controllers\Api\GLTypeController`): the optional finer
+  classification within one of the 5 AccountType classes that a Chart
+  of Accounts row can carry. List (ordered by account_type then code,
+  hiding inactive unless `include_inactive`), create (409 on a
+  duplicate code, and -- like Tax Types -- no `is_active` on create),
+  patch recording only genuinely changed fields.
+
+  **SCHEMA GAP CLOSED: `accounts.gl_type_id`.** Python's `Account` has
+  carried this column all along; `backend-php`'s `accounts` table never
+  did, because the GL posting conversion scoped GLType out (recorded in
+  `App\Models\Account`'s docblock). The column was therefore *missing*,
+  not merely unused. Added here with its foreign key. `AccountOut` does
+  not expose `gl_type_id` in Python either, so this is schema parity
+  only -- no API change, and the Chart of Accounts endpoints are
+  untouched.
+
+- **Currency Rate Table** (`app/routers/currency_rates.py` ->
+  `App\Http\Controllers\Api\CurrencyRateController`): list (filterable
+  by `currency_code`, case-insensitively, ordered by code then newest
+  effective date first), create, patch. Setup data only -- nothing in
+  the app converts an amount using these rates, since the system is
+  single-currency (SGD) and multi-currency remains open item 4b.5.
+
+  TWO PYTHON BEHAVIOURS CARRIED ACROSS DELIBERATELY, both pinned by
+  tests: (a) the list filters by `currency_code` only and **never** by
+  `is_active`, so a deactivated rate still appears -- there is no
+  `include_inactive` parameter here, unlike GL Types and Tax Types;
+  (b) `CurrencyRateUpdate` carries only `rate_to_base` and `is_active`,
+  so a rate's currency and effective date are not editable -- together
+  with the company they are the row's identity.
+
+  **FINDING in `backend/`, documented not fixed:** `create_currency_rate`
+  does not pre-check the `uq_currency_rate` (company, currency,
+  effective_date) constraint, unlike `gl_types.py` and `tax_codes.py`,
+  which both pre-check theirs and return a 409. A duplicate currency
+  rate therefore surfaces as a database integrity error rather than a
+  clean 409. The PHP conversion matches this rather than silently
+  improving it; worth raising with Dennis as a small inconsistency in
+  `backend/`.
+
+  13 dedicated tests cover both modules.
+
 ## New feature work landed directly in `backend-php/` (not a conversion)
 
 2026-09-22: Dennis asked for a set of new Sales-area features (Job

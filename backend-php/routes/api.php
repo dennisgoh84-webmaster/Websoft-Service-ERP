@@ -35,6 +35,8 @@ require __DIR__.'/api/payables.php';
 require __DIR__.'/api/accounts.php';
 require __DIR__.'/api/ledger.php';
 require __DIR__.'/api/reports.php';
+require __DIR__.'/api/gl_types.php';
+require __DIR__.'/api/currency_rates.php';
 require __DIR__.'/api/bank_accounts.php';
 require __DIR__.'/api/tax_codes.php';
 require __DIR__.'/api/periods.php';
