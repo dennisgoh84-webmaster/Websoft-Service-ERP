@@ -1,8 +1,8 @@
 <?php
 
-// Mirrors backend/app/routers/incidents.py. NOT yet converted (see
-// docs/php-conversion-plan.md): convert-to-software-task (the
-// Software Tasks module has no backend-php equivalent yet).
+// Mirrors backend/app/routers/incidents.py in full. The
+// convert-to-software-task route was this module's last remaining
+// gap; it landed with the Software Tasks module on 2026-09-15.
 //
 // The two Outlook Add-in "/from-email..." routes are registered
 // before "/{incident}/..." below for the exact same reason the Python
@@ -25,4 +25,5 @@ Route::middleware('auth.jwt')->prefix('incidents')->group(function () {
     Route::post('/{incident}/close', [IncidentController::class, 'close']);
     Route::post('/{incident}/convert-to-quotation', [IncidentController::class, 'convertToQuotation']);
     Route::post('/{incident}/convert-to-job-order', [IncidentController::class, 'convertToJobOrder']);
+    Route::post('/{incident}/convert-to-software-task', [IncidentController::class, 'convertToSoftwareTask']);
 });

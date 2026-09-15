@@ -9,6 +9,7 @@ use App\Models\Incident;
 use App\Models\JobOrder;
 use App\Models\Quotation;
 use App\Models\QuotationLine;
+use App\Models\SoftwareTask;
 use App\Support\Money;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -208,6 +209,44 @@ class IncidentService
             );
 
             return $quotation;
+        });
+    }
+
+    /**
+     * Route an Incident to the Software Development queue. Mirrors
+     * backend/app/services/incidents.py's convert_to_software_task.
+     *
+     * Unlike the Quotation and Job Order routes this needs no customer
+     * and no contract -- a bug report is a bug report whether or not
+     * the caller was ever identified, which is why Python checks
+     * neither. Only that the Incident is still open.
+     */
+    public static function convertToSoftwareTask(Incident $incident, ?string $assignedProgrammerId, ?string $actorUserId): SoftwareTask
+    {
+        self::requireOpen($incident);
+
+        return DB::transaction(function () use ($incident, $assignedProgrammerId, $actorUserId) {
+            $task = SoftwareTask::create([
+                'company_id' => $incident->company_id,
+                'title' => $incident->subject,
+                'description' => $incident->description,
+                'assigned_programmer_id' => $assignedProgrammerId,
+                'created_by_user_id' => $actorUserId,
+            ]);
+
+            $incident->status = Incident::STATUS_CONVERTED;
+            $incident->converted_software_task_id = $task->id;
+            $incident->save();
+
+            Audit::record(
+                entityType: 'incident',
+                entityId: $incident->id,
+                action: 'converted_to_software_task',
+                actorUserId: $actorUserId,
+                newValue: ['software_task_id' => $task->id],
+            );
+
+            return $task;
         });
     }
 

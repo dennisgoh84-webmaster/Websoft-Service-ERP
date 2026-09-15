@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\JobOrder;
 use App\Models\ServiceRecord;
+use App\Models\SoftwareTask;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 
@@ -22,15 +23,9 @@ use Illuminate\Support\Carbon;
  * Job Order that already has a manually-set due_date into "due soon"
  * vs. merely "overdue" vs. neither.
  *
- * KNOWN GAP: "Un-Test S/T" counts Software Task rows assigned to a
- * tester but not yet marked tested. The Software Tasks module is not
- * converted to backend-php yet, so there is no software_tasks table to
- * count -- every untested-task figure here is therefore 0 rather than a
- * real count, and the gap is recorded in docs/php-conversion-plan.md.
- * The shape of the response is unchanged, so the screen renders and the
- * column simply reads 0 until that module lands, at which point the
- * counting loop below is the only thing that needs filling in. Pinned
- * by a test so it cannot be mistaken for a real zero.
+ * "Un-Test S/T" counts Software Task rows assigned to a tester but not
+ * yet marked tested. This reported a placeholder 0 until the Software
+ * Tasks module was converted (2026-09-15); it is now a real count.
  */
 class Monitoring
 {
@@ -159,11 +154,21 @@ class Monitoring
             $byStaff[$sr->employee_user_id] = $row;
         }
 
-        // KNOWN GAP (see class docblock): nothing to count until the
-        // Software Tasks module is converted. Python's loop also
-        // increments the summary total for EVERY untested task, whether
-        // or not it has a tester assigned -- preserved for when this is
-        // filled in.
+        // Note the asymmetry, faithful to Python: the SUMMARY total
+        // counts every untested task, whether or not a tester is
+        // assigned, while a per-staff row only gains one when it is
+        // assigned to that tester. So the summary can exceed the sum of
+        // the rows, by exactly the unassigned ones.
+        $untested = SoftwareTask::where('company_id', $companyId)
+            ->where('is_tested', false)->get();
+        foreach ($untested as $task) {
+            if ($task->tester_user_id !== null && isset($byStaff[$task->tester_user_id])) {
+                $row = $byStaff[$task->tester_user_id];
+                $row['untested_software_tasks']++;
+                $byStaff[$task->tester_user_id] = $row;
+            }
+            $summary['total_untested_software_tasks']++;
+        }
 
         // Average daily contract hours deducted this month, per staff --
         // the denominator is the number of days elapsed SO FAR this

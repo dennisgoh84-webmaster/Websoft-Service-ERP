@@ -2013,6 +2013,41 @@ means building product-based sales invoicing first, which is a
 substantially larger piece of scope than the costing work and is
 recorded in docs/backlog.md for Dennis to scope rather than assumed.
 
+### Software Tasks (converted 2026-09-15)
+
+- **Software Tasks** (`app/routers/software_tasks.py` ->
+  `App\Http\Controllers\Api\SoftwareTaskController`, 10 dedicated
+  tests): list (filterable by programmer, tester, and untested-only),
+  create, patch, mark-tested, reopen-testing, and both exports. Gated on
+  `software_development`.
+
+  Confirmed 2026-09-10 as a deliberately minimal first slice -- no
+  status workflow beyond `is_tested` -- and converted as such rather
+  than extended.
+
+  **CLOSES THREE RECORDED GAPS:**
+  1. **Support Monitoring's "Un-Test S/T" placeholder.** That figure
+     reported a hard 0 because there was no `software_tasks` table; it
+     is now a real count. Note the asymmetry, faithful to Python: the
+     SUMMARY total counts every untested task whether or not a tester is
+     assigned, while a per-staff row only gains one assigned to that
+     tester -- so the summary can legitimately exceed the sum of the
+     rows, by exactly the unassigned ones. Pinned by a test.
+  2. **`incidents.converted_software_task_id`**, the foreign key that
+     migration deferred explicitly "until software_tasks exists" -- the
+     same pattern used for `portal_users` and `reference_codes`.
+  3. **The Incidents convert-to-software-task route**, that module's
+     last remaining KNOWN GAP. Unlike its convert-to-Quotation and
+     convert-to-Job-Order siblings this needs neither a customer nor a
+     contract -- a bug report is a bug report whether or not the caller
+     was ever identified, which is why Python checks neither. Pinned.
+
+  HARDENING beyond Python, consistent with the Stock conversion: an
+  `assigned_programmer_id` or `tester_user_id` belonging to another
+  company is refused with a 404. Python passes both straight through.
+
+  With this, the Incidents module has no KNOWN GAPs left.
+
 ## Not yet converted (pending, in rough priority order)
 
 Everything below still only exists in `backend/` (Python). Each is a

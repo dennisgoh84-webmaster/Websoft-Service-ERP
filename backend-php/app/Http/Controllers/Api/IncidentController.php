@@ -10,6 +10,7 @@ use App\Models\Incident;
 use App\Models\JobOrder;
 use App\Models\Quotation;
 use App\Models\QuotationLine;
+use App\Models\SoftwareTask;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\IncidentService;
@@ -388,5 +389,48 @@ class IncidentController extends Controller
         }
 
         return response()->json($this->presentJobOrder($jobOrder->fresh()));
+    }
+
+    public function convertToSoftwareTask(Request $request, string $incident)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $data = $request->validate([
+            'assigned_programmer_id' => 'sometimes|nullable|uuid',
+        ]);
+        $inc = $this->incidentOrFail($user->company_id, $incident);
+        try {
+            $task = IncidentService::convertToSoftwareTask(
+                $inc, $data['assigned_programmer_id'] ?? null, $user->id
+            );
+        } catch (IncidentRuleViolation $e) {
+            throw new ApiException(422, $e->getMessage());
+        }
+
+        return response()->json($this->presentSoftwareTask($task->fresh()));
+    }
+
+    /**
+     * Mirrors SoftwareTaskOut, so converting an Incident returns the
+     * same shape the Software Tasks module itself does.
+     *
+     * @return array<string, mixed>
+     */
+    private function presentSoftwareTask(SoftwareTask $t): array
+    {
+        return [
+            'id' => $t->id,
+            'title' => $t->title,
+            'description' => $t->description,
+            'modules_affected' => $t->modules_affected,
+            'assigned_programmer_id' => $t->assigned_programmer_id,
+            'programming_finish_date' => $t->programming_finish_date?->toDateString(),
+            'programming_hours' => $t->programming_hours === null ? null : (float) $t->programming_hours,
+            'tester_user_id' => $t->tester_user_id,
+            'is_tested' => $t->is_tested,
+            'tested_at' => $t->tested_at?->toJSON(),
+            'created_at' => $t->created_at?->toJSON(),
+        ];
     }
 }

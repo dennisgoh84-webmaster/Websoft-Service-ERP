@@ -9,6 +9,7 @@ use App\Models\GroupModuleAuthority;
 use App\Models\JobOrder;
 use App\Models\ModuleCatalog;
 use App\Models\ServiceRecord;
+use App\Models\SoftwareTask;
 use App\Models\User;
 use App\Models\UserCompanyAccess;
 use App\Services\Monitoring;
@@ -182,19 +183,32 @@ class MonitoringTest extends TestCase
         $this->assertSame(0, $result['summary']['total_overdue_job_orders']);
     }
 
-    public function test_untested_software_tasks_is_a_placeholder_zero_not_a_real_count(): void
+    public function test_untested_software_tasks_are_counted_per_tester_and_in_total(): void
     {
-        // KNOWN GAP: the Software Tasks module is not converted, so there
-        // is no software_tasks table to count. The field is present and
-        // zero so the screen renders; this test exists so that zero is
-        // not later mistaken for a verified real count.
+        // Was a placeholder 0 until Software Tasks was converted
+        // (2026-09-15); now a real count.
         $company = Company::factory()->create();
         $token = $this->ownerToken($company);
-        $this->staff($company, 'Alice Tan');
+        $alice = $this->staff($company, 'Alice Tan');
+
+        SoftwareTask::create([
+            'company_id' => $company->id, 'title' => 'Assigned to Alice, untested',
+            'tester_user_id' => $alice->id,
+        ]);
+        SoftwareTask::create([
+            'company_id' => $company->id, 'title' => 'No tester yet, untested',
+        ]);
+        SoftwareTask::create([
+            'company_id' => $company->id, 'title' => 'Already tested',
+            'tester_user_id' => $alice->id, 'is_tested' => true,
+        ]);
 
         $body = $this->getJson('/api/monitoring/support', $this->headers($token))->assertOk()->json();
-        $this->assertSame(0, $body['summary']['total_untested_software_tasks']);
-        $this->assertSame(0, $body['staff'][0]['untested_software_tasks']);
+        // Alice gets only the one assigned to her and not yet tested.
+        $this->assertSame(1, $body['staff'][0]['untested_software_tasks']);
+        // The summary counts every untested task, assigned or not -- so
+        // it deliberately exceeds the sum of the per-staff rows.
+        $this->assertSame(2, $body['summary']['total_untested_software_tasks']);
     }
 
     public function test_only_this_companys_job_orders_are_counted(): void
