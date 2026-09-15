@@ -1,0 +1,16 @@
+# Never bake a developer's local config, dependencies or database into
+# the image -- composer install and the compose environment supply
+# these.
+.env
+.env.*
+!.env.example
+vendor/
+node_modules/
+storage/app/uploads/
+storage/framework/cache/
+storage/framework/sessions/
+storage/framework/views/
+storage/logs/
+bootstrap/cache/
+.phpunit.result.cache
+tests/

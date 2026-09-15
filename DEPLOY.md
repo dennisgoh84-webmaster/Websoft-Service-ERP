@@ -106,6 +106,41 @@ needs a separate deploy. Enable a customer contact's portal access from
 their Company/Individual detail page → Contacts tab (needs PDPA consent
 recorded first).
 
+### 4b. Running the PHP backend instead (optional, not the default)
+
+The backend has been converted from Python/FastAPI to PHP/Laravel
+(`backend-php/`, complete 2026-09-15 — see
+[docs/php-conversion-plan.md](docs/php-conversion-plan.md)). Both
+backends are in `docker-compose.yml`; the PHP one sits behind a
+`php` profile, so the command above still brings up the Python stack
+and nothing else. **Switching production across is a deliberate
+decision, not something the deploy does on its own.**
+
+To run the PHP backend alongside the Python one:
+
+```bash
+docker compose --profile php up -d --build
+```
+
+Set `APP_KEY` in `.env` first (see the note there for how to generate
+one). To point the frontend at it, change `proxy_pass` in
+`frontend/nginx.conf` from `http://backend:8000` to
+`http://backend-php:8000` and rebuild `frontend` — the PHP image
+serves HTTP on the same port precisely so this is a one-line,
+reversible change.
+
+Two things to know before you do:
+
+- **Only one of the two migration services may ever run against a
+  given database.** Both manage the same schema — that is the point of
+  the conversion — but Alembic and Laravel each keep their own
+  bookkeeping, and running one over the other's database is not
+  something either tool supports.
+- The PHP image installs `libreoffice-writer`, like the Python one,
+  for the "Email X" buttons' .docx → PDF step. Without it the Word
+  downloads keep working while every Email button fails — a silent,
+  one-sided failure that is easy to miss.
+
 ### 5a. Load ERP demo data
 
 **Choose one:**
@@ -245,6 +280,8 @@ gunzip -c backup-cc-*.sql.gz | docker compose exec -T cc-db psql -U cc_app centr
 │  │         ├── /portal     → React SPA (customer portal)│     │
 │  │         └── /api/*      → backend :8000             │     │
 │  │  :8000  FastAPI backend                             │     │
+│  │         (or backend-php :8000 — Laravel, `php`      │     │
+│  │          profile, opt-in; see 4b)                   │     │
 │  │  :5432  PostgreSQL (websoft_service_erp)             │     │
 │  └─────────────────────────────────────────────────────┘     │
 │                                                              │

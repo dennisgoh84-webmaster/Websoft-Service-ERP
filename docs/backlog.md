@@ -10,8 +10,9 @@ shipped and when.
 
 ## In progress
 
-- [ ] **Backend language conversion, Python/FastAPI → PHP/Laravel**
-  -- started 2026-09-14. Converted and verified so far: Core /
+- [x] **Backend language conversion, Python/FastAPI → PHP/Laravel**
+  -- **COMPLETE 2026-09-15** (the cutover itself is still Dennis's to
+  call). Started 2026-09-14. Converted and verified: Core /
   Administration (auth, audit logging, Group Authority, Module
   Control, Company Setup, Users/Staff Master), CompanyIndividual
   Management (Customer/Supplier master, Contacts, Branches,
@@ -166,10 +167,25 @@ shipped and when.
   file Word repairs silently but LibreOffice refuses, breaking the
   PDF behind every Email button while the Word download still looked
   fine.
-  Still pending: everything else -- converted module by module, same
-  pattern as the Odoo replacement strategy. CSV/Excel export
-  (`exports.py`) is now the one export format still missing across
-  the converted modules.
+  **The conversion is COMPLETE as of 2026-09-15.** The last pieces
+  were Management Reporting (the four Operations Reports and the
+  Accounting Reports -- AR/AP aging, trial balance, GST return, Sales
+  GP, Commission with its rate setting), Commission Payouts, and
+  CSV/Excel export on the remaining eighteen list screens. Every
+  router in `backend/app/routers/` and every `export.csv`/
+  `export.xlsx` route now has a PHP equivalent, and `backend-php/` has
+  a Dockerfile and compose services (behind a `php` profile).
+  `backend/` (Python) is untouched and still the system of record --
+  **switching the frontend across is Dennis's decision**, one line in
+  `frontend/nginx.conf`, see DEPLOY.md §4b.
+  Two bugs found in `backend/` while converting, both worth raising:
+  its commission service allocates payout numbers with positional
+  arguments against a keyword-only signature, so Commission Payouts
+  cannot run there at all and an AR write-off would fail once a
+  non-zero commission rate is set; and the Job Orders report's
+  "overdue" column tests for a `"resolved"` status this system has
+  never had, so a VOID job order reads as overdue there while the
+  filter beside it excludes VOID correctly.
   → [php-conversion-plan.md](php-conversion-plan.md)
 
 ## Waiting on Dennis to pick up (deferred 2026-09-12)
@@ -310,14 +326,19 @@ shipped and when.
   per-company mailbox in Company Setup, which stays client-side.
   → [planned-work.md #8c](planned-work.md#8c-serversystem-configuration-push-raised-2026-09-15)
 
-- [ ] **No Dockerfile for `backend-php/`** -- found 2026-09-15.
-  `backend/Dockerfile` exists and correctly installs
-  `libreoffice-writer`; `docker-compose.yml` only ever builds
-  `./backend` and `./frontend`. So there is no deployment path for the
-  PHP backend yet. Whenever one is written it **must** install
-  `libreoffice-writer`, or every "Email X" button will fail with "PDF
-  conversion failed" while the Word exports keep working -- the
-  failure mode is silent and one-sided, which makes it easy to miss.
+- [x] **No Dockerfile for `backend-php/`** -- found and written
+  2026-09-15. `backend-php/Dockerfile` (php:8.4-fpm with nginx in
+  front, so it speaks HTTP on :8000 like the Python image and is a
+  drop-in swap), plus `backend-php` and `migrate-php` services in
+  `docker-compose.yml` behind a `php` profile, so a plain
+  `docker compose up` still brings up the Python stack unchanged.
+  Cutting the frontend over is one line in `frontend/nginx.conf` and
+  is **Dennis's decision, not a deploy side effect** -- see DEPLOY.md
+  §4b. It installs `libreoffice-writer`, as the Python image does.
+  **Not yet built or run:** there is no Docker daemon in the
+  development environment it was written in, so `docker compose
+  --profile php up --build` has never been executed. First run may
+  need small fixes.
 - [ ] **Two export writers now coexist** -- `App\Services\Exports`
   (added 2026-09-15, the faithful port of `exports.py`, real `.xlsx`
   via PhpSpreadsheet) and the older `App\Services\ExportService`

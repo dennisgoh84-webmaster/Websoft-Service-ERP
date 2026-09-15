@@ -49,6 +49,71 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # ---- PHP backend (the Python->PHP conversion, complete 2026-09-15) ----
+  #
+  # Both backends are in this file on purpose. The conversion plan is a
+  # parallel run (see docs/php-conversion-plan.md), so the Python
+  # `backend` above stays the one `frontend` proxies to until Dennis
+  # says to switch; these two are behind the `php` profile and do not
+  # start with a plain `docker compose up`. To run them alongside:
+  #
+  #     docker compose --profile php up -d --build
+  #
+  # To cut the frontend over, point frontend/nginx.conf's `proxy_pass`
+  # at `backend-php:8000` (the PHP image speaks HTTP on the same port
+  # for exactly this reason) and rebuild `frontend`. That is a
+  # deliberate, reversible switch, not a default.
+  #
+  # NOTE both share the SAME database as the Python backend. The two
+  # schemas are the same schema -- that is the point of the conversion
+  # -- but it also means only ONE of the two migration services should
+  # ever be run against a given database. Running Laravel's migrations
+  # over an Alembic-managed database (or the reverse) is not supported
+  # by either tool and would not end well.
+  migrate-php:
+    build: ./backend-php
+    profiles: ["php"]
+    command: ["php", "artisan", "migrate", "--force"]
+    entrypoint: []
+    environment: &backend_php_env
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:?generate one with `php artisan key:generate --show`}
+      APP_TIMEZONE: Asia/Singapore
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: websoft_service_erp
+      DB_USERNAME: websoft_app
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?set a real password in .env}
+      JWT_SECRET: ${JWT_SECRET_KEY:?set a real random secret in .env}
+      UPLOADS_DIR: /var/www/html/storage/app/uploads
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Web Master Consultancy}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend-php:
+    build: ./backend-php
+    profiles: ["php"]
+    restart: unless-stopped
+    environment: *backend_php_env
+    volumes:
+      # The same uploads volume the Python backend uses: documents
+      # attached under one backend must still be there under the other.
+      - uploads_data:/var/www/html/storage/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate-php:
+        condition: service_completed_successfully
+
   frontend:
     build: ./frontend
     restart: unless-stopped
