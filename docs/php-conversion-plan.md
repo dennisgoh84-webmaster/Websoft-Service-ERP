@@ -2146,6 +2146,53 @@ recorded in docs/backlog.md for Dennis to scope rather than assumed.
   have failed a naive test; it was caught by the sign-off's foreign key
   to the chop attachment.
 
+### eApproval Master (converted 2026-09-15)
+
+- **eApproval Master** (`app/routers/approvals.py` +
+  `services/approvals.py` -> `App\Http\Controllers\Api\ApprovalController`
+  + `App\Services\ApprovalService`, 21 dedicated tests): the generic,
+  authority-based, value-gated approval framework of planned-work #4.
+  Five new tables -- authorities, their members, rules, requests and
+  decisions. Gated on `core_administration`: configuring authorities
+  and rules needs FULL, submitting and deciding EDIT, reading VIEW.
+
+  RULES PINNED BY TESTS, each a place a plausible-looking shortcut
+  would be wrong:
+  - A threshold is **at or above**, so the boundary amount itself
+    matches.
+  - Called **without** an amount, only rules with NO threshold match --
+    a thresholded rule is not matched by default when the caller cannot
+    say what the document is worth.
+  - **Any rejection rejects the whole request immediately**, whatever
+    the mode and however many approvals it already has. One approver
+    saying no is not outvoted.
+  - `any_one` resolves on the first approval; `all_must` waits for
+    every current member.
+  - Re-submitting the same document under the same rule returns the
+    EXISTING pending request rather than raising a second one, so a
+    double click does not create two things to approve.
+  - An approver who has already decided stops seeing the request in
+    their pending list while it waits for colleagues.
+  - Requests and decisions are **never deleted**, so the per-entity
+    view keeps approved and rejected items visible -- planned-work #4
+    asks for this specifically, because today's Service Record approval
+    screen drops an item the moment it is acted on.
+
+  HARDENING beyond Python, consistent with earlier conversions: an
+  approver must be a user of the same company; a Bank Authority's
+  `bank_account_id` must belong to it; and deciding on another
+  company's request is a **404 rather than an approval error**, which
+  would otherwise leak that the request exists.
+
+  Entity types reuse `App\Models\DocumentAttachment::ENTITY_TYPES`
+  rather than a second list, mirroring how Python shares one
+  `DocumentEntityType` enum between attachments and approvals.
+
+  **STILL OUTSTANDING from the original request** (not conversion
+  gaps -- `backend/` does not do these either): folding the existing
+  Service Record approval onto this framework, and the approval screen
+  itself.
+
 ## Not yet converted (pending, in rough priority order)
 
 Everything below still only exists in `backend/` (Python). Each is a

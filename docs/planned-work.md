@@ -169,9 +169,20 @@ single configurable authority system covering multiple document types.
     that page was built narrowly for the one-time decision. eApproval
     Master's screen is a different, retained-history view.)
 
-**Not yet started -- no models, routes, or UI exist for this.** Depends
-on item 3 (attachments) for the "show attachments" requirement to be
-meaningful. Real open questions once this is picked up: how an
+**BUILT in `backend/` and CONVERTED to `backend-php/` 2026-09-15**
+(this note previously read "not yet started", which went stale once the
+Python implementation landed). `approval_authorities`,
+`approval_authority_members`, `approval_rules`, `approval_requests` and
+`approval_decisions` all exist, with the submit/decide/pending/
+per-entity endpoints. Open questions below were answered by that
+implementation: an authority is its OWN table, distinct from Group
+Authority; Bank Authority is a nullable `bank_account_id` on the
+authority; and whether one or all approvers must agree is per-authority
+(`mode`: `any_one` / `all_must`) rather than system-wide. Still
+outstanding from the original request: folding the existing Service
+Record approval onto this framework, and the screen itself. Depends
+on item 3 (attachments, now built) for the "show attachments"
+requirement to be meaningful. Real open questions once this is picked up: how an
 "authority" is modelled (a new table distinct from Group/GroupModuleAuthority,
 or an extension of it), how Bank Authority relates to the existing
 BankAccount model (app/models/treasury.py), whether approval is
