@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\InventoryRuleViolation;
+use App\Models\GoodsIssueNote;
 use App\Models\GoodsReceiveNote;
 use App\Models\GoodsReturnNote;
 use App\Models\GoodsTransferNote;
@@ -441,6 +442,38 @@ class InventoryService
             );
         }
         $grtn->status = StockDocumentStatus::CONFIRMED;
+    }
+
+    // ── GIN confirm ─────────────────────────────────────────────────
+
+    /**
+     * Confirm a Goods Issue Note: deduct every line from the warehouse
+     * at the item's current weighted average cost, and stamp that cost
+     * onto the line so the document still reads correctly after the
+     * average later moves.
+     *
+     * Any line the warehouse cannot cover throws, which rolls the whole
+     * document back -- an issue is never partially fulfilled, and an
+     * on-hand quantity is never driven negative.
+     */
+    public static function confirmGin(GoodsIssueNote $gin, ?string $userId = null): void
+    {
+        if ($gin->status !== StockDocumentStatus::DRAFT) {
+            throw new InventoryRuleViolation('GIN is not in draft status');
+        }
+        foreach ($gin->lines as $line) {
+            $movement = self::deductStock(
+                $gin->company_id, $line->stock_item_id, $gin->warehouse_id,
+                $line->quantity, StockMovement::TYPE_ISSUE,
+                referenceType: 'gin', referenceId: $gin->id,
+                userId: $userId, notes: $line->notes,
+            );
+
+            $line->unit_cost = (string) $movement->unit_cost;
+            $line->total_cost = (string) $movement->total_cost;
+            $line->save();
+        }
+        $gin->status = StockDocumentStatus::CONFIRMED;
     }
 
     // ── Stock Adjustment approve ────────────────────────────────────

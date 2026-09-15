@@ -328,6 +328,18 @@ shipped and when.
   silent side effect of the conversion.
   → [php-conversion-plan.md](php-conversion-plan.md)
 
+- [ ] **Product-based Sales Invoicing (blocks "Sales Invoice picks
+  stock")** -- raised 2026-09-15. Dennis asked that a Sales Invoice
+  refuse to update when stock is insufficient and deduct at average
+  cost. The stock side is built (Goods Issue Note does exactly this),
+  but the invoice side cannot be: `invoices` is header-only -- no line
+  items, no product selection, no manual raise-an-invoice flow. Every
+  invoice today is auto-issued from a contract activation or an
+  excess-usage decision with a single amount. This needs invoice lines
+  and a product-picking flow designed first; the Product -> Stock Master
+  link itself already exists (`stock_items.product_id`).
+  → [php-conversion-plan.md](php-conversion-plan.md)
+
 ## Partially open
 
 - [x] **Commission Management** -- ~~the GP-based report is built;

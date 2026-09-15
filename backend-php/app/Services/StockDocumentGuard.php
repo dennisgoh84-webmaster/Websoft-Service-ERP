@@ -65,11 +65,27 @@ class StockDocumentGuard
      */
     public static function assertSupplier(User $user, string $supplierId): CompanyIndividual
     {
-        $supplier = CompanyIndividual::find($supplierId);
-        if (! $supplier || $supplier->company_id !== $user->company_id) {
+        return self::assertCompanyIndividual($user, $supplierId);
+    }
+
+    /**
+     * The counterparty on a Goods Issue Note. Exactly the same check as
+     * assertSupplier -- suppliers and customers share one master table,
+     * and neither backend requires the is_customer/is_supplier flag on
+     * a stock document -- but named for how it reads at the call site.
+     */
+    public static function assertCustomer(User $user, string $customerId): CompanyIndividual
+    {
+        return self::assertCompanyIndividual($user, $customerId);
+    }
+
+    private static function assertCompanyIndividual(User $user, string $id): CompanyIndividual
+    {
+        $record = CompanyIndividual::find($id);
+        if (! $record || $record->company_id !== $user->company_id) {
             throw new ApiException(404, 'Company / Individual not found');
         }
 
-        return $supplier;
+        return $record;
     }
 }

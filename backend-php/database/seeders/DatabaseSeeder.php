@@ -62,6 +62,7 @@ class DatabaseSeeder extends Seeder
         'goods_receive_note' => ['Goods Receive Note', true, true],
         'goods_transfer_note' => ['Goods Transfer Note', true, true],
         'goods_return_note' => ['Goods Return Note', true, true],
+        'goods_issue_note' => ['Goods Issue Note', true, true],
         'stock_adjustment' => ['Stock Adjustment', true, true],
         'stock_operation_reports' => ['Stock Operation Reports', true, true],
         'ops_dashboard' => ['Ops Dashboard (personal task tracker)', true, true],

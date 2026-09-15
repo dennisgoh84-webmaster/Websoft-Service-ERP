@@ -1936,6 +1936,83 @@ conversion pass was scoped to Quotations only, per its own
 instructions, and does not touch `Contract`/`ContractController` or
 any file that new feature work owns.
 
+### Stock costing revision + Goods Issue Note (2026-09-15)
+
+Confirmed with Dennis 2026-09-15. Partly a revision of converted
+behaviour and partly new scope, so it is recorded here rather than as a
+conversion entry.
+
+**1. The weighted average moved from per-warehouse to per-item.**
+`backend/`'s `StockLevel` holds an `avg_cost` per (item, warehouse);
+`backend-php` now holds one per item on `stock_items`, across all
+locations and branches, and `stock_levels` carries quantity only. This
+is a DELIBERATE DIVERGENCE FROM `backend/`, not a conversion defect --
+recorded in `docs/business-requirements.md` under INV-002.
+
+Two consequences, both intended: a transfer is cost-neutral by
+definition rather than by a special rule (`confirmGtn` no longer reads
+and carries a source cost across, and its inbound half is a new private
+`transferIn` that adds quantity without re-weighting); and every
+location values at the same unit cost, so the Stock Valuation report's
+per-warehouse rows are slices of one company-wide valuation.
+
+**2. Stock Master item detail gains Avg Cost and Cost Value.**
+`cost_value` is recomputed from the authoritative per-warehouse
+quantities after every movement rather than incremented, so it cannot
+drift out of step with them.
+
+**3. Every movement records the running balance it produced**
+(`qty_after`, `avg_cost_after`, `cost_value_after`), so a recalculation
+can be tallied back against history. NULLABLE on purpose: rows written
+before this change have no recorded balance, and back-filling an
+invented one would be a fabricated audit trail. Null means "not
+recorded", never "zero".
+
+**4. Negative cost is unreachable.** A deduction larger than what the
+warehouse holds is refused outright (never partial), stock at another
+branch does not make a shortfall good, and a receipt at a negative unit
+cost is refused at entry -- with no negative quantity and no negative
+receipt cost there is no route to a negative average.
+
+**5. An adjustment-up may now carry its own unit cost** and re-weight
+like a receipt, for opening balances and found stock
+(`stock_adjustment_lines.unit_cost`, nullable). Omitting it keeps the
+previous behaviour: a pure count correction that reuses the current
+average and moves no weighting. This too diverges from `backend/`,
+which never re-weights on an adjustment.
+
+**6. Goods Issue Note (GIN) -- NEW, not a conversion.** `backend/` has
+no equivalent router or model. It is what finally writes the `issue`
+stock movement type, which existed but nothing ever produced. Shaped
+like the Goods Return Note beside it (draft -> confirm, count-based
+`GIN-00001` numbering, the same guards) so the stock module keeps one
+document pattern. Its own `goods_issue_note` module key.
+
+A GIN line carries NO unit cost on entry: stock leaves at the item's
+average, so a cost supplied there would be a second, contradictory
+source of truth. Confirming stamps the average that actually applied
+onto the line, so the document still reads correctly after the average
+later moves. A line the warehouse cannot cover throws, rolling the
+whole document back -- pinned by a multi-line test where the first line
+would have succeeded.
+
+**KNOWN GAP, confirmed as intended:** a confirmed GIN posts nothing to
+the General Ledger. Dennis confirmed 2026-09-15 that stock stays a
+sub-ledger, so there is no COGS entry -- consistent with every other
+stock document, none of which post either.
+
+**STILL OPEN -- the Sales Invoice half of the request.** Dennis also
+asked that a Sales Invoice picking stock be refused when quantity is
+insufficient, and deduct at average cost. That is NOT built, and the
+blocker is larger than it first appears: `invoices` is a HEADER-ONLY
+table. There are no invoice lines, no product selection, and no manual
+raise-an-invoice flow -- every invoice today is auto-issued from a
+contract activation (BILL-001) or an excess-usage decision (SRV-008)
+with a single `amount_sgd`. Making an invoice pick stock therefore
+means building product-based sales invoicing first, which is a
+substantially larger piece of scope than the costing work and is
+recorded in docs/backlog.md for Dennis to scope rather than assumed.
+
 ## Not yet converted (pending, in rough priority order)
 
 Everything below still only exists in `backend/` (Python). Each is a
