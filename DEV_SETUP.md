@@ -177,23 +177,56 @@ docs/open-business-decisions.md #23).
 
 - **Email** sends for real over SMTP, with the document as a PDF
   attachment (converted from the same .docx used for its Word export —
-  see `app/services/pdf_convert.py` and `app/services/document_email.py`,
-  the shared helper every document type's Email button calls). It is
-  unconfigured by default: until `backend/.env` carries real settings,
-  the button fails with a clear "Email sending is not configured yet"
-  error instead of pretending to send. Add to `backend/.env`:
+  see `app/services/pdf_convert.py` and `app/services/document_email.py`
+  in `backend/`, or `App\Services\PdfConvert` and
+  `App\Services\DocumentEmail` in `backend-php/`: the shared helper
+  every document type's Email button calls). It is unconfigured by
+  default: until the backend's `.env` carries real settings, the button
+  fails with a clear "Email sending is not configured yet" error
+  instead of pretending to send.
+
+  **Python backend** — add to `backend/.env` (lowercase keys):
 
   ```
   smtp_host=smtp.office365.com
   smtp_port=587
   smtp_username=...
   smtp_password=...
+  smtp_use_tls=true
   smtp_from_email=...
   smtp_from_name=Web Master Consultancy
   ```
 
+  **PHP backend** — add to `backend-php/.env` (uppercase keys, same
+  settings; templated in `backend-php/.env.example`):
+
+  ```
+  SMTP_HOST=smtp.office365.com
+  SMTP_PORT=587
+  SMTP_USERNAME=...
+  SMTP_PASSWORD=...
+  SMTP_USE_TLS=true
+  SMTP_FROM_EMAIL=...
+  SMTP_FROM_NAME="Web Master Consultancy"
+  ```
+
+  `SMTP_USE_TLS=true` means a plain connection upgraded with STARTTLS
+  (port 587), and the send fails if the server will not upgrade —
+  matching the Python backend's unconditional `starttls()`. Set it to
+  `false` only for a server that genuinely has no TLS. It is not
+  implicit TLS-on-connect (SMTPS, port 465); neither backend supports
+  that today.
+
   One shared mailbox for the whole install, not per-company. Do not
   commit real credentials — `.env` is gitignored.
+
+  > Planned change: [docs/planned-work.md #8c](docs/planned-work.md)
+  > records that these system SMTP settings should eventually be owned
+  > in Central Command and pushed down, and that customer-facing
+  > document email should move to a per-company mailbox configured in
+  > Company Setup → Maintenance. Neither is built yet — today both the
+  > login OTP and every document Email button use the one mailbox
+  > above, in both backends.
 - **WhatsApp** opens a `wa.me` chat link pre-filled with a short message
   (no API/account needed) — you attach the PDF yourself in the chat.
   Needs a phone number set on the relevant Company/Individual record.
