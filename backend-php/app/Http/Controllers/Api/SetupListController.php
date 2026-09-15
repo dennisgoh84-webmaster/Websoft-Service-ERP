@@ -170,6 +170,12 @@ class SetupListController extends Controller
         if ($listType = $request->query('list_type')) {
             $query->where('list_type', $listType);
         }
+        // A State or City list narrowed to one Country -- what the
+        // Company/Individual address pickers and the State/City setup
+        // screens ask for.
+        if ($parentCode = $request->query('parent_code')) {
+            $query->where('parent_code', $parentCode);
+        }
         if (! $request->boolean('include_inactive')) {
             $query->where('is_active', true);
         }

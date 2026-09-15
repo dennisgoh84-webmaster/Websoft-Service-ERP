@@ -528,6 +528,20 @@ Status: **CONFIRMED / DECIDED** (2026-09-14). Full design in
   given PDPA consent and is not archived; archiving a customer disables
   every portal login under it.
 
+### PDPA-001 — Data expiry defaults to five years from consent — pragmatic default (2026-09-15)
+
+- A Company/Individual's **data expiry date** lives in the PDPA & Data
+  Retention section of its file, next to the consent record, not among
+  the general details (Dennis, 2026-09-15).
+- When PDPA consent is recorded (the e-signed date) and no expiry date
+  has been set, the expiry date defaults to **five years** from the
+  consent date. A date already set is never overwritten, and the
+  default can be changed by hand at any time.
+- The five-year figure is Dennis's instruction for the default; the
+  retention period itself is not a confirmed PDPA rule, and nothing is
+  purged automatically when the date passes -- the date is a prompt for
+  review, per "never permanently delete important business records".
+
 ### PORTAL-005 — Invoices and Payments — CONFIRMED (2026-09-14)
 
 - Customers can **view their own Invoices** (net, GST, total, amount

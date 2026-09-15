@@ -104,7 +104,7 @@ building UI for license management.  Does not write to this table.
 | Column | Type | Purpose |
 |---|---|---|
 | `id` | `uuid` PK | Company identifier within this client database |
-| `code` | `varchar(20)` unique | System-generated short code from the name — 3+2+2 letters of its first three words then a running number, e.g. `WEBCOPT1` (2026-09-15); never edited, survives a rename |
+| `code` | `varchar(20)` unique | System-generated short code from the name — 3+2+2 letters of its first three words then a running number zero-padded to eight characters in all, e.g. `WEBCOPT1`, `ACMMA001`, `ACM00001` (2026-09-15); never edited, survives a rename |
 | `name` | `varchar(200)` | Company name |
 | `registration_number` | `varchar(50)` nullable | UEN / registration number |
 

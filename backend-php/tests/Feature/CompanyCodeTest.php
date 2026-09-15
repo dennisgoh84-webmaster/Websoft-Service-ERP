@@ -9,12 +9,14 @@ use App\Models\User;
 use App\Services\PasswordPolicy;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Tests\TestCase;
 
 /**
  * The system-generated company code shown on Company Setup, in the
  * form Dennis specified 2026-09-15: 3 + 2 + 2 letters of the first
- * three words, then a running number from 1 -- WEBCOPT1.
+ * three words, then a running number from 1, zero-padded so the code
+ * is eight characters -- WEBCOPT1, ACMMA001, ACM00001.
  */
 class CompanyCodeTest extends TestCase
 {
@@ -25,9 +27,9 @@ class CompanyCodeTest extends TestCase
         $this->assertSame('WEBCOPT1', Company::factory()->create(['name' => 'Webmaster Consultancy Pte Ltd'])->code);
         // Same prefix, next number.
         $this->assertSame('WEBCOPT2', Company::factory()->create(['name' => 'Webmaster Consulting Pte Ltd'])->code);
-        // Different name, its own sequence.
-        $this->assertSame('ACMMA1', Company::factory()->create(['name' => 'Acme Manufacturing'])->code);
-        $this->assertSame('ACM1', Company::factory()->create(['name' => 'Acme'])->code);
+        // Different name, its own sequence; a shorter prefix pads the number to eight characters.
+        $this->assertSame('ACMMA001', Company::factory()->create(['name' => 'Acme Manufacturing'])->code);
+        $this->assertSame('ACM00001', Company::factory()->create(['name' => 'Acme'])->code);
         // Letters only, case-insensitive: punctuation and case never change the code.
         $this->assertSame('WEBCOPT3', Company::factory()->create(['name' => 'web-master consultancy, pte. LTD'])->code);
     }
@@ -52,6 +54,31 @@ class CompanyCodeTest extends TestCase
         // A company created through the screen gets its own code.
         $this->postJson('/api/companies', ['name' => 'Websoft Digital Pte Ltd'], $h)
             ->assertOk()->assertJsonPath('code', 'WEBDIPT1');
+    }
+
+    /**
+     * The recoding migrations against a database that already has
+     * companies -- which is every real one. 2026_09_30_000600 once
+     * turned the column NOT NULL by omission (Laravel 11's change()
+     * drops any modifier it is not given) and then tried to clear it,
+     * so it failed on any populated database while passing on the
+     * empty one the suite migrates; this runs both migrations over
+     * live rows, from the placeholder C001 form they were written for.
+     */
+    public function test_the_recoding_migrations_run_against_existing_companies(): void
+    {
+        Company::factory()->create(['name' => 'Webmaster Consultancy Pte Ltd']);
+        Company::factory()->create(['name' => 'Acme Manufacturing']);
+        Company::factory()->create(['name' => 'Acme']);
+
+        Artisan::call('migrate:rollback', ['--step' => 2, '--force' => true]);
+        $this->assertSame(['C001', 'C002', 'C003'], Company::query()->orderBy('code')->pluck('code')->all());
+
+        Artisan::call('migrate', ['--force' => true]);
+        $this->assertSame(
+            ['ACM00001', 'ACMMA001', 'WEBCOPT1'],
+            Company::query()->orderBy('code')->pluck('code')->all(),
+        );
     }
 
     public function test_the_seeded_company_is_webcopt1(): void

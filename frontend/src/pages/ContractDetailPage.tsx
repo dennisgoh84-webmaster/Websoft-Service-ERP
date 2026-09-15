@@ -195,6 +195,8 @@ export default function ContractDetailPage() {
   const staffName = (uid: string | null) => (uid ? staff.find((s) => s.id === uid)?.full_name ?? uid.slice(0, 8) : null)
   const kindLabel = isAdHoc ? 'Ad Hoc Rate (billed as you go)' : isAnnual ? 'Annual (time coverage)' : 'Service Support (deduct hrs)'
 
+  const client = customers.find((c) => c.id === contract.customer_id)
+
   return (
     <div>
       <h1>Contract {contract.contract_number}</h1>
@@ -204,6 +206,43 @@ export default function ContractDetailPage() {
           {kindLabel} &middot; {contract.start_date} &rarr; {contract.end_date}
         </span>
       </p>
+      {/* The client, always in the header (Dennis, 2026-09-15). */}
+      <div className="card" style={{ padding: '12px 16px' }}>
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'baseline' }}>
+          <div>
+            <div className="muted" style={{ fontSize: 12, textTransform: 'uppercase' }}>Client</div>
+            <Link to={`/company-individuals/${contract.customer_id}`}>
+              <strong>{client?.name ?? contract.customer_id}</strong>
+            </Link>
+          </div>
+          {client?.contact_person && (
+            <div>
+              <div className="muted" style={{ fontSize: 12, textTransform: 'uppercase' }}>Contact person</div>
+              {client.contact_person}
+            </div>
+          )}
+          {(client?.phone || client?.mobile) && (
+            <div>
+              <div className="muted" style={{ fontSize: 12, textTransform: 'uppercase' }}>Phone</div>
+              {[client.phone, client.mobile].filter(Boolean).join(' / ')}
+            </div>
+          )}
+          {client?.billing_email && (
+            <div>
+              <div className="muted" style={{ fontSize: 12, textTransform: 'uppercase' }}>Email</div>
+              {client.billing_email}
+            </div>
+          )}
+          {client && (client.address_line1 || client.address_city || client.address_country) && (
+            <div>
+              <div className="muted" style={{ fontSize: 12, textTransform: 'uppercase' }}>Address</div>
+              {[client.address_line1, client.address_line2, client.address_city, client.address_state, client.address_postal_code, client.address_country]
+                .filter(Boolean)
+                .join(', ')}
+            </div>
+          )}
+        </div>
+      </div>
       {error && <div className="error-banner">{error}</div>}
       {message && (
         <p className="muted" style={{ marginBottom: 12 }}>

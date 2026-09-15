@@ -979,7 +979,17 @@ export interface ReferenceCode {
 }
 
 // ---- Setup Lists (Nationality / Country / State / Area Code / Currency / Industry) ----
-export type SetupListType = 'nationality' | 'country' | 'state' | 'area_code' | 'currency' | 'industry'
+export type SetupListType =
+  | 'nationality'
+  | 'country'
+  | 'state'
+  | 'city'
+  | 'area_code'
+  | 'currency'
+  | 'industry'
+  | 'product_category'
+  | 'unit_of_measure'
+  | 'relationship'
 
 export interface SetupListItem {
   id: string
@@ -2958,7 +2968,7 @@ export const api = {
     request<GLType>(`/gl-types/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
 
   // ---- Setup Lists ----
-  listSetupItems: (filters: { list_type?: SetupListType; include_inactive?: boolean } = {}) =>
+  listSetupItems: (filters: { list_type?: SetupListType; include_inactive?: boolean; parent_code?: string } = {}) =>
     request<SetupListItem[]>(`/setup-lists${qs(filters)}`),
   createSetupItem: (payload: {
     list_type: SetupListType

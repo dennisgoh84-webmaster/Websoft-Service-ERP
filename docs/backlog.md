@@ -392,6 +392,31 @@ shipped and when.
   below, and this was not the place to answer it quietly.
   → [php-conversion-plan.md](php-conversion-plan.md)
 
+- [x] **Maintenance / Company-Individual batch** -- built 2026-09-15
+  from Dennis's list. Company/Individual File: Country, State /
+  Province and City are pull-downs fed by the setup lists (State and
+  City narrow to the chosen Country; a value recorded before the
+  lists existed is kept as an option rather than blanked); the data
+  expiry date moved into the PDPA & Data Retention section and
+  defaults to five years from the e-signed date (PDPA-001); the
+  Relationship picker reads the new Relationship setup list. Service
+  Contract detail shows the client (name, contact, phone, email,
+  address) in its header. Maintenance: Company Setup says "Add a Sub
+  Company" / "Create Sub Company"; the Product Catalog has a View /
+  Edit form per product, with Product Category and Unit of Measure
+  picked from setup lists; the ten setup lists (Country, State /
+  Province, City, Nationality, Area Code, Currency, Industry, Product
+  Category, Unit of Measure, Relationship) are each their own
+  Maintenance menu entry at `/setup-lists/<type>`. Six units of
+  measure are seeded (Hours, Unit, Piece, Lot, Month, Year).
+  Company code: the running number is zero-padded to eight characters
+  in all (WEBCOPT1, ACMMA001, ACM00001) per Dennis's clarification,
+  and the recoding migration's NOT NULL slip -- it failed on any
+  database that already had a company -- is fixed with a regression
+  test that runs both migrations over live rows.
+  → [open-business-decisions.md #41](open-business-decisions.md#41-system-generated-company-code-raised-and-settled-2026-09-15),
+  [business-requirements.md PDPA-001](business-requirements.md)
+
 - [ ] **AI Assistant — scoped 2026-09-15**, not yet built. Tiered
   candidates, the architectural rule they must be built under (AI never
   does arithmetic on money; it calls the tested services and narrates,
@@ -468,4 +493,4 @@ shipped and when.
   → [open-business-decisions.md #7-8](open-business-decisions.md#7-projects)
 
 ---
-Last updated: 2026-09-15 (Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006)
+Last updated: 2026-09-15 (Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006; Maintenance / Company-Individual batch; eight-character company code)

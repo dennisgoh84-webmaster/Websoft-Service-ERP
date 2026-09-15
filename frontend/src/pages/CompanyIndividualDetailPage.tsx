@@ -79,6 +79,16 @@ export default function CompanyIndividualDetailPage() {
   const [relTargetContacts, setRelTargetContacts] = useState<Contact[]>([])
   const [groups, setGroups] = useState<CompanyIndividualGroup[]>([])
   const [industries, setIndustries] = useState<SetupListItem[]>([])
+  // Address pull-downs and the Relationship picker, all from Setup
+  // Lists (Maintenance). State and City are narrowed to the chosen
+  // Country. The address stores NAMES (what prints on documents), so a
+  // value typed before the lists existed still shows.
+  const [countries, setCountries] = useState<SetupListItem[]>([])
+  const [states, setStates] = useState<SetupListItem[]>([])
+  const [cities, setCities] = useState<SetupListItem[]>([])
+  const [relationshipTypes, setRelationshipTypes] = useState<SetupListItem[]>([])
+  const [dataExpiryDraft, setDataExpiryDraft] = useState('')
+  const [savingDataExpiry, setSavingDataExpiry] = useState(false)
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([])
   const [productUsage, setProductUsage] = useState<CompanyIndividualProductUsageRow[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -156,6 +166,7 @@ export default function CompanyIndividualDetailPage() {
           payment_terms_days: c.payment_terms_days === null ? '' : String(c.payment_terms_days),
           data_expiry_date: c.data_expiry_date ?? '',
         })
+        setDataExpiryDraft(c.data_expiry_date ?? '')
         setExcludeAutoSent(c.exclude_auto_sent)
         setIsCustomer(c.is_customer)
         setIsSupplier(c.is_supplier)
@@ -199,8 +210,23 @@ export default function CompanyIndividualDetailPage() {
   useEffect(() => {
     api.listCompanyIndividualGroups().then(setGroups).catch((e) => setError(e.message))
     api.listSetupItems({ list_type: 'industry' }).then(setIndustries).catch(() => setIndustries([]))
+    api.listSetupItems({ list_type: 'country' }).then(setCountries).catch(() => setCountries([]))
+    api.listSetupItems({ list_type: 'relationship' }).then(setRelationshipTypes).catch(() => setRelationshipTypes([]))
     api.listCompanyIndividuals().then(setAllCompanyIndividuals).catch(() => setAllCompanyIndividuals([]))
   }, [])
+
+  // State and City follow the chosen Country.
+  const selectedCountryCode = countries.find((c) => c.name === form.address_country)?.code
+  useEffect(() => {
+    if (!selectedCountryCode) {
+      setStates([])
+      setCities([])
+
+      return
+    }
+    api.listSetupItems({ list_type: 'state', parent_code: selectedCountryCode }).then(setStates).catch(() => setStates([]))
+    api.listSetupItems({ list_type: 'city', parent_code: selectedCountryCode }).then(setCities).catch(() => setCities([]))
+  }, [selectedCountryCode])
 
   // Fetch the chosen target's contacts so "relate to a specific
   // contact person there" can be offered -- confirmed 2026-09-11
@@ -247,7 +273,6 @@ export default function CompanyIndividualDetailPage() {
         memo: form.memo || null,
         billing_notes: form.billing_notes || null,
         payment_terms_days: form.payment_terms_days === '' ? null : parseInt(form.payment_terms_days, 10),
-        data_expiry_date: form.data_expiry_date || null,
       })
       refresh()
     } catch (err) {
@@ -308,6 +333,21 @@ export default function CompanyIndividualDetailPage() {
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update PDPA consent')
+    }
+  }
+
+  async function onSaveDataExpiry(e: FormEvent) {
+    e.preventDefault()
+    if (!id) return
+    setError(null)
+    setSavingDataExpiry(true)
+    try {
+      await api.updateCompanyIndividual(id, { data_expiry_date: dataExpiryDraft || null })
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save the data expiry date')
+    } finally {
+      setSavingDataExpiry(false)
     }
   }
 
@@ -651,20 +691,66 @@ export default function CompanyIndividualDetailPage() {
             <input {...field('address_line2')} />
           </div>
           <div className="form-row">
-            <label>City</label>
-            <input {...field('address_city')} />
+            <label>Country</label>
+            <select
+              value={form.address_country}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, address_country: e.target.value, address_state: '', address_city: '' }))
+              }
+            >
+              <option value="">-- select --</option>
+              {form.address_country && !countries.some((c) => c.name === form.address_country) && (
+                <option value={form.address_country}>{form.address_country}</option>
+              )}
+              {countries.map((c) => (
+                <option key={c.code} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            {countries.length === 0 && (
+              <span className="muted">No countries set up yet -- Maintenance → Country.</span>
+            )}
           </div>
           <div className="form-row">
-            <label>State</label>
-            <input {...field('address_state')} />
+            <label>State / Province</label>
+            <select
+              value={form.address_state}
+              onChange={(e) => setForm((p) => ({ ...p, address_state: e.target.value }))}
+              disabled={!form.address_country}
+            >
+              <option value="">{form.address_country ? '-- select --' : 'Choose a country first'}</option>
+              {form.address_state && !states.some((x) => x.name === form.address_state) && (
+                <option value={form.address_state}>{form.address_state}</option>
+              )}
+              {states.map((x) => (
+                <option key={x.code} value={x.name}>
+                  {x.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-row">
+            <label>City</label>
+            <select
+              value={form.address_city}
+              onChange={(e) => setForm((p) => ({ ...p, address_city: e.target.value }))}
+              disabled={!form.address_country}
+            >
+              <option value="">{form.address_country ? '-- select --' : 'Choose a country first'}</option>
+              {form.address_city && !cities.some((x) => x.name === form.address_city) && (
+                <option value={form.address_city}>{form.address_city}</option>
+              )}
+              {cities.map((x) => (
+                <option key={x.code} value={x.name}>
+                  {x.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="form-row">
             <label>Postal code</label>
             <input {...field('address_postal_code')} />
-          </div>
-          <div className="form-row">
-            <label>Country</label>
-            <input {...field('address_country')} placeholder="e.g. Singapore" />
           </div>
           <div className="form-row">
             <label>Tags</label>
@@ -680,18 +766,6 @@ export default function CompanyIndividualDetailPage() {
               placeholder="Leave blank if not yet agreed"
             />
           </div>
-          <div className="form-row">
-            <label>Data expiry date (PDPA)</label>
-            <input
-              type="date"
-              value={form.data_expiry_date}
-              onChange={(e) => setForm((p) => ({ ...p, data_expiry_date: e.target.value }))}
-            />
-          </div>
-          <p className="muted" style={{ marginTop: -8 }}>
-            After this date, this record's data should be archived (see "PDPA &amp; Data
-            Retention" below) -- leave blank if no expiry has been agreed yet.
-          </p>
           <div className="form-row">
             <label>Terms &amp; conditions (shown on orders)</label>
             <textarea {...field('terms_and_conditions')} rows={3} />
@@ -1030,21 +1104,17 @@ export default function CompanyIndividualDetailPage() {
           )}
           <div className="form-row">
             <label>Relationship</label>
-            <input
-              value={relType}
-              onChange={(e) => setRelType(e.target.value)}
-              required
-              placeholder="e.g. Parent Company, Referred By, Business Partner"
-              list="relationship-type-suggestions"
-            />
-            <datalist id="relationship-type-suggestions">
-              <option value="Parent Company" />
-              <option value="Subsidiary" />
-              <option value="Sister Company" />
-              <option value="Referred By" />
-              <option value="Business Partner" />
-              <option value="Same Decision Maker" />
-            </datalist>
+            <select value={relType} onChange={(e) => setRelType(e.target.value)} required>
+              <option value="">-- select --</option>
+              {relationshipTypes.map((t) => (
+                <option key={t.code} value={t.name}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+            {relationshipTypes.length === 0 && (
+              <span className="muted">No relationship types set up yet -- Maintenance → Relationship.</span>
+            )}
           </div>
           <div className="form-row">
             <label>Note (optional)</label>
@@ -1158,16 +1228,27 @@ export default function CompanyIndividualDetailPage() {
           </div>
         </div>
 
-        {customer.data_expiry_date && (
-          <p>
-            Data expiry date: <strong>{customer.data_expiry_date}</strong>
+        <form onSubmit={onSaveDataExpiry} className="form-row">
+          <label>
+            Data expiry date
             {isPastExpiry && !customer.is_archived && (
               <span className="badge exceeded" style={{ marginLeft: 8 }}>
                 Past expiry -- archive this record
               </span>
             )}
-          </p>
-        )}
+          </label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input type="date" value={dataExpiryDraft} onChange={(e) => setDataExpiryDraft(e.target.value)} style={{ width: 'auto' }} />
+            <button type="submit" disabled={savingDataExpiry || dataExpiryDraft === (customer.data_expiry_date ?? '')}>
+              {savingDataExpiry ? 'Saving...' : 'Save expiry date'}
+            </button>
+          </div>
+          <span className="muted">
+            Defaults to five years from the e-signed date when consent is recorded; change it here
+            if a different retention period was agreed. After this date the record should be
+            archived.
+          </span>
+        </form>
 
         <p className="muted">
           Archiving keeps all of this record's data intact in the same database -- per
@@ -1189,7 +1270,7 @@ export default function CompanyIndividualDetailPage() {
           <p className="muted">
             {customer.data_expiry_date
               ? 'Archiving becomes available once the data expiry date above has passed.'
-              : 'Set a data expiry date above to enable archiving.'}
+              : 'Record PDPA consent (or set a data expiry date above) to enable archiving.'}
           </p>
         )}
       </div>

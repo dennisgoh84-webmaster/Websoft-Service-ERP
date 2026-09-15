@@ -163,7 +163,8 @@ function CompanyCard({ company, onSaved }: { company: Company; onSaved: () => vo
       <p className="muted" style={{ marginTop: -6 }}>
         Company code <strong>{company.code}</strong> -- assigned by the system when the company was
         created: three letters of the first word of the name, two of the second, two of the
-        third, then a running number. It never changes, even if the name does.
+        third, then a running number padded to eight characters in all. It never changes, even
+        if the name does.
       </p>
       {error && <div className="error-banner">{error}</div>}
       <form onSubmit={onSave}>
@@ -347,9 +348,9 @@ export default function CompanySetupPage() {
       ))}
 
       <div className="card">
-        <h2>Add a company</h2>
+        <h2>Add a Sub Company</h2>
         <p className="muted">
-          A new company starts with the same module catalog (built modules enabled), no customers or
+          A sub company starts with the same module catalog (built modules enabled), no customers or
           contracts of its own, and you added as a user who can switch into it. It receives the next
           company code automatically from its name (e.g. Websoft Digital Pte Ltd becomes WEBDIPT1).
           Set its logo and details above once created.
@@ -365,7 +366,7 @@ export default function CompanySetupPage() {
             />
           </div>
           <button type="submit" disabled={creating}>
-            {creating ? 'Creating...' : 'Create company'}
+            {creating ? 'Creating...' : 'Create Sub Company'}
           </button>
         </form>
       </div>

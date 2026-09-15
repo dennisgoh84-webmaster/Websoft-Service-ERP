@@ -18,8 +18,12 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // ->nullable() must be restated: Laravel 11's change() drops every
+        // modifier it is not given, and without it the column became NOT
+        // NULL here, so the clearing update below failed on any database
+        // that already had a company -- i.e. every real one.
         Schema::table('companies', function (Blueprint $table) {
-            $table->string('code', 20)->change();
+            $table->string('code', 20)->nullable()->change();
         });
 
         // Clear first so the per-prefix numbering below starts clean.
@@ -41,7 +45,7 @@ return new class extends Migration
             DB::table('companies')->where('id', $row->id)->update(['code' => sprintf('C%03d', ++$n)]);
         }
         Schema::table('companies', function (Blueprint $table) {
-            $table->string('code', 10)->change();
+            $table->string('code', 10)->nullable()->change();
         });
     }
 };

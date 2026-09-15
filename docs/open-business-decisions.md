@@ -1947,14 +1947,18 @@ did not spell out, applied as pragmatic defaults:
 
 - Letters only, upper-cased; punctuation and case in the name never
   affect the code ("web-master consultancy, pte. LTD" → WEBCOPT).
-- A name with fewer than three words gives a shorter prefix ("Acme
-  Manufacturing" → ACMMA1, "Acme" → ACM1).
+- The number is zero-padded so every code is **eight characters**
+  (Dennis, 2026-09-15): a name with fewer than three words gives a
+  shorter prefix and a longer number ("Acme Manufacturing" → ACMMA001,
+  "Acme" → ACM00001; WEBCOPT has room for one digit, so WEBCOPT1). The
+  tenth WEBCOPT company simply runs on to WEBCOPT10 rather than being
+  refused.
 - The running number is **per prefix**: a second company whose name
   yields WEBCOPT becomes WEBCOPT2; a different name starts its own
   sequence at 1.
 - The code is assigned once, on create, from the name at that moment,
   and **renaming the company does not change it** — it identifies the
   entity, not the current spelling of its name.
-- `App\Models\Company::codePrefix()` / `nextCode()`; existing
-  companies were recoded from their names by migration
-  `2026_09_30_000600`.
+- `App\Models\Company::codePrefix()` / `nextCode()` / `formatCode()`;
+  existing companies were recoded from their names by migration
+  `2026_09_30_000600`, and re-padded by `2026_09_30_000700`.

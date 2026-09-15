@@ -12,6 +12,7 @@ use App\Models\CompanyModule;
 use App\Models\Group;
 use App\Models\GroupModuleAuthority;
 use App\Models\ModuleCatalog;
+use App\Models\SetupListItem;
 use App\Models\TaxCode;
 use App\Models\User;
 use App\Models\UserCompanyAccess;
@@ -271,6 +272,18 @@ class DatabaseSeeder extends Seeder
         // row for the banner; announcements match on their text so a
         // reseed does not stack duplicates, and an item Dennis has
         // edited or deactivated keeps its sort_order/is_active.
+        // Units of measure, so the Product Catalog's picker is not empty
+        // on day one. "Hours" matters: a quotation line in Hours is what
+        // becomes a Service Support contract on acceptance
+        // (QuotationService::isHourly). Dennis adds the rest under
+        // Maintenance -> Unit of Measure.
+        foreach ([['HR', 'Hours'], ['UNIT', 'Unit'], ['PC', 'Piece'], ['LOT', 'Lot'], ['MTH', 'Month'], ['YR', 'Year']] as $i => [$code, $name]) {
+            SetupListItem::firstOrCreate(
+                ['list_type' => SetupListItem::TYPE_UNIT_OF_MEASURE, 'code' => $code],
+                ['name' => $name, 'sort_order' => $i, 'is_active' => true],
+            );
+        }
+
         AdBannerSettings::firstOrCreate(['id' => 1], ['video_url' => self::AD_VIDEO_URL]);
         foreach (self::ANNOUNCEMENTS as $i => [$tag, $text]) {
             Announcement::firstOrCreate(
@@ -279,7 +292,7 @@ class DatabaseSeeder extends Seeder
             );
         }
 
-        $this->command?->info('Seeded: 1 company (letterhead + logo), module catalog, Owner/Admin group, Dennis (owner, demo1234), Chart of Accounts, 1 bank account, 1 sample customer, ad banner + 3 announcements.');
+        $this->command?->info('Seeded: 1 company (letterhead + logo), module catalog, Owner/Admin group, Dennis (owner, demo1234), Chart of Accounts, 1 bank account, 1 sample customer, 6 units of measure, ad banner + 3 announcements.');
     }
 
     /**

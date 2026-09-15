@@ -27,10 +27,12 @@ class Company extends Model
      * ("3221"): the first THREE letters of the name's first word, the
      * first TWO of the second, the first TWO of the third, then a
      * running number from 1 -- "Webmaster Consultancy Pte Ltd" is
-     * WEBCOPT1. Letters only, upper-cased; a shorter name gives a
-     * shorter prefix ("Acme Manufacturing" -> ACMMA1, "Acme" -> ACM1);
-     * the number runs per prefix, so a second company whose name yields
-     * WEBCOPT becomes WEBCOPT2. Assigned here on create, deliberately
+     * WEBCOPT1. Letters only, upper-cased. The number is zero-padded so
+     * the whole code is CODE_LENGTH (8) characters: a shorter name gives
+     * a shorter prefix and a longer number ("Acme Manufacturing" ->
+     * ACMMA001, "Acme" -> ACM00001), Dennis's clarification of the same
+     * day. The number runs per prefix, so a second company whose name
+     * yields WEBCOPT becomes WEBCOPT2. Assigned here on create, deliberately
      * NOT fillable, so it is never typed in or changed -- a stable
      * short identifier for the entity where a UUID is unwieldy and a
      * name can be edited (renaming a company does not change its code).
@@ -43,6 +45,9 @@ class Company extends Model
             }
         });
     }
+
+    /** Every code is padded to this many characters (WEBCOPT1, ACMMA001, ACM00001). */
+    public const CODE_LENGTH = 8;
 
     /** The letters part of a code for this name: 3 + 2 + 2 from its first three words. */
     public static function codePrefix(string $name): string
@@ -71,7 +76,17 @@ class Company extends Model
             }
         }
 
-        return $prefix.($max + 1);
+        return self::formatCode($prefix, $max + 1);
+    }
+
+    /**
+     * Prefix + number, the number zero-padded to fill CODE_LENGTH. A
+     * prefix already that long, or a number that overflows the room
+     * left, simply runs on (WEBCOPT10) rather than being refused.
+     */
+    public static function formatCode(string $prefix, int $number): string
+    {
+        return $prefix.str_pad((string) $number, max(1, self::CODE_LENGTH - strlen($prefix)), '0', STR_PAD_LEFT);
     }
 
     protected $fillable = [

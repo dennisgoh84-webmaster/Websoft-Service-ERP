@@ -150,6 +150,7 @@ function AppRoutes() {
         <Route path="/groups" element={<GroupsPage />} />
         <Route path="/product-catalog" element={<ProductCatalogPage />} />
         <Route path="/setup-lists" element={<SetupListsPage />} />
+        <Route path="/setup-lists/:listType" element={<SetupListsPage />} />
         <Route path="/document-control" element={<DocumentControlPage />} />
         <Route path="/approval-authorities" element={<ApprovalAuthoritiesPage />} />
         <Route path="/approval-center" element={<ApprovalCenterPage />} />

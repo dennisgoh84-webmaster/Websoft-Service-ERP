@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
-import { api, downloadBlob, type Product, type ProductType, type ReferenceCode } from '../lib/api'
+import { api, downloadBlob, type Product, type ProductType, type ReferenceCode, type SetupListItem } from '../lib/api'
 import { formatMoney as money } from '../lib/format'
 import ProductImplementationTemplateEditor from '../components/ProductImplementationTemplateEditor'
 
@@ -13,6 +13,15 @@ export default function ProductCatalogPage() {
   // NEW FEATURE (not a Python->PHP conversion) -- see
   // docs/backlog.md / docs/planned-work.md.
   const [templateEditorFor, setTemplateEditorFor] = useState<string | null>(null)
+
+  // Category and unit of measure are picked from Setup Lists
+  // (Maintenance -> Product Category / Unit of Measure), 2026-09-15.
+  const [categories, setCategories] = useState<SetupListItem[]>([])
+  const [units, setUnits] = useState<SetupListItem[]>([])
+  // Inline view/edit of one product at a time.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [edit, setEdit] = useState({ product_type: 'service' as ProductType, name: '', internal_reference: '', product_category: '', sales_price_sgd: '', cost_sgd: '', unit_of_measure: '', tax_code: '', tags: '' })
+  const [savingEdit, setSavingEdit] = useState(false)
 
   const [productType, setProductType] = useState<ProductType>('service')
   const [name, setName] = useState('')
@@ -30,7 +39,72 @@ export default function ProductCatalogPage() {
   useEffect(refresh, [showInactive])
   useEffect(() => {
     api.listReferenceCodes().then(setReferenceCodes).catch(() => setReferenceCodes([]))
+    api.listSetupItems({ list_type: 'product_category' }).then(setCategories).catch(() => setCategories([]))
+    api.listSetupItems({ list_type: 'unit_of_measure' }).then(setUnits).catch(() => setUnits([]))
   }, [])
+
+  function startEdit(p: Product) {
+    setEditingId(p.id)
+    setEdit({
+      product_type: p.product_type,
+      name: p.name,
+      internal_reference: p.internal_reference ?? '',
+      product_category: p.product_category ?? '',
+      sales_price_sgd: String(p.sales_price_sgd),
+      cost_sgd: p.cost_sgd != null ? String(p.cost_sgd) : '',
+      unit_of_measure: p.unit_of_measure ?? '',
+      tax_code: p.tax_code,
+      tags: p.tags ?? '',
+    })
+  }
+
+  async function onSaveEdit(e: FormEvent) {
+    e.preventDefault()
+    if (!editingId) return
+    setError(null)
+    setSavingEdit(true)
+    try {
+      await api.updateCatalogItem(editingId, {
+        product_type: edit.product_type,
+        name: edit.name,
+        internal_reference: edit.internal_reference || null,
+        product_category: edit.product_category || null,
+        sales_price_sgd: parseFloat(edit.sales_price_sgd) || 0,
+        cost_sgd: edit.cost_sgd === '' ? null : parseFloat(edit.cost_sgd),
+        unit_of_measure: edit.unit_of_measure || null,
+        tax_code: edit.tax_code || undefined,
+        tags: edit.tags || null,
+      })
+      setEditingId(null)
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save product')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  /** A select over a Setup List that still shows a value typed before the list existed. */
+  function listSelect(value: string, onChange: (v: string) => void, list: SetupListItem[], listLabel: string, listPath: string) {
+    return (
+      <>
+        <select value={value} onChange={(e) => onChange(e.target.value)}>
+          <option value="">-- none --</option>
+          {value && !list.some((x) => x.name === value) && <option value={value}>{value}</option>}
+          {list.map((x) => (
+            <option key={x.code} value={x.name}>
+              {x.name}
+            </option>
+          ))}
+        </select>
+        {list.length === 0 && (
+          <span className="muted">
+            Nothing set up yet -- <Link to={listPath}>Maintenance → {listLabel}</Link>.
+          </span>
+        )}
+      </>
+    )
+  }
 
   async function onCreate(e: FormEvent) {
     e.preventDefault()
@@ -130,7 +204,7 @@ export default function ProductCatalogPage() {
           </div>
           <div className="form-row">
             <label>Product category</label>
-            <input value={productCategory} onChange={(e) => setProductCategory(e.target.value)} />
+            {listSelect(productCategory, setProductCategory, categories, 'Product Category', '/setup-lists/product_category')}
           </div>
           <div className="form-row">
             <label>Sales price (SGD, net of GST)</label>
@@ -144,11 +218,7 @@ export default function ProductCatalogPage() {
           </div>
           <div className="form-row">
             <label>Unit of measure</label>
-            <input
-              value={unitOfMeasure}
-              onChange={(e) => setUnitOfMeasure(e.target.value)}
-              placeholder="e.g. Hours, Monthly, Yearly, Units"
-            />
+            {listSelect(unitOfMeasure, setUnitOfMeasure, units, 'Unit of Measure', '/setup-lists/unit_of_measure')}
           </div>
           <div className="form-row">
             <label>Default reference code</label>
@@ -247,6 +317,9 @@ export default function ProductCatalogPage() {
                   </span>
                 </td>
                 <td style={{ display: 'flex', gap: 6 }}>
+                  <button className="secondary" onClick={() => (editingId === i.id ? setEditingId(null) : startEdit(i))}>
+                    {editingId === i.id ? 'Close' : 'View / Edit'}
+                  </button>
                   <button className="secondary" onClick={() => onToggleActive(i)}>
                     {i.is_active ? 'Deactivate' : 'Reactivate'}
                   </button>
@@ -268,6 +341,64 @@ export default function ProductCatalogPage() {
             )}
           </tbody>
         </table>
+        {editingId && (
+          <div className="card" style={{ marginTop: 12 }}>
+            <h2>Edit -- {items.find((x) => x.id === editingId)?.name}</h2>
+            <form onSubmit={onSaveEdit}>
+              <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 260 }}>
+                  <div className="form-row">
+                    <label>Type</label>
+                    <select value={edit.product_type} onChange={(e) => setEdit((p) => ({ ...p, product_type: e.target.value as ProductType }))}>
+                      <option value="service">Service</option>
+                      <option value="product">Product</option>
+                    </select>
+                  </div>
+                  <div className="form-row">
+                    <label>Product name</label>
+                    <input value={edit.name} onChange={(e) => setEdit((p) => ({ ...p, name: e.target.value }))} required />
+                  </div>
+                  <div className="form-row">
+                    <label>Internal reference</label>
+                    <input value={edit.internal_reference} onChange={(e) => setEdit((p) => ({ ...p, internal_reference: e.target.value }))} />
+                  </div>
+                  <div className="form-row">
+                    <label>Product category</label>
+                    {listSelect(edit.product_category, (v) => setEdit((p) => ({ ...p, product_category: v })), categories, 'Product Category', '/setup-lists/product_category')}
+                  </div>
+                  <div className="form-row">
+                    <label>Tags</label>
+                    <input value={edit.tags} onChange={(e) => setEdit((p) => ({ ...p, tags: e.target.value }))} />
+                  </div>
+                </div>
+                <div style={{ flex: 1, minWidth: 260 }}>
+                  <div className="form-row">
+                    <label>Sales price (SGD, net of GST)</label>
+                    <input type="number" min="0" step="0.01" value={edit.sales_price_sgd} onChange={(e) => setEdit((p) => ({ ...p, sales_price_sgd: e.target.value }))} />
+                  </div>
+                  <div className="form-row">
+                    <label>Cost (SGD)</label>
+                    <input type="number" min="0" step="0.01" value={edit.cost_sgd} onChange={(e) => setEdit((p) => ({ ...p, cost_sgd: e.target.value }))} placeholder="Blank = no cost recorded" />
+                  </div>
+                  <div className="form-row">
+                    <label>Unit of measure</label>
+                    {listSelect(edit.unit_of_measure, (v) => setEdit((p) => ({ ...p, unit_of_measure: v })), units, 'Unit of Measure', '/setup-lists/unit_of_measure')}
+                  </div>
+                  <div className="form-row">
+                    <label>Tax code</label>
+                    <input value={edit.tax_code} onChange={(e) => setEdit((p) => ({ ...p, tax_code: e.target.value }))} />
+                  </div>
+                  <button type="submit" disabled={savingEdit || !edit.name}>
+                    {savingEdit ? 'Saving...' : 'Save product'}
+                  </button>{' '}
+                  <button type="button" className="secondary" onClick={() => setEditingId(null)}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        )}
         {templateEditorFor && (
           <div className="card" style={{ marginTop: 12 }}>
             <h2>Job Implementation Template -- {items.find((x) => x.id === templateEditorFor)?.name}</h2>

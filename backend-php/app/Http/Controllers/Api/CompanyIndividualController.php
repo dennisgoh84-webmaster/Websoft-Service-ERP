@@ -49,6 +49,9 @@ class CompanyIndividualController extends Controller
 
     private const MODULE = 'company_individual_management';
 
+    /** PDPA data retention: the expiry date defaults to this many years after the e-signed date (Dennis, 2026-09-15). */
+    private const PDPA_RETENTION_YEARS = 5;
+
     private const MAX_PDPA_DOCUMENT_CHARS = 2_800_000; // ~2 MB of base64
 
     private const CUSTOMER_FIELDS = [
@@ -206,6 +209,16 @@ class CompanyIndividualController extends Controller
         $customer->pdpa_consent_given = $data['given'];
         $customer->pdpa_consent_at = $data['given'] ? Carbon::now('UTC') : null;
 
+        // Dennis, 2026-09-15: the data expiry date defaults to FIVE
+        // YEARS from the e-signed date. Only filled in when nothing has
+        // been set -- a date someone chose deliberately is kept -- and
+        // it stays editable on the PDPA & Data Retention card.
+        $expiryDefaulted = false;
+        if ($data['given'] && $customer->data_expiry_date === null) {
+            $customer->data_expiry_date = $customer->pdpa_consent_at->copy()->addYears(self::PDPA_RETENTION_YEARS)->toDateString();
+            $expiryDefaulted = true;
+        }
+
         Audit::record(
             'customer', $customer->id,
             $data['given'] ? 'pdpa_consent_recorded' : 'pdpa_consent_revoked', $user->id,
@@ -213,7 +226,7 @@ class CompanyIndividualController extends Controller
             newValue: [
                 'pdpa_consent_given' => $data['given'],
                 'pdpa_consent_at' => $customer->pdpa_consent_at?->toIso8601String(),
-            ],
+            ] + ($expiryDefaulted ? ['data_expiry_date' => $customer->data_expiry_date->toDateString()] : []),
         );
         $customer->save();
 
