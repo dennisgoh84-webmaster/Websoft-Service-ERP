@@ -133,7 +133,7 @@ class ContractQuotationLinkTest extends TestCase
         $farOff = $this->contract(120);
         $this->getJson("/api/contracts/{$farOff->id}", $this->h())->assertJsonPath('renewal_quotation_eligible', false);
         $this->postJson("/api/contracts/{$farOff->id}/renewal-quotation", [], $this->h())->assertStatus(422)
-            ->assertJsonPath('detail', "{$farOff->contract_number} is not within 30 days of expiry yet (SRV-014), so a renewal quotation cannot be raised for it.");
+            ->assertJsonPath('detail', "{$farOff->contract_number} is not coming due yet: more than 30 days to expiry (SRV-014) and 20.0 of 20.0 hours left, so a new quotation cannot be raised for it.");
 
         $adHoc = $this->contract(5, ['contract_kind' => Contract::KIND_AD_HOC, 'contracted_minutes' => 0, 'contract_value_sgd' => 0, 'hourly_rate_sgd' => 150]);
         $this->postJson("/api/contracts/{$adHoc->id}/renewal-quotation", [], $this->h())->assertStatus(422);
@@ -142,10 +142,37 @@ class ContractQuotationLinkTest extends TestCase
         $this->postJson("/api/contracts/{$renewed->id}/renewal-quotation", [], $this->h())->assertStatus(422);
     }
 
+    public function test_hours_finishing_makes_a_contract_due_even_with_months_left_on_the_date(): void
+    {
+        // 20 contracted, 18.5 used: 1.5 left = 7.5%, under the 10% threshold.
+        $contract = $this->contract(200, ['consumed_minutes' => (int) (18.5 * 60)]);
+
+        $this->getJson("/api/contracts/{$contract->id}", $this->h())
+            ->assertJsonPath('renewal_quotation_eligible', true)
+            ->assertJsonPath('renewal_due_reason', '1.5 of 20.0 hours left');
+
+        $r = $this->postJson("/api/contracts/{$contract->id}/renewal-quotation", [], $this->h())->assertOk();
+        // The new quotation carries the CONTRACTED hours, not the remaining ones.
+        $q = $this->getJson('/api/quotations/'.$r->json('quotation_id'), $this->h());
+        $this->assertEquals(20, $q->json('lines.0.quantity'));
+
+        // Exactly at the threshold counts; just above it does not.
+        $atThreshold = $this->contract(200, ['consumed_minutes' => 18 * 60]); // 2.0 left = 10%
+        $this->getJson("/api/contracts/{$atThreshold->id}", $this->h())->assertJsonPath('renewal_quotation_eligible', true);
+        $above = $this->contract(200, ['consumed_minutes' => 17 * 60 + 45]); // 2.25 left
+        $this->getJson("/api/contracts/{$above->id}", $this->h())->assertJsonPath('renewal_quotation_eligible', false)
+            ->assertJsonPath('renewal_due_reason', null);
+
+        // An Annual contract has no hours, so only its date can make it due.
+        $annual = $this->contract(200, ['contract_kind' => Contract::KIND_ANNUAL, 'contracted_minutes' => 0]);
+        $this->getJson("/api/contracts/{$annual->id}", $this->h())->assertJsonPath('renewal_quotation_eligible', false);
+    }
+
     public function test_a_service_support_renewal_quotation_carries_the_hours_at_the_blended_rate(): void
     {
         $contract = $this->contract(20); // inside the 30-day window
-        $this->getJson("/api/contracts/{$contract->id}", $this->h())->assertJsonPath('renewal_quotation_eligible', true);
+        $this->getJson("/api/contracts/{$contract->id}", $this->h())->assertJsonPath('renewal_quotation_eligible', true)
+            ->assertJsonPath('renewal_due_reason', 'expires on '.$contract->end_date->toDateString().' (20 days)');
 
         $r = $this->postJson("/api/contracts/{$contract->id}/renewal-quotation", [], $this->h())->assertOk();
         $q = $this->getJson('/api/quotations/'.$r->json('quotation_id'), $this->h())->assertOk();

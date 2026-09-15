@@ -629,13 +629,23 @@ conversion" note on this set of rules). Decision record:
     it), or linked by hand on the contract page to any quotation of
     the same customer. The old free-text `quotation_reference` is kept
     read-only where it was recorded; nothing new is entered into it.
-  - **Create renewal quotation** on a contract that is within
-    SRV-014's 30-day pre-expiry window, or already expired or
-    exceeded: raises a draft quotation for the same customer carrying
-    the contract's current terms as its line (hours × blended rate for
-    Service Support; the annual value for Annual), marked as renewing
-    that contract (`quotations.renews_contract_id`). It then goes
-    through SALES-008's approval and sending like any other quotation.
+  - **Generate new quotation** on a contract that is **coming due** —
+    Dennis, 2026-09-15: "it's allowing to generate a quotation from
+    Contract to New Quotation when it's going to due / hrs finishing…
+    date going to due". Coming due means any of: within SRV-014's
+    30-day pre-expiry window; **hours finishing** (a Service Support
+    contract with 10% or less of its contracted hours left — the 10%
+    is a **pragmatic default**, no figure was given, see
+    open-business-decisions #40); already expired; or exceeded. It
+    raises a draft quotation for the same customer carrying the
+    contract's current terms as its line (contracted hours × blended
+    rate for Service Support; the annual value for Annual), marked as
+    renewing that contract (`quotations.renews_contract_id`), and the
+    contract page shows why it is due. It then goes through SALES-008's
+    approval and sending like any other quotation. The manual
+    "link an existing quotation" picker was removed from the contract
+    page at the same time: the link is what the system records, not a
+    thing to do by hand (the endpoint remains for the Renew form).
   - **Accepting a renewal quotation renews the contract** through the
     same `renewContract()` Renew uses -- SRV-010 (new record, own
     allocation) and SRV-016 (2-week backdating window) apply exactly;

@@ -94,6 +94,7 @@ class ContractController extends Controller
             'renewal_quotation_number' => $renewal?->quotation_number,
             'renewal_quotation_status' => $renewal?->status,
             'renewal_quotation_eligible' => $renewal === null && ContractService::renewalQuotationBlocker($contract) === null,
+            'renewal_due_reason' => ContractService::renewalDueReason($contract),
         ];
     }
 

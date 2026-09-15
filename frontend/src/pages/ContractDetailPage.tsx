@@ -39,8 +39,6 @@ export default function ContractDetailPage() {
   // Contract <-> Sales Quotation, a real link since 2026-09-15: the
   // customer's quotations for the picker, and the two actions.
   const [customerQuotations, setCustomerQuotations] = useState<Quotation[]>([])
-  const [linkQuotationId, setLinkQuotationId] = useState('')
-  const [savingQuotationLink, setSavingQuotationLink] = useState(false)
   const [creatingRenewalQuotation, setCreatingRenewalQuotation] = useState(false)
   const [sharedCustomerToAdd, setSharedCustomerToAdd] = useState('')
   const [savingSharedCustomer, setSavingSharedCustomer] = useState(false)
@@ -55,8 +53,6 @@ export default function ContractDetailPage() {
   // license fields shouldn't require re-submitting the whole coverage list.
   const [licenseDrafts, setLicenseDrafts] = useState<Record<string, { type: string; count: string }>>({})
   const [savingLicenseFor, setSavingLicenseFor] = useState<string | null>(null)
-
-  const customerName = (customerId: string) => customers.find((c) => c.id === customerId)?.name ?? 'this customer'
 
   function refresh() {
     if (!id) return
@@ -111,22 +107,6 @@ export default function ContractDetailPage() {
     }
   }
 
-  async function onLinkQuotation(e: FormEvent) {
-    e.preventDefault()
-    if (!id || !linkQuotationId) return
-    setError(null)
-    setSavingQuotationLink(true)
-    try {
-      await api.linkContractQuotation(id, linkQuotationId)
-      setLinkQuotationId('')
-      refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to link quotation')
-    } finally {
-      setSavingQuotationLink(false)
-    }
-  }
-
   async function onCreateRenewalQuotation() {
     if (!id) return
     setError(null)
@@ -134,7 +114,7 @@ export default function ContractDetailPage() {
     setCreatingRenewalQuotation(true)
     try {
       const r = await api.createContractRenewalQuotation(id)
-      setMessage(`Renewal quotation ${r.quotation_number} raised as a draft -- price it on the Sales Quotation screen, then submit for approval. Accepting it renews this contract.`)
+      setMessage(`New quotation ${r.quotation_number} generated as a draft from this contract -- price it on the Sales Quotation screen, then submit for approval. Accepting it renews this contract.`)
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create the renewal quotation')
@@ -467,48 +447,14 @@ export default function ContractDetailPage() {
       )}
 
       <div className="card">
-        <h2>Sales Quotation</h2>
+        <h2>Renewal quotation</h2>
         <p className="muted" style={{ marginTop: -6 }}>
-          The quotation this contract came from, and the renewal quotation raised from it when it
-          nears expiry. Accepting a renewal quotation renews this contract (SRV-010 / SRV-016
-          apply exactly as they do to Renew above).
+          When this contract is coming due -- its date within 30 days of expiry, or its hours
+          finishing -- generate its renewal as a new Sales Quotation carrying the current terms.
+          It goes through approval and sending like any quotation; accepting it renews this
+          contract (SRV-010 / SRV-016 apply exactly as they do to Renew above).
         </p>
 
-        {contract.quotation_id ? (
-          <p>
-            From quotation{' '}
-            <Link to={`/quotations/${contract.quotation_id}/print`}>
-              <strong>{contract.quotation_number}</strong>
-            </Link>
-          </p>
-        ) : (
-          <p className="muted">Not linked to a quotation.</p>
-        )}
-        {contract.quotation_reference && !contract.quotation_id && (
-          <p className="muted">
-            Free-text reference recorded earlier: <strong>{contract.quotation_reference}</strong>
-            {contract.quotation_reference_set_at && <> -- set {formatDate(contract.quotation_reference_set_at)}</>}
-          </p>
-        )}
-
-        <form onSubmit={onLinkQuotation} className="form-row" style={{ margin: '8px 0 16px' }}>
-          <label>Link an existing quotation for {customerName(contract.customer_id)}</label>
-          <select value={linkQuotationId} onChange={(e) => setLinkQuotationId(e.target.value)}>
-            <option value="">-- choose --</option>
-            {customerQuotations
-              .filter((q) => q.id !== contract.quotation_id)
-              .map((q) => (
-                <option key={q.id} value={q.id}>
-                  {q.quotation_number} · {q.status} · {money(q.total_amount_sgd)}
-                </option>
-              ))}
-          </select>
-          <button type="submit" disabled={savingQuotationLink || !linkQuotationId}>
-            {savingQuotationLink ? 'Saving...' : contract.quotation_id ? 'Replace link' : 'Link quotation'}
-          </button>
-        </form>
-
-        <h3 style={{ marginBottom: 4 }}>Renewal</h3>
         {contract.renewal_quotation_id ? (
           <p>
             Renewal quotation{' '}
@@ -520,19 +466,34 @@ export default function ContractDetailPage() {
           </p>
         ) : contract.renewal_quotation_eligible ? (
           <>
-            <p className="muted">
-              This contract is within 30 days of expiry or has expired. Raise its renewal as a
-              quotation to price and send to the customer.
+            <p>
+              <span className="badge exceeded">Coming due</span>{' '}
+              <span className="muted">{contract.renewal_due_reason}</span>
             </p>
             <button type="button" disabled={creatingRenewalQuotation} onClick={onCreateRenewalQuotation}>
-              {creatingRenewalQuotation ? 'Creating...' : 'Create renewal quotation'}
+              {creatingRenewalQuotation ? 'Generating...' : 'Generate new quotation'}
             </button>
           </>
         ) : (
           <p className="muted">
             {contract.status === 'renewed'
               ? 'Already renewed.'
-              : 'A renewal quotation can be raised once this contract is within 30 days of expiry, or after it expires.'}
+              : contract.contract_kind === 'ad_hoc'
+                ? 'An Ad Hoc Rate contract has no upfront value to quote -- it is renewed directly.'
+                : 'Not coming due yet: a new quotation can be generated once this contract is within 30 days of expiry, its hours are finishing, or it has expired.'}
+          </p>
+        )}
+
+        {contract.quotation_id && (
+          <p className="muted" style={{ marginTop: 12 }}>
+            This contract came from quotation{' '}
+            <Link to={`/quotations/${contract.quotation_id}/print`}>{contract.quotation_number}</Link>.
+          </p>
+        )}
+        {contract.quotation_reference && !contract.quotation_id && (
+          <p className="muted" style={{ marginTop: 12 }}>
+            Quotation reference recorded earlier: <strong>{contract.quotation_reference}</strong>
+            {contract.quotation_reference_set_at && <> -- set {formatDate(contract.quotation_reference_set_at)}</>}
           </p>
         )}
       </div>

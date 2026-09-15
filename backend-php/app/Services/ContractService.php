@@ -309,10 +309,53 @@ class ContractService
     }
 
     /**
+     * "Hours finishing": a Service Support contract with
+     * RENEWAL_HOURS_FINISHING_FRACTION or less of its hours left.
+     */
+    public static function hoursFinishing(Contract $contract): bool
+    {
+        if ($contract->contract_kind !== Contract::KIND_SERVICE_SUPPORT || $contract->contracted_minutes <= 0) {
+            return false;
+        }
+
+        return $contract->remainingMinutes() <= (int) floor($contract->contracted_minutes * Contract::RENEWAL_HOURS_FINISHING_FRACTION);
+    }
+
+    /**
+     * Why this contract is coming due -- the reason its renewal
+     * quotation can be raised -- or null when it is not: expired,
+     * exceeded, within SRV-014's 30-day pre-expiry window, or hours
+     * finishing (Dennis, 2026-09-15: "when it's going to due / hrs
+     * finishing ... date going to due").
+     */
+    public static function renewalDueReason(Contract $contract): ?string
+    {
+        if ($contract->status === Contract::STATUS_EXPIRED) {
+            return 'expired on '.Carbon::parse($contract->end_date)->toDateString();
+        }
+        if ($contract->status === Contract::STATUS_EXCEEDED) {
+            return 'hours exceeded';
+        }
+        if ($contract->status !== Contract::STATUS_ACTIVE) {
+            return null;
+        }
+        $reasons = [];
+        if (self::needsPreExpiryCheck($contract)) {
+            $days = (int) Carbon::today()->diffInDays($contract->end_date, false);
+            $reasons[] = 'expires on '.Carbon::parse($contract->end_date)->toDateString()." ({$days} days)";
+        }
+        if (self::hoursFinishing($contract)) {
+            $reasons[] = sprintf('%.1f of %.1f hours left', $contract->remainingMinutes() / 60, $contract->contracted_minutes / 60);
+        }
+
+        return $reasons ? implode('; ', $reasons) : null;
+    }
+
+    /**
      * Why a renewal quotation cannot be raised right now, or null when
      * it can: the contract is Ad Hoc (no upfront value to quote),
-     * already renewed, not yet within SRV-014's 30-day pre-expiry
-     * window, or already has an open renewal quotation.
+     * already renewed, not coming due yet (see renewalDueReason), or
+     * already has an open renewal quotation.
      */
     public static function renewalQuotationBlocker(Contract $contract): ?string
     {
@@ -322,11 +365,14 @@ class ContractService
         if ($contract->status === Contract::STATUS_RENEWED) {
             return "{$contract->contract_number} has already been renewed.";
         }
-        $due = in_array($contract->status, [Contract::STATUS_EXPIRED, Contract::STATUS_EXCEEDED], true)
-            || ($contract->status === Contract::STATUS_ACTIVE && self::needsPreExpiryCheck($contract));
-        if (! $due) {
-            return "{$contract->contract_number} is not within ".Contract::PRE_EXPIRY_CHECK_LEAD_DAYS
-                .' days of expiry yet (SRV-014), so a renewal quotation cannot be raised for it.';
+        if (self::renewalDueReason($contract) === null) {
+            return sprintf(
+                '%s is not coming due yet: more than %d days to expiry (SRV-014) and %.1f of %.1f hours left, so a new quotation cannot be raised for it.',
+                $contract->contract_number,
+                Contract::PRE_EXPIRY_CHECK_LEAD_DAYS,
+                $contract->remainingMinutes() / 60,
+                $contract->contracted_minutes / 60,
+            );
         }
         if ($open = self::openRenewalQuotation($contract)) {
             return "{$contract->contract_number} already has an open renewal quotation, {$open->quotation_number} ({$open->status}).";

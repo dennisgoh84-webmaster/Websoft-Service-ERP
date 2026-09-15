@@ -529,8 +529,10 @@ export interface Contract {
   renewal_quotation_id: string | null
   renewal_quotation_number: string | null
   renewal_quotation_status: QuotationStatus | null
-  /** Within SRV-014's 30-day pre-expiry window, or already expired/exceeded, with no open renewal quotation. */
+  /** Coming due (date within SRV-014's 30 days, hours finishing, expired or exceeded) with no open renewal quotation. */
   renewal_quotation_eligible: boolean
+  /** Why it is coming due, e.g. "expires on 2026-09-25 (10 days)" or "1.5 of 20.0 hours left"; null when it is not. */
+  renewal_due_reason: string | null
 }
 
 export type JobOrderPriority = 'low' | 'normal' | 'high' | 'critical'
