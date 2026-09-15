@@ -10,6 +10,20 @@ shipped and when.
 
 ## In progress
 
+- [x] **AI Assistant PDPA self-declaration at login** -- built
+  2026-09-15, settling the open half of decision 12.1. Every staff
+  user must tick a one-time notice (masked queries may reach
+  Anthropic's US-hosted API; non-sensitive usage data may be analysed
+  internally) before using the system at all, on desktop and mobile.
+  Recorded once as `users.ai_data_consent_at`, shown read-only on
+  Staff Master, and structurally protected from ever being edited or
+  cleared (not in `$fillable`, not in the profile-update endpoint's
+  validated fields, and the acknowledge endpoint itself refuses to
+  move an existing timestamp).
+  → [open-business-decisions.md #43](open-business-decisions.md#43-ai-assistant-pdpa-self-declaration-at-login-raised-and-built-2026-09-15),
+  [business-requirements.md PDPA-002](business-requirements.md)
+
+
 - [x] **Backend language conversion, Python/FastAPI → PHP/Laravel**
   -- **COMPLETE 2026-09-15** (the cutover itself is still Dennis's to
   call). Started 2026-09-14. Converted and verified: Core /
@@ -532,4 +546,4 @@ shipped and when.
   → [open-business-decisions.md #7-8](open-business-decisions.md#7-projects)
 
 ---
-Last updated: 2026-09-15 (Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006; Maintenance / Company-Individual batch; eight-character company code; Service Record rules SRV-019/020, SLA removed; AI Assistant slices 1, 2 and 3)
+Last updated: 2026-09-15 (Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006; Maintenance / Company-Individual batch; eight-character company code; Service Record rules SRV-019/020, SLA removed; AI Assistant slices 1, 2, 3 + PDPA consent gate)

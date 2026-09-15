@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
+import AiDataConsentGate from './components/AiDataConsentGate'
 import { AuthProvider, useAuth } from './lib/AuthContext'
 import { ThemeProvider } from './lib/ThemeContext'
 import AccountingPeriodsPage from './pages/AccountingPeriodsPage'
@@ -75,9 +76,13 @@ import WarehousesPage from './pages/WarehousesPage'
 import YearEndClosingPage from './pages/YearEndClosingPage'
 
 function RequireAuth({ children }: { children: ReactElement }) {
-  const { user, loading } = useAuth()
+  const { user, loading, refresh } = useAuth()
   if (loading) return <p style={{ padding: 24 }}>Loading...</p>
   if (!user) return <Navigate to="/login" replace />
+  // PDPA self-declaration for the AI Assistant (2026-09-15): blocks
+  // every screen until acknowledged, once, per user -- see
+  // AiDataConsentGate.tsx.
+  if (user.ai_data_consent_required) return <AiDataConsentGate onAcknowledged={refresh} />
   return children
 }
 

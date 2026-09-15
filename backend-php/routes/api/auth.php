@@ -12,4 +12,5 @@ Route::prefix('auth')->group(function () {
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/reset-password-otp', [AuthController::class, 'resetPasswordWithOtp']);
     Route::get('/me', [AuthController::class, 'me'])->middleware('auth.jwt');
+    Route::post('/ai-consent', [AuthController::class, 'acknowledgeAiConsent'])->middleware('auth.jwt');
 });

@@ -18,6 +18,7 @@
  * - Photos + videos, no limit
  */
 import { useEffect, useRef, useState } from 'react'
+import AiDataConsentGate from '../components/AiDataConsentGate'
 import { useAuth } from '../lib/AuthContext'
 import { getToken } from '../lib/api'
 import { getDeviceId } from '../lib/deviceId'
@@ -995,11 +996,15 @@ function SignoffPanel({ recordId, hasExisting, onDone }: { recordId: string; has
 // ── Main Mobile App Component ───────────────────────────────────────
 
 export default function MobileApp() {
-  const { user, loading } = useAuth()
+  const { user, loading, refresh } = useAuth()
   const [selectedJobOrder, setSelectedJobOrder] = useState<string | null>(null)
 
   if (loading) return <div style={{ ...styles.container, padding: 40, textAlign: 'center' }}>Loading...</div>
   if (!user) return <MobileLogin />
+  // PDPA self-declaration for the AI Assistant (2026-09-15) -- same
+  // gate as the desktop app, since mobile staff sign in to the same
+  // accounts. See ../components/AiDataConsentGate.tsx.
+  if (user.ai_data_consent_required) return <AiDataConsentGate onAcknowledged={refresh} />
 
   if (selectedJobOrder) {
     return <JobOrderDetailView jobOrderId={selectedJobOrder} onBack={() => setSelectedJobOrder(null)} />

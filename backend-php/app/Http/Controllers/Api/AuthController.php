@@ -210,6 +210,61 @@ class AuthController extends Controller
             'role' => $user->role,
             'group_id' => Authority::getUserGroupId($user),
             'company_id' => $user->company_id,
+            'ai_data_consent_required' => $user->needsAiDataConsent(),
+        ]);
+    }
+
+    /**
+     * PDPA self-declaration for the AI Assistant (Dennis, 2026-09-15):
+     * every staff user must acknowledge, once, that their queries may
+     * be sent to Anthropic's US-hosted API (masked by default) and
+     * that non-sensitive usage data may be analysed internally, before
+     * they can use the system. The frontend blocks on
+     * `ai_data_consent_required` (from login/me) until this succeeds.
+     *
+     * Deliberately a one-way door: if `ai_data_consent_at` is already
+     * set, this call is a no-op that just returns the existing
+     * timestamp -- it can NEVER be moved, cleared or re-dated, by this
+     * endpoint or any other (see User::$casts's docblock and
+     * UserController::update()'s validated field list).
+     */
+    public function acknowledgeAiConsent(Request $request)
+    {
+        $user = Authenticate::user($request);
+        $data = $request->validate(['accepted' => 'required|accepted']);
+
+        if ($user->ai_data_consent_at === null) {
+            // Kept in a local variable and used below rather than
+            // re-read from $user: Eloquent's datetime cast round-trips
+            // a freshly-assigned Carbon through a timezone-less
+            // "Y-m-d H:i:s" string on the way into $attributes, so
+            // reading the attribute straight back BEFORE any DB
+            // round-trip re-parses that naive string in the app's
+            // LOCAL timezone (Asia/Singapore) rather than UTC -- an
+            // 8-hour corruption of exactly the figure this PDPA record
+            // most needs to be right. The value actually written to
+            // the database is unaffected (Postgres receives and
+            // returns it correctly, confirmed against a raw query),
+            // and every subsequent read -- Staff Master included --
+            // re-fetches from the database and is therefore correct;
+            // only THIS response, right after the fact, was ever wrong.
+            $now = Carbon::now('UTC');
+            $user->ai_data_consent_at = $now;
+            $user->save();
+            Audit::record(
+                'user', $user->id, 'ai_data_consent_acknowledged', $user->id,
+                details: 'AI Assistant PDPA notice acknowledged at login',
+            );
+
+            return response()->json([
+                'ai_data_consent_at' => $now->toJSON(),
+                'ai_data_consent_required' => false,
+            ]);
+        }
+
+        return response()->json([
+            'ai_data_consent_at' => $user->ai_data_consent_at->toJSON(),
+            'ai_data_consent_required' => false,
         ]);
     }
 
@@ -240,13 +295,13 @@ class AuthController extends Controller
                 // SMTP looked configured but the actual send failed --
                 // fail OPEN rather than stranding every user outside a
                 // login page they can't get past.
-                return ['status' => 'ok', 'access_token' => Jwt::createAccessToken($user->id), 'token_type' => 'bearer'];
+                return ['status' => 'ok', 'access_token' => Jwt::createAccessToken($user->id), 'token_type' => 'bearer', 'ai_data_consent_required' => $user->needsAiDataConsent()];
             }
 
             return ['status' => 'otp_required', 'otp_token' => Jwt::createPurposeToken($user->id, 'otp', self::OTP_EXPIRE_MINUTES)];
         }
 
-        return ['status' => 'ok', 'access_token' => Jwt::createAccessToken($user->id), 'token_type' => 'bearer'];
+        return ['status' => 'ok', 'access_token' => Jwt::createAccessToken($user->id), 'token_type' => 'bearer', 'ai_data_consent_required' => $user->needsAiDataConsent()];
     }
 
     private static function hashOtp(string $code): string

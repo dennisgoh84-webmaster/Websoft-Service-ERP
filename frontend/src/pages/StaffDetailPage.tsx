@@ -253,6 +253,20 @@ export default function StaffDetailPage() {
       </div>
 
       <div className="card">
+        <h2>AI Assistant PDPA notice</h2>
+        <p className="muted" style={{ margin: 0 }}>
+          {staff.ai_data_consent_at ? (
+            <>
+              Acknowledged {formatDateTime(staff.ai_data_consent_at)}. This date/time is recorded once, at their
+              first login after the notice was introduced, and cannot be changed or cleared from here.
+            </>
+          ) : (
+            'Not yet acknowledged -- they will be asked to at their next sign-in.'
+          )}
+        </p>
+      </div>
+
+      <div className="card">
         <h2>Recent activity</h2>
         <table>
           <thead>

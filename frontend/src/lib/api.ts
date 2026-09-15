@@ -153,6 +153,9 @@ export interface CurrentUser {
   role: UserRole
   group_id: string | null
   company_id: string | null
+  /** PDPA self-declaration for the AI Assistant (2026-09-15): true until
+   * this user has ticked the one-time acknowledgement at login. */
+  ai_data_consent_required: boolean
 }
 
 /** Login page branding (2026-09-12) -- deliberately just these two
@@ -234,6 +237,10 @@ export interface StaffUser {
   must_change_password: boolean
   is_active: boolean
   created_at: string
+  /** PDPA self-declaration for the AI Assistant -- when this staff member
+   * first acknowledged it, or null if not yet. Read-only: shown on Staff
+   * Master, never editable there or anywhere else. */
+  ai_data_consent_at: string | null
 }
 
 export interface AuditLogEntry {
@@ -1959,6 +1966,7 @@ export interface ReorderItem {
 
 export const api = {
   me: () => request<CurrentUser>('/auth/me'),
+  acknowledgeAiDataConsent: () => request<{ ai_data_consent_at: string; ai_data_consent_required: boolean }>('/auth/ai-consent', { method: 'POST', body: JSON.stringify({ accepted: true }) }),
   listUsers: () => request<CurrentUser[]>('/users'),
 
   // Company Setup / multi-company

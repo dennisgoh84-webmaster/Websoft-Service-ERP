@@ -90,6 +90,9 @@ class UserController extends Controller
             'must_change_password' => $user->must_change_password,
             'is_active' => $user->is_active,
             'created_at' => $user->created_at,
+            // PDPA self-declaration for the AI Assistant (2026-09-15) --
+            // read-only here; see User::$casts's docblock for why.
+            'ai_data_consent_at' => optional($user->ai_data_consent_at)->toJSON(),
         ];
     }
 

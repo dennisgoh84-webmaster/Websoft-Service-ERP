@@ -50,7 +50,16 @@ class User extends Model
         'must_change_password' => 'boolean',
         'is_active' => 'boolean',
         'created_at' => 'datetime',
+        // Deliberately NOT in $fillable -- see the migration's docblock.
+        // Set exactly once, by AuthController::acknowledgeAiConsent().
+        'ai_data_consent_at' => 'datetime',
     ];
+
+    /** Has this user acknowledged the AI Assistant's PDPA notice yet? */
+    public function needsAiDataConsent(): bool
+    {
+        return $this->ai_data_consent_at === null;
+    }
 
     public function company(): BelongsTo
     {

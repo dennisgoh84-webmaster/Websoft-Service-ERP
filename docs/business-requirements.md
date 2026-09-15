@@ -567,6 +567,22 @@ Status: **CONFIRMED / DECIDED** (2026-09-14). Full design in
   given PDPA consent and is not archived; archiving a customer disables
   every portal login under it.
 
+### PDPA-002 — AI Assistant staff data-consent gate — CONFIRMED (2026-09-15)
+
+- Every staff user must explicitly acknowledge, once, that queries
+  sent to the AI Assistant may reach Anthropic's US-hosted API (masked
+  by default) and that non-sensitive usage information may be
+  analysed internally by Webmaster Consultancy, before they can use
+  the system at all -- a full-screen gate at login, blocking until a
+  checkbox is ticked.
+- Recorded exactly once, as `users.ai_data_consent_at`, the first time
+  each user encounters the gate; shown read-only on Staff Master.
+  **Protected**: not editable through Staff Master or any other
+  screen, and the acknowledgement endpoint itself never moves an
+  existing timestamp.
+- Settles the outstanding half of decision 12.1 -- see
+  [open-business-decisions.md #43](open-business-decisions.md#43-ai-assistant-pdpa-self-declaration-at-login-raised-and-built-2026-09-15).
+
 ### PDPA-001 — Data expiry defaults to five years from consent — pragmatic default (2026-09-15)
 
 - A Company/Individual's **data expiry date** lives in the PDPA & Data

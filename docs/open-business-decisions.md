@@ -1985,9 +1985,10 @@ Dennis; the build takes a safe default for each, all switchable:
    masked before any text leaves the system (email addresses,
    telephone numbers, people's names → placeholders); company names
    and email domains are kept. Owner-switchable under Maintenance →
-   AI Assistant. **Still open:** whether masked text going to
-   Anthropic's US-hosted API is acceptable, or a regional /
-   self-hosted model is required. Until Dennis says, leave masking ON.
+   AI Assistant. **Settled 2026-09-15:** "No issues" sending masked
+   text to Anthropic's US-hosted API, **provided every staff member
+   has explicitly agreed to it** -- see #43 below, the self-declaration
+   built the same day.
 42.2. **Cost model (12.2).** Default: per event, measured — tokens per
    call recorded and summarised on the settings screen. No cap is
    enforced yet; decide one once a month of real usage is visible.
@@ -2019,4 +2020,49 @@ screen; no server-side refusal fallback is configured.
    from the model as "which customer", matching `PortalController`'s
    own discipline. She cannot raise an Incident on the customer's
    behalf; the existing submission flow is unchanged.
+
+## 43. AI Assistant PDPA self-declaration at login (raised and built 2026-09-15)
+
+Dennis, closing out decision 12.1: "No issues [...] Can we have a self
+declare at the login screen [...] I agree that information will be
+masked going through [...] US hosted API and non sensitive information
+may be used to share for data analysis [...] Research and create such
+a self declaration during login, they must acknowledge, tick then can
+login, this information will be recorded the first time every user
+login and saved in the staff master file and protected meaning they
+cannot delete away the date/time stamp with the acknowledgment."
+
+**Built exactly as asked:**
+
+- A full-screen notice blocks the app (desktop and mobile alike, since
+  both sign in to the same staff accounts) until a checkbox is ticked
+  and "Accept and continue" is pressed -- `AiDataConsentGate.tsx`.
+- `POST /auth/ai-consent` records `users.ai_data_consent_at` the FIRST
+  time only; `login` and `/auth/me` report `ai_data_consent_required`
+  so the frontend knows to show the gate.
+- **Protected, exactly as instructed:** the column is not in
+  `User::$fillable`, is absent from `UserController::update()`'s
+  validated field list, and the acknowledge endpoint itself refuses to
+  move a timestamp that is already set -- there is no path, including
+  Staff Master's own edit form, that can clear or back-date it.
+- **Saved in the staff master file:** shown read-only on Staff Master's
+  detail page ("Acknowledged <date/time>" or "Not yet acknowledged").
+- Every acknowledgement is also an Event Log entry
+  (`ai_data_consent_acknowledged`), so the record survives even if a
+  user row were ever archived.
+
+**Wording is a pragmatic default**, not legal copy: it discloses that
+queries go to a US-hosted API (masked by default), and that Webmaster
+Consultancy may analyse non-sensitive, aggregated usage information
+internally -- it does not claim anything about how Anthropic itself
+uses or does not use API data, which is a separate, factual question
+governed by Anthropic's own commercial terms, not this system's
+wording. If a legally-reviewed notice is wanted, the copy in
+`AiDataConsentGate.tsx` is the one place to change it.
+
+**Deliberately out of scope for now:** the Customer Helpdesk Portal
+has its own login and its own chat (slice 3) but no equivalent
+declaration -- Dennis's instruction named "the login screen" and "the
+staff master file" specifically, which are both staff-side. Worth
+raising if the portal chat is to continue.
 
