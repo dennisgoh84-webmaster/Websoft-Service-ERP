@@ -6,6 +6,7 @@ use App\Exceptions\ApiException;
 use App\Exceptions\ARRuleViolation;
 use App\Exceptions\PostingError;
 use App\Http\Controllers\Api\Concerns\SendsDocuments;
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Company;
@@ -20,6 +21,7 @@ use App\Services\Numbering;
 use App\Services\Posting;
 use App\Support\Money;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -39,6 +41,14 @@ use Illuminate\Support\Facades\DB;
  */
 class PaymentController extends Controller
 {
+    use SendsExports;
+
+    /** @var array<int, string> */
+    private const EXPORT_FIELDS = [
+        'voucher_number', 'customer_name', 'payment_date', 'amount_sgd', 'allocated_sgd',
+        'unallocated_sgd', 'method', 'reference',
+    ];
+
     use SendsDocuments;
 
     private const MODULE = 'accounts_receivable';
@@ -108,7 +118,19 @@ class PaymentController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $query = Payment::with('allocations')->where('company_id', $user->company_id);
+        return $this->filtered($user->company_id, $request)->map(fn (Payment $p) => $this->present($p))->values();
+    }
+
+    /**
+     * The list the screen shows, honouring its filters -- shared with
+     * the exports so an Export button always returns what is on
+     * screen.
+     *
+     * @return Collection<int, Payment>
+     */
+    private function filtered(string $companyId, Request $request)
+    {
+        $query = Payment::with('allocations')->where('company_id', $companyId);
         if ($request->filled('customer_id')) {
             $query->where('customer_id', $request->query('customer_id'));
         }
@@ -117,7 +139,44 @@ class PaymentController extends Controller
             $payments = $payments->filter(fn (Payment $p) => $p->unallocatedSgd()->toFloat() > 0)->values();
         }
 
-        return $payments->map(fn (Payment $p) => $this->present($p))->values();
+        return $payments;
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function exportRows(string $companyId, Request $request): array
+    {
+        $customerNames = CompanyIndividual::where('company_id', $companyId)->pluck('name', 'id');
+
+        return $this->filtered($companyId, $request)->map(fn (Payment $p) => [
+            'voucher_number' => $p->voucher_number,
+            'customer_name' => $customerNames[$p->customer_id] ?? '',
+            'payment_date' => optional($p->payment_date)->toDateString(),
+            'amount_sgd' => number_format((float) $p->amount_sgd, 2, '.', ''),
+            'allocated_sgd' => $p->allocatedSgd()->toString(),
+            'unallocated_sgd' => $p->unallocatedSgd()->toString(),
+            'method' => $p->method,
+            'reference' => $p->reference ?? '',
+        ])->all();
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->csvResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'receipts.csv'
+        );
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->xlsxResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'Receipts', 'receipts.xlsx'
+        );
     }
 
     public function show(Request $request, string $paymentId)

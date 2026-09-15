@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Api\Concerns\SendsDocuments;
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Company;
@@ -32,6 +33,14 @@ use Illuminate\Support\Facades\DB;
  */
 class QuotationController extends Controller
 {
+    use SendsExports;
+
+    /** @var array<int, string> */
+    private const EXPORT_FIELDS = [
+        'quotation_number', 'customer_name', 'quotation_date', 'valid_until', 'status',
+        'amount_sgd', 'gst_amount_sgd', 'total_amount_sgd',
+    ];
+
     use SendsDocuments;
 
     private const MODULE = 'sales';
@@ -98,6 +107,43 @@ class QuotationController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
         return $this->filterQuotations($request, $user->company_id)->map(fn ($q) => $this->present($q))->values();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function exportRows(string $companyId, Request $request): array
+    {
+        $customerNames = CompanyIndividual::where('company_id', $companyId)->pluck('name', 'id');
+
+        return $this->filterQuotations($request, $companyId)->map(fn (Quotation $q) => [
+            'quotation_number' => $q->quotation_number,
+            'customer_name' => $customerNames[$q->customer_id] ?? '',
+            'quotation_date' => optional($q->quotation_date)->toDateString(),
+            'valid_until' => optional($q->valid_until)->toDateString() ?? '',
+            'status' => $q->status,
+            'amount_sgd' => number_format((float) $q->amount_sgd, 2, '.', ''),
+            'gst_amount_sgd' => number_format((float) $q->gst_amount_sgd, 2, '.', ''),
+            'total_amount_sgd' => number_format((float) $q->total_amount_sgd, 2, '.', ''),
+        ])->all();
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->csvResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'quotations.csv'
+        );
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->xlsxResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'Quotations', 'quotations.xlsx'
+        );
     }
 
     public function show(Request $request, string $quotationId)

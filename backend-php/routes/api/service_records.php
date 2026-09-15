@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.jwt')->prefix('service-records')->group(function () {
     Route::get('/', [ServiceRecordController::class, 'index']);
+    Route::get('/export.csv', [ServiceRecordController::class, 'exportCsv']);
+    Route::get('/export.xlsx', [ServiceRecordController::class, 'exportExcel']);
     Route::post('/', [ServiceRecordController::class, 'store']);
     Route::get('/pending-approval', [ServiceRecordController::class, 'pendingApproval']);
     Route::get('/{serviceRecord}', [ServiceRecordController::class, 'show']);

@@ -6,6 +6,7 @@ use App\Exceptions\ApiException;
 use App\Exceptions\PayablesRuleViolation;
 use App\Exceptions\PostingError;
 use App\Http\Controllers\Api\Concerns\SendsDocuments;
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Company;
@@ -20,6 +21,7 @@ use App\Services\PayablesService;
 use App\Services\Posting;
 use App\Support\Money;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -40,6 +42,14 @@ use Illuminate\Support\Facades\DB;
  */
 class SupplierPaymentController extends Controller
 {
+    use SendsExports;
+
+    /** @var array<int, string> */
+    private const EXPORT_FIELDS = [
+        'voucher_number', 'supplier_name', 'payment_date', 'amount_sgd', 'allocated_sgd',
+        'unallocated_sgd', 'method', 'reference',
+    ];
+
     use SendsDocuments;
 
     private const MODULE = 'accounts_payable';
@@ -105,12 +115,63 @@ class SupplierPaymentController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $query = SupplierPayment::with('allocations')->where('company_id', $user->company_id);
+        return $this->filtered($user->company_id, $request)
+            ->map(fn (SupplierPayment $p) => $this->present($p))->values();
+    }
+
+    /**
+     * The list the screen shows, honouring its filter -- shared with
+     * the exports so an Export button always returns what is on
+     * screen.
+     *
+     * @return Collection<int, SupplierPayment>
+     */
+    private function filtered(string $companyId, Request $request)
+    {
+        $query = SupplierPayment::with('allocations')->where('company_id', $companyId);
         if ($request->filled('supplier_id')) {
             $query->where('supplier_id', $request->query('supplier_id'));
         }
 
-        return $query->orderByDesc('payment_date')->get()->map(fn (SupplierPayment $p) => $this->present($p))->values();
+        return $query->orderByDesc('payment_date')->get();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function exportRows(string $companyId, Request $request): array
+    {
+        $supplierNames = CompanyIndividual::where('company_id', $companyId)->pluck('name', 'id');
+
+        return $this->filtered($companyId, $request)->map(fn (SupplierPayment $p) => [
+            'voucher_number' => $p->voucher_number,
+            'supplier_name' => $supplierNames[$p->supplier_id] ?? '',
+            'payment_date' => optional($p->payment_date)->toDateString(),
+            'amount_sgd' => number_format((float) $p->amount_sgd, 2, '.', ''),
+            'allocated_sgd' => $p->allocatedSgd()->toString(),
+            'unallocated_sgd' => $p->unallocatedSgd()->toString(),
+            'method' => $p->method,
+            'reference' => $p->reference ?? '',
+        ])->all();
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->csvResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'payment-vouchers.csv'
+        );
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->xlsxResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request),
+            'Payment Vouchers', 'payment-vouchers.xlsx'
+        );
     }
 
     public function show(Request $request, string $paymentId)

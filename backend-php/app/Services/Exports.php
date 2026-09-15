@@ -37,19 +37,43 @@ class Exports
      */
     public static function rowsToCsv(array $fieldnames, array $rows): string
     {
-        $out = fopen('php://temp', 'r+');
-        fputcsv($out, $fieldnames);
+        $csv = self::csvLine($fieldnames);
         foreach ($rows as $row) {
-            fputcsv($out, array_map(
+            $csv .= self::csvLine(array_map(
                 static fn (string $f) => self::scalar($row[$f] ?? ''),
                 $fieldnames
             ));
         }
-        rewind($out);
-        $csv = stream_get_contents($out);
-        fclose($out);
 
         return $csv;
+    }
+
+    /**
+     * One CSV record, written the way Python's `csv.writer` writes it
+     * with its defaults -- which is what this is a port of.
+     *
+     * Deliberately NOT `fputcsv()`: PHP also quotes a field that
+     * merely contains a SPACE, and terminates lines with "\n", where
+     * Python quotes only when the field contains the delimiter, a
+     * quote or a line break (QUOTE_MINIMAL) and terminates with
+     * "\r\n". Both files open the same in Excel, but "Acme Pte Ltd"
+     * coming back quoted from one backend and bare from the other is
+     * exactly the kind of drift this conversion is meant not to
+     * introduce.
+     *
+     * @param  array<int, string>  $values
+     */
+    private static function csvLine(array $values): string
+    {
+        $fields = array_map(static function (string $value): string {
+            if (preg_match('/[",\r\n]/', $value) === 1) {
+                return '"'.str_replace('"', '""', $value).'"';
+            }
+
+            return $value;
+        }, $values);
+
+        return implode(',', $fields)."\r\n";
     }
 
     /**

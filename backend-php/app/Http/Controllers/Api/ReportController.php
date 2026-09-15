@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\CommissionSettings;
@@ -10,7 +11,6 @@ use App\Models\User;
 use App\Services\AccountsReceivableService;
 use App\Services\Audit;
 use App\Services\Authority;
-use App\Services\Exports;
 use App\Services\Ledger;
 use App\Services\PayablesService;
 use App\Services\ReportsService;
@@ -60,6 +60,8 @@ use Illuminate\Support\Carbon;
  */
 class ReportController extends Controller
 {
+    use SendsExports;
+
     private const MODULE = 'accounting_reports';
 
     /** @var array<int, string> */
@@ -112,7 +114,7 @@ class ReportController extends Controller
         $rows = $this->trialBalanceReport($user->company_id, $this->asAt($request))['rows'];
         $this->auditExport($user, 'Accounting Report: Trial Balance', 'csv', count($rows));
 
-        return $this->csv(Exports::rowsToCsv(self::TRIAL_BALANCE_FIELDS, $rows), 'trial-balance-report.csv');
+        return $this->csvResponse(self::TRIAL_BALANCE_FIELDS, $rows, 'trial-balance-report.csv');
     }
 
     public function trialBalanceExcel(Request $request)
@@ -121,10 +123,7 @@ class ReportController extends Controller
         $rows = $this->trialBalanceReport($user->company_id, $this->asAt($request))['rows'];
         $this->auditExport($user, 'Accounting Report: Trial Balance', 'excel', count($rows));
 
-        return $this->xlsx(
-            Exports::rowsToExcel(self::TRIAL_BALANCE_FIELDS, $rows, 'Trial Balance'),
-            'trial-balance-report.xlsx'
-        );
+        return $this->xlsxResponse(self::TRIAL_BALANCE_FIELDS, $rows, 'Trial Balance', 'trial-balance-report.xlsx');
     }
 
     /** @return array<string, mixed> */
@@ -158,7 +157,7 @@ class ReportController extends Controller
         $rows = $this->arAgingReport($user->company_id, $this->asAt($request))['rows'];
         $this->auditExport($user, 'Accounting Report: AR Aging', 'csv', count($rows));
 
-        return $this->csv(Exports::rowsToCsv(self::AR_AGING_FIELDS, $rows), 'ar-aging-report.csv');
+        return $this->csvResponse(self::AR_AGING_FIELDS, $rows, 'ar-aging-report.csv');
     }
 
     public function arAgingExcel(Request $request)
@@ -167,7 +166,7 @@ class ReportController extends Controller
         $rows = $this->arAgingReport($user->company_id, $this->asAt($request))['rows'];
         $this->auditExport($user, 'Accounting Report: AR Aging', 'excel', count($rows));
 
-        return $this->xlsx(Exports::rowsToExcel(self::AR_AGING_FIELDS, $rows, 'AR Aging'), 'ar-aging-report.xlsx');
+        return $this->xlsxResponse(self::AR_AGING_FIELDS, $rows, 'AR Aging', 'ar-aging-report.xlsx');
     }
 
     /** @return array<string, mixed> */
@@ -200,7 +199,7 @@ class ReportController extends Controller
         $rows = $this->apAgingReport($user->company_id, $this->asAt($request))['rows'];
         $this->auditExport($user, 'Accounting Report: AP Aging', 'csv', count($rows));
 
-        return $this->csv(Exports::rowsToCsv(self::AP_AGING_FIELDS, $rows), 'ap-aging-report.csv');
+        return $this->csvResponse(self::AP_AGING_FIELDS, $rows, 'ap-aging-report.csv');
     }
 
     public function apAgingExcel(Request $request)
@@ -209,7 +208,7 @@ class ReportController extends Controller
         $rows = $this->apAgingReport($user->company_id, $this->asAt($request))['rows'];
         $this->auditExport($user, 'Accounting Report: AP Aging', 'excel', count($rows));
 
-        return $this->xlsx(Exports::rowsToExcel(self::AP_AGING_FIELDS, $rows, 'AP Aging'), 'ap-aging-report.xlsx');
+        return $this->xlsxResponse(self::AP_AGING_FIELDS, $rows, 'AP Aging', 'ap-aging-report.xlsx');
     }
 
     /** @return array<string, mixed> */
@@ -240,7 +239,7 @@ class ReportController extends Controller
         $rows = $this->gstReturnRows($request);
         $this->auditExport($user, 'Accounting Report: GST Return', 'csv', count($rows));
 
-        return $this->csv(Exports::rowsToCsv(self::GST_FIELDS, $rows), 'gst-return.csv');
+        return $this->csvResponse(self::GST_FIELDS, $rows, 'gst-return.csv');
     }
 
     public function gstReturnExcel(Request $request)
@@ -249,7 +248,7 @@ class ReportController extends Controller
         $rows = $this->gstReturnRows($request);
         $this->auditExport($user, 'Accounting Report: GST Return', 'excel', count($rows));
 
-        return $this->xlsx(Exports::rowsToExcel(self::GST_FIELDS, $rows, 'GST Return'), 'gst-return.xlsx');
+        return $this->xlsxResponse(self::GST_FIELDS, $rows, 'GST Return', 'gst-return.xlsx');
     }
 
     /**
@@ -287,7 +286,7 @@ class ReportController extends Controller
         $rows = $this->salesGpExportRows($request);
         $this->auditExport($user, 'Accounting Report: Sales GP', 'csv', count($rows));
 
-        return $this->csv(Exports::rowsToCsv(self::SALES_GP_FIELDS, $rows), 'sales-gp-report.csv');
+        return $this->csvResponse(self::SALES_GP_FIELDS, $rows, 'sales-gp-report.csv');
     }
 
     public function salesGpExcel(Request $request)
@@ -296,7 +295,7 @@ class ReportController extends Controller
         $rows = $this->salesGpExportRows($request);
         $this->auditExport($user, 'Accounting Report: Sales GP', 'excel', count($rows));
 
-        return $this->xlsx(Exports::rowsToExcel(self::SALES_GP_FIELDS, $rows, 'Sales GP'), 'sales-gp-report.xlsx');
+        return $this->xlsxResponse(self::SALES_GP_FIELDS, $rows, 'Sales GP', 'sales-gp-report.xlsx');
     }
 
     /** @return array<string, mixed> */
@@ -401,7 +400,7 @@ class ReportController extends Controller
         $rows = $this->commissionExportRows($request);
         $this->auditExport($user, 'Accounting Report: Commission', 'csv', count($rows));
 
-        return $this->csv(Exports::rowsToCsv(self::COMMISSION_FIELDS, $rows), 'commission-report.csv');
+        return $this->csvResponse(self::COMMISSION_FIELDS, $rows, 'commission-report.csv');
     }
 
     public function commissionExcel(Request $request)
@@ -410,7 +409,7 @@ class ReportController extends Controller
         $rows = $this->commissionExportRows($request);
         $this->auditExport($user, 'Accounting Report: Commission', 'excel', count($rows));
 
-        return $this->xlsx(Exports::rowsToExcel(self::COMMISSION_FIELDS, $rows, 'Commission'), 'commission-report.xlsx');
+        return $this->xlsxResponse(self::COMMISSION_FIELDS, $rows, 'Commission', 'commission-report.xlsx');
     }
 
     /** @return array<string, mixed> */
@@ -492,21 +491,5 @@ class ReportController extends Controller
             $reportName,
             "{$reportName} exported as ".strtoupper($format)." ({$rowCount} {$plural})",
         );
-    }
-
-    private function csv(string $body, string $filename)
-    {
-        return response($body, 200, [
-            'Content-Type' => 'text/csv',
-            'Content-Disposition' => "attachment; filename={$filename}",
-        ]);
-    }
-
-    private function xlsx(string $body, string $filename)
-    {
-        return response($body, 200, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => "attachment; filename={$filename}",
-        ]);
     }
 }

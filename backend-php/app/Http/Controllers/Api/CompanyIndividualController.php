@@ -3,14 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\AuditLogEntry;
 use App\Models\Branch;
 use App\Models\CompanyIndividual;
+use App\Models\CompanyIndividualGroup;
 use App\Models\CompanyIndividualRelationship;
 use App\Models\Contact;
 use App\Models\PortalUser;
+use App\Models\SetupListItem;
 use App\Models\User;
 use App\Services\Audit;
 use App\Services\Authority;
@@ -20,6 +23,7 @@ use App\Services\MailerNotConfiguredException;
 use App\Services\PasswordPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 /**
@@ -34,6 +38,15 @@ use Illuminate\Support\Str;
  */
 class CompanyIndividualController extends Controller
 {
+    use SendsExports;
+
+    /** @var array<int, string> */
+    private const EXPORT_FIELDS = [
+        'name', 'customer_type', 'customer_group', 'industry', 'legacy_customer_code',
+        'contact_person', 'uen', 'gst_registration_no', 'billing_email', 'phone', 'mobile',
+        'address', 'payment_terms_days', 'status',
+    ];
+
     private const MODULE = 'company_individual_management';
 
     private const MAX_PDPA_DOCUMENT_CHARS = 2_800_000; // ~2 MB of base64
@@ -303,7 +316,19 @@ class CompanyIndividualController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $query = CompanyIndividual::where('company_id', $user->company_id);
+        return $this->filtered($user->company_id, $request);
+    }
+
+    /**
+     * The list the screen shows, honouring every filter -- shared with
+     * the exports so an Export button always returns what is on
+     * screen.
+     *
+     * @return Collection<int, CompanyIndividual>
+     */
+    private function filtered(string $companyId, Request $request)
+    {
+        $query = CompanyIndividual::where('company_id', $companyId);
 
         if (! $request->boolean('include_inactive')) {
             $query->where('is_active', true);
@@ -335,6 +360,60 @@ class CompanyIndividualController extends Controller
         }
 
         return $query->orderBy('name')->get();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function exportRows(string $companyId, Request $request): array
+    {
+        $groupNames = CompanyIndividualGroup::where('company_id', $companyId)->pluck('name', 'id');
+        $industryNames = SetupListItem::where('list_type', SetupListItem::TYPE_INDUSTRY)->pluck('name', 'code');
+
+        return $this->filtered($companyId, $request)->map(function (CompanyIndividual $c) use ($groupNames, $industryNames) {
+            // One flattened address column: a spreadsheet reader wants
+            // the address, not six columns that are usually blank.
+            $address = implode(', ', array_filter([
+                $c->address_line1, $c->address_line2, $c->address_city,
+                $c->address_state, $c->address_postal_code, $c->address_country,
+            ]));
+
+            return [
+                'name' => $c->name,
+                'customer_type' => $c->customer_type,
+                'customer_group' => $groupNames[$c->customer_group_id] ?? '',
+                'industry' => $industryNames[$c->industry_code] ?? '',
+                'legacy_customer_code' => $c->legacy_customer_code ?? '',
+                'contact_person' => $c->contact_person ?? '',
+                'uen' => $c->uen ?? '',
+                'gst_registration_no' => $c->gst_registration_no ?? '',
+                'billing_email' => $c->billing_email ?? '',
+                'phone' => $c->phone ?? '',
+                'mobile' => $c->mobile ?? '',
+                'address' => $address,
+                'payment_terms_days' => $c->payment_terms_days ?? '',
+                'status' => $c->is_active ? 'active' : 'inactive',
+            ];
+        })->all();
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->csvResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'company-individuals.csv'
+        );
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->xlsxResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request),
+            'Company Individuals', 'company-individuals.xlsx'
+        );
     }
 
     public function show(Request $request, string $customerId)

@@ -3,21 +3,30 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
+use App\Models\Account;
 use App\Models\BankAccount;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\BankBook;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 /**
  * Bank Master File. Mirrors backend/app/routers/bank_accounts.py.
- *
- * NOT yet converted: CSV/Excel export.
  */
 class BankAccountController extends Controller
 {
+    use SendsExports;
+
+    /** @var array<int, string> */
+    private const EXPORT_FIELDS = [
+        'bank_name', 'account_name', 'account_number', 'branch', 'swift_code',
+        'currency_code', 'gl_account_code', 'is_active',
+    ];
+
     private const MODULE = 'finance_accounting';
 
     private function present(BankAccount $bank): array
@@ -48,12 +57,63 @@ class BankAccountController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $query = BankAccount::where('company_id', $user->company_id);
+        return $this->filtered($user->company_id, $request)
+            ->map(fn (BankAccount $b) => $this->present($b))->values();
+    }
+
+    /**
+     * The list the screen shows, honouring its filter -- shared with
+     * the exports so an Export button always returns what is on
+     * screen.
+     *
+     * @return Collection<int, BankAccount>
+     */
+    private function filtered(string $companyId, Request $request)
+    {
+        $query = BankAccount::where('company_id', $companyId);
         if (! $request->boolean('include_inactive')) {
             $query->where('is_active', true);
         }
 
-        return $query->orderBy('bank_name')->get()->map(fn (BankAccount $b) => $this->present($b))->values();
+        return $query->orderBy('bank_name')->get();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function exportRows(string $companyId, Request $request): array
+    {
+        $glCodes = Account::where('company_id', $companyId)->pluck('code', 'id');
+
+        return $this->filtered($companyId, $request)->map(fn (BankAccount $b) => [
+            'bank_name' => $b->bank_name,
+            'account_name' => $b->account_name,
+            'account_number' => $b->account_number,
+            'branch' => $b->branch ?? '',
+            'swift_code' => $b->swift_code ?? '',
+            'currency_code' => $b->currency_code,
+            'gl_account_code' => $glCodes[$b->gl_account_id] ?? '',
+            'is_active' => $b->is_active,
+        ])->all();
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->csvResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'bank-accounts.csv'
+        );
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->xlsxResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request),
+            'Bank Accounts', 'bank-accounts.xlsx'
+        );
     }
 
     public function show(Request $request, string $bankAccountId)

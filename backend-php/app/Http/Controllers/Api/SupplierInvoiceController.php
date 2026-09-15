@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Exceptions\ApiException;
 use App\Exceptions\PayablesRuleViolation;
 use App\Exceptions\PostingError;
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\CompanyIndividual;
@@ -16,6 +17,7 @@ use App\Services\PayablesService;
 use App\Services\Posting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -27,6 +29,15 @@ use Illuminate\Support\Facades\DB;
  */
 class SupplierInvoiceController extends Controller
 {
+    use SendsExports;
+
+    /** @var array<int, string> */
+    private const EXPORT_FIELDS = [
+        'bill_number', 'supplier_invoice_no', 'supplier_name', 'invoice_date', 'due_date',
+        'description', 'amount_sgd', 'gst_amount_sgd', 'total_amount_sgd', 'amount_paid_sgd',
+        'outstanding_sgd', 'match_status', 'status',
+    ];
+
     private const MODULE = 'accounts_payable';
 
     private function supplierOrFail(string $companyId, string $supplierId): CompanyIndividual
@@ -80,15 +91,70 @@ class SupplierInvoiceController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $query = SupplierInvoice::where('company_id', $user->company_id);
-        if ($request->filled('supplier_id')) {
-            $query->where('supplier_id', $request->query('supplier_id'));
-        }
-        if ($request->filled('status')) {
-            $query->where('status', $request->query('status'));
+        return $this->filtered($user->company_id, $request)
+            ->map(fn (SupplierInvoice $b) => $this->present($b))->values();
+    }
+
+    /**
+     * The list the screen shows, honouring its filters -- shared with
+     * the exports so an Export button always returns what is on
+     * screen.
+     *
+     * @return Collection<int, SupplierInvoice>
+     */
+    private function filtered(string $companyId, Request $request)
+    {
+        $query = SupplierInvoice::where('company_id', $companyId);
+        foreach (['supplier_id', 'status'] as $field) {
+            if ($request->filled($field)) {
+                $query->where($field, $request->query($field));
+            }
         }
 
-        return $query->orderByDesc('invoice_date')->get()->map(fn (SupplierInvoice $b) => $this->present($b))->values();
+        return $query->orderByDesc('invoice_date')->get();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function exportRows(string $companyId, Request $request): array
+    {
+        $supplierNames = CompanyIndividual::where('company_id', $companyId)->pluck('name', 'id');
+
+        return $this->filtered($companyId, $request)->map(fn (SupplierInvoice $b) => [
+            'bill_number' => $b->bill_number,
+            'supplier_invoice_no' => $b->supplier_invoice_no ?? '',
+            'supplier_name' => $supplierNames[$b->supplier_id] ?? '',
+            'invoice_date' => optional($b->invoice_date)->toDateString(),
+            'due_date' => optional($b->due_date)->toDateString() ?? '',
+            'description' => $b->description,
+            'amount_sgd' => number_format((float) $b->amount_sgd, 2, '.', ''),
+            'gst_amount_sgd' => number_format((float) $b->gst_amount_sgd, 2, '.', ''),
+            'total_amount_sgd' => number_format((float) $b->total_amount_sgd, 2, '.', ''),
+            'amount_paid_sgd' => number_format((float) $b->amount_paid_sgd, 2, '.', ''),
+            'outstanding_sgd' => $b->outstandingSgd()->toString(),
+            'match_status' => $b->match_status,
+            'status' => $b->status,
+        ])->all();
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->csvResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'supplier-bills.csv'
+        );
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->xlsxResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request),
+            'Supplier Bills', 'supplier-bills.xlsx'
+        );
     }
 
     public function show(Request $request, string $billId)

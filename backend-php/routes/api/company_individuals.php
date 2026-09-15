@@ -1,14 +1,14 @@
 <?php
 
-// Mirrors backend/app/routers/company_individuals.py. NOT yet
-// converted from the Python router (see docs/php-conversion-plan.md):
-// CSV/Excel export.
+// Mirrors backend/app/routers/company_individuals.py.
 
 use App\Http\Controllers\Api\CompanyIndividualController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.jwt')->prefix('company-individuals')->group(function () {
     Route::get('/', [CompanyIndividualController::class, 'index']);
+    Route::get('/export.csv', [CompanyIndividualController::class, 'exportCsv']);
+    Route::get('/export.xlsx', [CompanyIndividualController::class, 'exportExcel']);
     Route::post('/', [CompanyIndividualController::class, 'store']);
     Route::get('/{customer}', [CompanyIndividualController::class, 'show']);
     Route::patch('/{customer}', [CompanyIndividualController::class, 'update']);

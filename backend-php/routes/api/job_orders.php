@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.jwt')->prefix('job-orders')->group(function () {
     Route::get('/', [JobOrderController::class, 'index']);
+    Route::get('/export.csv', [JobOrderController::class, 'exportCsv']);
+    Route::get('/export.xlsx', [JobOrderController::class, 'exportExcel']);
     Route::post('/', [JobOrderController::class, 'store']);
     Route::get('/{jobOrder}', [JobOrderController::class, 'show']);
     Route::post('/{jobOrder}/assign', [JobOrderController::class, 'assign']);

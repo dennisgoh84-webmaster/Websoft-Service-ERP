@@ -4,13 +4,16 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
 use App\Exceptions\ContractRuleViolation;
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
+use App\Models\CompanyIndividual;
 use App\Models\Contract;
 use App\Models\ExcessUsageRecord;
 use App\Services\Authority;
 use App\Services\ExcessUsageService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -24,6 +27,11 @@ use Illuminate\Support\Facades\DB;
  */
 class ExcessUsageController extends Controller
 {
+    use SendsExports;
+
+    /** @var array<int, string> */
+    private const EXPORT_FIELDS = ['customer_name', 'excess_hours', 'treatment', 'reason', 'invoiced'];
+
     private const MODULE = 'service_contracts';
 
     private function present(ExcessUsageRecord $r): array
@@ -45,12 +53,64 @@ class ExcessUsageController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $query = ExcessUsageRecord::where('company_id', $user->company_id);
+        return $this->filtered($user->company_id, $request)
+            ->map(fn (ExcessUsageRecord $r) => $this->present($r))->values();
+    }
+
+    /**
+     * The list the screen shows, honouring its filter -- shared with
+     * the exports so an Export button always returns what is on
+     * screen.
+     *
+     * @return Collection<int, ExcessUsageRecord>
+     */
+    private function filtered(string $companyId, Request $request)
+    {
+        $query = ExcessUsageRecord::where('company_id', $companyId);
         if ($request->boolean('pending_only')) {
             $query->whereNull('treatment');
         }
 
-        return $query->get()->map(fn (ExcessUsageRecord $r) => $this->present($r))->values();
+        return $query->get();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function exportRows(string $companyId, Request $request): array
+    {
+        $records = $this->filtered($companyId, $request);
+        $contractCustomers = Contract::whereIn('id', $records->pluck('contract_id')->unique())
+            ->pluck('customer_id', 'id');
+        $customerNames = CompanyIndividual::where('company_id', $companyId)->pluck('name', 'id');
+
+        return $records->map(fn (ExcessUsageRecord $r) => [
+            // The excess belongs to a contract, and the contract to a
+            // customer -- an excess record has no customer of its own.
+            'customer_name' => $customerNames[$contractCustomers[$r->contract_id] ?? ''] ?? '',
+            'excess_hours' => number_format($r->excess_minutes / 60, 2, '.', ''),
+            'treatment' => $r->treatment ?? '',
+            'reason' => $r->reason ?? '',
+            'invoiced' => $r->invoiced,
+        ])->all();
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->csvResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'excess-usage.csv'
+        );
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->xlsxResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'Excess Usage', 'excess-usage.xlsx'
+        );
     }
 
     public function decide(Request $request, string $recordId)

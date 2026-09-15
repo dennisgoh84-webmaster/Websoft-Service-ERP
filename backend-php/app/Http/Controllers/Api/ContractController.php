@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
 use App\Exceptions\ContractRuleViolation;
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\CompanyIndividual;
@@ -16,6 +17,7 @@ use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\BillingService;
 use App\Services\ContractService;
+use App\Services\ReportsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -29,6 +31,15 @@ use Illuminate\Support\Facades\DB;
  */
 class ContractController extends Controller
 {
+    use SendsExports;
+
+    /** @var array<int, string> */
+    private const EXPORT_FIELDS = [
+        'contract_number', 'customer_name', 'contract_kind', 'status', 'contracted_hours',
+        'consumed_hours', 'remaining_hours', 'contract_value_sgd', 'hourly_rate_sgd',
+        'sales_staff', 'products', 'start_date', 'end_date',
+    ];
+
     private const MODULE = 'service_contracts';
 
     private function contractOrFail(string $companyId, string $contractId): Contract
@@ -175,6 +186,52 @@ class ContractController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
         return $this->filterContracts($request, $user->company_id)->map(fn ($c) => $this->present($c))->values();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function exportRows(string $companyId, Request $request): array
+    {
+        $contracts = $this->filterContracts($request, $companyId);
+        $customerNames = CompanyIndividual::where('company_id', $companyId)->pluck('name', 'id');
+        $staffNames = ReportsService::userNames($contracts->pluck('sales_staff_id'));
+
+        return $contracts->map(fn (Contract $c) => [
+            'contract_number' => $c->contract_number,
+            'customer_name' => $customerNames[$c->customer_id] ?? '',
+            'contract_kind' => $c->contract_kind,
+            'status' => $c->status,
+            'contracted_hours' => number_format($c->contracted_minutes / 60, 2, '.', ''),
+            'consumed_hours' => number_format($c->consumed_minutes / 60, 2, '.', ''),
+            'remaining_hours' => number_format($c->remainingMinutes() / 60, 2, '.', ''),
+            'contract_value_sgd' => number_format((float) $c->contract_value_sgd, 2, '.', ''),
+            'hourly_rate_sgd' => $c->hourly_rate_sgd === null
+                ? ''
+                : number_format((float) $c->hourly_rate_sgd, 2, '.', ''),
+            'sales_staff' => $c->sales_staff_id === null ? '' : ($staffNames[$c->sales_staff_id] ?? ''),
+            'products' => $c->products->map(fn (ContractProduct $cp) => $cp->product?->name)->filter()->implode(', '),
+            'start_date' => optional($c->start_date)->toDateString(),
+            'end_date' => optional($c->end_date)->toDateString(),
+        ])->all();
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->csvResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'contracts.csv'
+        );
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->xlsxResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'Contracts', 'contracts.xlsx'
+        );
     }
 
     /**

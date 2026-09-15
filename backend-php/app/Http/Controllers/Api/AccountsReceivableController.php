@@ -6,6 +6,7 @@ use App\Exceptions\ApiException;
 use App\Exceptions\ARRuleViolation;
 use App\Exceptions\PostingError;
 use App\Http\Controllers\Api\Concerns\SendsDocuments;
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Company;
@@ -38,6 +39,13 @@ use Illuminate\Support\Facades\DB;
  */
 class AccountsReceivableController extends Controller
 {
+    use SendsExports;
+
+    /** @var array<int, string> */
+    private const AGING_EXPORT_FIELDS = [
+        'customer_name', 'current', 'days_1_30', 'days_31_60', 'days_61_90', 'over_90', 'total',
+    ];
+
     use SendsDocuments;
 
     private const MODULE = 'accounts_receivable';
@@ -200,7 +208,7 @@ class AccountsReceivableController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $asAt = $request->filled('as_at') ? Carbon::parse($request->query('as_at')) : null;
+        $asAt = $this->asAt($request);
         [$resolvedAsAt, $rows] = AccountsReceivableService::agingRows($user->company_id, $asAt);
 
         return response()->json([
@@ -213,6 +221,52 @@ class AccountsReceivableController extends Controller
             'over_90' => array_sum(array_column($rows, 'over_90')),
             'total' => array_sum(array_column($rows, 'total')),
         ]);
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function agingExportRows(string $companyId, ?Carbon $asAt): array
+    {
+        [, $rows] = AccountsReceivableService::agingRows($companyId, $asAt);
+
+        return array_map(fn (array $r) => [
+            'customer_name' => $r['customer_name'],
+            'current' => number_format($r['current'], 2, '.', ''),
+            'days_1_30' => number_format($r['days_1_30'], 2, '.', ''),
+            'days_31_60' => number_format($r['days_31_60'], 2, '.', ''),
+            'days_61_90' => number_format($r['days_61_90'], 2, '.', ''),
+            'over_90' => number_format($r['over_90'], 2, '.', ''),
+            'total' => number_format($r['total'], 2, '.', ''),
+        ], $rows);
+    }
+
+    public function agingCsv(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->csvResponse(
+            self::AGING_EXPORT_FIELDS,
+            $this->agingExportRows($user->company_id, $this->asAt($request)),
+            'ar-aging.csv',
+        );
+    }
+
+    public function agingExcel(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->xlsxResponse(
+            self::AGING_EXPORT_FIELDS,
+            $this->agingExportRows($user->company_id, $this->asAt($request)),
+            'AR Aging',
+            'ar-aging.xlsx',
+        );
+    }
+
+    private function asAt(Request $request): ?Carbon
+    {
+        return $request->filled('as_at') ? Carbon::parse($request->query('as_at')) : null;
     }
 
     private function customerOrFail(string $companyId, string $customerId): CompanyIndividual
@@ -235,7 +289,7 @@ class AccountsReceivableController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
         $customer = $this->customerOrFail($user->company_id, $customerId);
-        $asAt = $request->filled('as_at') ? Carbon::parse($request->query('as_at')) : null;
+        $asAt = $this->asAt($request);
 
         return response()->json(
             AccountsReceivableService::buildCustomerStatement($customer, $user->company_id, $asAt)
@@ -249,7 +303,7 @@ class AccountsReceivableController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
         $customer = $this->customerOrFail($user->company_id, $customerId);
-        $asAt = $request->filled('as_at') ? Carbon::parse($request->query('as_at')) : null;
+        $asAt = $this->asAt($request);
         $statement = AccountsReceivableService::buildCustomerStatement($customer, $user->company_id, $asAt);
         $company = Company::find($user->company_id);
 
@@ -272,7 +326,7 @@ class AccountsReceivableController extends Controller
         if (! $customer->billing_email) {
             throw new ApiException(422, 'This customer has no email on file -- add one on the Company/Individual page first.');
         }
-        $asAt = $request->filled('as_at') ? Carbon::parse($request->query('as_at')) : null;
+        $asAt = $this->asAt($request);
         $statement = AccountsReceivableService::buildCustomerStatement($customer, $user->company_id, $asAt);
         $company = Company::find($user->company_id);
         $companyName = $this->companyName($company);

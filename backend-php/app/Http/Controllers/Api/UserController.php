@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\AuditLogEntry;
@@ -14,6 +15,7 @@ use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\PasswordPolicy;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
@@ -34,6 +36,11 @@ use InvalidArgumentException;
  */
 class UserController extends Controller
 {
+    use SendsExports;
+
+    /** @var array<int, string> */
+    private const EXPORT_FIELDS = ['full_name', 'email', 'role', 'group_name', 'is_active'];
+
     private const MODULE = 'core_administration';
 
     private const MAX_PHOTO_CHARS = 400_000; // ~300 KB of base64
@@ -96,12 +103,62 @@ class UserController extends Controller
     {
         $user = Authenticate::user($request);
 
-        $query = User::where('company_id', $user->company_id);
+        return $this->filtered($user->company_id, $request)
+            ->map(fn ($u) => $this->present($u, $user->company_id))->values();
+    }
+
+    /**
+     * The list the screen shows, honouring its filter -- shared with
+     * the exports so an Export button always returns what is on
+     * screen.
+     *
+     * @return Collection<int, User>
+     */
+    private function filtered(string $companyId, Request $request)
+    {
+        $query = User::where('company_id', $companyId);
         if (! $request->boolean('include_inactive')) {
             $query->where('is_active', true);
         }
 
-        return $query->orderBy('full_name')->get()->map(fn ($u) => $this->present($u, $user->company_id))->values();
+        return $query->orderBy('full_name')->get();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function exportRows(string $companyId, Request $request): array
+    {
+        $users = $this->filtered($companyId, $request);
+        $groupIds = UserCompanyAccess::whereIn('user_id', $users->pluck('id'))
+            ->where('company_id', $companyId)->pluck('group_id')->filter()->unique();
+        $groupNames = $groupIds->isEmpty() ? collect() : Group::whereIn('id', $groupIds)->pluck('name', 'id');
+
+        return $users->map(function (User $u) use ($companyId, $groupNames) {
+            $groupId = $this->accessRow($u->id, $companyId)?->group_id;
+
+            return [
+                'full_name' => $u->full_name,
+                'email' => $u->email,
+                'role' => $u->role,
+                'group_name' => $groupId === null ? '' : ($groupNames[$groupId] ?? ''),
+                'is_active' => $u->is_active,
+            ];
+        })->all();
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = Authenticate::user($request);
+
+        return $this->csvResponse(self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'users.csv');
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $user = Authenticate::user($request);
+
+        return $this->xlsxResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'Users', 'users.xlsx'
+        );
     }
 
     public function store(Request $request)

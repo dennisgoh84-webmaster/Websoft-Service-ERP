@@ -8,5 +8,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.jwt')->prefix('excess-usage')->group(function () {
     Route::get('/', [ExcessUsageController::class, 'index']);
+    Route::get('/export.csv', [ExcessUsageController::class, 'exportCsv']);
+    Route::get('/export.xlsx', [ExcessUsageController::class, 'exportExcel']);
     Route::post('/{excessUsage}/decide', [ExcessUsageController::class, 'decide']);
 });

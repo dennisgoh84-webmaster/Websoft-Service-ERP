@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Exceptions\ApiException;
 use App\Exceptions\PayablesRuleViolation;
 use App\Http\Controllers\Api\Concerns\SendsDocuments;
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Company;
@@ -20,6 +21,7 @@ use App\Services\Tax;
 use App\Support\Money;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -33,6 +35,14 @@ use Illuminate\Support\Facades\DB;
  */
 class PurchaseOrderController extends Controller
 {
+    use SendsExports;
+
+    /** @var array<int, string> */
+    private const EXPORT_FIELDS = [
+        'po_number', 'supplier_name', 'order_date', 'description', 'amount_sgd',
+        'gst_amount_sgd', 'total_amount_sgd', 'status',
+    ];
+
     use SendsDocuments;
 
     private const MODULE = 'accounts_payable';
@@ -81,15 +91,65 @@ class PurchaseOrderController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $query = PurchaseOrder::where('company_id', $user->company_id);
-        if ($request->filled('supplier_id')) {
-            $query->where('supplier_id', $request->query('supplier_id'));
-        }
-        if ($request->filled('status')) {
-            $query->where('status', $request->query('status'));
+        return $this->filtered($user->company_id, $request)
+            ->map(fn (PurchaseOrder $po) => $this->present($po))->values();
+    }
+
+    /**
+     * The list the screen shows, honouring its filters -- shared with
+     * the exports so an Export button always returns what is on
+     * screen.
+     *
+     * @return Collection<int, PurchaseOrder>
+     */
+    private function filtered(string $companyId, Request $request)
+    {
+        $query = PurchaseOrder::where('company_id', $companyId);
+        foreach (['supplier_id', 'status'] as $field) {
+            if ($request->filled($field)) {
+                $query->where($field, $request->query($field));
+            }
         }
 
-        return $query->orderByDesc('order_date')->get()->map(fn (PurchaseOrder $po) => $this->present($po))->values();
+        return $query->orderByDesc('order_date')->get();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function exportRows(string $companyId, Request $request): array
+    {
+        $supplierNames = CompanyIndividual::where('company_id', $companyId)->pluck('name', 'id');
+
+        return $this->filtered($companyId, $request)->map(fn (PurchaseOrder $po) => [
+            'po_number' => $po->po_number,
+            'supplier_name' => $supplierNames[$po->supplier_id] ?? '',
+            'order_date' => optional($po->order_date)->toDateString(),
+            'description' => $po->description,
+            'amount_sgd' => number_format((float) $po->amount_sgd, 2, '.', ''),
+            'gst_amount_sgd' => number_format((float) $po->gst_amount_sgd, 2, '.', ''),
+            'total_amount_sgd' => number_format((float) $po->total_amount_sgd, 2, '.', ''),
+            'status' => $po->status,
+        ])->all();
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->csvResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'purchase-orders.csv'
+        );
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->xlsxResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request),
+            'Purchase Orders', 'purchase-orders.xlsx'
+        );
     }
 
     public function show(Request $request, string $poId)

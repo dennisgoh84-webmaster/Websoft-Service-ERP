@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Account;
 use App\Services\Audit;
 use App\Services\Authority;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 /**
  * Chart of Accounts maintenance. Mirrors
@@ -17,11 +19,14 @@ use Illuminate\Http\Request;
  * starting point (confirmed approach, 2026-09-10), not a decided
  * chart -- this API is how it gets adjusted to how Webmaster actually
  * wants its books structured.
- *
- * NOT yet converted: CSV/Excel export.
  */
 class AccountController extends Controller
 {
+    use SendsExports;
+
+    /** @var array<int, string> */
+    private const EXPORT_FIELDS = ['code', 'name', 'account_type', 'description', 'is_active'];
+
     private const MODULE = 'finance_accounting';
 
     private function present(Account $account): array
@@ -41,7 +46,19 @@ class AccountController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $query = Account::where('company_id', $user->company_id);
+        return $this->filtered($user->company_id, $request)->map(fn (Account $a) => $this->present($a))->values();
+    }
+
+    /**
+     * The list the screen shows, honouring its filters -- shared with
+     * the exports so an Export button always returns what is on
+     * screen.
+     *
+     * @return Collection<int, Account>
+     */
+    private function filtered(string $companyId, Request $request)
+    {
+        $query = Account::where('company_id', $companyId);
         if (! $request->boolean('include_inactive')) {
             $query->where('is_active', true);
         }
@@ -49,7 +66,40 @@ class AccountController extends Controller
             $query->where('account_type', $request->query('account_type'));
         }
 
-        return $query->orderBy('code')->get()->map(fn (Account $a) => $this->present($a))->values();
+        return $query->orderBy('code')->get();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function exportRows(string $companyId, Request $request): array
+    {
+        return $this->filtered($companyId, $request)->map(fn (Account $a) => [
+            'code' => $a->code,
+            'name' => $a->name,
+            'account_type' => $a->account_type,
+            'description' => $a->description ?? '',
+            'is_active' => $a->is_active,
+        ])->all();
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->csvResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'chart-of-accounts.csv'
+        );
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->xlsxResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request),
+            'Chart of Accounts', 'chart-of-accounts.xlsx'
+        );
     }
 
     public function store(Request $request)

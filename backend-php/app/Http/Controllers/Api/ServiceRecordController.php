@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Exceptions\ApiException;
 use App\Exceptions\ContractRuleViolation;
 use App\Http\Controllers\Api\Concerns\SendsDocuments;
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Company;
@@ -15,8 +16,10 @@ use App\Models\User;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\DocxForms;
+use App\Services\ReportsService;
 use App\Services\ServiceRecordService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -32,6 +35,15 @@ use Illuminate\Support\Facades\DB;
  */
 class ServiceRecordController extends Controller
 {
+    use SendsExports;
+
+    /** @var array<int, string> */
+    private const EXPORT_FIELDS = [
+        'service_record_number', 'job_order_subject', 'employee_name', 'work_date', 'raw_minutes',
+        'rounded_minutes', 'deducted_minutes', 'completion_status', 'is_after_hours', 'status',
+        'outcome', 'is_late',
+    ];
+
     use SendsDocuments;
 
     private const MODULE = 'service_records';
@@ -154,18 +166,72 @@ class ServiceRecordController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $query = ServiceRecord::where('company_id', $user->company_id);
-        if ($request->filled('job_order_id')) {
-            $query->where('job_order_id', $request->query('job_order_id'));
-        }
-        if ($request->filled('employee_user_id')) {
-            $query->where('employee_user_id', $request->query('employee_user_id'));
-        }
-        if ($request->filled('status')) {
-            $query->where('status', $request->query('status'));
+        return $this->filtered($user->company_id, $request)->map(fn ($r) => $this->present($r))->values();
+    }
+
+    /**
+     * The list the screen shows, honouring every filter -- shared with
+     * the exports so an Export button always returns what is on
+     * screen.
+     *
+     * @return Collection<int, ServiceRecord>
+     */
+    private function filtered(string $companyId, Request $request)
+    {
+        $query = ServiceRecord::where('company_id', $companyId);
+        foreach (['job_order_id', 'employee_user_id', 'status'] as $field) {
+            if ($request->filled($field)) {
+                $query->where($field, $request->query($field));
+            }
         }
 
-        return $query->orderByDesc('work_date')->get()->map(fn ($r) => $this->present($r))->values();
+        return $query->orderByDesc('work_date')->get();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function exportRows(string $companyId, Request $request): array
+    {
+        $records = $this->filtered($companyId, $request);
+        $subjects = JobOrder::whereIn('id', $records->pluck('job_order_id')->unique())->pluck('subject', 'id');
+        $employeeNames = ReportsService::userNames($records->pluck('employee_user_id'));
+
+        return $records->map(fn (ServiceRecord $r) => [
+            'service_record_number' => $r->service_record_number,
+            'job_order_subject' => $subjects[$r->job_order_id] ?? '',
+            'employee_name' => $employeeNames[$r->employee_user_id] ?? '',
+            'work_date' => optional($r->work_date)->toDateString(),
+            'raw_minutes' => $r->raw_minutes,
+            'rounded_minutes' => $r->rounded_minutes,
+            // Blank, not zero, while the approver has not decided how
+            // much to deduct -- undecided is not "nothing deducted".
+            'deducted_minutes' => $r->deducted_minutes ?? '',
+            'completion_status' => $r->completion_status,
+            'is_after_hours' => $r->is_after_hours,
+            'status' => $r->status,
+            'outcome' => $r->outcome,
+            'is_late' => $r->isLate(),
+        ])->all();
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->csvResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'service-records.csv'
+        );
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->xlsxResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request),
+            'Service Records', 'service-records.xlsx'
+        );
     }
 
     public function show(Request $request, string $recordId)

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Api\Concerns\SendsDocuments;
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Company;
@@ -14,6 +15,7 @@ use App\Services\Authority;
 use App\Services\DocxForms;
 use App\Services\Posting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 /**
  * Sales invoices. Mirrors backend/app/routers/billing.py -- see
@@ -29,6 +31,15 @@ use Illuminate\Http\Request;
  */
 class InvoiceController extends Controller
 {
+    use SendsExports;
+
+    /** @var array<int, string> */
+    private const EXPORT_FIELDS = [
+        'invoice_number', 'customer_name', 'invoice_type', 'description',
+        'amount_sgd', 'gst_amount_sgd', 'total_amount_sgd', 'outstanding_sgd',
+        'status', 'issued_at', 'due_date',
+    ];
+
     use SendsDocuments;
 
     private const MODULE = 'billing';
@@ -66,15 +77,68 @@ class InvoiceController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $query = Invoice::where('company_id', $user->company_id);
-        if ($request->filled('customer_id')) {
-            $query->where('customer_id', $request->query('customer_id'));
-        }
-        if ($request->filled('contract_id')) {
-            $query->where('contract_id', $request->query('contract_id'));
+        return $this->filtered($user->company_id, $request)->map(fn (Invoice $i) => $this->present($i))->values();
+    }
+
+    /**
+     * The list the screen shows, honouring its filters -- shared with
+     * the exports so an Export button always returns what is on
+     * screen.
+     *
+     * @return Collection<int, Invoice>
+     */
+    private function filtered(string $companyId, Request $request)
+    {
+        $query = Invoice::where('company_id', $companyId);
+        foreach (['customer_id', 'contract_id'] as $field) {
+            if ($request->filled($field)) {
+                $query->where($field, $request->query($field));
+            }
         }
 
-        return $query->orderByDesc('issued_at')->get()->map(fn (Invoice $i) => $this->present($i))->values();
+        return $query->orderByDesc('issued_at')->get();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function exportRows(string $companyId, Request $request): array
+    {
+        $customerNames = CompanyIndividual::where('company_id', $companyId)->pluck('name', 'id');
+
+        return $this->filtered($companyId, $request)->map(fn (Invoice $i) => [
+            'invoice_number' => $i->invoice_number,
+            'customer_name' => $customerNames[$i->customer_id] ?? '',
+            'invoice_type' => $i->invoice_type,
+            'description' => $i->description,
+            'amount_sgd' => number_format((float) $i->amount_sgd, 2, '.', ''),
+            'gst_amount_sgd' => number_format((float) $i->gst_amount_sgd, 2, '.', ''),
+            'total_amount_sgd' => number_format((float) $i->total_amount_sgd, 2, '.', ''),
+            'outstanding_sgd' => $i->outstandingSgd()->toString(),
+            'status' => $i->status,
+            // The date only: an exact issue time is more than a
+            // listing needs.
+            'issued_at' => optional($i->issued_at)->toDateString(),
+            'due_date' => optional($i->due_date)->toDateString() ?? '',
+        ])->all();
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->csvResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'invoices.csv'
+        );
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->xlsxResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'Invoices', 'invoices.xlsx'
+        );
     }
 
     public function show(Request $request, string $invoiceId)

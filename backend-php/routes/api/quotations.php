@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.jwt')->prefix('quotations')->group(function () {
     Route::get('/', [QuotationController::class, 'index']);
+    Route::get('/export.csv', [QuotationController::class, 'exportCsv']);
+    Route::get('/export.xlsx', [QuotationController::class, 'exportExcel']);
     Route::post('/', [QuotationController::class, 'store']);
     Route::get('/{quotation}', [QuotationController::class, 'show']);
     Route::post('/{quotation}/send', [QuotationController::class, 'send']);

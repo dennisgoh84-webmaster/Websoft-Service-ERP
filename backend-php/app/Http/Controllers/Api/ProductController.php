@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Product;
@@ -11,17 +12,24 @@ use App\Models\ProductImplementationTemplateTask;
 use App\Services\Audit;
 use App\Services\Authority;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Product/Service Catalog. Mirrors backend/app/routers/catalog.py --
  * see App\Models\Product for field rationale. Backs Sales Quotation
  * lines (not yet converted -- see docs/php-conversion-plan.md).
- *
- * NOT yet converted from the Python router: CSV/Excel export.
  */
 class ProductController extends Controller
 {
+    use SendsExports;
+
+    /** @var array<int, string> */
+    private const EXPORT_FIELDS = [
+        'name', 'product_type', 'internal_reference', 'product_category', 'tags',
+        'sales_price_sgd', 'cost_sgd', 'unit_of_measure', 'tax_code', 'is_active',
+    ];
+
     // Gated by "sales", not "company_individual_management" -- matches
     // the Python router's MODULE constant exactly.
     private const MODULE = 'sales';
@@ -67,12 +75,61 @@ class ProductController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $query = Product::where('company_id', $user->company_id);
+        return $this->filtered($user->company_id, $request)->map(fn ($p) => $this->present($p))->values();
+    }
+
+    /**
+     * The list the screen shows, honouring its filter -- shared with
+     * the exports so an Export button always returns what is on
+     * screen.
+     *
+     * @return Collection<int, Product>
+     */
+    private function filtered(string $companyId, Request $request)
+    {
+        $query = Product::where('company_id', $companyId);
         if (! $request->boolean('include_inactive')) {
             $query->where('is_active', true);
         }
 
-        return $query->orderBy('name')->get()->map(fn ($p) => $this->present($p))->values();
+        return $query->orderBy('name')->get();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function exportRows(string $companyId, Request $request): array
+    {
+        return $this->filtered($companyId, $request)->map(fn (Product $p) => [
+            'name' => $p->name,
+            'product_type' => $p->product_type,
+            'internal_reference' => $p->internal_reference ?? '',
+            'product_category' => $p->product_category ?? '',
+            'tags' => $p->tags ?? '',
+            'sales_price_sgd' => number_format((float) $p->sales_price_sgd, 2, '.', ''),
+            'cost_sgd' => $p->cost_sgd === null ? '' : number_format((float) $p->cost_sgd, 2, '.', ''),
+            'unit_of_measure' => $p->unit_of_measure ?? '',
+            'tax_code' => $p->tax_code,
+            'is_active' => $p->is_active,
+        ])->all();
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->csvResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'catalog.csv'
+        );
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->xlsxResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'Catalog', 'catalog.xlsx'
+        );
     }
 
     public function store(Request $request)

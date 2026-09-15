@@ -2475,6 +2475,60 @@ different Module Control keys, exactly as Python splits them.
   Receivable: its write-off endpoint now raises the commission clawback,
   as Python's does.
 
+### CSV/Excel export on every list screen (converted 2026-09-15)
+
+The last export format missing from `backend-php` -- the `.docx`/PDF/
+Email half landed with the document generation stack, and
+`App\Services\Exports` (the port of `exports.py`) landed with Tax
+Types. This wires that helper into the eighteen list screens that were
+still without it, so **every `export.csv`/`export.xlsx` route in
+`backend/app/routers/` now has a PHP equivalent** (89 export routes in
+`backend-php` against Python's 79 -- the surplus is this project's own
+report screens).
+
+Wired up: Chart of Accounts, Bank Accounts, Catalog, Company/
+Individuals, Groups, Users, Contracts, Job Orders, Service Records,
+Excess Usage, Invoices, Quotations, AR aging, AR receipts, AP aging,
+AP bills, AP payment vouchers and Purchase Orders. Field lists and row
+shapes are Python's, column for column.
+
+- **`App\Http\Controllers\Api\Concerns\SendsExports`** -- the two
+  download responses, in one trait rather than repeated per
+  controller, the same way `SendsDocuments` already holds the .docx
+  one. The two report controllers moved onto it too.
+
+- **The export always returns WHAT IS ON SCREEN.** Each controller's
+  list filter is extracted into one `filtered()` the index endpoint
+  and both exports share, so an export can never quietly ignore a
+  filter the screen applied. (Python's job-order export helper takes
+  four of that screen's five filters and drops `job_order_type`, so
+  there a filtered screen CAN export rows it is not showing; sharing
+  one filter here means it cannot. This is a deliberate divergence,
+  and the only behavioural one in this pass.) Every test asserts the
+  excluded row is absent, not merely that the included one is present
+  -- a "did it download" assertion would pass against an export that
+  ignored every filter.
+
+- **A REAL FIDELITY BUG FIXED IN `App\Services\Exports`:** its CSV
+  writer used PHP's `fputcsv()`, which quotes any field containing a
+  SPACE and ends records with `\n`. Python's `csv.writer` defaults
+  quote only on a delimiter, quote or line break (QUOTE_MINIMAL) and
+  end records with `\r\n`. So every converted export was emitting
+  `SR,"Standard Rated",9.00` where Python emits
+  `SR,Standard Rated,9.00`. Both open identically in Excel, which is
+  why it went unnoticed, but it is exactly the drift this conversion
+  exists to avoid. Replaced with a small writer matching Python's
+  defaults; the one test that had encoded the PHP spelling was
+  corrected (it was asserting the bug).
+
+Still open, and unchanged by this pass: `App\Services\ExportService`
+(the older writer whose "Excel" is an HTML table with a `.xls` name)
+still serves the report screens built directly in `backend-php` --
+the Contract Operation Report and the Sales Dashboard drill-downs.
+Moving those onto the real-xlsx writer is follow-up work; it changes
+what those screens download, so it is not something to fold into a
+conversion pass.
+
 ## Not yet converted (pending, in rough priority order)
 
 Everything below still only exists in `backend/` (Python). Each is a
@@ -2485,15 +2539,15 @@ smoke test:
 1. **Nothing.** Every router in `backend/app/routers/` now has a PHP
    equivalent. What remains below is retrofitting and follow-ups, not
    conversion.
-2. CSV/Excel export (`app/services/exports.py` plus the
-   `export.csv`/`export.xlsx` route on nearly every list screen). This
-   is now the only export format still missing on the converted
-   modules: the `.docx`/PDF/Email half is done (see "Document
-   generation stack" above). `App\Services\ExportService` already
-   exists for the report screens built directly in `backend-php/`, so
-   this is mostly a matter of wiring each module's own column list to
-   it -- but note its "Excel" output is an HTML table, not a real
-   .xlsx, which is a decision to revisit before adopting it wholesale.
+2. Consolidating the two export writers. Every Python export route is
+   converted (see "CSV/Excel export on every list screen" above), and
+   they all use `App\Services\Exports` -- real CSV, real .xlsx. The
+   older `App\Services\ExportService`, whose "Excel" is an HTML table
+   with a `.xls` name, still serves the report screens built directly
+   in `backend-php/` (Contract Operation Report, Sales Dashboard
+   drill-downs). Moving those onto the real writer changes what those
+   screens download, so it wants saying out loud rather than doing
+   silently.
 3. Follow-ups raised by the Inventory/Stock conversion, each small and
    waiting on a decision rather than on code: moving the four stock
    documents off their count-based numbering onto

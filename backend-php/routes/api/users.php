@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.jwt')->prefix('users')->group(function () {
     Route::get('/', [UserController::class, 'index']);
+    Route::get('/export.csv', [UserController::class, 'exportCsv']);
+    Route::get('/export.xlsx', [UserController::class, 'exportExcel']);
     Route::post('/', [UserController::class, 'store']);
     Route::get('/{user}', [UserController::class, 'show']);
     Route::patch('/{user}', [UserController::class, 'update']);

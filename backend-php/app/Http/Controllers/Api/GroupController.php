@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Group;
@@ -20,6 +21,11 @@ use Illuminate\Http\Request;
  */
 class GroupController extends Controller
 {
+    use SendsExports;
+
+    /** @var array<int, string> */
+    private const EXPORT_FIELDS = ['name', 'description', 'member_count'];
+
     private const MODULE = 'core_administration';
 
     private function groupOrFail(string $groupId): Group
@@ -95,6 +101,48 @@ class GroupController extends Controller
         $groups = Group::with('authorities')->where('company_id', $targetCompanyId)->orderBy('name')->get();
 
         return $groups->map(fn ($g) => $this->present($g))->values();
+    }
+
+    /**
+     * Which company's groups this request is for -- the caller's own
+     * unless they name another they have access to. Shared with the
+     * exports so they can never read a company the list would refuse.
+     */
+    private function targetCompanyId(Request $request, $user): string
+    {
+        $companyId = $request->query('company_id');
+        if ($companyId !== null && ! in_array($companyId, CompanyController::accessibleCompanyIds($user), true)) {
+            throw new ApiException(403, 'You do not have access to this company.');
+        }
+
+        return $companyId ?? $user->company_id;
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function exportRows(Request $request, $user): array
+    {
+        return Group::where('company_id', $this->targetCompanyId($request, $user))
+            ->orderBy('name')->get()->map(fn (Group $g) => [
+                'name' => $g->name,
+                'description' => $g->description ?? '',
+                'member_count' => $this->memberCount($g->id),
+            ])->all();
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, GroupModuleAuthority::VIEW);
+
+        return $this->csvResponse(self::EXPORT_FIELDS, $this->exportRows($request, $user), 'groups.csv');
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, GroupModuleAuthority::VIEW);
+
+        return $this->xlsxResponse(self::EXPORT_FIELDS, $this->exportRows($request, $user), 'Groups', 'groups.xlsx');
     }
 
     public function show(Request $request, string $groupId)

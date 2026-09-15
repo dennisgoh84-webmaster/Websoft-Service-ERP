@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.jwt')->prefix('contracts')->group(function () {
     Route::get('/', [ContractController::class, 'index']);
+    Route::get('/export.csv', [ContractController::class, 'exportCsv']);
+    Route::get('/export.xlsx', [ContractController::class, 'exportExcel']);
     Route::post('/', [ContractController::class, 'store']);
     Route::get('/{contract}', [ContractController::class, 'show']);
     Route::patch('/{contract}', [ContractController::class, 'update']);

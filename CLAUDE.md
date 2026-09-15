@@ -338,11 +338,20 @@ of writing document text unescaped meant a literal "&" -- which every
 Service Record carries in "Signature & Company Stamp" -- produced a
 file Word silently repairs but LibreOffice refuses, so the Word
 download looked fine while the PDF behind every Email button failed.
-**Partly closed since:** CSV/Excel export, a different Python
-service (`exports.py`), has been ported as `App\Services\Exports` and
-wired into the modules converted after it (Tax Types onward, the
-ledger, and all of Management Reporting). **Still a KNOWN GAP:**
-retrofitting it onto the modules converted before it.
+**Closed since:** CSV/Excel export, a different Python service
+(`exports.py`), is ported as `App\Services\Exports` and wired into
+every list screen, so **every export route Python has now exists in
+`backend-php` too**. Each controller's list filter is shared with its
+exports, so an Export button always returns what is on screen. A
+fidelity bug was fixed on the way: the CSV writer used PHP's
+`fputcsv()`, which quotes any field containing a space and ends
+records with a bare newline, where Python quotes only where a field
+needs it and ends records with CRLF -- so every export was emitting
+`SR,"Standard Rated",9.00` against Python's `SR,Standard Rated,9.00`.
+**One thing still open:** the older `ExportService` (its "Excel" is an
+HTML table named `.xls`) still serves the report screens built
+directly in `backend-php`; moving those onto the real writer changes
+what they download.
 
 `backend/` (Python) is untouched and keeps running as the system of
 record until each remaining module is converted, module by module,

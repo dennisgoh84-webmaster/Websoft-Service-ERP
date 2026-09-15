@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Contract;
@@ -11,7 +12,6 @@ use App\Models\ServiceRecord;
 use App\Models\User;
 use App\Services\Audit;
 use App\Services\Authority;
-use App\Services\Exports;
 use App\Services\ReportsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -35,6 +35,8 @@ use Illuminate\Support\Collection;
  */
 class OperationsReportController extends Controller
 {
+    use SendsExports;
+
     private const MODULE = 'operations_reports';
 
     /**
@@ -88,7 +90,7 @@ class OperationsReportController extends Controller
         $rows = $this->contractRows($user->company_id, $request);
         $this->auditExport($user, 'Operations Report: Contracts', 'csv', count($rows));
 
-        return $this->csv(Exports::rowsToCsv(self::CONTRACT_FIELDS, $rows), 'contracts-report.csv');
+        return $this->csvResponse(self::CONTRACT_FIELDS, $rows, 'contracts-report.csv');
     }
 
     public function contractsExcel(Request $request)
@@ -97,7 +99,7 @@ class OperationsReportController extends Controller
         $rows = $this->contractRows($user->company_id, $request);
         $this->auditExport($user, 'Operations Report: Contracts', 'excel', count($rows));
 
-        return $this->xlsx(Exports::rowsToExcel(self::CONTRACT_FIELDS, $rows, 'Contracts'), 'contracts-report.xlsx');
+        return $this->xlsxResponse(self::CONTRACT_FIELDS, $rows, 'Contracts', 'contracts-report.xlsx');
     }
 
     /** @return Collection<int, Contract> */
@@ -179,7 +181,7 @@ class OperationsReportController extends Controller
         $rows = $this->jobOrderRows($user->company_id, $request);
         $this->auditExport($user, 'Operations Report: Job Orders', 'csv', count($rows));
 
-        return $this->csv(Exports::rowsToCsv(self::JOB_ORDER_FIELDS, $rows), 'job-orders-report.csv');
+        return $this->csvResponse(self::JOB_ORDER_FIELDS, $rows, 'job-orders-report.csv');
     }
 
     public function jobOrdersExcel(Request $request)
@@ -188,7 +190,7 @@ class OperationsReportController extends Controller
         $rows = $this->jobOrderRows($user->company_id, $request);
         $this->auditExport($user, 'Operations Report: Job Orders', 'excel', count($rows));
 
-        return $this->xlsx(Exports::rowsToExcel(self::JOB_ORDER_FIELDS, $rows, 'Job Orders'), 'job-orders-report.xlsx');
+        return $this->xlsxResponse(self::JOB_ORDER_FIELDS, $rows, 'Job Orders', 'job-orders-report.xlsx');
     }
 
     /** @return Collection<int, JobOrder> */
@@ -283,7 +285,7 @@ class OperationsReportController extends Controller
         $rows = $this->serviceRecordRows($user->company_id, $request);
         $this->auditExport($user, 'Operations Report: Service Records', 'csv', count($rows));
 
-        return $this->csv(Exports::rowsToCsv(self::SERVICE_RECORD_FIELDS, $rows), 'service-records-report.csv');
+        return $this->csvResponse(self::SERVICE_RECORD_FIELDS, $rows, 'service-records-report.csv');
     }
 
     public function serviceRecordsExcel(Request $request)
@@ -292,10 +294,7 @@ class OperationsReportController extends Controller
         $rows = $this->serviceRecordRows($user->company_id, $request);
         $this->auditExport($user, 'Operations Report: Service Records', 'excel', count($rows));
 
-        return $this->xlsx(
-            Exports::rowsToExcel(self::SERVICE_RECORD_FIELDS, $rows, 'Service Records'),
-            'service-records-report.xlsx'
-        );
+        return $this->xlsxResponse(self::SERVICE_RECORD_FIELDS, $rows, 'Service Records', 'service-records-report.xlsx');
     }
 
     /** @return Collection<int, ServiceRecord> */
@@ -376,7 +375,7 @@ class OperationsReportController extends Controller
         $rows = $this->usageExportRows($user->company_id, $request);
         $this->auditExport($user, self::USAGE_REPORT_NAME, 'csv', count($rows));
 
-        return $this->csv(Exports::rowsToCsv(self::USAGE_FIELDS, $rows), 'customer-product-usage.csv');
+        return $this->csvResponse(self::USAGE_FIELDS, $rows, 'customer-product-usage.csv');
     }
 
     public function customerProductUsageExcel(Request $request)
@@ -385,10 +384,7 @@ class OperationsReportController extends Controller
         $rows = $this->usageExportRows($user->company_id, $request);
         $this->auditExport($user, self::USAGE_REPORT_NAME, 'excel', count($rows));
 
-        return $this->xlsx(
-            Exports::rowsToExcel(self::USAGE_FIELDS, $rows, 'Company Individual Product Usage'),
-            'customer-product-usage.xlsx'
-        );
+        return $this->xlsxResponse(self::USAGE_FIELDS, $rows, 'Company Individual Product Usage', 'customer-product-usage.xlsx');
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -444,21 +440,5 @@ class OperationsReportController extends Controller
             $reportName,
             "{$reportName} exported as ".strtoupper($format)." ({$rowCount} {$plural})",
         );
-    }
-
-    private function csv(string $body, string $filename)
-    {
-        return response($body, 200, [
-            'Content-Type' => 'text/csv',
-            'Content-Disposition' => "attachment; filename={$filename}",
-        ]);
-    }
-
-    private function xlsx(string $body, string $filename)
-    {
-        return response($body, 200, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => "attachment; filename={$filename}",
-        ]);
     }
 }

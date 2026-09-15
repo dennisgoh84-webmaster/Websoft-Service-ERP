@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
 use App\Exceptions\ContractRuleViolation;
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
+use App\Models\CompanyIndividual;
 use App\Models\Contract;
 use App\Models\JobOrder;
 use App\Models\JobOrderImplementationTask;
@@ -18,8 +20,10 @@ use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\JobOrderImplementationTaskService;
 use App\Services\Numbering;
+use App\Services\ReportsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -30,6 +34,14 @@ use Illuminate\Support\Facades\DB;
  */
 class JobOrderController extends Controller
 {
+    use SendsExports;
+
+    /** @var array<int, string> */
+    private const EXPORT_FIELDS = [
+        'job_order_number', 'subject', 'job_order_type', 'customer_name', 'priority', 'status',
+        'is_urgent', 'assigned_to', 'due_date', 'created_at',
+    ];
+
     private const MODULE = 'service_operations';
 
     // Sales Manager (Cherish) or Owner -- budget overrun approval (7.1)
@@ -244,24 +256,73 @@ class JobOrderController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $query = JobOrder::with(['milestones', 'products.product', 'implementationTasks'])->where('company_id', $user->company_id);
-        if ($request->filled('status')) {
-            $query->where('status', $request->query('status'));
-        }
-        if ($request->filled('priority')) {
-            $query->where('priority', $request->query('priority'));
-        }
-        if ($request->filled('customer_id')) {
-            $query->where('customer_id', $request->query('customer_id'));
-        }
-        if ($request->filled('contract_id')) {
-            $query->where('contract_id', $request->query('contract_id'));
-        }
-        if ($request->filled('job_order_type')) {
-            $query->where('job_order_type', $request->query('job_order_type'));
+        return $this->filtered($user->company_id, $request)->map(fn ($jo) => $this->present($jo))->values();
+    }
+
+    /**
+     * The list the screen shows, honouring every filter -- shared with
+     * the exports so an Export button always returns what is on
+     * screen. (Python's export helper takes four of these five
+     * filters and drops `job_order_type`, so a filtered screen there
+     * can export rows it is not showing; sharing one filter here means
+     * that cannot happen.)
+     *
+     * @return Collection<int, JobOrder>
+     */
+    private function filtered(string $companyId, Request $request)
+    {
+        $query = JobOrder::with(['milestones', 'products.product', 'implementationTasks'])
+            ->where('company_id', $companyId);
+        foreach (['status', 'priority', 'customer_id', 'contract_id', 'job_order_type'] as $field) {
+            if ($request->filled($field)) {
+                $query->where($field, $request->query($field));
+            }
         }
 
-        return $query->orderByDesc('created_at')->get()->map(fn ($jo) => $this->present($jo))->values();
+        return $query->orderByDesc('created_at')->get();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function exportRows(string $companyId, Request $request): array
+    {
+        $orders = $this->filtered($companyId, $request);
+        $customerNames = CompanyIndividual::where('company_id', $companyId)->pluck('name', 'id');
+        $assigneeNames = ReportsService::userNames($orders->pluck('assigned_to_user_id'));
+
+        return $orders->map(fn (JobOrder $jo) => [
+            'job_order_number' => $jo->job_order_number,
+            'subject' => $jo->subject,
+            'job_order_type' => $jo->job_order_type,
+            'customer_name' => $customerNames[$jo->customer_id] ?? '',
+            'priority' => $jo->priority,
+            'status' => $jo->status,
+            'is_urgent' => $jo->is_urgent,
+            'assigned_to' => $jo->assigned_to_user_id === null
+                ? ''
+                : ($assigneeNames[$jo->assigned_to_user_id] ?? ''),
+            'due_date' => optional($jo->due_date)->toDateString() ?? '',
+            'created_at' => optional($jo->created_at)->toIso8601String(),
+        ])->all();
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->csvResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'job-orders.csv'
+        );
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        return $this->xlsxResponse(
+            self::EXPORT_FIELDS, $this->exportRows($user->company_id, $request), 'Job Orders', 'job-orders.xlsx'
+        );
     }
 
     public function show(Request $request, string $jobOrderId)
