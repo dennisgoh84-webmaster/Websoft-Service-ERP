@@ -216,9 +216,9 @@ class TaxCodeTest extends TestCase
         $response->assertHeader('Content-Disposition', 'attachment; filename=tax-types.xlsx');
         $bytes = $response->getContent();
 
-        // A real OOXML package is a ZIP: "PK\x03\x04". The pre-existing
-        // App\Services\ExportService writes an HTML <table> instead,
-        // which is why a converted endpoint cannot use it -- Python's
+        // A real OOXML package is a ZIP: "PK\x03\x04". The writer
+        // this replaced emitted an HTML <table> named .xls, which is
+        // why a converted endpoint could not use it -- Python's
         // openpyxl returns a genuine .xlsx here.
         $this->assertStringStartsWith("PK\x03\x04", $bytes);
 

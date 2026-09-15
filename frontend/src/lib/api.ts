@@ -2069,33 +2069,33 @@ export const api = {
   exportContractExpiryListingCsv: (filters: { expiry_from?: string; expiry_to?: string } = {}) =>
     requestBlob(`/reports/operations/contracts/expiry-listing/export.csv${qs(filters)}`),
   exportContractExpiryListingExcel: (filters: { expiry_from?: string; expiry_to?: string } = {}) =>
-    requestBlob(`/reports/operations/contracts/expiry-listing/export.xls${qs(filters)}`),
+    requestBlob(`/reports/operations/contracts/expiry-listing/export.xlsx${qs(filters)}`),
 
   reportContractRenewalDueListing: (filters: { as_of?: string } = {}) =>
     request<Contract[]>(`/reports/operations/contracts/renewal-due-listing${qs(filters)}`),
   exportContractRenewalDueListingCsv: (filters: { as_of?: string } = {}) =>
     requestBlob(`/reports/operations/contracts/renewal-due-listing/export.csv${qs(filters)}`),
   exportContractRenewalDueListingExcel: (filters: { as_of?: string } = {}) =>
-    requestBlob(`/reports/operations/contracts/renewal-due-listing/export.xls${qs(filters)}`),
+    requestBlob(`/reports/operations/contracts/renewal-due-listing/export.xlsx${qs(filters)}`),
 
   // ---- Sales Dashboard ----
   salesDashboardSummary: (year?: number) => request<SalesDashboardSummary>(`/sales-dashboard/summary${qs({ year })}`),
   salesDashboardArBreakdown: (bucket: string) =>
     request<SalesDashboardArRow[]>(`/sales-dashboard/ar-breakdown${qs({ bucket })}`),
   exportSalesDashboardArBreakdownCsv: (bucket: string) => requestBlob(`/sales-dashboard/ar-breakdown/export.csv${qs({ bucket })}`),
-  exportSalesDashboardArBreakdownExcel: (bucket: string) => requestBlob(`/sales-dashboard/ar-breakdown/export.xls${qs({ bucket })}`),
+  exportSalesDashboardArBreakdownExcel: (bucket: string) => requestBlob(`/sales-dashboard/ar-breakdown/export.xlsx${qs({ bucket })}`),
   salesDashboardTopBillingCustomers: (year?: number) =>
     request<SalesDashboardTopCustomerRow[]>(`/sales-dashboard/top-billing-customers${qs({ year })}`),
   exportSalesDashboardTopBillingCustomersCsv: (year?: number) =>
     requestBlob(`/sales-dashboard/top-billing-customers/export.csv${qs({ year })}`),
   exportSalesDashboardTopBillingCustomersExcel: (year?: number) =>
-    requestBlob(`/sales-dashboard/top-billing-customers/export.xls${qs({ year })}`),
+    requestBlob(`/sales-dashboard/top-billing-customers/export.xlsx${qs({ year })}`),
   salesDashboardBottomNonActiveCustomers: (year?: number) =>
     request<SalesDashboardBottomCustomerRow[]>(`/sales-dashboard/bottom-non-active-customers${qs({ year })}`),
   exportSalesDashboardBottomNonActiveCustomersCsv: (year?: number) =>
     requestBlob(`/sales-dashboard/bottom-non-active-customers/export.csv${qs({ year })}`),
   exportSalesDashboardBottomNonActiveCustomersExcel: (year?: number) =>
-    requestBlob(`/sales-dashboard/bottom-non-active-customers/export.xls${qs({ year })}`),
+    requestBlob(`/sales-dashboard/bottom-non-active-customers/export.xlsx${qs({ year })}`),
 
   listJobOrders: (
     filters: { status?: string; priority?: string; customer_id?: string; contract_id?: string; job_order_type?: string } = {},

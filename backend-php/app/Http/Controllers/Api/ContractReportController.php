@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\CompanyIndividual;
@@ -9,7 +10,6 @@ use App\Models\Contract;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\ContractService;
-use App\Services\ExportService;
 use Illuminate\Http\Request;
 
 /**
@@ -35,6 +35,8 @@ use Illuminate\Http\Request;
  */
 class ContractReportController extends Controller
 {
+    use SendsExports;
+
     private const MODULE = 'operations_reports';
 
     private const EXPORT_HEADERS = [
@@ -108,7 +110,7 @@ class ContractReportController extends Controller
         $contracts = ContractService::expiryListing($user->company_id, $request->query('expiry_from'), $request->query('expiry_to'));
         Audit::recordReportGenerated($user->id, 'contract_expiry_listing', details: 'CSV export');
 
-        return ExportService::csvResponse('contract-expiry-listing', self::EXPORT_HEADERS, $this->exportRows($contracts, $this->customerNames($user->company_id)));
+        return $this->csvTableResponse(self::EXPORT_HEADERS, $this->exportRows($contracts, $this->customerNames($user->company_id)), 'contract-expiry-listing.csv');
     }
 
     public function exportExpiryListingExcel(Request $request)
@@ -119,7 +121,7 @@ class ContractReportController extends Controller
         $contracts = ContractService::expiryListing($user->company_id, $request->query('expiry_from'), $request->query('expiry_to'));
         Audit::recordReportGenerated($user->id, 'contract_expiry_listing', details: 'Excel export');
 
-        return ExportService::excelResponse('contract-expiry-listing', self::EXPORT_HEADERS, $this->exportRows($contracts, $this->customerNames($user->company_id)));
+        return $this->xlsxTableResponse(self::EXPORT_HEADERS, $this->exportRows($contracts, $this->customerNames($user->company_id)), 'Contract Expiry', 'contract-expiry-listing.xlsx');
     }
 
     public function renewalDueListing(Request $request)
@@ -141,7 +143,7 @@ class ContractReportController extends Controller
         $contracts = ContractService::dueForRenewal($user->company_id, $request->query('as_of'));
         Audit::recordReportGenerated($user->id, 'contract_renewal_due_listing', details: 'CSV export');
 
-        return ExportService::csvResponse('contract-renewal-due-listing', self::EXPORT_HEADERS, $this->exportRows($contracts, $this->customerNames($user->company_id)));
+        return $this->csvTableResponse(self::EXPORT_HEADERS, $this->exportRows($contracts, $this->customerNames($user->company_id)), 'contract-renewal-due-listing.csv');
     }
 
     public function exportRenewalDueListingExcel(Request $request)
@@ -152,6 +154,6 @@ class ContractReportController extends Controller
         $contracts = ContractService::dueForRenewal($user->company_id, $request->query('as_of'));
         Audit::recordReportGenerated($user->id, 'contract_renewal_due_listing', details: 'Excel export');
 
-        return ExportService::excelResponse('contract-renewal-due-listing', self::EXPORT_HEADERS, $this->exportRows($contracts, $this->customerNames($user->company_id)));
+        return $this->xlsxTableResponse(self::EXPORT_HEADERS, $this->exportRows($contracts, $this->customerNames($user->company_id)), 'Contract Renewal Due', 'contract-renewal-due-listing.xlsx');
     }
 }

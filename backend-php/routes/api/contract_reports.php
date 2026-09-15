@@ -11,9 +11,9 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth.jwt')->prefix('reports/operations/contracts')->group(function () {
     Route::get('/expiry-listing', [ContractReportController::class, 'expiryListing']);
     Route::get('/expiry-listing/export.csv', [ContractReportController::class, 'exportExpiryListingCsv']);
-    Route::get('/expiry-listing/export.xls', [ContractReportController::class, 'exportExpiryListingExcel']);
+    Route::get('/expiry-listing/export.xlsx', [ContractReportController::class, 'exportExpiryListingExcel']);
 
     Route::get('/renewal-due-listing', [ContractReportController::class, 'renewalDueListing']);
     Route::get('/renewal-due-listing/export.csv', [ContractReportController::class, 'exportRenewalDueListingCsv']);
-    Route::get('/renewal-due-listing/export.xls', [ContractReportController::class, 'exportRenewalDueListingExcel']);
+    Route::get('/renewal-due-listing/export.xlsx', [ContractReportController::class, 'exportRenewalDueListingExcel']);
 });

@@ -12,13 +12,13 @@ Route::middleware('auth.jwt')->prefix('sales-dashboard')->group(function () {
 
     Route::get('/ar-breakdown', [SalesDashboardController::class, 'arBreakdown']);
     Route::get('/ar-breakdown/export.csv', [SalesDashboardController::class, 'exportArBreakdownCsv']);
-    Route::get('/ar-breakdown/export.xls', [SalesDashboardController::class, 'exportArBreakdownExcel']);
+    Route::get('/ar-breakdown/export.xlsx', [SalesDashboardController::class, 'exportArBreakdownExcel']);
 
     Route::get('/top-billing-customers', [SalesDashboardController::class, 'topBillingCustomers']);
     Route::get('/top-billing-customers/export.csv', [SalesDashboardController::class, 'exportTopBillingCustomersCsv']);
-    Route::get('/top-billing-customers/export.xls', [SalesDashboardController::class, 'exportTopBillingCustomersExcel']);
+    Route::get('/top-billing-customers/export.xlsx', [SalesDashboardController::class, 'exportTopBillingCustomersExcel']);
 
     Route::get('/bottom-non-active-customers', [SalesDashboardController::class, 'bottomNonActiveCustomers']);
     Route::get('/bottom-non-active-customers/export.csv', [SalesDashboardController::class, 'exportBottomNonActiveCustomersCsv']);
-    Route::get('/bottom-non-active-customers/export.xls', [SalesDashboardController::class, 'exportBottomNonActiveCustomersExcel']);
+    Route::get('/bottom-non-active-customers/export.xlsx', [SalesDashboardController::class, 'exportBottomNonActiveCustomersExcel']);
 });

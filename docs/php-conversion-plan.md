@@ -2521,13 +2521,24 @@ shapes are Python's, column for column.
   defaults; the one test that had encoded the PHP spelling was
   corrected (it was asserting the bug).
 
-Still open, and unchanged by this pass: `App\Services\ExportService`
-(the older writer whose "Excel" is an HTML table with a `.xls` name)
-still serves the report screens built directly in `backend-php` --
-the Contract Operation Report and the Sales Dashboard drill-downs.
-Moving those onto the real-xlsx writer is follow-up work; it changes
-what those screens download, so it is not something to fold into a
-conversion pass.
+**Followed up the same day:** `App\Services\ExportService` -- the
+older writer whose "Excel" was an HTML `<table>` served with a `.xls`
+name -- is **retired**. The two report screens built directly in
+`backend-php` (Contract Operation Report, Sales Dashboard
+drill-downs) now go through `Exports` as well, via a second pair of
+entry points, `tableToCsv`/`tableToExcel`, that take a header row of
+human labels plus positional rows. Those screens have no Python
+counterpart and label their columns for a reader ("Contract Number",
+not `contract_number`), so the labels stay; only the writer changes.
+It was left out of the conversion pass itself on purpose, because it
+changes what those screens download: five endpoints move from
+`/export.xls` to `/export.xlsx` (the old paths now 404) and the file
+becomes a genuine OOXML package. Excel had been warning that the old
+file's format and its extension disagreed, because they did.
+docs/ui-guidelines.md section 2 had specified `export.xlsx` and
+"never write a CSV/XLSX writer by hand" from the start, so this
+brings those two screens into line with the project's own convention
+rather than setting a new one.
 
 ## Not yet converted (pending, in rough priority order)
 

@@ -19,15 +19,15 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
  * layout rather than a generic row/column table -- same split as
  * Python.
  *
- * NOT the same class as App\Services\ExportService, deliberately:
- * that one predates the conversion, serves the NEW backend-php-only
- * report screens (Contract Operation Report, Sales Dashboard
- * drill-downs), and writes "Excel" as an HTML <table> with a .xls
- * name. That is fine for those screens but is NOT what Python's
- * /export.xlsx returns, so a converted endpoint cannot use it without
- * changing the API contract. Consolidating the two -- by moving those
- * screens onto this real-xlsx writer -- is follow-up work recorded in
- * docs/php-conversion-plan.md, not something to do silently here.
+ * This is now the ONLY export writer in `backend-php`. It replaced
+ * App\Services\ExportService (retired 2026-09-15), which predated the
+ * conversion and wrote "Excel" as an HTML <table> served with a .xls
+ * name -- a real file Excel opens, but one it also warns about, and
+ * not what Python's /export.xlsx returns. The two report screens that
+ * used it (Contract Operation Report, Sales Dashboard drill-downs)
+ * now go through `tableToCsv`/`tableToExcel` below, which is what
+ * docs/ui-guidelines.md section 2 asked for all along ("never write a
+ * CSV/XLSX writer by hand").
  */
 class Exports
 {
@@ -74,6 +74,53 @@ class Exports
         }, $values);
 
         return implode(',', $fields)."\r\n";
+    }
+
+    /**
+     * The same two writers, for a table that comes as a header row of
+     * human labels plus positional rows, rather than field keys plus
+     * dictionaries.
+     *
+     * The converted endpoints use the `rows*` pair above because their
+     * header row has to be Python's field names, column for column.
+     * The report screens built directly in `backend-php` (Contract
+     * Operation Report, Sales Dashboard drill-downs) have no Python
+     * counterpart and label their columns for a reader -- "Contract
+     * Number", not "contract_number". Both shapes go through the same
+     * writer so neither can drift.
+     *
+     * @param  array<int, string>  $headers
+     * @param  array<int, array<int, string|int|float|null>>  $rows
+     */
+    public static function tableToCsv(array $headers, array $rows): string
+    {
+        return self::rowsToCsv($headers, self::keyRows($headers, $rows));
+    }
+
+    /**
+     * @param  array<int, string>  $headers
+     * @param  array<int, array<int, string|int|float|null>>  $rows
+     */
+    public static function tableToExcel(array $headers, array $rows, string $sheetName = 'Sheet1'): string
+    {
+        return self::rowsToExcel($headers, self::keyRows($headers, $rows), $sheetName);
+    }
+
+    /**
+     * @param  array<int, string>  $headers
+     * @param  array<int, array<int, string|int|float|null>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private static function keyRows(array $headers, array $rows): array
+    {
+        return array_map(
+            static fn (array $row) => array_combine($headers, array_pad(
+                array_slice(array_values($row), 0, count($headers)),
+                count($headers),
+                ''
+            )),
+            $rows
+        );
     }
 
     /**

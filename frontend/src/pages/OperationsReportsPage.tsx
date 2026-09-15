@@ -231,13 +231,13 @@ export default function OperationsReportsPage() {
         format === 'csv'
           ? await api.exportContractExpiryListingCsv(filters)
           : await api.exportContractExpiryListingExcel(filters)
-      downloadBlob(blob, `contract-expiry-listing.${format === 'csv' ? 'csv' : 'xls'}`)
+      downloadBlob(blob, `contract-expiry-listing.${format === 'csv' ? 'csv' : 'xlsx'}`)
     } else if (reportType === 'contract-renewal-due-listing') {
       const blob =
         format === 'csv'
           ? await api.exportContractRenewalDueListingCsv()
           : await api.exportContractRenewalDueListingExcel()
-      downloadBlob(blob, `contract-renewal-due-listing.${format === 'csv' ? 'csv' : 'xls'}`)
+      downloadBlob(blob, `contract-renewal-due-listing.${format === 'csv' ? 'csv' : 'xlsx'}`)
     }
   }
 

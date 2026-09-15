@@ -348,10 +348,14 @@ fidelity bug was fixed on the way: the CSV writer used PHP's
 records with a bare newline, where Python quotes only where a field
 needs it and ends records with CRLF -- so every export was emitting
 `SR,"Standard Rated",9.00` against Python's `SR,Standard Rated,9.00`.
-**One thing still open:** the older `ExportService` (its "Excel" is an
-HTML table named `.xls`) still serves the report screens built
-directly in `backend-php`; moving those onto the real writer changes
-what they download.
+The older `ExportService` (its "Excel" was an HTML table named
+`.xls`) has since been **retired**: the two report screens built
+directly in `backend-php` -- Contract Operation Report and the Sales
+Dashboard drill-downs -- now use the same writer, so there is exactly
+one. Those five downloads change from `.xls` to a genuine `.xlsx`
+(the `/export.xls` routes are gone), which is what
+[docs/ui-guidelines.md](docs/ui-guidelines.md) section 2 had specified
+all along.
 
 `backend/` (Python) is untouched and keeps running as the system of
 record until each remaining module is converted, module by module,

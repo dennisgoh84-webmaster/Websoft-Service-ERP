@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Services\Audit;
 use App\Services\Authority;
-use App\Services\ExportService;
 use App\Services\SalesDashboardService;
 use Illuminate\Http\Request;
 
@@ -32,6 +32,8 @@ use Illuminate\Http\Request;
  */
 class SalesDashboardController extends Controller
 {
+    use SendsExports;
+
     private const MODULE = 'reporting';
 
     public function summary(Request $request)
@@ -75,7 +77,7 @@ class SalesDashboardController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'view');
         Audit::recordReportGenerated($user->id, 'sales_dashboard_ar_breakdown', details: 'CSV export');
 
-        return ExportService::csvResponse('ar-outstanding-breakdown', self::AR_HEADERS, $this->arExportRows($request, $user->company_id));
+        return $this->csvTableResponse(self::AR_HEADERS, $this->arExportRows($request, $user->company_id), 'ar-outstanding-breakdown.csv');
     }
 
     public function exportArBreakdownExcel(Request $request)
@@ -84,7 +86,7 @@ class SalesDashboardController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'view');
         Audit::recordReportGenerated($user->id, 'sales_dashboard_ar_breakdown', details: 'Excel export');
 
-        return ExportService::excelResponse('ar-outstanding-breakdown', self::AR_HEADERS, $this->arExportRows($request, $user->company_id));
+        return $this->xlsxTableResponse(self::AR_HEADERS, $this->arExportRows($request, $user->company_id), 'AR Outstanding', 'ar-outstanding-breakdown.xlsx');
     }
 
     private function arExportRows(Request $request, string $companyId): array
@@ -122,7 +124,7 @@ class SalesDashboardController extends Controller
         $rows = SalesDashboardService::topBillingCustomers($user->company_id, $year)
             ->map(fn ($r) => [$r['customer_name'], $r['invoice_count'], $r['net_revenue_sgd']])->values()->all();
 
-        return ExportService::csvResponse('top-billing-customers', self::TOP_HEADERS, $rows);
+        return $this->csvTableResponse(self::TOP_HEADERS, $rows, 'top-billing-customers.csv');
     }
 
     public function exportTopBillingCustomersExcel(Request $request)
@@ -135,7 +137,7 @@ class SalesDashboardController extends Controller
         $rows = SalesDashboardService::topBillingCustomers($user->company_id, $year)
             ->map(fn ($r) => [$r['customer_name'], $r['invoice_count'], $r['net_revenue_sgd']])->values()->all();
 
-        return ExportService::excelResponse('top-billing-customers', self::TOP_HEADERS, $rows);
+        return $this->xlsxTableResponse(self::TOP_HEADERS, $rows, 'Top Billing Customers', 'top-billing-customers.xlsx');
     }
 
     private const BOTTOM_HEADERS = ['Company / Individual'];
@@ -160,7 +162,7 @@ class SalesDashboardController extends Controller
         $rows = SalesDashboardService::bottomNonActiveCustomers($user->company_id, $year)
             ->map(fn ($r) => [$r['customer_name']])->values()->all();
 
-        return ExportService::csvResponse('bottom-non-active-customers', self::BOTTOM_HEADERS, $rows);
+        return $this->csvTableResponse(self::BOTTOM_HEADERS, $rows, 'bottom-non-active-customers.csv');
     }
 
     public function exportBottomNonActiveCustomersExcel(Request $request)
@@ -173,6 +175,6 @@ class SalesDashboardController extends Controller
         $rows = SalesDashboardService::bottomNonActiveCustomers($user->company_id, $year)
             ->map(fn ($r) => [$r['customer_name']])->values()->all();
 
-        return ExportService::excelResponse('bottom-non-active-customers', self::BOTTOM_HEADERS, $rows);
+        return $this->xlsxTableResponse(self::BOTTOM_HEADERS, $rows, 'Bottom Non-Active Customers', 'bottom-non-active-customers.xlsx');
     }
 }

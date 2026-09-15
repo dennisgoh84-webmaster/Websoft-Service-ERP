@@ -339,14 +339,20 @@ shipped and when.
   development environment it was written in, so `docker compose
   --profile php up --build` has never been executed. First run may
   need small fixes.
-- [ ] **Two export writers now coexist** -- `App\Services\Exports`
-  (added 2026-09-15, the faithful port of `exports.py`, real `.xlsx`
-  via PhpSpreadsheet) and the older `App\Services\ExportService`
-  (an HTML `<table>` served as `.xls`, used by the newer
-  backend-php-only report screens). Converted endpoints must use the
-  former to match Python's contract. Moving the newer screens onto it
-  and retiring `ExportService` is tidy-up, deliberately not done as a
-  silent side effect of the conversion.
+- [x] **Two export writers now coexist** -- resolved 2026-09-15 by
+  retiring `App\Services\ExportService`. There is now ONE export
+  writer, `App\Services\Exports` (the faithful port of `exports.py`:
+  real CSV, real `.xlsx` via PhpSpreadsheet). The two report screens
+  that used the old one -- Contract Operation Report and the Sales
+  Dashboard drill-downs -- moved onto it and now download a genuine
+  `.xlsx`, which is what docs/ui-guidelines.md section 2 specified all
+  along ("never write a CSV/XLSX writer by hand"). Their column
+  headers stay human labels ("Contract Number"), which is theirs to
+  keep -- these screens have no Python counterpart.
+  **User-visible:** those five downloads change from `.xls` to
+  `.xlsx`, and the `/export.xls` routes are gone (they now 404).
+  Excel had been warning that the old file's format and extension
+  disagreed, because they did.
   → [php-conversion-plan.md](php-conversion-plan.md)
 
 - [ ] **Product-based Sales Invoicing (blocks "Sales Invoice picks

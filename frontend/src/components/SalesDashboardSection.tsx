@@ -117,7 +117,7 @@ export default function SalesDashboardSection() {
                   format === 'csv'
                     ? await api.exportSalesDashboardArBreakdownCsv(drillDownBucket)
                     : await api.exportSalesDashboardArBreakdownExcel(drillDownBucket)
-                downloadBlob(blob, `ar-outstanding-breakdown.${format === 'csv' ? 'csv' : 'xls'}`)
+                downloadBlob(blob, `ar-outstanding-breakdown.${format === 'csv' ? 'csv' : 'xlsx'}`)
               }}
               onError={setError}
             />
@@ -162,7 +162,7 @@ export default function SalesDashboardSection() {
                 format === 'csv'
                   ? await api.exportSalesDashboardTopBillingCustomersCsv()
                   : await api.exportSalesDashboardTopBillingCustomersExcel()
-              downloadBlob(blob, `top-billing-customers.${format === 'csv' ? 'csv' : 'xls'}`)
+              downloadBlob(blob, `top-billing-customers.${format === 'csv' ? 'csv' : 'xlsx'}`)
             }}
             onError={setError}
           />
@@ -209,7 +209,7 @@ export default function SalesDashboardSection() {
                 format === 'csv'
                   ? await api.exportSalesDashboardBottomNonActiveCustomersCsv()
                   : await api.exportSalesDashboardBottomNonActiveCustomersExcel()
-              downloadBlob(blob, `bottom-non-active-customers.${format === 'csv' ? 'csv' : 'xls'}`)
+              downloadBlob(blob, `bottom-non-active-customers.${format === 'csv' ? 'csv' : 'xlsx'}`)
             }}
             onError={setError}
           />

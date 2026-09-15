@@ -14,11 +14,11 @@ use Illuminate\Http\Response;
  * types and Content-Disposition filenames are identical -- it just
  * avoids repeating it across a dozen controllers.
  *
- * Note this is App\Services\Exports (the port of Python's
- * exports.py -- real CSV, and a real .xlsx via PhpSpreadsheet), not
- * the older App\Services\ExportService, whose "Excel" is an HTML
- * table with a .xls name. New exports use this one; consolidating the
- * two is tracked in docs/php-conversion-plan.md.
+ * Everything goes through App\Services\Exports, the port of Python's
+ * exports.py -- real CSV, and a real .xlsx via PhpSpreadsheet. The
+ * older ExportService, whose "Excel" was an HTML table named .xls,
+ * was retired 2026-09-15 and its two screens moved onto the table
+ * helpers below.
  */
 trait SendsExports
 {
@@ -32,6 +32,33 @@ trait SendsExports
     {
         return response(Exports::rowsToCsv($fields, $rows), 200, [
             'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename={$filename}",
+        ]);
+    }
+
+    /**
+     * The same two responses for a label-headed table -- see
+     * App\Services\Exports::tableToCsv for when each shape applies.
+     *
+     * @param  array<int, string>  $headers
+     * @param  array<int, array<int, string|int|float|null>>  $rows
+     */
+    protected function csvTableResponse(array $headers, array $rows, string $filename): Response
+    {
+        return response(Exports::tableToCsv($headers, $rows), 200, [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename={$filename}",
+        ]);
+    }
+
+    /**
+     * @param  array<int, string>  $headers
+     * @param  array<int, array<int, string|int|float|null>>  $rows
+     */
+    protected function xlsxTableResponse(array $headers, array $rows, string $sheetName, string $filename): Response
+    {
+        return response(Exports::tableToExcel($headers, $rows, $sheetName), 200, [
+            'Content-Type' => self::XLSX_MEDIA_TYPE,
             'Content-Disposition' => "attachment; filename={$filename}",
         ]);
     }
