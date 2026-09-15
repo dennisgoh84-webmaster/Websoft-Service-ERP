@@ -149,7 +149,12 @@ outside `Layout`, so it has no staff sidebar.
   Incident form, showing the routed Job Order once converted).
 - Company logo and name from the public branding endpoint the staff
   login already uses.
-- Phone-first layout; it will mostly be opened from a phone.
+- ~~Phone-first layout; it will mostly be opened from a phone.~~
+  **Reversed 2026-09-15 at Dennis's request: desktop-first.** Customers
+  raise and chase support from a PC. From ~900px the portal is a normal
+  desktop application (left sidebar nav, wide content column, Home's
+  tiles side by side); below that it collapses to the single column and
+  bottom tab bar it started as, so a phone still works.
 
 ## 8. Module key and nav
 

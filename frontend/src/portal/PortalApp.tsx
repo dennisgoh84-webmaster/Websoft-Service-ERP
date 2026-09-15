@@ -1,9 +1,22 @@
 /**
  * Customer Helpdesk Portal (PORTAL-001..004, docs/customer-portal-design.md).
  *
- * Mounted at /portal/* outside the staff <Layout> (see App.tsx) -- no
- * sidebar, phone-first, self-contained (own auth context/token, own
- * styles) the same way src/pages/MobileApp.tsx is for staff. A customer
+ * Mounted at /portal/* outside the staff <Layout> (see App.tsx),
+ * self-contained (own auth context/token, own styles) the same way
+ * src/pages/MobileApp.tsx is for staff.
+ *
+ * DESKTOP-FIRST since 2026-09-15, at Dennis's request -- the design doc
+ * originally said "phone-first; it will mostly be opened from a phone"
+ * (docs/customer-portal-design.md §7), which turned out to be the wrong
+ * guess: customers raise and chase support from a PC at their desk.
+ * From ~900px the portal is a normal desktop application -- a left
+ * sidebar, a wide content column, and Home's tiles side by side -- and
+ * below that it collapses back to the single column and fixed bottom
+ * tab bar it was, so a phone is still perfectly usable. That switch is
+ * the ONE thing here done with a real stylesheet rather than the inline
+ * style objects below: inline styles cannot carry a media query.
+ *
+ * A customer
  * signs in with email + password, then (if SMTP is configured) a
  * 6-digit email code, then sets their own password on first sign-in.
  * From there: hour balance + account balance + open incidents on Home,
@@ -49,9 +62,9 @@ const DANGER = '#c0362c'
 const DANGER_BG = '#fdecea'
 
 const styles = {
+  // Width, padding and the nav's placement are in PORTAL_CSS below --
+  // they are the parts that differ between desktop and phone.
   shell: {
-    maxWidth: 480,
-    margin: '0 auto',
     minHeight: '100vh',
     background: LIGHT_BG,
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -76,9 +89,9 @@ const styles = {
     background: 'rgba(255,255,255,0.2)', border: 'none', color: WHITE,
     fontSize: 13, padding: '6px 12px', borderRadius: 6, cursor: 'pointer',
   } as CSSProperties,
-  content: { flex: 1, paddingBottom: 76 } as CSSProperties,
+  content: { flex: 1 } as CSSProperties,
   card: {
-    background: WHITE, borderRadius: 12, padding: 16, margin: '12px 16px',
+    background: WHITE, borderRadius: 12, padding: 16,
     boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: `1px solid ${BORDER}`,
   } as CSSProperties,
   btn: {
@@ -105,16 +118,76 @@ const styles = {
     display: 'inline-block', padding: '2px 9px', borderRadius: 999,
     fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const,
   } as CSSProperties,
-  bottomNav: {
-    position: 'fixed' as const, bottom: 0, left: '50%', transform: 'translateX(-50%)',
-    width: '100%', maxWidth: 480, background: WHITE, borderTop: `1px solid ${BORDER}`,
-    display: 'flex', boxShadow: '0 -2px 8px rgba(0,0,0,0.06)',
-  } as CSSProperties,
-  navItem: {
-    flex: 1, background: 'none', border: 'none', padding: '10px 4px 12px',
-    display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 3,
-    cursor: 'pointer', fontSize: 11, fontWeight: 600,
-  } as CSSProperties,
+}
+
+/**
+ * The desktop/phone switch. Everything else on this screen is an inline
+ * style object; this is a stylesheet because a media query cannot be
+ * expressed inline. Scoped under .portal-shell so it cannot reach the
+ * staff app, which is never mounted at the same time anyway.
+ *
+ * Desktop (>= 900px) is the primary layout: sidebar nav, wide content,
+ * Home's tiles in a grid. Below that everything falls back to the
+ * original single column with a fixed bottom tab bar.
+ */
+const PORTAL_CSS = `
+.portal-shell { width: 100%; }
+.portal-body { display: flex; align-items: flex-start; }
+.portal-nav { display: flex; background: ${WHITE}; }
+.portal-nav-item {
+  background: none; border: none; cursor: pointer; font-weight: 600;
+  display: flex; align-items: center; font-family: inherit;
+}
+.portal-nav-item:hover { background: #f4eeee; }
+.portal-card { margin: 12px 16px; }
+
+@media (min-width: 900px) {
+  .portal-shell { max-width: 1240px; margin: 0 auto; }
+  .portal-nav {
+    flex-direction: column; width: 216px; flex: 0 0 216px;
+    border-right: 1px solid ${BORDER}; position: sticky; top: 64px;
+    align-self: flex-start; padding: 12px 0; gap: 2px;
+    min-height: calc(100vh - 64px);
+  }
+  .portal-nav-item {
+    gap: 10px; padding: 11px 20px; font-size: 14px; text-align: left;
+    border-left: 3px solid transparent;
+  }
+  .portal-nav-item[aria-current='true'] { border-left-color: ${MAROON}; background: #f7f0f1; }
+  .portal-nav-icon { font-size: 16px; width: 18px; text-align: center; }
+  .portal-content { flex: 1; min-width: 0; padding: 8px 8px 40px; }
+  .portal-card { margin: 16px; padding: 20px; }
+  /* Home's summary tiles sit side by side rather than stacked. */
+  .portal-home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  /* A full-width button is a phone idiom; on a desktop card it reads as
+     a link-sized action instead. */
+  .portal-card .portal-action { width: auto; min-width: 200px; padding: 10px 18px; }
+  /* The sign-in card stays a centred column -- that IS the desktop
+     convention -- under a full-width branded header band. */
+  .portal-shell--login { max-width: 100%; }
+  .portal-shell--login .portal-login-card { max-width: 440px; margin: 48px auto 0; width: 100%; }
+}
+
+@media (max-width: 899px) {
+  .portal-shell { max-width: 480px; margin: 0 auto; }
+  .portal-body { display: block; }
+  .portal-content { padding-bottom: 76px; }
+  .portal-nav {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 480px; border-top: 1px solid ${BORDER};
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.06); z-index: 10;
+  }
+  .portal-nav-item {
+    flex: 1; flex-direction: column; gap: 3px; padding: 10px 4px 12px; font-size: 11px;
+    justify-content: center;
+  }
+  .portal-nav-icon { font-size: 18px; }
+}
+`
+
+/** Injected once, at the top of whichever portal screen is showing. */
+function PortalStyles() {
+  return <style>{PORTAL_CSS}</style>
 }
 
 function badgeStyle(kind: 'ok' | 'warn' | 'danger' | 'neutral'): CSSProperties {
@@ -313,12 +386,13 @@ function PortalLogin() {
   // signed-in app underneath (PortalAuthContext already has a token).
   if (pendingChangePassword) {
     return (
-      <div style={styles.shell}>
+      <div className="portal-shell portal-shell--login" style={styles.shell}>
+        <PortalStyles />
         <div style={{ ...styles.header, justifyContent: 'center' }}>
           <h1 style={styles.headerTitle}>Set your password</h1>
         </div>
         <form onSubmit={onSubmitChangePassword} style={{ padding: 20 }}>
-          <div style={styles.card}>
+          <div className="portal-card portal-login-card" style={styles.card}>
             <p style={{ margin: '0 0 16px', fontSize: 14, color: MUTED }}>
               This is your first sign-in to the Helpdesk Portal -- please set your own
               password to continue. At least 8 characters, with a letter and a number.
@@ -342,7 +416,8 @@ function PortalLogin() {
   }
 
   return (
-    <div style={styles.shell}>
+    <div className="portal-shell portal-shell--login" style={styles.shell}>
+      <PortalStyles />
       <div style={{ ...styles.header, justifyContent: 'center', flexDirection: 'column', gap: 4 }}>
         {branding?.logo && (
           <img src={branding.logo} alt={`${branding.name} logo`} style={{ maxHeight: 40, maxWidth: 160, objectFit: 'contain', marginBottom: 4 }} />
@@ -353,7 +428,7 @@ function PortalLogin() {
 
       {step === 'credentials' && (
         <form onSubmit={onSubmitCredentials} style={{ padding: 20 }}>
-          <div style={styles.card}>
+          <div className="portal-card portal-login-card" style={styles.card}>
             <h2 style={{ margin: '0 0 16px', fontSize: 18 }}>Sign in</h2>
             {info && <p style={{ fontSize: 13, color: MUTED, margin: '0 0 12px' }}>{info}</p>}
             {error && <div style={{ ...styles.errorBox, margin: '0 0 12px' }}>{error}</div>}
@@ -381,7 +456,7 @@ function PortalLogin() {
 
       {step === 'otp' && (
         <form onSubmit={onSubmitOtp} style={{ padding: 20 }}>
-          <div style={styles.card}>
+          <div className="portal-card portal-login-card" style={styles.card}>
             <p style={{ margin: '0 0 16px', fontSize: 14, color: MUTED }}>
               We emailed a 6-digit code to {email}. Enter it below to finish signing in.
             </p>
@@ -403,7 +478,7 @@ function PortalLogin() {
 
       {step === 'forgot_email' && (
         <form onSubmit={onSubmitForgotEmail} style={{ padding: 20 }}>
-          <div style={styles.card}>
+          <div className="portal-card portal-login-card" style={styles.card}>
             <p style={{ margin: '0 0 16px', fontSize: 14, color: MUTED }}>
               Enter your account email -- if it matches an active portal login, we'll email a
               one-time code to reset your password.
@@ -425,7 +500,7 @@ function PortalLogin() {
 
       {step === 'forgot_reset' && (
         <form onSubmit={onSubmitForgotReset} style={{ padding: 20 }}>
-          <div style={styles.card}>
+          <div className="portal-card portal-login-card" style={styles.card}>
             {info && <p style={{ margin: '0 0 16px', fontSize: 14, color: MUTED }}>{info}</p>}
             {error && <div style={{ ...styles.errorBox, margin: '0 0 12px' }}>{error}</div>}
             <div style={{ marginBottom: 12 }}>
@@ -470,7 +545,13 @@ function PortalHeader({ title }: { title: string }) {
   )
 }
 
-function BottomNav({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
+/**
+ * A left sidebar on a desktop screen, the original fixed bottom tab bar
+ * on a phone -- one set of buttons, placed by PORTAL_CSS. aria-current
+ * carries the selected tab so the stylesheet can mark it without a
+ * second class name, and it is the right attribute for a nav anyway.
+ */
+function PortalNav({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
   const items: { key: Tab; label: string; icon: string }[] = [
     { key: 'home', label: 'Home', icon: '⌂' },
     { key: 'contracts', label: 'Contracts', icon: '⌗' },
@@ -479,18 +560,20 @@ function BottomNav({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) 
     { key: 'incidents', label: 'Incidents', icon: '⚠' },
   ]
   return (
-    <div style={styles.bottomNav}>
+    <nav className="portal-nav">
       {items.map((it) => (
         <button
           key={it.key}
+          className="portal-nav-item"
+          aria-current={tab === it.key}
           onClick={() => onChange(it.key)}
-          style={{ ...styles.navItem, color: tab === it.key ? MAROON : MUTED }}
+          style={{ color: tab === it.key ? MAROON : MUTED }}
         >
-          <span style={{ fontSize: 18 }}>{it.icon}</span>
+          <span className="portal-nav-icon">{it.icon}</span>
           {it.label}
         </button>
       ))}
-    </div>
+    </nav>
   )
 }
 
@@ -520,8 +603,10 @@ function PortalHome({ onGoTab }: { onGoTab: (t: Tab) => void }) {
     <div>
       {error && <div style={styles.errorBox}>{error}</div>}
 
+      {/* Side by side on a desktop screen, stacked on a phone -- PORTAL_CSS. */}
+      <div className="portal-home-grid">
       {activeHourContracts.map((c) => (
-        <div key={c.id} style={styles.card}>
+        <div key={c.id} className="portal-card" style={styles.card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ fontSize: 12, color: MUTED, fontWeight: 600, textTransform: 'uppercase' }}>Support hours</div>
@@ -542,7 +627,7 @@ function PortalHome({ onGoTab }: { onGoTab: (t: Tab) => void }) {
         </div>
       ))}
 
-      <div style={styles.card}>
+      <div className="portal-card" style={styles.card}>
         <div style={{ fontSize: 12, color: MUTED, fontWeight: 600, textTransform: 'uppercase' }}>Account balance</div>
         <div style={{ fontSize: 28, fontWeight: 700, marginTop: 4, color: outstandingBalance > 0 ? INK : OK }}>
           {fmtMoney(outstandingBalance)}
@@ -550,22 +635,22 @@ function PortalHome({ onGoTab }: { onGoTab: (t: Tab) => void }) {
         <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>
           {outstandingBalance > 0 ? 'Outstanding across all invoices' : 'Nothing outstanding'}
         </div>
-        <button onClick={() => onGoTab('billing')} style={{ ...styles.btn, ...styles.btnSecondary, marginTop: 12 }}>
+        <button onClick={() => onGoTab('billing')} className="portal-action" style={{ ...styles.btn, ...styles.btnSecondary, marginTop: 12 }}>
           View invoices &amp; payments
         </button>
       </div>
 
-      <div style={styles.card}>
+      <div className="portal-card" style={styles.card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontSize: 12, color: MUTED, fontWeight: 600, textTransform: 'uppercase' }}>Open incidents</div>
           <span style={{ fontSize: 22, fontWeight: 700 }}>{openIncidents.length}</span>
         </div>
-        <button onClick={() => onGoTab('incidents')} style={{ ...styles.btn, ...styles.btnSecondary, marginTop: 12 }}>
+        <button onClick={() => onGoTab('incidents')} className="portal-action" style={{ ...styles.btn, ...styles.btnSecondary, marginTop: 12 }}>
           View incidents
         </button>
       </div>
 
-      <div style={styles.card}>
+      <div className="portal-card" style={styles.card}>
         <div style={{ fontSize: 12, color: MUTED, fontWeight: 600, textTransform: 'uppercase', marginBottom: 8 }}>Recent job orders</div>
         {recentJobOrders.length === 0 && <div style={{ fontSize: 14, color: MUTED }}>No job orders yet.</div>}
         {recentJobOrders.map((jo) => (
@@ -577,9 +662,10 @@ function PortalHome({ onGoTab }: { onGoTab: (t: Tab) => void }) {
             <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>{jo.subject}</div>
           </div>
         ))}
-        <button onClick={() => onGoTab('jobOrders')} style={{ ...styles.btn, ...styles.btnSecondary, marginTop: 12 }}>
+        <button onClick={() => onGoTab('jobOrders')} className="portal-action" style={{ ...styles.btn, ...styles.btnSecondary, marginTop: 12 }}>
           View all job orders
         </button>
+      </div>
       </div>
     </div>
   )
@@ -600,7 +686,7 @@ function PortalContracts({ onViewServiceRecords }: { onViewServiceRecords: (cont
       {error && <div style={styles.errorBox}>{error}</div>}
       {contracts?.length === 0 && <div style={{ padding: '20px 16px', color: MUTED, fontSize: 14 }}>No contracts on file.</div>}
       {contracts?.map((c) => (
-        <div key={c.id} style={styles.card}>
+        <div key={c.id} className="portal-card" style={styles.card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 15 }}>{c.contract_number}</div>
@@ -662,7 +748,7 @@ function PortalContractServiceRecords({
         </button>
       </div>
       {error && <div style={styles.errorBox}>{error}</div>}
-      <div style={styles.card}>
+      <div className="portal-card" style={styles.card}>
         <div style={{ fontSize: 12, color: MUTED, fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>
           Service records for {contractNumber}
         </div>
@@ -688,7 +774,7 @@ function PortalJobOrders({ onSelect }: { onSelect: (id: string) => void }) {
       {error && <div style={styles.errorBox}>{error}</div>}
       {jobOrders?.length === 0 && <div style={{ padding: '20px 16px', color: MUTED, fontSize: 14 }}>No job orders yet.</div>}
       {jobOrders?.map((jo) => (
-        <div key={jo.id} style={{ ...styles.card, cursor: 'pointer' }} onClick={() => onSelect(jo.id)}>
+        <div key={jo.id} className="portal-card" style={{ ...styles.card, cursor: 'pointer' }} onClick={() => onSelect(jo.id)}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 15 }}>{jo.job_order_number}</div>
@@ -742,7 +828,7 @@ function PortalJobOrderDetailView({ id, onBack }: { id: string; onBack: () => vo
       {error && <div style={styles.errorBox}>{error}</div>}
       {detail && (
         <>
-          <div style={styles.card}>
+          <div className="portal-card" style={styles.card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 16 }}>{detail.job_order_number}</div>
@@ -755,7 +841,7 @@ function PortalJobOrderDetailView({ id, onBack }: { id: string; onBack: () => vo
             )}
             {detail.due_date && <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>Due: {fmtDate(detail.due_date)}</div>}
           </div>
-          <div style={styles.card}>
+          <div className="portal-card" style={styles.card}>
             <div style={{ fontSize: 12, color: MUTED, fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Service records</div>
             {detail.service_records.length === 0 && <div style={{ fontSize: 14, color: MUTED, padding: '8px 0' }}>No service records logged yet.</div>}
             {detail.service_records.map((r) => <ServiceRecordRow key={r.id} r={r} />)}
@@ -770,7 +856,7 @@ function PortalJobOrderDetailView({ id, onBack }: { id: string; onBack: () => vo
 
 function InvoiceCard({ inv }: { inv: PortalInvoice }) {
   return (
-    <div style={styles.card}>
+    <div className="portal-card" style={styles.card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <div style={{ fontWeight: 700, fontSize: 15 }}>{inv.invoice_number}</div>
@@ -806,7 +892,7 @@ function InvoiceCard({ inv }: { inv: PortalInvoice }) {
 
 function PaymentCard({ p }: { p: PortalPayment }) {
   return (
-    <div style={styles.card}>
+    <div className="portal-card" style={styles.card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <div style={{ fontWeight: 700, fontSize: 15 }}>{p.voucher_number}</div>
@@ -894,7 +980,7 @@ function PortalIncidents({ onNew }: { onNew: () => void }) {
       {error && <div style={styles.errorBox}>{error}</div>}
       {incidents?.length === 0 && <div style={{ padding: '20px 16px', color: MUTED, fontSize: 14 }}>No incidents raised yet.</div>}
       {incidents?.map((i) => (
-        <div key={i.id} style={styles.card}>
+        <div key={i.id} className="portal-card" style={styles.card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 14 }}>{i.incident_number}</div>
@@ -940,7 +1026,7 @@ function PortalNewIncident({ onDone }: { onDone: () => void }) {
       <button type="button" onClick={onDone} style={{ background: 'none', border: 'none', color: MAROON, fontSize: 14, cursor: 'pointer', padding: 0, marginBottom: 12 }}>
         &larr; Cancel
       </button>
-      <div style={styles.card}>
+      <div className="portal-card" style={styles.card}>
         <h2 style={{ margin: '0 0 16px', fontSize: 17 }}>Raise an incident</h2>
         {error && <div style={{ ...styles.errorBox, margin: '0 0 12px' }}>{error}</div>}
         <div style={{ marginBottom: 12 }}>
@@ -983,9 +1069,12 @@ function PortalSignedInApp() {
   }
 
   return (
-    <div style={styles.shell}>
+    <div className="portal-shell" style={styles.shell}>
+      <PortalStyles />
       <PortalHeader title={titles[tab]} />
-      <div style={styles.content}>
+      <div className="portal-body">
+        <PortalNav tab={tab} onChange={goTab} />
+        <div className="portal-content" style={styles.content}>
         {tab === 'home' && <PortalHome onGoTab={goTab} />}
         {tab === 'contracts' && (
           contractDrilldown
@@ -1009,15 +1098,15 @@ function PortalSignedInApp() {
             ? <PortalNewIncident onDone={() => setShowNewIncident(false)} />
             : <PortalIncidents onNew={() => setShowNewIncident(true)} />
         )}
+        </div>
       </div>
-      <BottomNav tab={tab} onChange={goTab} />
     </div>
   )
 }
 
 function PortalRoot() {
   const { portalUser, loading } = usePortalAuth()
-  if (loading) return <div style={{ ...styles.shell, alignItems: 'center', justifyContent: 'center' }}>Loading...</div>
+  if (loading) return <div className="portal-shell" style={{ ...styles.shell, alignItems: 'center', justifyContent: 'center' }}>Loading...</div>
   if (!portalUser) return <PortalLogin />
   if (portalUser.must_change_password) return <PortalLogin />
   return <PortalSignedInApp />
