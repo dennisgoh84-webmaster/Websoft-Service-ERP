@@ -342,6 +342,33 @@ converted modules.
 record until each remaining module is converted, module by module,
 the same way.
 
+Also converted (2026-09-15): the **document generation stack**
+(`docx_forms.py`, `pdf_convert.py`, `document_email.py`) and the
+`.docx` export / "Email X" endpoints that depend on it, across
+Invoices, Quotations, Service Records, Purchase Orders, Payment
+Vouchers, Receipt Vouchers and the AR Customer Statement -- closing the
+gaps previously recorded against those modules. PDF is produced by
+converting the same `.docx` through LibreOffice headless, exactly as
+`backend/` does, so the Word and PDF outputs can never drift;
+**`libreoffice-writer` must therefore be installed wherever
+`backend-php/` runs** -- `libreoffice-core` alone converts nothing.
+
+And the last six small maintenance modules: **Tax Types**, **GL
+Types**, the **Currency Rate Table**, **Setup Lists** (Nationality /
+Country / State / Area Code / Currency / Industry -- deliberately
+global rather than company-scoped, since a country's name does not
+differ per company), **Reference Codes** (the Reference Monitor, whose
+endpoint was the last remaining 404 against `backend-php`), and
+**Support Monitoring**. Three schema gaps were closed along the way:
+`accounts.gl_type_id`, which Python has always had and `backend-php`
+was missing outright, and the two foreign keys
+(`products.default_reference_code_id`,
+`quotation_lines.reference_code_id`) that earlier migrations had
+deferred until `reference_codes` existed. **Known gap:** Support
+Monitoring's "Un-Test S/T" figure always reports 0, because the
+Software Tasks module is not converted and there is no table to count;
+a test pins that zero so it cannot be mistaken for a real count.
+
 **Sales module enhancements landed directly in `backend-php/` +
 `frontend/`, not as part of the conversion above** (`backend/` has no
 equivalent for any of these -- new business scope Dennis asked for; see

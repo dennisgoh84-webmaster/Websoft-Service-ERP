@@ -310,6 +310,24 @@ shipped and when.
   per-company mailbox in Company Setup, which stays client-side.
   → [planned-work.md #8c](planned-work.md#8c-serversystem-configuration-push-raised-2026-09-15)
 
+- [ ] **No Dockerfile for `backend-php/`** -- found 2026-09-15.
+  `backend/Dockerfile` exists and correctly installs
+  `libreoffice-writer`; `docker-compose.yml` only ever builds
+  `./backend` and `./frontend`. So there is no deployment path for the
+  PHP backend yet. Whenever one is written it **must** install
+  `libreoffice-writer`, or every "Email X" button will fail with "PDF
+  conversion failed" while the Word exports keep working -- the
+  failure mode is silent and one-sided, which makes it easy to miss.
+- [ ] **Two export writers now coexist** -- `App\Services\Exports`
+  (added 2026-09-15, the faithful port of `exports.py`, real `.xlsx`
+  via PhpSpreadsheet) and the older `App\Services\ExportService`
+  (an HTML `<table>` served as `.xls`, used by the newer
+  backend-php-only report screens). Converted endpoints must use the
+  former to match Python's contract. Moving the newer screens onto it
+  and retiring `ExportService` is tidy-up, deliberately not done as a
+  silent side effect of the conversion.
+  → [php-conversion-plan.md](php-conversion-plan.md)
+
 ## Partially open
 
 - [x] **Commission Management** -- ~~the GP-based report is built;
