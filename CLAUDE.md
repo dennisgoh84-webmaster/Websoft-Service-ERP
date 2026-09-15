@@ -200,10 +200,11 @@ Python itself serves both routes). This is the first time
 `Periods::requireAllows()` -- wired into every posting/bank/reversal
 path since the GL posting + Bank module -- is a real, non-stub check
 rather than a permanent no-op, since no endpoint had ever created an
-`AccountingPeriod` row before now. **Known gap:** the manual Journal
+`AccountingPeriod` row before now. The manual Journal
 Voucher CRUD endpoints (raising/posting/reversing a voucher from the
-General Ledger screen) were outside this pass's scope and remain
-unconverted -- see docs/php-conversion-plan.md. Also converted:
+General Ledger screen) landed 2026-09-15, closing that gap, together
+with CSV/Excel export for the voucher list, the trial balance and the
+account ledger. Also converted:
 Quotations (create/list/get/send/accept/reject, single-rate GST
 totals, and the confirmed 2026-09-10 accept-to-auto-Contract
 conversion -- lines split by unit of measure, "Hours"/"Hour" lines
@@ -386,11 +387,13 @@ drilling into its underlying rows, plus Top 10 Sales Billing Customer
 its own standalone Main Menu page/route (`/sales-dashboard`, gated on
 the `reporting` module), between Company Dashboard and My Ops
 Dashboard, per Dennis's explicit request that it not be merged into
-the Company Dashboard as originally built. **Two pragmatic defaults, flagged
-for Dennis to confirm rather than silently assumed:** "this Financial
-Year" is taken as the calendar year (no fiscal-year-start field exists
-anywhere in the system yet), and the Contract-Quotation link is a
-free-text `quotation_reference` field, not a real linked record --
+the Company Dashboard as originally built. **One of the two pragmatic defaults is now
+settled:** "this Financial Year" was taken as the calendar year because
+no fiscal-year-start field existed; since 2026-09-15 it is a real
+Company Setup value (`financial_year_start_month`, Webmaster runs
+1 Jul - 30 Jun, labelled by the year it ends in), so those listings now
+report the real financial year. Still open: the Contract-Quotation link
+is a free-text `quotation_reference` field, not a real linked record --
 both recorded in
 [docs/open-business-decisions.md #40](docs/open-business-decisions.md#40-sales-module-enhancements-financial-year-definition-and-contractquotation-link-raised-2026-09-22).
 Quotations has since been converted to `backend-php/` (below), which

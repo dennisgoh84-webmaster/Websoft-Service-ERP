@@ -2290,6 +2290,47 @@ a 502, an unconfigured mailbox a 422.
 
 13 dedicated tests.
 
+### Journal Voucher CRUD + ledger exports (converted 2026-09-15)
+
+- **Manual Journal Vouchers** (the `/ledger/vouchers*` half of
+  `app/routers/ledger.py` -> `App\Http\Controllers\Api\LedgerController`,
+  12 dedicated tests): list (filterable by voucher type and status),
+  get, create, post, reverse, and CSV/Excel export -- closing the KNOWN
+  GAP recorded when GL posting was converted.
+
+  `App\Services\Ledger` already had `createJournalEntry()`,
+  `postEntry()` and `reverseEntry()`, built for the GL posting + Bank
+  module and used internally by `App\Services\Posting`. So this adds
+  only the endpoints a person drives by hand; the posting rules stay in
+  one place for automatic and manual entries alike.
+
+  RULES PINNED BY TESTS: a voucher is a DRAFT unless `post` is asked
+  for; an unbalanced voucher is refused whole, writing nothing;
+  **reversal writes a mirror entry and leaves the original exactly as
+  it was**, marked reversed, so the mistake and its correction both stay
+  on record (CLAUDE.md forbids deleting financial records) and the
+  endpoint returns the REVERSAL, as Python does; a reversal needs a
+  reason; and raising a draft needs EDIT while committing it to the
+  ledger needs FULL.
+
+  HARDENING beyond Python: every line's `account_id` must belong to the
+  caller's company. Python relies on the foreign key alone.
+
+  **A REAL DIFFERENCE CAUGHT HERE, worth recording:** `total_debit`,
+  `total_credit` and `is_balanced` are COMPUTED PROPERTIES over the
+  lines in Python, not columns -- and `is_balanced` additionally
+  requires the total to be **greater than zero**, so an all-zero
+  voucher is not "balanced", it is empty. A first pass that read them
+  as model attributes returned 0 for every draft and would have called
+  an empty voucher balanced. They now go through the model's existing
+  `totalDebit()`/`totalCredit()` Money accessors, with the non-zero
+  condition reproduced.
+
+- **CSV/Excel export** for the voucher list, the trial balance and the
+  per-account GL ledger, using `App\Services\Exports`. This is the
+  first instalment of the tracked CSV/Excel gap; the remaining modules
+  still need theirs.
+
 ## Not yet converted (pending, in rough priority order)
 
 Everything below still only exists in `backend/` (Python). Each is a
