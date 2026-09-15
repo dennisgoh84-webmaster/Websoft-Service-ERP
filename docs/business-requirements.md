@@ -432,6 +432,31 @@ Items 5.4 (RMA process) and 5.5 (warranty terms) remain open.
 
 - Inventory is valued using **weighted average cost**: the cost per unit
   is the average cost of all units currently in stock.
+- **The average is held once per item, across all locations and
+  branches** (CONFIRMED 2026-09-15, revising the original per-warehouse
+  implementation). On receipt:
+  `new_avg = (total_qty_all_locations × existing_avg + received_qty ×
+  received_cost) ÷ (total_qty_all_locations + received_qty)`.
+  The Stock Master item detail shows this **Avg Cost** and the extended
+  **Cost Value** of everything on hand at it.
+- A **Goods Transfer moves quantity between locations only** — it never
+  affects cost. With a single company-wide average this is true by
+  definition rather than by a special rule.
+- **A Goods Issue Note and a stock-picking Sales Invoice deduct at the
+  average cost**, which the deduction itself never moves.
+- **Neither quantity nor cost may go negative.** A deduction larger than
+  what is held at that location is refused outright (never a partial
+  issue), and stock at another branch does not make the shortfall good.
+  A receipt at a negative unit cost is refused at entry — with no
+  negative quantity and no negative receipt cost, a negative average is
+  unreachable.
+- **Every stock movement records the running balance it produced**
+  (quantity, average cost and cost value after it), so a later
+  recalculation can be tallied back against history.
+- A **stock adjustment that increases quantity may carry its own unit
+  cost** and re-weight the average like a receipt, for opening balances
+  and found stock. Omitting the cost keeps it a pure count correction
+  that reuses the current average and moves no weighting.
 
 ### HW-001 — Hardware Installation Sign-off — CONFIRMED
 

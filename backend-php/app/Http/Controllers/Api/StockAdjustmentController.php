@@ -65,6 +65,15 @@ class StockAdjustmentController extends Controller
             // increases, -ve decreases, and 0 is accepted (it simply
             // moves nothing on approval).
             'lines.*.quantity_change' => 'required|integer',
+            // Optional cost for an increase (2026-09-15): supplied, the
+            // line re-weights the item's average like a receipt, so
+            // found stock and opening balances come in at their real
+            // cost; omitted, it is a pure count correction that reuses
+            // the current average and moves no weighting. Never
+            // negative -- that is the only route by which a weighted
+            // average could turn negative. Ignored on a decrease, which
+            // always leaves at the current average.
+            'lines.*.unit_cost' => 'sometimes|nullable|numeric|min:0',
             'lines.*.notes' => 'sometimes|nullable|string',
         ]);
 
@@ -86,6 +95,7 @@ class StockAdjustmentController extends Controller
                     'adjustment_id' => $adjustment->id,
                     'stock_item_id' => $line['stock_item_id'],
                     'quantity_change' => $line['quantity_change'],
+                    'unit_cost' => $line['unit_cost'] ?? null,
                     'notes' => $line['notes'] ?? null,
                 ]);
             }

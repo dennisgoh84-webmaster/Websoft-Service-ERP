@@ -97,7 +97,11 @@ class StockReportController extends Controller
                 'warehouses.code as warehouse_code',
                 'warehouses.name as warehouse_name',
                 'stock_levels.quantity',
-                'stock_levels.avg_cost',
+                // The weighted average is held once per item across all
+                // locations (2026-09-15), so every warehouse row values
+                // at the same unit cost -- these are slices of one
+                // company-wide valuation, not independent ones.
+                'stock_items.avg_cost',
             );
 
         if ($request->filled('warehouse_id')) {

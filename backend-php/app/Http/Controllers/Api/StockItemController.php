@@ -195,6 +195,9 @@ class StockItemController extends Controller
             ->where('stock_levels.company_id', $user->company_id)
             ->select(
                 'stock_levels.*',
+                // Held once per item across all locations (2026-09-15),
+                // so every warehouse row reports the same unit cost.
+                'stock_items.avg_cost',
                 'stock_items.code as item_code',
                 'stock_items.name as item_name',
                 'warehouses.code as warehouse_code',
@@ -385,6 +388,14 @@ class StockItemController extends Controller
             'memo' => $item->memo,
             'notes' => $item->notes,
             'dimensions' => $item->dimensions,
+            // Costing (2026-09-15): the weighted average cost of this
+            // item across ALL locations and branches, and the extended
+            // value of everything on hand at that average. Read-only --
+            // both are maintained by App\Services\InventoryService and
+            // are never settable through this controller.
+            // 4dp for the unit cost (Numeric(14, 4)), 2dp for the value.
+            'avg_cost' => (float) $item->avg_cost,
+            'cost_value' => (float) $item->cost_value,
             // Joined display names, so the Stock Master list can show
             // the lookup text without a request per row.
             'category_name' => $item->stockCategory?->name,

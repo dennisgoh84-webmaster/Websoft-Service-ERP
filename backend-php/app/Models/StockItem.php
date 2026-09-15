@@ -35,16 +35,27 @@ class StockItem extends Model
         'category_id', 'group_id', 'brand_id', 'model_id', 'usage_id',
         'barcode', 'part_number', 'invoice_description', 'memo', 'notes', 'dimensions',
         'is_active',
+        // Costing (2026-09-15). The weighted average cost of this item
+        // across ALL locations and branches, and the extended value of
+        // everything on hand at that average. Written only by
+        // App\Services\InventoryService -- never set directly.
+        'avg_cost', 'cost_value',
     ];
 
     protected $attributes = [
         'unit_of_measure' => 'PCS',
         'reorder_level' => 0,
+        'avg_cost' => '0.0000',
+        'cost_value' => '0.00',
         'is_active' => true,
     ];
 
     protected $casts = [
         'reorder_level' => 'integer',
+        // decimal:4 for a unit cost, decimal:2 for an extended value --
+        // the same two precisions the rest of the stock module uses.
+        'avg_cost' => 'decimal:4',
+        'cost_value' => 'decimal:2',
         'is_active' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',

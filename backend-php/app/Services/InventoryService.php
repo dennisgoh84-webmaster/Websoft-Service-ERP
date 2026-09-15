@@ -7,6 +7,7 @@ use App\Models\GoodsReceiveNote;
 use App\Models\GoodsReturnNote;
 use App\Models\GoodsTransferNote;
 use App\Models\StockAdjustment;
+use App\Models\StockItem;
 use App\Models\StockLevel;
 use App\Models\StockMovement;
 use App\Support\Money;
@@ -20,16 +21,45 @@ use Illuminate\Support\Carbon;
  *
  * INV-002 (CONFIRMED 2026-09-09): inventory is valued using WEIGHTED
  * AVERAGE COST -- the cost per unit is the average cost of all units
- * currently in stock. When stock is received (GRN), the average cost
- * at that warehouse is recalculated:
+ * currently in stock.
  *
- *   new_avg = (existing_qty * existing_avg + received_qty * received_cost)
- *             / (existing_qty + received_qty)
+ * REVISED 2026-09-15 (Dennis): that average is held ONCE PER ITEM,
+ * across all locations and branches, on `stock_items.avg_cost`, and
+ * NOT per warehouse as backend/app/services/inventory.py holds it.
+ * `stock_levels` carries quantity only. On receipt:
  *
- * When stock leaves (transfer out, return, adjustment down) the average
- * cost stays the same at the source location -- units leave at their
- * current weighted average, which is what makes the average "weighted"
- * rather than re-derived.
+ *   new_avg = (total_qty_all_locations * existing_avg
+ *              + received_qty * received_cost)
+ *             / (total_qty_all_locations + received_qty)
+ *
+ * Two consequences worth stating, because they are the point of the
+ * change:
+ *   - A TRANSFER IS COST-NEUTRAL BY DEFINITION. There is only one
+ *     average, so moving units between warehouses cannot change it.
+ *     confirmGtn no longer has to read and carry a source cost across.
+ *   - Every location values at the same unit cost, so the Stock
+ *     Valuation report's per-warehouse figures are now slices of one
+ *     company-wide valuation rather than independent ones.
+ *
+ * When stock leaves (issue, transfer, return, adjustment down) the
+ * average stays exactly as it was -- units leave at the current
+ * weighted average, which is what makes the average "weighted" rather
+ * than re-derived.
+ *
+ * `stock_items.cost_value` is the extended value of everything on hand
+ * (total quantity across all warehouses x avg_cost). It is RECOMPUTED
+ * from the authoritative per-warehouse quantities after every movement
+ * rather than incremented, so it cannot drift out of step with them.
+ *
+ * Every movement row records the running balance it produced
+ * (`qty_after`, `avg_cost_after`, `cost_value_after`) so a later
+ * recalculation can be tallied back against history.
+ *
+ * NEITHER QUANTITY NOR COST MAY GO NEGATIVE. A deduction larger than
+ * what is on hand is refused outright (never a partial issue), and a
+ * receipt at a negative unit cost is refused at entry -- with no
+ * negative quantity and no negative receipt cost, a negative average
+ * is unreachable.
  *
  * INV-001 (CONFIRMED 2026-09-09): stock adjustments require manager
  * approval. The adjustment document must be approved before stock
@@ -59,6 +89,57 @@ class InventoryService
     /** Decimal places of an extended (quantity x cost) total (Numeric(14, 2)). */
     private const TOTAL_SCALE = 2;
 
+    /** The item row that carries this company's single average cost for it. */
+    private static function itemOrFail(string $companyId, string $stockItemId): StockItem
+    {
+        $item = StockItem::where('company_id', $companyId)->find($stockItemId);
+        if (! $item) {
+            throw new InventoryRuleViolation('Stock item not found');
+        }
+
+        return $item;
+    }
+
+    /** Total quantity on hand for this item across every warehouse. */
+    private static function totalQuantity(string $companyId, string $stockItemId): int
+    {
+        return (int) StockLevel::where('company_id', $companyId)
+            ->where('stock_item_id', $stockItemId)
+            ->sum('quantity');
+    }
+
+    /**
+     * Recompute the item's extended value from the authoritative
+     * per-warehouse quantities and persist it. Always derived, never
+     * incremented, so `cost_value` cannot drift from `stock_levels`.
+     */
+    private static function revalueItem(StockItem $item, string $companyId, string $stockItemId): void
+    {
+        $qty = self::totalQuantity($companyId, $stockItemId);
+        $item->cost_value = Money::of($qty)
+            ->multipliedByMoney(Money::of($item->avg_cost))
+            ->quantize(self::TOTAL_SCALE)
+            ->toString(self::TOTAL_SCALE);
+        $item->save();
+    }
+
+    /**
+     * The running balance to stamp on a movement row -- the state
+     * AFTER it, so the ledger can be tallied back line by line.
+     *
+     * @return array<string, mixed>
+     */
+    private static function balanceAfter(StockItem $item, string $companyId, string $stockItemId): array
+    {
+        $qty = self::totalQuantity($companyId, $stockItemId);
+
+        return [
+            'qty_after' => $qty,
+            'avg_cost_after' => (string) $item->avg_cost,
+            'cost_value_after' => (string) $item->cost_value,
+        ];
+    }
+
     /** Get the existing stock level for this item/warehouse, or create a zero row. */
     public static function getOrCreateStockLevel(string $companyId, string $stockItemId, string $warehouseId): StockLevel
     {
@@ -73,7 +154,6 @@ class InventoryService
                 'stock_item_id' => $stockItemId,
                 'warehouse_id' => $warehouseId,
                 'quantity' => 0,
-                'avg_cost' => '0.0000',
             ]);
         }
 
@@ -97,35 +177,46 @@ class InventoryService
         string $referenceId,
         ?string $userId = null,
         ?string $notes = null,
+        ?string $movementType = null,
     ): StockMovement {
-        $level = self::getOrCreateStockLevel($companyId, $stockItemId, $warehouseId);
+        // A negative receipt cost is the only way a weighted average
+        // could ever turn negative, so it is refused at entry. Checked
+        // on the raw input rather than through Money, which has no
+        // comparison method -- and the sign of a value is exact in
+        // float for every input this accepts.
+        if ((float) $unitCost < 0) {
+            throw new InventoryRuleViolation('Receipt unit cost cannot be negative');
+        }
         $cost = Money::of($unitCost);
 
-        // Weighted average cost. Both operands keep their full internal
-        // precision until the single quantize at the end -- mirroring
-        // how the Python Decimal arithmetic never rounds an
-        // intermediate operand.
-        $existingValue = Money::of($level->quantity)->multipliedByMoney(Money::of($level->avg_cost));
+        $item = self::itemOrFail($companyId, $stockItemId);
+        $level = self::getOrCreateStockLevel($companyId, $stockItemId, $warehouseId);
+
+        // Weighted average across ALL locations, not just this one.
+        // Both operands keep full internal precision until the single
+        // quantize at the end, so no intermediate is rounded.
+        $globalQty = self::totalQuantity($companyId, $stockItemId);
+        $existingValue = Money::of($globalQty)->multipliedByMoney(Money::of($item->avg_cost));
         $incomingValue = Money::of($qty)->multipliedByMoney($cost);
-        $newQty = $level->quantity + $qty;
-        if ($newQty > 0) {
-            $level->avg_cost = $existingValue->plus($incomingValue)
-                ->dividedBy($newQty)
+        $newGlobalQty = $globalQty + $qty;
+        if ($newGlobalQty > 0) {
+            $item->avg_cost = $existingValue->plus($incomingValue)
+                ->dividedBy($newGlobalQty)
                 ->quantize(self::COST_SCALE)
                 ->toString(self::COST_SCALE);
         }
         // A zero-or-negative resulting quantity leaves avg_cost exactly
-        // as it was -- same guard as the Python service (there is no
-        // meaningful average over no units, and inventing one would
-        // corrupt the next receipt's weighting).
-        $level->quantity = $newQty;
+        // as it was: there is no meaningful average over no units, and
+        // inventing one would corrupt the next receipt's weighting.
+        $level->quantity += $qty;
         $level->save();
+        self::revalueItem($item, $companyId, $stockItemId);
 
         return StockMovement::create([
             'company_id' => $companyId,
             'stock_item_id' => $stockItemId,
             'warehouse_id' => $warehouseId,
-            'movement_type' => StockMovement::TYPE_RECEIVE,
+            'movement_type' => $movementType ?? StockMovement::TYPE_RECEIVE,
             'quantity' => $qty,
             'unit_cost' => $cost->toString(self::COST_SCALE),
             'total_cost' => $incomingValue->quantize(self::TOTAL_SCALE)->toString(self::TOTAL_SCALE),
@@ -133,7 +224,7 @@ class InventoryService
             'reference_id' => $referenceId,
             'notes' => $notes,
             'created_by' => $userId,
-        ]);
+        ] + self::balanceAfter($item, $companyId, $stockItemId));
     }
 
     /**
@@ -155,16 +246,22 @@ class InventoryService
         ?string $userId = null,
         ?string $notes = null,
     ): StockMovement {
+        $item = self::itemOrFail($companyId, $stockItemId);
         $level = self::getOrCreateStockLevel($companyId, $stockItemId, $warehouseId);
+        // Refused outright rather than partially issued, and checked
+        // against the quantity AT THIS WAREHOUSE -- stock held at
+        // another branch cannot satisfy an issue from this one.
         if ($level->quantity < $qty) {
             throw new InventoryRuleViolation("Insufficient stock: have {$level->quantity}, need {$qty}");
         }
 
-        $unitCost = Money::of($level->avg_cost);
+        // Units leave at the item's single weighted average, which the
+        // deduction itself never moves.
+        $unitCost = Money::of($item->avg_cost);
         $totalCost = Money::of($qty)->multipliedByMoney($unitCost)->quantize(self::TOTAL_SCALE);
         $level->quantity -= $qty;
-        // avg_cost stays the same when deducting.
         $level->save();
+        self::revalueItem($item, $companyId, $stockItemId);
 
         return StockMovement::create([
             'company_id' => $companyId,
@@ -178,14 +275,20 @@ class InventoryService
             'reference_id' => $referenceId,
             'notes' => $notes,
             'created_by' => $userId,
-        ]);
+        ] + self::balanceAfter($item, $companyId, $stockItemId));
     }
 
     /**
-     * Positive adjustment -- add quantity at the current average cost.
-     * An adjustment carries no new cost information (it records a count
-     * variance or a found item, not a purchase), so unlike receiveStock
-     * this deliberately does NOT move the weighted average.
+     * Positive adjustment -- add quantity, re-weighting the average
+     * with the cost the adjustment carries.
+     *
+     * CHANGED 2026-09-15 (Dennis): previously an adjustment-up reused
+     * the current average and brought no new cost information, on the
+     * grounds that it records a count variance rather than a purchase.
+     * It now behaves like a receipt, so that opening balances and found
+     * stock can be brought in at their real cost. Passing null keeps
+     * the old behaviour for a pure count correction: the current
+     * average is reused and the weighting is untouched.
      */
     public static function adjustStockIncrease(
         string $companyId,
@@ -195,12 +298,26 @@ class InventoryService
         string $referenceId,
         ?string $userId = null,
         ?string $notes = null,
+        string|int|float|null $unitCostIn = null,
     ): StockMovement {
+        $item = self::itemOrFail($companyId, $stockItemId);
+
+        if ($unitCostIn !== null) {
+            // Same weighting as a receipt, including the negative guard.
+            return self::receiveStock(
+                $companyId, $stockItemId, $warehouseId, $qty, $unitCostIn,
+                referenceType: 'adj', referenceId: $referenceId,
+                userId: $userId, notes: $notes,
+                movementType: StockMovement::TYPE_ADJUSTMENT,
+            );
+        }
+
         $level = self::getOrCreateStockLevel($companyId, $stockItemId, $warehouseId);
         $level->quantity += $qty;
         $level->save();
+        self::revalueItem($item, $companyId, $stockItemId);
 
-        $unitCost = Money::of($level->avg_cost);
+        $unitCost = Money::of($item->avg_cost);
 
         return StockMovement::create([
             'company_id' => $companyId,
@@ -215,7 +332,45 @@ class InventoryService
             'reference_id' => $referenceId,
             'notes' => $notes,
             'created_by' => $userId,
-        ]);
+        ] + self::balanceAfter($item, $companyId, $stockItemId));
+    }
+
+    /**
+     * The receiving half of a transfer: add quantity at the item's
+     * existing average WITHOUT re-weighting it. Deliberately not
+     * receiveStock -- a transfer brings no new cost information into
+     * the company, so nothing about the valuation may move. Together
+     * with its deductStock partner the pair nets to zero value.
+     */
+    private static function transferIn(
+        string $companyId,
+        string $stockItemId,
+        string $warehouseId,
+        int $qty,
+        string $referenceId,
+        ?string $userId = null,
+    ): StockMovement {
+        $item = self::itemOrFail($companyId, $stockItemId);
+        $level = self::getOrCreateStockLevel($companyId, $stockItemId, $warehouseId);
+        $level->quantity += $qty;
+        $level->save();
+        self::revalueItem($item, $companyId, $stockItemId);
+
+        $unitCost = Money::of($item->avg_cost);
+
+        return StockMovement::create([
+            'company_id' => $companyId,
+            'stock_item_id' => $stockItemId,
+            'warehouse_id' => $warehouseId,
+            'movement_type' => StockMovement::TYPE_TRANSFER_IN,
+            'quantity' => $qty,
+            'unit_cost' => $unitCost->toString(self::COST_SCALE),
+            'total_cost' => Money::of($qty)->multipliedByMoney($unitCost)
+                ->quantize(self::TOTAL_SCALE)->toString(self::TOTAL_SCALE),
+            'reference_type' => 'gtn',
+            'reference_id' => $referenceId,
+            'created_by' => $userId,
+        ] + self::balanceAfter($item, $companyId, $stockItemId));
     }
 
     // ── GRN confirm ─────────────────────────────────────────────────
@@ -246,24 +401,21 @@ class InventoryService
             throw new InventoryRuleViolation('GTN is not in draft status');
         }
         foreach ($gtn->lines as $line) {
-            // Read the average cost at the source BEFORE deducting, so
-            // the units arrive at the destination carrying the cost
-            // they left with. A transfer moves stock; it must not
-            // revalue it.
-            $sourceLevel = self::getOrCreateStockLevel($gtn->company_id, $line->stock_item_id, $gtn->from_warehouse_id);
-            $transferCost = (string) $sourceLevel->avg_cost;
-
+            // A transfer moves QUANTITY BETWEEN LOCATIONS AND NOTHING
+            // ELSE (Dennis, 2026-09-15). Since the weighted average is
+            // now held once per item across all locations, there is no
+            // cost to carry across and nothing a transfer could
+            // revalue -- so the destination side deliberately does NOT
+            // go through receiveStock, which would re-weight.
             self::deductStock(
                 $gtn->company_id, $line->stock_item_id, $gtn->from_warehouse_id,
                 $line->quantity, StockMovement::TYPE_TRANSFER_OUT,
                 referenceType: 'gtn', referenceId: $gtn->id,
                 userId: $userId,
             );
-            self::receiveStock(
+            self::transferIn(
                 $gtn->company_id, $line->stock_item_id, $gtn->to_warehouse_id,
-                $line->quantity, $transferCost,
-                referenceType: 'gtn', referenceId: $gtn->id,
-                userId: $userId,
+                $line->quantity, $gtn->id, $userId,
             );
         }
         $gtn->status = StockDocumentStatus::CONFIRMED;
@@ -314,6 +466,9 @@ class InventoryService
                 self::adjustStockIncrease(
                     $adjustment->company_id, $line->stock_item_id, $adjustment->warehouse_id,
                     $line->quantity_change, $adjustment->id, $approverId, $line->notes,
+                    // Null here means a pure count correction: reuse the
+                    // current average, move no weighting.
+                    unitCostIn: $line->unit_cost,
                 );
             } elseif ($line->quantity_change < 0) {
                 self::deductStock(

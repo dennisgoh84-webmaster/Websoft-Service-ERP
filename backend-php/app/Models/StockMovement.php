@@ -52,6 +52,12 @@ class StockMovement extends Model
     protected $fillable = [
         'company_id', 'stock_item_id', 'warehouse_id', 'movement_type', 'quantity',
         'unit_cost', 'total_cost', 'reference_type', 'reference_id', 'notes', 'created_by',
+        // Running balance this movement produced, across ALL locations
+        // (2026-09-15) -- so a recalculation can be tallied back against
+        // history. Nullable: rows written before that change have no
+        // recorded balance, and null there means "not recorded", never
+        // "zero".
+        'qty_after', 'avg_cost_after', 'cost_value_after',
     ];
 
     protected $casts = [
@@ -60,6 +66,9 @@ class StockMovement extends Model
         // Numeric(14, 4) / Numeric(14, 2) columns exactly.
         'unit_cost' => 'decimal:4',
         'total_cost' => 'decimal:2',
+        'qty_after' => 'integer',
+        'avg_cost_after' => 'decimal:4',
+        'cost_value_after' => 'decimal:2',
         'created_at' => 'datetime',
     ];
 

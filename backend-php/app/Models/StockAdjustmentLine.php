@@ -21,9 +21,10 @@ class StockAdjustmentLine extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['adjustment_id', 'stock_item_id', 'quantity_change', 'notes'];
+    protected $fillable = ['adjustment_id', 'stock_item_id', 'quantity_change', 'unit_cost', 'notes'];
 
-    protected $casts = ['quantity_change' => 'integer'];
+    protected $casts = [
+        'unit_cost' => 'decimal:4', 'quantity_change' => 'integer'];
 
     public function adjustment(): BelongsTo
     {

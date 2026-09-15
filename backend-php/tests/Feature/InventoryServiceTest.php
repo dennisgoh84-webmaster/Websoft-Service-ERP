@@ -63,6 +63,21 @@ class InventoryServiceTest extends TestCase
             ->where('warehouse_id', $warehouse->id)->first();
     }
 
+    /**
+     * The weighted average cost, which since 2026-09-15 is held ONCE
+     * PER ITEM across all locations and branches -- not per warehouse.
+     */
+    private function avgCost(): string
+    {
+        return (string) $this->item->fresh()->avg_cost;
+    }
+
+    /** The extended value of everything on hand for the item. */
+    private function costValue(): string
+    {
+        return (string) $this->item->fresh()->cost_value;
+    }
+
     private function receive(int $qty, string $unitCost, ?Warehouse $warehouse = null): StockMovement
     {
         return InventoryService::receiveStock(
@@ -79,7 +94,8 @@ class InventoryServiceTest extends TestCase
 
         $level = $this->levelAt($this->main);
         $this->assertSame(10, $level->quantity);
-        $this->assertSame('100.0000', (string) $level->avg_cost);
+        $this->assertSame('100.0000', $this->avgCost());
+        $this->assertSame('1000.00', $this->costValue());
         // The movement records the extended value at 2dp.
         $this->assertSame('1000.00', (string) $movement->total_cost);
         $this->assertSame(StockMovement::TYPE_RECEIVE, $movement->movement_type);
@@ -97,7 +113,8 @@ class InventoryServiceTest extends TestCase
 
         $level = $this->levelAt($this->main);
         $this->assertSame(15, $level->quantity);
-        $this->assertSame('110.0000', (string) $level->avg_cost);
+        $this->assertSame('110.0000', $this->avgCost());
+        $this->assertSame('1650.00', $this->costValue());
     }
 
     /**
@@ -115,7 +132,7 @@ class InventoryServiceTest extends TestCase
 
         $level = $this->levelAt($this->main);
         $this->assertSame(18, $level->quantity);
-        $this->assertSame('100.9167', (string) $level->avg_cost);
+        $this->assertSame('100.9167', $this->avgCost());
     }
 
     public function test_deducting_leaves_the_average_untouched_and_uses_it_as_the_unit_cost(): void
@@ -130,7 +147,7 @@ class InventoryServiceTest extends TestCase
 
         $level = $this->levelAt($this->main);
         $this->assertSame(11, $level->quantity);
-        $this->assertSame('110.0000', (string) $level->avg_cost, 'a deduction must never re-derive the average');
+        $this->assertSame('110.0000', $this->avgCost(), 'a deduction must never re-derive the average');
         $this->assertSame(-4, $movement->quantity, 'an outward movement is stored negative');
         $this->assertSame('110.0000', (string) $movement->unit_cost);
         $this->assertSame('440.00', (string) $movement->total_cost);
@@ -156,6 +173,117 @@ class InventoryServiceTest extends TestCase
         $this->assertSame(2, $this->levelAt($this->branch)->quantity);
     }
 
+    // ── Costing across locations (2026-09-15) ───────────────────────
+
+    /**
+     * THE HEADING CHANGE: the average is one figure for the item across
+     * every location. A receipt into BR01 re-weights the same average
+     * that MAIN's units are valued at, because there is only one.
+     *
+     *   10 @ 100 into MAIN, then 5 @ 130 into BR01
+     *   = (1000 + 650) / 15 = $110.0000 company-wide
+     */
+    public function test_a_receipt_at_one_branch_reweights_the_average_for_every_branch(): void
+    {
+        $this->receive(10, '100.00', $this->main);
+        $this->receive(5, '130.00', $this->branch);
+
+        $this->assertSame('110.0000', $this->avgCost());
+        $this->assertSame('1650.00', $this->costValue(), 'total value spans all locations');
+        $this->assertSame(10, $this->levelAt($this->main)->quantity);
+        $this->assertSame(5, $this->levelAt($this->branch)->quantity);
+    }
+
+    public function test_cost_value_is_quantity_across_all_locations_times_the_average(): void
+    {
+        $this->receive(10, '100.00', $this->main);
+        $this->receive(5, '100.00', $this->branch);
+
+        // 15 units on hand in two places, one average.
+        $this->assertSame('100.0000', $this->avgCost());
+        $this->assertSame('1500.00', $this->costValue());
+
+        // Issuing from one location reduces the company-wide value.
+        InventoryService::deductStock(
+            $this->company->id, $this->item->id, $this->main->id,
+            4, StockMovement::TYPE_ISSUE, 'gin', (string) Str::uuid(), $this->user->id,
+        );
+        $this->assertSame('100.0000', $this->avgCost(), 'issuing never moves the average');
+        $this->assertSame('1100.00', $this->costValue());
+    }
+
+    /**
+     * An issue may only draw on what is AT THAT LOCATION -- stock held
+     * at another branch does not make a shortfall good.
+     */
+    public function test_stock_at_another_branch_cannot_satisfy_an_issue(): void
+    {
+        $this->receive(2, '100.00', $this->main);
+        $this->receive(50, '100.00', $this->branch);
+
+        $this->expectException(InventoryRuleViolation::class);
+        $this->expectExceptionMessage('Insufficient stock: have 2, need 3');
+
+        InventoryService::deductStock(
+            $this->company->id, $this->item->id, $this->main->id,
+            3, StockMovement::TYPE_ISSUE, 'gin', (string) Str::uuid(),
+        );
+    }
+
+    public function test_a_negative_receipt_cost_is_refused(): void
+    {
+        // With no negative quantity and no negative receipt cost, a
+        // negative weighted average is unreachable.
+        $this->expectException(InventoryRuleViolation::class);
+        $this->expectExceptionMessage('Receipt unit cost cannot be negative');
+
+        $this->receive(5, '-1.00');
+    }
+
+    /** Every movement carries the running balance it produced. */
+    public function test_each_movement_records_the_balance_it_produced(): void
+    {
+        $first = $this->receive(10, '100.00');
+        $this->assertSame(10, $first->qty_after);
+        $this->assertSame('100.0000', (string) $first->avg_cost_after);
+        $this->assertSame('1000.00', (string) $first->cost_value_after);
+
+        $second = $this->receive(5, '130.00');
+        $this->assertSame(15, $second->qty_after);
+        $this->assertSame('110.0000', (string) $second->avg_cost_after);
+        $this->assertSame('1650.00', (string) $second->cost_value_after);
+
+        // The history tallies: value after = qty after x average after,
+        // which is what makes a later recalculation checkable.
+        $this->assertSame(
+            round(15 * 110.0, 2),
+            round((float) $second->cost_value_after, 2),
+        );
+    }
+
+    /**
+     * An adjustment-up MAY now carry its own cost and re-weight, for
+     * opening balances and found stock (Dennis, 2026-09-15).
+     *   10 @ 100 on hand, adjust in 5 @ 130 = (1000 + 650) / 15 = 110
+     */
+    public function test_an_adjustment_with_a_unit_cost_reweights_like_a_receipt(): void
+    {
+        $this->receive(10, '100.00');
+        $adjustment = $this->makeAdjustment(5, StockAdjustment::STATUS_PENDING_APPROVAL);
+        $adjustment->lines()->first()->update(['unit_cost' => '130.0000']);
+        $adjustment->load('lines');
+
+        InventoryService::approveAdjustment($adjustment, $this->user->id);
+        $adjustment->save();
+
+        $this->assertSame(15, $this->levelAt($this->main)->quantity);
+        $this->assertSame('110.0000', $this->avgCost());
+        // Still recorded as an adjustment, not disguised as a receipt.
+        $movement = StockMovement::where('reference_id', $adjustment->id)->firstOrFail();
+        $this->assertSame(StockMovement::TYPE_ADJUSTMENT, $movement->movement_type);
+        $this->assertSame('adj', $movement->reference_type);
+    }
+
     // ── Document confirms ───────────────────────────────────────────
 
     public function test_confirming_a_grn_receives_every_line(): void
@@ -175,7 +303,7 @@ class InventoryServiceTest extends TestCase
 
         $this->assertSame(GoodsReceiveNote::STATUS_CONFIRMED, $grn->fresh()->status);
         $this->assertSame(10, $this->levelAt($this->main)->quantity);
-        $this->assertSame('100.0000', (string) $this->levelAt($this->main)->avg_cost);
+        $this->assertSame('100.0000', $this->avgCost());
     }
 
     public function test_a_grn_cannot_be_confirmed_twice(): void
@@ -216,15 +344,20 @@ class InventoryServiceTest extends TestCase
         $gtn->save();
 
         $this->assertSame(9, $this->levelAt($this->main)->quantity);
-        $this->assertSame('110.0000', (string) $this->levelAt($this->main)->avg_cost);
         $this->assertSame(6, $this->levelAt($this->branch)->quantity);
-        $this->assertSame('110.0000', (string) $this->levelAt($this->branch)->avg_cost);
 
-        // Two movement rows, one per side.
+        // A TRANSFER MOVES QUANTITY AND NOTHING ELSE: the single
+        // company-wide average is untouched, and so is the total value
+        // -- 15 units at 110.0000 before and after, just in two places.
+        $this->assertSame('110.0000', $this->avgCost(), 'a transfer must never move the average');
+        $this->assertSame('1650.00', $this->costValue(), 'a transfer must never change total value');
+
+        // Two movement rows, one per side. The inbound side is a
+        // transfer_in, NOT a receive -- a receive would re-weight.
         $this->assertSame(1, StockMovement::where('reference_id', $gtn->id)
             ->where('movement_type', StockMovement::TYPE_TRANSFER_OUT)->count());
         $this->assertSame(1, StockMovement::where('reference_id', $gtn->id)
-            ->where('movement_type', StockMovement::TYPE_RECEIVE)
+            ->where('movement_type', StockMovement::TYPE_TRANSFER_IN)
             ->where('warehouse_id', $this->branch->id)->count());
     }
 
@@ -248,7 +381,7 @@ class InventoryServiceTest extends TestCase
         $grtn->save();
 
         $this->assertSame(7, $this->levelAt($this->main)->quantity);
-        $this->assertSame('100.0000', (string) $this->levelAt($this->main)->avg_cost);
+        $this->assertSame('100.0000', $this->avgCost());
         $movement = StockMovement::where('reference_id', $grtn->id)->firstOrFail();
         $this->assertSame('100.0000', (string) $movement->unit_cost);
         $this->assertSame('300.00', (string) $movement->total_cost);
@@ -294,14 +427,14 @@ class InventoryServiceTest extends TestCase
         $this->assertSame($this->user->id, $adjustment->fresh()->approved_by);
         $this->assertNotNull($adjustment->fresh()->approved_at);
         $this->assertSame(13, $this->levelAt($this->main)->quantity);
-        $this->assertSame('110.0000', (string) $this->levelAt($this->main)->avg_cost);
+        $this->assertSame('110.0000', $this->avgCost());
     }
 
     /**
-     * A positive adjustment adds units at the CURRENT average -- it
-     * carries no new cost information (it records a count variance,
-     * not a purchase), so unlike a receipt it must not move the
-     * average.
+     * A positive adjustment WITHOUT its own unit cost is a pure count
+     * correction: it adds units at the current average and must not
+     * move the weighting. (Supplying a cost re-weights instead -- see
+     * the next test.)
      */
     public function test_approving_applies_a_positive_adjustment_without_moving_the_average(): void
     {
@@ -312,7 +445,7 @@ class InventoryServiceTest extends TestCase
         $adjustment->save();
 
         $this->assertSame(14, $this->levelAt($this->main)->quantity);
-        $this->assertSame('100.0000', (string) $this->levelAt($this->main)->avg_cost);
+        $this->assertSame('100.0000', $this->avgCost());
         $movement = StockMovement::where('reference_id', $adjustment->id)->firstOrFail();
         $this->assertSame(4, $movement->quantity);
         $this->assertSame('adj', $movement->reference_type);
