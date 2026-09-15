@@ -241,8 +241,8 @@ Close, and converting to a draft Sales Quotation or a Job Order
 against a valid contract, each auto-creating the real record with a
 back-reference rather than just a routing flag, plus both Outlook
 Add-in endpoints including the confirmed fallback-to-plain-Incident
-rule). **Known gap:** no convert-to-software-task route (the
-Software Tasks module isn't converted).
+rule). Its convert-to-software-task route landed with the Software
+Tasks module (2026-09-15), so this module now has no known gaps.
 Also converted: the **Company Dashboard** summary -- the app's landing
 page, which until now reported "Company Dashboard summary
 unavailable" on every login against `backend-php/`. It aggregates
@@ -353,10 +353,18 @@ endpoint was the last remaining 404 against `backend-php`), and
 was missing outright, and the two foreign keys
 (`products.default_reference_code_id`,
 `quotation_lines.reference_code_id`) that earlier migrations had
-deferred until `reference_codes` existed. **Known gap:** Support
-Monitoring's "Un-Test S/T" figure always reports 0, because the
-Software Tasks module is not converted and there is no table to count;
-a test pins that zero so it cannot be mistaken for a real count.
+deferred until `reference_codes` existed. Also converted since: **Software Tasks** (which turned Support
+Monitoring's "Un-Test S/T" from a placeholder 0 into a real count,
+added the `incidents.converted_software_task_id` foreign key, and
+landed the convert-to-software-task route that was the Incidents
+module's last gap -- Incidents now has none), **Event Logs** (the
+read-only face of the audit trail; exporting it is itself audited),
+the **Bank Book** (bank transactions, voiding with a reason,
+per-line reconcile and full reconciliation sessions, plus the
+`bank_reconciliations` table), and the **Mobile Web App**
+(planned-work #1: own-Job-Orders-only, time in/out replacing keyed
+minutes, work photos and videos, and customer sign-off with a
+watermarked chop photo).
 
 **Sales module enhancements landed directly in `backend-php/` +
 `frontend/`, not as part of the conversion above** (`backend/` has no

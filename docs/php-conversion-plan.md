@@ -2099,6 +2099,53 @@ recorded in docs/backlog.md for Dennis to scope rather than assumed.
   Python keeps `bank_book.py` shared, and pinned by a test asserting
   the account list and the ledger closing balance agree.
 
+### Mobile Web App (converted 2026-09-15)
+
+- **Mobile Web App** (`app/routers/mobile.py` ->
+  `App\Http\Controllers\Api\MobileController` +
+  `App\Services\MobileFileStorage`, 16 dedicated tests): all 11
+  endpoints -- own Job Orders and their detail, time in/out, work
+  photo/video upload/list/download/soft-delete, customer sign-off and
+  its retrieval, and the open-time-in check. Gated on
+  `service_records`: the mobile app is a different front door to the
+  same module, not a module of its own.
+
+  Adds `service_record_attachments` and `service_record_signoffs`.
+  DISTINCT from `document_attachments`, deliberately and as in Python:
+  that is the generic any-file panel on ~12 document pages, while these
+  carry rules it does not -- images and videos only, and a chop photo
+  watermarked so it cannot be reused on another record.
+
+  RULES PINNED BY TESTS: a Job Order not assigned to the caller is
+  **403 while another company's is 404** ("not yours" is a different
+  fact from "does not exist"); only one open time-in at a time, naming
+  the record that is already open; time-in on an OPEN Job Order claims
+  it to ASSIGNED; elapsed time is ceil'd to at least one minute then
+  rounded UP to the 15-minute increment, so a 20-second call still
+  bills the minimum; one sign-off per Service Record; and a deleted
+  attachment is soft-deleted with **the file left on disk**.
+
+  **The chop-photo watermark is a GD port of Python's PIL code**, and
+  no new dependency was needed: GD is bundled with PHP and is compiled
+  here with JPEG and FreeType support, with the same DejaVu font the
+  Python code asks for present. Both marks are reproduced -- the
+  semi-transparent bottom strip carrying "SR-NUMBER | timestamp" and
+  the larger, fainter SR number across the centre. Note GD's alpha runs
+  0-127 INVERTED relative to PIL's 0-255, so every alpha is converted
+  rather than copied; and `imagettftext` takes a baseline where PIL
+  takes a top-left corner, so the text height is added back. A test
+  reads the stored pixels to prove the strip is actually drawn rather
+  than trusting that the call returned bytes.
+
+  **BUG AVOIDED, worth recording:** an attachment's stored filename is
+  named after its id, and `ServiceRecordAttachment::create(['id' =>
+  ...])` silently DROPS that id because `id` is not mass-assignable --
+  leaving the row and the file on disk disagreeing about which id they
+  belong to. The id is now set explicitly after construction. The
+  download path reads `stored_filename` from the row, so this would not
+  have failed a naive test; it was caught by the sign-off's foreign key
+  to the chop attachment.
+
 ## Not yet converted (pending, in rough priority order)
 
 Everything below still only exists in `backend/` (Python). Each is a

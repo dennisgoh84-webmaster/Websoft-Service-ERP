@@ -51,6 +51,7 @@ require __DIR__.'/api/stock_issue.php';
 require __DIR__.'/api/dashboard.php';
 require __DIR__.'/api/documents.php';
 require __DIR__.'/api/announcements.php';
+require __DIR__.'/api/mobile.php';
 require __DIR__.'/api/portal.php';
 
 // NEW FEATURES (not Python->PHP conversions -- built directly in
