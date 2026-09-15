@@ -5,14 +5,17 @@ namespace App\Http\Controllers\Api;
 use App\Exceptions\ApiException;
 use App\Exceptions\ARRuleViolation;
 use App\Exceptions\PostingError;
+use App\Http\Controllers\Api\Concerns\SendsDocuments;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
+use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\AccountsReceivableService;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\DocxForms;
 use App\Services\Numbering;
 use App\Services\Posting;
 use App\Support\Money;
@@ -29,11 +32,15 @@ use Illuminate\Support\Facades\DB;
  * recording one fails outright if it can't be posted (ACC-001/003 --
  * Dr bank / Cr AR).
  *
- * NOT yet converted: CSV/Excel/.docx export, "Email Receipt", the
- * Customer Statement endpoints.
+ * NOT yet converted: CSV/Excel export. (The .docx export and "Email
+ * Receipt" endpoints WERE the other gap here; both are converted now
+ * -- see exportDocx()/email() below. The Customer Statement endpoints
+ * are converted too, on AccountsReceivableController.)
  */
 class PaymentController extends Controller
 {
+    use SendsDocuments;
+
     private const MODULE = 'accounts_receivable';
 
     private function customerOrFail(string $companyId, string $customerId): CompanyIndividual
@@ -282,5 +289,75 @@ class PaymentController extends Controller
         }
 
         return response()->json(['status' => 'reversed', 'reversal_voucher' => $reversal->voucher_number]);
+    }
+
+    /**
+     * Every invoice number in the company, keyed by id -- mirrors the
+     * Python router's `_invoice_numbers()` helper, which the Receipt
+     * form uses to label each allocation line.
+     *
+     * @return array<string, string>
+     */
+    private function invoiceNumbers(string $companyId): array
+    {
+        return Invoice::where('company_id', $companyId)->pluck('invoice_number', 'id')->all();
+    }
+
+    /** GET /accounts-receivable/payments/{id}/export.docx -- the Word button on the Receipt Voucher page. */
+    public function exportDocx(Request $request, string $paymentId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        $payment = $this->paymentOrFail($user->company_id, $paymentId);
+        $customer = CompanyIndividual::find($payment->customer_id);
+        $company = Company::find($user->company_id);
+
+        return $this->docxResponse(
+            DocxForms::receiptToDocx($payment, $customer, $company, $this->invoiceNumbers($user->company_id)),
+            "{$payment->voucher_number}.docx",
+        );
+    }
+
+    /**
+     * Email Receipt Voucher (2026-09-12) -- same real-send pattern as
+     * Purchase Order's Email button.
+     */
+    public function email(Request $request, string $paymentId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $payment = $this->paymentOrFail($user->company_id, $paymentId);
+        $customer = CompanyIndividual::find($payment->customer_id);
+        if (! $customer || ! $customer->billing_email) {
+            throw new ApiException(422, 'This customer has no email on file -- add one on the Company/Individual page first.');
+        }
+        $company = Company::find($user->company_id);
+        $companyName = $this->companyName($company);
+        $docxBytes = DocxForms::receiptToDocx($payment, $customer, $company, $this->invoiceNumbers($user->company_id));
+        $amount = number_format((float) $payment->amount_sgd, 2, '.', '');
+        $body = "Dear {$customer->name},\n\n"
+            ."Please find attached Receipt {$payment->voucher_number} dated "
+            .$payment->payment_date->toDateString()." for SGD {$amount}.\n\n"
+            ."Regards,\n{$companyName}";
+
+        $result = $this->emailDocument(
+            $customer->billing_email,
+            "Receipt {$payment->voucher_number} - {$companyName}",
+            $body,
+            $docxBytes,
+            $payment->voucher_number,
+        );
+
+        Audit::record(
+            entityType: 'payment',
+            entityId: $payment->id,
+            action: 'emailed',
+            actorUserId: $user->id,
+            details: "{$payment->voucher_number} emailed to {$customer->billing_email}",
+        );
+
+        return response()->json($result);
     }
 }

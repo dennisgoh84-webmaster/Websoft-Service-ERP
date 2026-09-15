@@ -3,10 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Api\Concerns\SendsDocuments;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
+use App\Models\Company;
+use App\Models\CompanyIndividual;
 use App\Models\Invoice;
+use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\DocxForms;
 use App\Services\Posting;
 use Illuminate\Http\Request;
 
@@ -17,13 +22,15 @@ use Illuminate\Http\Request;
  * and ExcessUsageService::decideExcessUsage()); this controller only
  * lists/reads what's already been issued.
  *
- * NOT yet converted from the Python router: CSV/Excel export, the
- * .docx export and "Email Invoice" endpoints (both need the Documents
- * module's mailer/docx-generation wiring, same gap as Service
- * Records).
+ * NOT yet converted from the Python router: CSV/Excel export. (The
+ * .docx export and "Email Invoice" endpoints WERE the other gap here;
+ * both are converted now -- see exportDocx()/email() below and
+ * App\Services\DocxForms / App\Services\DocumentEmail.)
  */
 class InvoiceController extends Controller
 {
+    use SendsDocuments;
+
     private const MODULE = 'billing';
 
     private function present(Invoice $invoice): array
@@ -81,5 +88,73 @@ class InvoiceController extends Controller
         }
 
         return response()->json($this->present($invoice));
+    }
+
+    private function invoiceOrFail(string $companyId, string $invoiceId): Invoice
+    {
+        $invoice = Invoice::find($invoiceId);
+        if (! $invoice || $invoice->company_id !== $companyId) {
+            throw new ApiException(404, 'Invoice not found');
+        }
+
+        return $invoice;
+    }
+
+    /** GET /invoices/{id}/export.docx -- the Word button on the Invoice print page. */
+    public function exportDocx(Request $request, string $invoiceId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        $invoice = $this->invoiceOrFail($user->company_id, $invoiceId);
+        $customer = CompanyIndividual::find($invoice->customer_id);
+        $company = Company::find($user->company_id);
+
+        return $this->docxResponse(
+            DocxForms::invoiceToDocx($invoice, $customer, $company),
+            "{$invoice->invoice_number}.docx",
+        );
+    }
+
+    /**
+     * Email Sales Invoice (2026-09-12) -- same real-send pattern as
+     * Purchase Order's Email button.
+     */
+    public function email(Request $request, string $invoiceId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $invoice = $this->invoiceOrFail($user->company_id, $invoiceId);
+        $customer = CompanyIndividual::find($invoice->customer_id);
+        if (! $customer || ! $customer->billing_email) {
+            throw new ApiException(422, 'This customer has no email on file -- add one on the Company/Individual page first.');
+        }
+        $company = Company::find($user->company_id);
+        $companyName = $this->companyName($company);
+        $docxBytes = DocxForms::invoiceToDocx($invoice, $customer, $company);
+        $total = number_format((float) $invoice->total_amount_sgd, 2, '.', '');
+        $body = "Dear {$customer->name},\n\n"
+            ."Please find attached Invoice {$invoice->invoice_number} for SGD {$total}"
+            .($invoice->due_date ? ', due '.$invoice->due_date->toDateString().".\n\n" : ".\n\n")
+            ."Regards,\n{$companyName}";
+
+        $result = $this->emailDocument(
+            $customer->billing_email,
+            "Invoice {$invoice->invoice_number} - {$companyName}",
+            $body,
+            $docxBytes,
+            $invoice->invoice_number,
+        );
+
+        Audit::record(
+            entityType: 'invoice',
+            entityId: $invoice->id,
+            action: 'emailed',
+            actorUserId: $user->id,
+            details: "{$invoice->invoice_number} emailed to {$customer->billing_email}",
+        );
+
+        return response()->json($result);
     }
 }

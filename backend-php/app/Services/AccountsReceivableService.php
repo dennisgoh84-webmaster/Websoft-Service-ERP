@@ -220,4 +220,68 @@ class AccountsReceivableService
 
         return [$asAt, $rows];
     }
+
+    /**
+     * Everything this customer currently owes, plus any receipt money
+     * still sitting unallocated on their account. Mirrors
+     * backend/app/routers/accounts_receivable.py's
+     * `_build_customer_statement`, and lives here for the same reason
+     * that helper is shared in Python: the JSON endpoint, the .docx
+     * export and the Email attachment must all show the same figures --
+     * "export what's on screen" always matches (2026-09-12).
+     *
+     * Returns the CompanyIndividualStatement shape from
+     * app/schemas/schemas.py, field for field.
+     *
+     * @return array<string, mixed>
+     */
+    public static function buildCustomerStatement(CompanyIndividual $customer, string $companyId, ?Carbon $asAt = null): array
+    {
+        $asAt = $asAt ?? Carbon::today();
+
+        $invoices = Invoice::where('company_id', $companyId)
+            ->where('customer_id', $customer->id)
+            ->where('status', '!=', Invoice::STATUS_PAID)
+            ->orderBy('issued_at')
+            ->get();
+
+        $lines = [];
+        $totalOutstanding = Money::of(0);
+        foreach ($invoices as $invoice) {
+            $outstanding = $invoice->outstandingSgd();
+            $lines[] = [
+                'invoice_id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'description' => $invoice->description,
+                'issued_on' => optional($invoice->issued_at)->toDateString(),
+                'due_date' => optional($invoice->due_date)->toDateString(),
+                'total_amount_sgd' => (float) $invoice->total_amount_sgd,
+                'amount_paid_sgd' => (float) $invoice->amount_paid_sgd,
+                'outstanding_sgd' => $outstanding->toFloat(),
+                'status' => $invoice->status,
+                'is_disputed' => (bool) $invoice->is_disputed,
+                // Python: max((as_at - due_date).days, 0), and 0 when the
+                // invoice has no due date -- never an invented lateness.
+                'days_overdue' => $invoice->due_date
+                    ? max((int) $invoice->due_date->copy()->startOfDay()->diffInDays($asAt->copy()->startOfDay(), false), 0)
+                    : 0,
+            ];
+            $totalOutstanding = $totalOutstanding->plus($outstanding);
+        }
+
+        $unallocated = Money::of(0);
+        foreach (Payment::with('allocations')->where('company_id', $companyId)->where('customer_id', $customer->id)->get() as $payment) {
+            $unallocated = $unallocated->plus($payment->unallocatedSgd());
+        }
+
+        return [
+            'customer_id' => $customer->id,
+            'customer_name' => $customer->name,
+            'as_at' => $asAt->toDateString(),
+            'payment_terms_days' => $customer->payment_terms_days,
+            'lines' => $lines,
+            'total_outstanding_sgd' => $totalOutstanding->toFloat(),
+            'unallocated_credit_sgd' => $unallocated->toFloat(),
+        ];
+    }
 }

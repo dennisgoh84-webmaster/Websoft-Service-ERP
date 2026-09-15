@@ -110,10 +110,11 @@ shipped and when.
   under the same layout the Python backend uses, 20MB cap, any file
   type, plus drawn signatures; 11 dedicated tests). **Correction to an
   earlier note:** the `.docx` export / "Email X" gaps recorded against
-  Service Records, Invoices, Purchase Orders and Quotations are NOT
-  closed by this -- that wiring is a separate, still-unconverted stack
+  Service Records, Invoices, Purchase Orders and Quotations were NOT
+  closed by this -- that wiring is a separate stack
   (`mailer.py`, `pdf_convert.py`, `docx_forms.py`,
-  `document_email.py`), now listed as its own pending item.
+  `document_email.py`), **which has since been converted in its own
+  right (2026-09-15, below)**.
   Also converted: **Announcements + Ad Banner** (the platform
   announcements and promo video URL behind the app-wide ad banner,
   plus its admin screen, 10 dedicated tests) --
@@ -141,8 +142,34 @@ shipped and when.
   the two foreign keys (`login_otps.portal_user_id`,
   `incidents.raised_by_portal_user_id`) earlier migrations had
   deferred until `portal_users` existed.
+  Also converted: the **document generation stack and every `.docx` /
+  "Email X" endpoint** (`docx_forms.py`, `pdf_convert.py`,
+  `document_email.py` -- 42 dedicated tests). All seven Word forms
+  (Sales Invoice, Sales Quotation, Receipt Voucher, Purchase Order,
+  Payment Voucher, Service Record, Statement of Accounts), DOCX → PDF
+  via LibreOffice headless (the same .docx bytes the Word button
+  serves, so the two formats can never drift), and the shared "Email
+  this document" helper -- which closes the `.docx`/"Email X" KNOWN
+  GAPs recorded against Service Records, Invoices, Purchase Orders,
+  Payment Vouchers, Receipt Vouchers, Quotations **and** the AR
+  Customer Statement endpoints, all at once. The AR Customer
+  Statement itself (its own separate gap) is converted with them.
+  Adds `phpoffice/phpword` as a dependency (PHP has no built-in DOCX
+  writer; the alternative is hand-rolling OOXML) and needs
+  **`libreoffice-writer`** installed, not just `libreoffice-core`
+  (DEV_SETUP.md already says this; `pdf_convert.py`'s own docstring
+  in `backend/` is the stale one). Two bugs
+  fixed on the way: `Mailer`'s `SMTP_USE_TLS` flag was inert (both
+  branches of a ternary were identical, so TLS could never be turned
+  off), and PHPWord's default of writing `<w:t>` text unescaped meant
+  a literal "&" -- which every Service Record carries -- produced a
+  file Word repairs silently but LibreOffice refuses, breaking the
+  PDF behind every Email button while the Word download still looked
+  fine.
   Still pending: everything else -- converted module by module, same
-  pattern as the Odoo replacement strategy.
+  pattern as the Odoo replacement strategy. CSV/Excel export
+  (`exports.py`) is now the one export format still missing across
+  the converted modules.
   → [php-conversion-plan.md](php-conversion-plan.md)
 
 ## Waiting on Dennis to pick up (deferred 2026-09-12)

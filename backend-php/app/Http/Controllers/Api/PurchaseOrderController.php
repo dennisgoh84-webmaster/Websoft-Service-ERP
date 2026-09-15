@@ -4,13 +4,16 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
 use App\Exceptions\PayablesRuleViolation;
+use App\Http\Controllers\Api\Concerns\SendsDocuments;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
+use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\PurchaseOrder;
 use App\Models\SupplierInvoice;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\DocxForms;
 use App\Services\Numbering;
 use App\Services\PayablesService;
 use App\Services\Tax;
@@ -24,12 +27,14 @@ use Illuminate\Support\Facades\DB;
  * backend/app/routers/payables.py -- see App\Services\PayablesService
  * for the PUR-001/002/003 business logic this only orchestrates.
  *
- * NOT yet converted: CSV/Excel export, the .docx export and "Email
- * Purchase Order" endpoints (need the Documents module's mailer
- * wiring, same gap as Service Records/Invoices).
+ * NOT yet converted: CSV/Excel export. (The .docx export and "Email
+ * Purchase Order" endpoints WERE the other gap here; both are
+ * converted now -- see exportDocx()/email() below.)
  */
 class PurchaseOrderController extends Controller
 {
+    use SendsDocuments;
+
     private const MODULE = 'accounts_payable';
 
     private function supplierOrFail(string $companyId, string $supplierId): CompanyIndividual
@@ -219,5 +224,65 @@ class PurchaseOrderController extends Controller
         }
 
         return response()->json((new SupplierInvoiceController)->present($bill->fresh()));
+    }
+
+    /** GET /accounts-payable/purchase-orders/{id}/export.docx -- the Word button on the PO print page. */
+    public function exportDocx(Request $request, string $poId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        $po = $this->poOrFail($user->company_id, $poId);
+        $supplier = $this->supplierOrFail($user->company_id, $po->supplier_id);
+        $company = Company::find($user->company_id);
+
+        return $this->docxResponse(
+            DocxForms::purchaseOrderToDocx($po, $supplier, $company),
+            "{$po->po_number}.docx",
+        );
+    }
+
+    /**
+     * Real server-side send (2026-09-12), PO PDF attached. The PDF is
+     * the same .docx form (see DocxForms::purchaseOrderToDocx)
+     * converted via LibreOffice headless -- see App\Services\PdfConvert.
+     */
+    public function email(Request $request, string $poId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $po = $this->poOrFail($user->company_id, $poId);
+        $supplier = $this->supplierOrFail($user->company_id, $po->supplier_id);
+        if (! $supplier->billing_email) {
+            throw new ApiException(422, "{$supplier->name} has no email on file -- add one on the Company/Individual page first.");
+        }
+        $company = Company::find($user->company_id);
+        $companyName = $this->companyName($company);
+        $docxBytes = DocxForms::purchaseOrderToDocx($po, $supplier, $company);
+        $total = number_format((float) $po->total_amount_sgd, 2, '.', '');
+        $body = "Dear {$supplier->name},\n\n"
+            ."Please find attached Purchase Order {$po->po_number} dated ".$po->order_date->toDateString()
+            ." for SGD {$total}.\n\n"
+            ."Please confirm receipt and quote the PO number on your invoice.\n\n"
+            ."Regards,\n{$companyName}";
+
+        $result = $this->emailDocument(
+            $supplier->billing_email,
+            "Purchase Order {$po->po_number} - {$companyName}",
+            $body,
+            $docxBytes,
+            $po->po_number,
+        );
+
+        Audit::record(
+            entityType: 'purchase_order',
+            entityId: $po->id,
+            action: 'emailed',
+            actorUserId: $user->id,
+            details: "{$po->po_number} emailed to {$supplier->billing_email}",
+        );
+
+        return response()->json($result);
     }
 }

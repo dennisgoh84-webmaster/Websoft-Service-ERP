@@ -5,13 +5,16 @@ namespace App\Http\Controllers\Api;
 use App\Exceptions\ApiException;
 use App\Exceptions\PayablesRuleViolation;
 use App\Exceptions\PostingError;
+use App\Http\Controllers\Api\Concerns\SendsDocuments;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
+use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\SupplierInvoice;
 use App\Models\SupplierPayment;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\DocxForms;
 use App\Services\Numbering;
 use App\Services\PayablesService;
 use App\Services\Posting;
@@ -31,10 +34,14 @@ use Illuminate\Support\Facades\DB;
  * this module was deferred until GL posting + Bank existed -- see
  * PayablesService's class docblock's history.
  *
- * NOT yet converted: CSV/Excel/.docx export, "Email Payment Voucher".
+ * NOT yet converted: CSV/Excel export. (The .docx export and "Email
+ * Payment Voucher" endpoints WERE the other gap here; both are
+ * converted now -- see exportDocx()/email() below.)
  */
 class SupplierPaymentController extends Controller
 {
+    use SendsDocuments;
+
     private const MODULE = 'accounts_payable';
 
     private function supplierOrFail(string $companyId, string $supplierId): CompanyIndividual
@@ -274,5 +281,72 @@ class SupplierPaymentController extends Controller
         }
 
         return response()->json(['status' => 'reversed', 'reversal_voucher' => $reversal->voucher_number]);
+    }
+
+    /**
+     * Every bill number in the company, keyed by id -- mirrors the
+     * Python router's `_bill_numbers()` helper, which the Payment
+     * Voucher form uses to label each allocation line.
+     *
+     * @return array<string, string>
+     */
+    private function billNumbers(string $companyId): array
+    {
+        return SupplierInvoice::where('company_id', $companyId)->pluck('bill_number', 'id')->all();
+    }
+
+    /** GET /accounts-payable/payments/{id}/export.docx -- the Word button on the Payment Voucher page. */
+    public function exportDocx(Request $request, string $paymentId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        $payment = $this->paymentOrFail($user->company_id, $paymentId);
+        $supplier = $this->supplierOrFail($user->company_id, $payment->supplier_id);
+        $company = Company::find($user->company_id);
+
+        return $this->docxResponse(
+            DocxForms::paymentVoucherToDocx($payment, $supplier, $company, $this->billNumbers($user->company_id)),
+            "{$payment->voucher_number}.docx",
+        );
+    }
+
+    /** Email PV (2026-09-12) -- same real-send pattern as Purchase Order. */
+    public function email(Request $request, string $paymentId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $payment = $this->paymentOrFail($user->company_id, $paymentId);
+        $supplier = $this->supplierOrFail($user->company_id, $payment->supplier_id);
+        if (! $supplier->billing_email) {
+            throw new ApiException(422, "{$supplier->name} has no email on file -- add one on the Company/Individual page first.");
+        }
+        $company = Company::find($user->company_id);
+        $companyName = $this->companyName($company);
+        $docxBytes = DocxForms::paymentVoucherToDocx($payment, $supplier, $company, $this->billNumbers($user->company_id));
+        $amount = number_format((float) $payment->amount_sgd, 2, '.', '');
+        $body = "Dear {$supplier->name},\n\n"
+            ."Please find attached Payment Voucher {$payment->voucher_number} dated "
+            .$payment->payment_date->toDateString()." for SGD {$amount}.\n\n"
+            ."Regards,\n{$companyName}";
+
+        $result = $this->emailDocument(
+            $supplier->billing_email,
+            "Payment Voucher {$payment->voucher_number} - {$companyName}",
+            $body,
+            $docxBytes,
+            $payment->voucher_number,
+        );
+
+        Audit::record(
+            entityType: 'supplier_payment',
+            entityId: $payment->id,
+            action: 'emailed',
+            actorUserId: $user->id,
+            details: "{$payment->voucher_number} emailed to {$supplier->billing_email}",
+        );
+
+        return response()->json($result);
     }
 }

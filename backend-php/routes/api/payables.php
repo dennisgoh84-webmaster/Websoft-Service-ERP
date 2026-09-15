@@ -1,8 +1,7 @@
 <?php
 
 // Mirrors backend/app/routers/payables.py. NOT yet converted (see
-// docs/php-conversion-plan.md): CSV/Excel/.docx export, "Email
-// Purchase Order"/"Email Payment Voucher".
+// docs/php-conversion-plan.md): CSV/Excel export.
 
 use App\Http\Controllers\Api\AccountsPayableController;
 use App\Http\Controllers\Api\PurchaseOrderController;
@@ -16,6 +15,8 @@ Route::middleware('auth.jwt')->prefix('accounts-payable')->group(function () {
     Route::get('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show']);
     Route::post('/purchase-orders/{purchaseOrder}/approve', [PurchaseOrderController::class, 'approve']);
     Route::post('/purchase-orders/{purchaseOrder}/import-to-ap', [PurchaseOrderController::class, 'importToAp']);
+    Route::get('/purchase-orders/{purchaseOrder}/export.docx', [PurchaseOrderController::class, 'exportDocx']);
+    Route::post('/purchase-orders/{purchaseOrder}/email', [PurchaseOrderController::class, 'email']);
 
     Route::get('/bills', [SupplierInvoiceController::class, 'index']);
     Route::post('/bills', [SupplierInvoiceController::class, 'store']);
@@ -29,6 +30,8 @@ Route::middleware('auth.jwt')->prefix('accounts-payable')->group(function () {
     Route::post('/payments/{payment}/bank', [SupplierPaymentController::class, 'bank']);
     Route::post('/payments/{payment}/unbank', [SupplierPaymentController::class, 'unbank']);
     Route::post('/payments/{payment}/ungl', [SupplierPaymentController::class, 'ungl']);
+    Route::get('/payments/{payment}/export.docx', [SupplierPaymentController::class, 'exportDocx']);
+    Route::post('/payments/{payment}/email', [SupplierPaymentController::class, 'email']);
 
     Route::get('/aging', [AccountsPayableController::class, 'agingReport']);
 });

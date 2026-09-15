@@ -4,12 +4,17 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
 use App\Exceptions\ContractRuleViolation;
+use App\Http\Controllers\Api\Concerns\SendsDocuments;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
+use App\Models\Company;
+use App\Models\CompanyIndividual;
 use App\Models\JobOrder;
 use App\Models\ServiceRecord;
 use App\Models\User;
+use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\DocxForms;
 use App\Services\ServiceRecordService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,12 +26,14 @@ use Illuminate\Support\Facades\DB;
  * business logic this only orchestrates.
  *
  * NOT yet converted from the Python router (tracked in
- * docs/php-conversion-plan.md): CSV/Excel export, the .docx export and
- * "Email Service Record" endpoints (both need the Documents module's
- * mailer/docx-generation wiring, not yet converted).
+ * docs/php-conversion-plan.md): CSV/Excel export. (The .docx export
+ * and "Email Service Record" endpoints WERE the other gap here; both
+ * are converted now -- see exportDocx()/email() below.)
  */
 class ServiceRecordController extends Controller
 {
+    use SendsDocuments;
+
     private const MODULE = 'service_records';
 
     private function recordOrFail(string $companyId, string $recordId): ServiceRecord
@@ -187,5 +194,65 @@ class ServiceRecordController extends Controller
         }
 
         return response()->json($this->present($record->fresh()));
+    }
+
+    /** GET /service-records/{id}/export.docx -- the Word button on the Service Record print page. */
+    public function exportDocx(Request $request, string $recordId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        $record = $this->recordOrFail($user->company_id, $recordId);
+        $jobOrder = JobOrder::find($record->job_order_id);
+        $customer = $jobOrder ? CompanyIndividual::find($jobOrder->customer_id) : null;
+        $company = Company::find($user->company_id);
+
+        return $this->docxResponse(
+            DocxForms::serviceRecordToDocx($record, $jobOrder, $customer, $company),
+            "{$record->service_record_number}.docx",
+        );
+    }
+
+    /**
+     * Email Service Record (2026-09-12) -- same real-send pattern as
+     * Purchase Order's Email button. Goes to the customer on the Job
+     * Order this record was logged against.
+     */
+    public function email(Request $request, string $recordId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $record = $this->recordOrFail($user->company_id, $recordId);
+        $jobOrder = JobOrder::find($record->job_order_id);
+        $customer = $jobOrder ? CompanyIndividual::find($jobOrder->customer_id) : null;
+        if (! $customer || ! $customer->billing_email) {
+            throw new ApiException(422, 'This customer has no email on file -- add one on the Company/Individual page first.');
+        }
+        $company = Company::find($user->company_id);
+        $companyName = $this->companyName($company);
+        $docxBytes = DocxForms::serviceRecordToDocx($record, $jobOrder, $customer, $company);
+        $body = "Dear {$customer->name},\n\n"
+            ."Please find attached Service Record {$record->service_record_number} for Job Order "
+            ."{$jobOrder->job_order_number} ({$jobOrder->subject}), dated ".$record->work_date->toDateString().".\n\n"
+            ."Regards,\n{$companyName}";
+
+        $result = $this->emailDocument(
+            $customer->billing_email,
+            "Service Record {$record->service_record_number} - {$companyName}",
+            $body,
+            $docxBytes,
+            $record->service_record_number,
+        );
+
+        Audit::record(
+            entityType: 'service_record',
+            entityId: $record->id,
+            action: 'emailed',
+            actorUserId: $user->id,
+            details: "{$record->service_record_number} emailed to {$customer->billing_email}",
+        );
+
+        return response()->json($result);
     }
 }

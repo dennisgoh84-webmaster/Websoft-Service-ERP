@@ -351,8 +351,9 @@ see the Customer Helpdesk Portal entry below.)
   (`tests/Feature/ServiceRecordTest.php`) cover RBAC (Group Authority
   *and* the named-role approver check are independently enforced),
   multi-company isolation, and the approval-queue shape.
-  **Not yet converted:** CSV/Excel export, the `.docx`/email endpoints
-  (need the Documents module's mailer wiring). The Excess Usage
+  **Not yet converted:** CSV/Excel export. (The `.docx`/email
+  endpoints were the other gap here; both are converted now -- see
+  "Document generation stack" below.) The Excess Usage
   *treatment-decision* endpoints (approve/write-off/bill an
   `ExcessUsageRecord`) are still pending -- see below; this module only
   creates those rows.
@@ -422,9 +423,9 @@ see the Customer Helpdesk Portal entry below.)
   contract (open decision #32). Quotations isn't converted yet, so
   `cost_sgd` is always null here -- the same as the Python source's
   own "not created from a quotation" case, never an invented cost.
-  **Not yet converted:** CSV/Excel export, the `.docx` export and
-  "Email Invoice" endpoints (need the Documents module's mailer
-  wiring, same gap as Service Records).
+  **Not yet converted:** CSV/Excel export. (The `.docx` export and
+  "Email Invoice" endpoints were the other gap here; both are
+  converted now -- see "Document generation stack" below.)
 
 Verified end-to-end for all five modules against the real React
 frontend (screenshots in the PR/commit history): contract creation
@@ -458,7 +459,9 @@ breakdown.
   (`tests/Feature/AccountsReceivableTest.php`).
   **Not yet converted:** the commission clawback the Python write-off
   endpoint triggers (Commission Management is deferred, per
-  CLAUDE.md), CSV/Excel/.docx export.
+  CLAUDE.md) and CSV/Excel export. (The Customer Statement endpoints
+  and `.docx` export were also listed here; both are converted now --
+  see "Document generation stack" below.)
 - **AR-001** (`app/models/payments.py`, the payment half of
   `app/routers/accounts_receivable.py` →
   `App\Models\Payment`/`PaymentAllocation`,
@@ -484,7 +487,9 @@ breakdown.
   9 business-logic tests added to `AccountsReceivableServiceTest.php`
   + 9 API-level tests (`tests/Feature/PaymentTest.php`).
   **Not yet converted:** the Customer Statement endpoints, CSV/Excel/
-  .docx export, "Email Receipt".
+  CSV/Excel export. (The Customer Statement endpoints, the `.docx`
+  export and "Email Receipt" were also listed here; all are converted
+  now -- see "Document generation stack" below.)
 - **Accounts Payable / Purchasing** (`app/models/payables.py`,
   `app/services/payables.py`, `app/routers/payables.py` (partial) →
   `App\Models\PurchaseOrder`/`SupplierInvoice`,
@@ -520,8 +525,10 @@ breakdown.
   every threshold/role combination, every 2-way-match outcome, the
   double-import guard, aging) + 8 API-level tests
   (`tests/Feature/PayablesTest.php`).
-  **Not yet converted:** CSV/Excel/.docx export, "Email Purchase
-  Order".
+  **Not yet converted:** CSV/Excel export. (The `.docx` export and
+  "Email Purchase Order"/"Email Payment Voucher" endpoints were the
+  other gap here; all are converted now -- see "Document generation
+  stack" below.)
 - **GL posting + Bank step** (`app/services/posting.py`,
   `app/services/ledger.py`, `app/models/accounting.py`,
   `app/models/treasury.py`, `app/models/periods.py` →
@@ -748,15 +755,12 @@ part of the still-unconverted `reports.py` module).
   hourly-only/non-hourly-only/mixed conversion, the SRV-002 partial-
   failure message, the neither-converts edge case) + 12 API-level
   tests (`tests/Feature/QuotationTest.php`).
-  **KNOWN GAP (not silently papered over):** CSV/Excel export, the
-  `.docx` export, and the "Email Quotation" endpoint are not converted
-  -- same Documents-module-mailer-wiring gap already flagged for
-  Service Records/Invoices/Purchase Orders. `QuotationsPage.tsx`'s
-  Export/Email/WhatsApp buttons and `QuotationPrintPage.tsx`'s Word
-  export therefore still 404 if clicked against `backend-php/` (the
-  PDF/Print option uses the browser's own print dialog, not an API
-  call, so it works); every other control on both pages works
-  end-to-end. `Invoice`'s existing GP-costing `KNOWN GAP` (tracing a
+  **KNOWN GAP (not silently papered over):** CSV/Excel export is not
+  converted. (The `.docx` export and the "Email Quotation" endpoint
+  were listed here too; both are converted now -- see "Document
+  generation stack" below, and `QuotationPrintPage.tsx`'s Word export
+  and `QuotationsPage.tsx`'s Email button were both driven end to end
+  through the real UI as part of that work.) `Invoice`'s existing GP-costing `KNOWN GAP` (tracing a
   CONTRACT_ANNUAL invoice's cost back to the quotation that converted
   into it) is **not** closed by this conversion -- `Quotation` and
   `Contract` carry no link back to each other in either direction (the
@@ -1015,7 +1019,10 @@ re-drive manually.
   therefore all stand unchanged, and converting them is its own future
   task (config already has the `smtp_*` settings in
   `config/websoft.php`, so the eventual PHP mailer has somewhere to
-  read from).
+  read from). **Update 2026-09-15: that future task is done** -- see
+  "Document generation stack" below; the correction above was right
+  about where the wiring lived, and converting those four Python
+  services is what actually closed all of those gaps.
   21 tests across both halves
   (`tests/Feature/DocumentTest.php`, 11 -- a real multipart upload via
   `UploadedFile::fake()`, the on-disk path and content, download,
@@ -1489,6 +1496,215 @@ resulting audit trail showed `portal_access_enabled`,
 `password_changed_self` plus the `incident`/`created` entry attributed
 to "Alice Tan (portal)" with no staff actor id.
 
+- **Document generation stack + the `.docx` / "Email X" endpoints**
+  (`app/services/docx_forms.py` (497 lines),
+  `app/services/pdf_convert.py`, `app/services/document_email.py` ->
+  `App\Services\DocxForms`, `App\Services\PdfConvert`,
+  `App\Services\DocumentEmail`, plus the
+  `App\Http\Controllers\Api\Concerns\SendsDocuments` trait and the
+  fifteen endpoints that consume them). This is the stack the
+  Documents-module correction above identified as the real blocker,
+  and converting it closes the `.docx`/"Email X" KNOWN GAPs recorded
+  against **Service Records, Sales Invoices, Purchase Orders, Payment
+  Vouchers, Receipt Vouchers, Sales Quotations** and the **AR Customer
+  Statement** all at once.
+
+  **Converted:**
+  - All **seven** Word forms: `invoice_to_docx`, `quotation_to_docx`,
+    `receipt_to_docx`, `purchase_order_to_docx`,
+    `payment_voucher_to_docx`, `service_record_to_docx`,
+    `statement_to_docx` -- section for section, label for label, same
+    table columns, same totals/GST treatment, same number and date
+    formatting.
+  - **DOCX -> PDF via LibreOffice headless**, keeping the Python
+    module's deliberate design: the PDF attached to an email is the
+    *same .docx bytes* the Word button serves, converted by shelling
+    out to `soffice`, so one template feeds both formats and they can
+    never drift. Not re-implemented as a second PDF layout.
+  - The shared "Email this document" helper, with Python's own status
+    mapping preserved: a PDF-conversion failure or an unconfigured
+    mailer is **422**, an SMTP failure is **502**.
+  - `App\Services\Mailer` gained **attachment support**
+    (`attachment_filename`/`attachment_bytes`/`attachment_content_type`,
+    defaulting to `application/pdf`, matching Python's `send_email`
+    signature). The existing 3-argument calls (login OTP, password
+    reset, portal invites) are unchanged. There is deliberately only
+    one mailer -- the Auth one -- not a second copy.
+  - The **AR Customer Statement** itself
+    (`AccountsReceivableService::buildCustomerStatement()` +
+    `GET /accounts-receivable/statement/{customer}`), which the .docx
+    and Email endpoints both need and which was its own separate gap.
+    Shared by all three exactly like Python's own
+    `_build_customer_statement`, so "export what's on screen" always
+    matches (2026-09-12).
+  - Endpoints, same paths/verbs/RBAC as the Python routers -- `.docx`
+    export at VIEW, "Email X" at EDIT, on each module's own existing
+    module key (`billing`, `sales`, `service_records`,
+    `accounts_payable`, `accounts_receivable`); no new module key:
+    `GET|POST /invoices/{id}/export.docx|email`,
+    `/quotations/{id}/...`, `/service-records/{id}/...`,
+    `/accounts-payable/purchase-orders/{id}/...`,
+    `/accounts-payable/payments/{id}/...`,
+    `/accounts-receivable/payments/{id}/...`, and
+    `/accounts-receivable/statement/{customer}` + its `/export.docx`
+    and `/email`. Each Email endpoint writes the same audit entry as
+    Python (`emailed` on the document, `statement_emailed` on the
+    customer) and only after a successful send.
+
+  **DEPENDENCY: `phpoffice/phpword`** (recorded here the same way
+  `brick/math` was, per CLAUDE.md's "do not introduce unnecessary
+  dependencies" rule). PHP has no built-in DOCX writer, and PHPWord is
+  the direct counterpart to the Python backend's `python-docx`. The
+  only alternative is hand-assembling OOXML -- the WordprocessingML
+  parts, the content-type/relationship parts and the zip container --
+  by hand, which is strictly worse: more code, no styling primitives,
+  and a format that has to be kept valid by hand. No PDF library was
+  added: LibreOffice does that, exactly as in `backend/`.
+
+  **SYSTEM DEPENDENCY, and a correction to `backend/`'s own
+  documentation:** `pdf_convert.py`'s docstring says this needs
+  "`apt install libreoffice-core` or similar". **`libreoffice-core`
+  alone is not enough** -- it carries no Writer import/export filter,
+  so *every* conversion fails with `Error: source file could not be
+  loaded` (verified here: even a plain `.txt` fails). The real
+  requirement is **`libreoffice-writer`**. DEV_SETUP.md's Prerequisites
+  section already says this correctly; it is the Python module's own
+  docstring that is stale -- documented here for Dennis rather than
+  edited in `backend/`.
+
+  **Parity notes (python-docx vs. PHPWord -- byte-identical output is
+  impossible and was never the goal):**
+  - python-docx's `table.style = "Light Grid Accent 1"` references a
+    built-in Word table style that ships inside python-docx's own
+    default template. PHPWord's default template has no such style, so
+    a bare reference would dangle and the table would render
+    borderless. The same style *name* is registered on each document
+    with an equivalent look (a full single-line grid in Word's Accent 1
+    blue, shaded header row); PHPWord's table style cannot carry the
+    header row's bold run formatting, so each form bolds its header
+    cells explicitly. Rendered result matches; the markup does not.
+  - python-docx turns a `"\n"` inside a run into a `<w:br/>`; PHPWord
+    writes text verbatim, so `DocxForms::addRun()` splits on `"\n"`
+    and emits a real text break.
+
+  **Python quirks preserved rather than tidied up (each documented at
+  the code):**
+  - The Invoice form labels its tax row from the raw `Decimal`
+    (`Tax 9.00% (SR)`) while the Quotation form labels it from
+    `float(...)` (`Tax 9.0% (SR)`) -- the same rate, rendered
+    differently on the two documents. Both pinned by
+    `DocxFormsTest`. `DocxForms::pyFloat()` reproduces Python's float
+    repr (PHP's `(string) 9.0` is `"9"`, Python's is `"9.0"`).
+  - `receipt_to_docx` prints the payment method enum's raw value
+    (`bank_transfer`, not "Bank Transfer"), while `purchase_order_to_docx`
+    title-cases the PO status (`Pending Approval`). Both carried across.
+  - The Payment Voucher form reads `payment.method` without `.value`
+    because that column really is a plain `String(30)` on
+    `SupplierPayment`, unlike `Payment.method` -- not a bug, and not
+    "corrected".
+
+  **Bug found and fixed in `backend-php/` (ours to fix, unlike
+  `backend/`):** `Mailer`'s DSN builder read
+  `config('websoft.smtp_use_tls') ? 'smtp' : 'smtp'` -- both branches
+  of the ternary identical -- so `SMTP_USE_TLS=false` was inert and TLS
+  could never actually be switched off, where Python's `mailer.py`
+  calls `smtp.starttls()` only when the flag is true. Fixed by mapping
+  the flag onto Symfony Mailer's real controls, verified against the
+  constructed transport rather than the DSN string alone: true ->
+  `?require_tls=true` (a plain connection that upgrades via STARTTLS
+  and *fails* if the server won't, matching Python's unconditional
+  `starttls()`), false -> `?auto_tls=false` (opportunistic STARTTLS
+  switched off). Deliberately **not** the `smtps://` scheme for the
+  true case -- that is implicit TLS-on-connect (SMTPS), a different
+  wire protocol from the STARTTLS upgrade Python performs. Pinned by
+  `tests/Feature/MailerTest.php`.
+
+  **Bug found and fixed while verifying (caught by the browser pass,
+  not by any unit test):** PHPWord writes run text into `<w:t>`
+  verbatim by default (`outputEscapingEnabled` is false out of the
+  box), so a literal `&` produced malformed XML. Word silently repairs
+  such a file, so the **Word download looked fine**, but LibreOffice
+  refuses it outright -- which broke the PDF conversion behind every
+  Email button. It bit the Service Record form on *every* document
+  ("Signature & Company Stamp"), and would have bitten any customer
+  named "Smith & Sons" on all seven. python-docx escapes
+  unconditionally, so switching escaping on is what actually matches
+  `backend/`. Pinned at both levels:
+  `DocxFormsTest::test_ampersands_in_document_text_are_escaped` and
+  `PdfConvertTest::test_a_service_record_with_an_ampersand_still_converts`.
+
+  **42 tests** -- `tests/Feature/DocxFormsTest.php` (13: every one of
+  the seven forms really generated, the `.docx` unzipped and its
+  WordprocessingML asserted on -- title, letterhead, table headers and
+  the exact money/date strings -- plus the omit-when-absent branches
+  (no due date, no allocations, no deduction row, no payment terms),
+  the preserved Decimal-vs-float tax label, the escaping regression,
+  and a valid-OOXML-package check that the table style is really
+  defined and not a dangling reference);
+  `tests/Feature/PdfConvertTest.php` (4: a real LibreOffice round trip
+  asserting `%PDF-` + a trailer + a plausible size, no temp files left
+  behind, the ampersand regression, and the unconfigured-mailer 422);
+  `tests/Feature/MailerTest.php` (5: the TLS fix, in both directions,
+  against the constructed Symfony transport); and
+  `tests/Feature/DocumentExportTest.php` (20: every export endpoint
+  returning a real Word package with the right media type and
+  filename, every Email endpoint's "no email on file" 422 and its
+  "not configured" 422 with no audit entry written, VIEW-vs-EDIT
+  gating, Module-Control fail-closed, no-Group 403, multi-company 404,
+  and the Customer Statement JSON including its `as_at` handling and
+  paid-invoice exclusion).
+
+  **KNOWN GAP (not silently papered over):** CSV/Excel export is
+  untouched by this work and remains the one export format missing
+  across the converted modules -- it is a different Python service
+  (`app/services/exports.py`), listed on its own in "Not yet
+  converted" below.
+
+  **NOTE for Dennis, not assumed either way:** these Email endpoints
+  send through the single system mailbox (`SMTP_*` in
+  `backend-php/.env`), because that is exactly what `backend/` does
+  today. [planned-work.md #8c](planned-work.md) records a decision
+  (2026-09-15) that customer-facing document email should instead go
+  out from a **per-company** mailbox configured in Company Setup ->
+  Maintenance, with the system mailbox reserved for login OTP and
+  password reset. That split is not built in either backend yet, so
+  this conversion does not anticipate it; when it is built, the change
+  is confined to which settings `DocumentEmail` hands to `Mailer`.
+
+**Verification method (document stack):** a real browser pass, not a
+`curl` substitute. `backend-php/` was run on its own database
+(`websoft_docx_verify`) and port (8123) with the Vite dev server (5199)
+proxied at it, and Playwright drove the preinstalled Chromium at
+`/opt/pw-browsers/chromium-1194`. Signed in as
+`dennis@websoft.example` and clicked the **actual Word button** on the
+Sales Invoice, Sales Quotation, Service Record, Purchase Order,
+Receipt Voucher and Payment Voucher print pages and on the Statement
+of Accounts panel of the Invoices page -- all seven downloaded real
+`PK`-magic Word packages (`INV-2026-0001.docx`, `QUO-2026-0001.docx`,
+`SR-2026-0001.docx`, `PO-2026-0001.docx`, `RV-2026-0001.docx`,
+`PV-2026-0001.docx`,
+`Statement-Acme Logistics Pte Ltd-2026-09-15.docx`), each of which was
+then unzipped and confirmed to carry the right letterhead, document
+number, dates and totals, and converted through LibreOffice to a real
+PDF. Then clicked the **actual Email button** on all seven: every one
+reached its endpoint and returned 422 "Email sending is not configured
+yet..." surfaced in the UI banner -- not the 404 they all returned
+before this work. The only remaining 404 in the whole pass was
+`GET /api/reference-codes`, a pre-existing gap for a module that isn't
+converted. The first run of this same pass is what caught the
+ampersand/escaping bug above: the Service Record's Word download
+succeeded while its Email button failed with "source file could not be
+loaded".
+
+**What the Email path could NOT be exercised against:** there is no
+SMTP server in this environment, so a *successful* send was never
+driven end to end. Everything up to the socket was: the document is
+really built, really converted to PDF and really attached, and the
+unconfigured-mailer outcome -- which Python treats as a first-class
+result, a clear 422 rather than pretending to have sent -- is asserted
+at both the service and HTTP levels. The TLS behaviour is verified
+against the constructed Symfony transport, not by connecting.
+
 ## New feature work landed directly in `backend-php/` (not a conversion)
 
 2026-09-22: Dennis asked for a set of new Sales-area features (Job
@@ -1531,17 +1747,15 @@ smoke test:
    CLAUDE.md]) -- lower priority than the Service Operations core
    above, since that core is what CLAUDE.md's Status section calls out
    as the one working slice today.
-2. The shared document mailer stack -- `app/services/mailer.py` (66
-   lines, SMTP), `app/services/pdf_convert.py` (62 lines, .docx ->
-   PDF), `app/services/docx_forms.py` (497 lines, the document
-   templates) and `app/services/document_email.py` (the shared "Email
-   this document" helper tying the three together). Named separately
-   here because four already-converted modules (Service Records,
-   Invoices, Purchase Orders, Quotations) each carry a KNOWN GAP for
-   their `.docx` export and "Email X" endpoints -- and this stack, NOT
-   the Documents module converted above, is what actually unblocks all
-   four at once. `config/websoft.php` already carries the `smtp_*`
-   settings the eventual PHP mailer would read.
+2. CSV/Excel export (`app/services/exports.py` plus the
+   `export.csv`/`export.xlsx` route on nearly every list screen). This
+   is now the only export format still missing on the converted
+   modules: the `.docx`/PDF/Email half is done (see "Document
+   generation stack" above). `App\Services\ExportService` already
+   exists for the report screens built directly in `backend-php/`, so
+   this is mostly a matter of wiring each module's own column list to
+   it -- but note its "Excel" output is an HTML table, not a real
+   .xlsx, which is a decision to revisit before adopting it wholesale.
 3. Follow-ups raised by the Inventory/Stock conversion, each small and
    waiting on a decision rather than on code: moving the four stock
    documents off their count-based numbering onto

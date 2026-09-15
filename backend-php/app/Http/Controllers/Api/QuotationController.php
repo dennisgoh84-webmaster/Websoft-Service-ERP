@@ -3,14 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Api\Concerns\SendsDocuments;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
+use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\Product;
 use App\Models\Quotation;
 use App\Models\QuotationLine;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\DocxForms;
 use App\Services\Numbering;
 use App\Services\QuotationService;
 use App\Support\Money;
@@ -23,13 +26,14 @@ use Illuminate\Support\Facades\DB;
  * Contract conversion this controller only orchestrates.
  *
  * NOT yet converted from the Python router (tracked in
- * docs/php-conversion-plan.md): CSV/Excel export and the `.docx`
- * export / "Email Quotation" endpoints (need the Documents module's
- * mailer wiring, same gap already flagged for Service Records,
- * Invoices, and Purchase Orders).
+ * docs/php-conversion-plan.md): CSV/Excel export. (The `.docx` export
+ * and "Email Quotation" endpoints WERE the other gap here; both are
+ * converted now -- see exportDocx()/email() below.)
  */
 class QuotationController extends Controller
 {
+    use SendsDocuments;
+
     private const MODULE = 'sales';
 
     private function quotationOrFail(string $companyId, string $quotationId): Quotation
@@ -262,5 +266,63 @@ class QuotationController extends Controller
         $quotation->save();
 
         return response()->json($this->present($quotation->fresh('lines')));
+    }
+
+    /** GET /quotations/{id}/export.docx -- the Word button on the Quotation print page. */
+    public function exportDocx(Request $request, string $quotationId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        $quotation = $this->quotationOrFail($user->company_id, $quotationId);
+        $customer = CompanyIndividual::find($quotation->customer_id);
+        $company = Company::find($user->company_id);
+
+        return $this->docxResponse(
+            DocxForms::quotationToDocx($quotation, $customer, $company),
+            "{$quotation->quotation_number}.docx",
+        );
+    }
+
+    /**
+     * Email Sales Quotation (2026-09-12) -- same real-send pattern as
+     * Purchase Order's Email button.
+     */
+    public function email(Request $request, string $quotationId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $quotation = $this->quotationOrFail($user->company_id, $quotationId);
+        $customer = CompanyIndividual::find($quotation->customer_id);
+        if (! $customer || ! $customer->billing_email) {
+            throw new ApiException(422, 'This customer has no email on file -- add one on the Company/Individual page first.');
+        }
+        $company = Company::find($user->company_id);
+        $companyName = $this->companyName($company);
+        $docxBytes = DocxForms::quotationToDocx($quotation, $customer, $company);
+        $total = number_format((float) $quotation->total_amount_sgd, 2, '.', '');
+        $body = "Dear {$customer->name},\n\n"
+            ."Please find attached Quotation {$quotation->quotation_number} dated "
+            .$quotation->quotation_date->toDateString()." for SGD {$total}.\n\n"
+            ."Regards,\n{$companyName}";
+
+        $result = $this->emailDocument(
+            $customer->billing_email,
+            "Quotation {$quotation->quotation_number} - {$companyName}",
+            $body,
+            $docxBytes,
+            $quotation->quotation_number,
+        );
+
+        Audit::record(
+            entityType: 'quotation',
+            entityId: $quotation->id,
+            action: 'emailed',
+            actorUserId: $user->id,
+            details: "{$quotation->quotation_number} emailed to {$customer->billing_email}",
+        );
+
+        return response()->json($result);
     }
 }

@@ -5,12 +5,16 @@ namespace App\Http\Controllers\Api;
 use App\Exceptions\ApiException;
 use App\Exceptions\ARRuleViolation;
 use App\Exceptions\PostingError;
+use App\Http\Controllers\Api\Concerns\SendsDocuments;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
+use App\Models\Company;
+use App\Models\CompanyIndividual;
 use App\Models\Invoice;
 use App\Services\AccountsReceivableService;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\DocxForms;
 use App\Services\Posting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -24,13 +28,17 @@ use Illuminate\Support\Facades\DB;
  * live in App\Http\Controllers\Api\PaymentController.
  *
  * NOT yet converted from the Python router (tracked in
- * docs/php-conversion-plan.md): Customer Statement, CSV/Excel/.docx
- * export. Also not converted: the commission clawback that Python's
- * write-off endpoint triggers (Commission Management is deferred, per
- * CLAUDE.md).
+ * docs/php-conversion-plan.md): CSV/Excel export, and the commission
+ * clawback that Python's write-off endpoint triggers (Commission
+ * Management is deferred, per CLAUDE.md). The Customer Statement
+ * endpoints -- JSON, .docx and Email -- WERE the other gap here; all
+ * three are converted now, see statement()/statementDocx()/
+ * statementEmail() below.
  */
 class AccountsReceivableController extends Controller
 {
+    use SendsDocuments;
+
     private const MODULE = 'accounts_receivable';
 
     private function present(Invoice $invoice): array
@@ -182,5 +190,92 @@ class AccountsReceivableController extends Controller
             'over_90' => array_sum(array_column($rows, 'over_90')),
             'total' => array_sum(array_column($rows, 'total')),
         ]);
+    }
+
+    private function customerOrFail(string $companyId, string $customerId): CompanyIndividual
+    {
+        $customer = CompanyIndividual::find($customerId);
+        if (! $customer || $customer->company_id !== $companyId) {
+            throw new ApiException(404, 'Company / Individual not found');
+        }
+
+        return $customer;
+    }
+
+    /**
+     * Everything this customer currently owes, plus any receipt money
+     * still sitting unallocated on their account.
+     */
+    public function statement(Request $request, string $customerId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        $customer = $this->customerOrFail($user->company_id, $customerId);
+        $asAt = $request->filled('as_at') ? Carbon::parse($request->query('as_at')) : null;
+
+        return response()->json(
+            AccountsReceivableService::buildCustomerStatement($customer, $user->company_id, $asAt)
+        );
+    }
+
+    /** GET /accounts-receivable/statement/{customer}/export.docx -- the Word button on the Statement print page. */
+    public function statementDocx(Request $request, string $customerId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+
+        $customer = $this->customerOrFail($user->company_id, $customerId);
+        $asAt = $request->filled('as_at') ? Carbon::parse($request->query('as_at')) : null;
+        $statement = AccountsReceivableService::buildCustomerStatement($customer, $user->company_id, $asAt);
+        $company = Company::find($user->company_id);
+
+        return $this->docxResponse(
+            DocxForms::statementToDocx($statement, $customer, $company),
+            "Statement-{$customer->name}-{$statement['as_at']}.docx",
+        );
+    }
+
+    /**
+     * Email Statement of Accounts (2026-09-12) -- same real-send
+     * pattern as Purchase Order's Email button.
+     */
+    public function statementEmail(Request $request, string $customerId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $customer = $this->customerOrFail($user->company_id, $customerId);
+        if (! $customer->billing_email) {
+            throw new ApiException(422, 'This customer has no email on file -- add one on the Company/Individual page first.');
+        }
+        $asAt = $request->filled('as_at') ? Carbon::parse($request->query('as_at')) : null;
+        $statement = AccountsReceivableService::buildCustomerStatement($customer, $user->company_id, $asAt);
+        $company = Company::find($user->company_id);
+        $companyName = $this->companyName($company);
+        $docxBytes = DocxForms::statementToDocx($statement, $customer, $company);
+        $total = number_format((float) $statement['total_outstanding_sgd'], 2, '.', '');
+        $body = "Dear {$customer->name},\n\n"
+            ."Please find attached your Statement of Accounts as at {$statement['as_at']}, "
+            ."total outstanding SGD {$total}.\n\n"
+            ."Regards,\n{$companyName}";
+
+        $result = $this->emailDocument(
+            $customer->billing_email,
+            "Statement of Accounts as at {$statement['as_at']} - {$companyName}",
+            $body,
+            $docxBytes,
+            "Statement-{$customer->name}-{$statement['as_at']}",
+        );
+
+        Audit::record(
+            entityType: 'customer',
+            entityId: $customer->id,
+            action: 'statement_emailed',
+            actorUserId: $user->id,
+            details: "Statement as at {$statement['as_at']} emailed to {$customer->billing_email}",
+        );
+
+        return response()->json($result);
     }
 }

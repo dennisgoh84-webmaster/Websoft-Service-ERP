@@ -1,8 +1,7 @@
 <?php
 
 // Mirrors backend/app/routers/accounts_receivable.py. NOT yet
-// converted (see docs/php-conversion-plan.md): CSV/Excel/.docx
-// export, "Email Receipt", Customer Statement.
+// converted (see docs/php-conversion-plan.md): CSV/Excel export.
 
 use App\Http\Controllers\Api\AccountsReceivableController;
 use App\Http\Controllers\Api\PaymentController;
@@ -21,4 +20,10 @@ Route::middleware('auth.jwt')->prefix('accounts-receivable')->group(function () 
     Route::post('/payments/{payment}/bank', [PaymentController::class, 'bank']);
     Route::post('/payments/{payment}/unbank', [PaymentController::class, 'unbank']);
     Route::post('/payments/{payment}/ungl', [PaymentController::class, 'ungl']);
+    Route::get('/payments/{payment}/export.docx', [PaymentController::class, 'exportDocx']);
+    Route::post('/payments/{payment}/email', [PaymentController::class, 'email']);
+
+    Route::get('/statement/{customer}', [AccountsReceivableController::class, 'statement']);
+    Route::get('/statement/{customer}/export.docx', [AccountsReceivableController::class, 'statementDocx']);
+    Route::post('/statement/{customer}/email', [AccountsReceivableController::class, 'statementEmail']);
 });

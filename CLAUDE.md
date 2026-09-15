@@ -264,10 +264,10 @@ the same layout the Python backend uses, 20MB per file, any file
 type, plus drawn electronic signatures). **Correction to an earlier
 note:** the `.docx` export / "Email X" gaps recorded against Service
 Records, Invoices, Purchase Orders and Quotations are **not** closed
-by the Documents conversion -- that wiring is a separate,
-still-unconverted stack of Python services (`mailer.py`,
-`pdf_convert.py`, `docx_forms.py`, `document_email.py`), now tracked
-as its own pending item in docs/php-conversion-plan.md. Also
+by the Documents conversion -- that wiring is a separate stack of
+Python services (`mailer.py`, `pdf_convert.py`, `docx_forms.py`,
+`document_email.py`), **which has since been converted in its own
+right -- see the document generation stack below.** Also
 converted: **Announcements + Ad Banner** (the platform announcements
 and promo video URL shown on the Login page and, smaller, on every
 page after signing in, plus the admin screen behind them) --
@@ -306,9 +306,41 @@ returns 404, never 403, and a filter naming another customer's
 contract returns an empty list rather than their rows. This module
 also adds the two foreign keys (`login_otps.portal_user_id`,
 `incidents.raised_by_portal_user_id`) earlier migrations had
-deferred until `portal_users` existed. `backend/` (Python) is
-untouched and keeps running as the system of record until each
-remaining module is converted, module by module, the same way.
+deferred until `portal_users` existed.
+
+Also converted: the **document generation stack and every `.docx` /
+"Email X" endpoint** (`docx_forms.py`, `pdf_convert.py`,
+`document_email.py`) -- all seven Word forms (Sales Invoice, Sales
+Quotation, Receipt Voucher, Purchase Order, Payment Voucher, Service
+Record, Statement of Accounts), DOCX → PDF via LibreOffice headless,
+and the shared "Email this document" helper. This is the stack the
+Documents note above identified as the real blocker, so converting it
+closes the `.docx`/"Email X" KNOWN GAPs recorded against Service
+Records, Invoices, Purchase Orders, Payment Vouchers, Receipt
+Vouchers and Quotations, plus the AR Customer Statement endpoints
+(the statement itself is converted with them). The Python module's
+design decision is kept deliberately: the PDF attached to an email is
+the *same* .docx bytes the Word button serves, converted by shelling
+out to `soffice`, so one template feeds both formats and they can
+never drift -- which makes **`libreoffice-writer`** (not just
+`libreoffice-core`) a system dependency, and adds
+`phpoffice/phpword` as the only new PHP dependency, PHP having no
+built-in DOCX writer. `App\Services\Mailer` gained attachment
+support rather than a second mailer being written. Two bugs in
+`backend-php/` were found and fixed on the way: `Mailer`'s
+`SMTP_USE_TLS` setting was inert (both branches of a ternary were
+identical, so TLS could never be switched off), and PHPWord's default
+of writing document text unescaped meant a literal "&" -- which every
+Service Record carries in "Signature & Company Stamp" -- produced a
+file Word silently repairs but LibreOffice refuses, so the Word
+download looked fine while the PDF behind every Email button failed.
+**Still a KNOWN GAP:** CSV/Excel export, a different Python service
+(`exports.py`), is the one export format still missing across the
+converted modules.
+
+`backend/` (Python) is untouched and keeps running as the system of
+record until each remaining module is converted, module by module,
+the same way.
 
 **Sales module enhancements landed directly in `backend-php/` +
 `frontend/`, not as part of the conversion above** (`backend/` has no
