@@ -55,6 +55,7 @@ require __DIR__.'/api/approvals.php';
 require __DIR__.'/api/documents.php';
 require __DIR__.'/api/announcements.php';
 require __DIR__.'/api/system_mail.php';
+require __DIR__.'/api/ai.php';
 require __DIR__.'/api/mobile.php';
 require __DIR__.'/api/portal.php';
 

@@ -60,7 +60,9 @@ class DatabaseSeeder extends Seeder
         'operations_reports' => ['Operations Reports (Contracts / Job Orders / Service Records)', true, true],
         'accounting_reports' => ['Accounting Reports (AR/AP Aging, Trial Balance)', true, true],
         'integrations' => ['Integrations (incl. Odoo migration)', false, false], // deferred
-        'ai_assistant' => ['AI Assistant', false, false],
+        // Built 2026-09-15 (incident triage). A paid add-on (decision 12.4):
+        // seeded OFF; enable per company under Module Control once licensed.
+        'ai_assistant' => ['AI Assistant', true, false],
         'stock_master' => ['Stock Master', true, true],
         'goods_receive_note' => ['Goods Receive Note', true, true],
         'goods_transfer_note' => ['Goods Transfer Note', true, true],

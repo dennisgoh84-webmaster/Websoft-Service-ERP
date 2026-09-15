@@ -674,3 +674,61 @@ human decision point, per-event cost, no money arithmetic, and it
 directly reduces the Helpdesk workload that Support Monitoring already
 measures — so the value is provable from data the system already
 collects.
+
+### Built 2026-09-15 — slice 1: incident triage + resolution suggestions
+
+Dennis said "Next AI" once the Service Record rules were settled, so the
+recommended starting point above was built, under the architectural
+rule exactly as stated:
+
+- **Incidents page → "AI triage".** For a logged Incident the assistant
+  is shown the company's customers (names, ids, the email domains of
+  their contacts), their valid contracts (number, kind, hours
+  remaining and expiry — all figures from `Contract::remainingMinutes()`
+  and friends, never re-derived), and the last 40 resolved incidents
+  with what fixed them (the close reason, or the latest approved
+  Service Record's `work_description` on the Job Order it became). It
+  returns a suggestion: customer (with confidence and reason),
+  contract, priority, route (Job Order / Quotation / Software Task /
+  callback / close), up to three similar past incidents with their
+  fixes, and a draft reply. "Fill in the pickers" puts the suggested
+  customer and contract into the existing pickers; staff still press
+  the same Convert / Callback / Close buttons, through the same
+  endpoints, RBAC and audit as before. **Nothing is written by the
+  assistant.** Every id it returns is checked against the data it was
+  shown; an invented one is dropped, and a contract that is not the
+  suggested customer's is dropped.
+- **Structured answers only.** The call asks the model for JSON against
+  a schema (`output_config.format`, Anthropic PHP SDK, model
+  `claude-opus-5`), so no feature parses free text. A refusal is
+  surfaced as "the assistant declined", never hidden.
+- **Maintenance → AI Assistant.** API key (write-only, encrypted;
+  `ANTHROPIC_API_KEY` in `.env` is the bootstrap fallback, as for the
+  OTP mailbox), model, the personal-data mask toggle, a Test
+  connection button, and the usage record.
+- **Tests** fake the provider (`AiClient::fake()`) and assert on what
+  would have left the system — see `tests/Feature/AiAssistantTest.php`.
+
+**The four open decisions, as built (pragmatic defaults, each easy to
+change — recorded in
+[open-business-decisions.md #42](open-business-decisions.md#42-ai-assistant-slice-1--defaults-taken-for-the-four-open-decisions-built-2026-09-15)):**
+
+- 12.1 PDPA / data residency → **mask personal data before sending, on
+  by default** (`App\Services\Ai\Redactor`: email addresses, telephone
+  numbers and people's names become `[email]` / `[phone]` / `[name]`;
+  company names and email domains are kept so matching still works).
+  The owner can turn masking off. Data still goes to Anthropic's API
+  (US-hosted); a regional or self-hosted model was not chosen.
+- 12.2 Cost model → per event, and **measured rather than guessed**:
+  every call records its input/output tokens, shown per month and all
+  time on the settings screen.
+- 12.3 Audit → **logged like everything else**: an `ai_interactions`
+  row per call (who, which record, model, tokens, status, the answer —
+  never the prompt) plus an Event Log entry on the Incident.
+- 12.4 Licensing → **a paid add-on module key** `ai_assistant`, seeded
+  OFF; unlike every other module the licence check applies to the
+  owner too.
+
+**Not built yet:** Tier 1 items 3 and 4 (Service Record drafting, AR
+collections assistant) and everything in Tier 2/3.
+

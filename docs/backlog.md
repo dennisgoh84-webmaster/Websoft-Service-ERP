@@ -432,14 +432,22 @@ shipped and when.
   → [business-requirements.md SRV-019 / SRV-020](business-requirements.md),
   [open-business-decisions.md #9](open-business-decisions.md#9-service-records--approval)
 
-- [ ] **AI Assistant — scoped 2026-09-15**, not yet built. Tiered
-  candidates, the architectural rule they must be built under (AI never
-  does arithmetic on money; it calls the tested services and narrates,
-  and proposes rather than commits), and four open decisions (PDPA/data
-  residency, cost model, audit of AI interactions, licensing as a paid
-  module key). Recommended start: incident triage + resolution
-  suggestions.
-  → [planned-work.md #12](planned-work.md#12-ai-assistant--where-ai-fits-this-system-and-what-it-must-not-do-raised-2026-09-15)
+- [x] **AI Assistant — slice 1 built 2026-09-15** (scoped the same
+  day): incident triage + resolution suggestions on the Incidents page
+  ("AI triage": customer, contract, priority, route, similar past
+  incidents and what fixed them, a draft reply — proposes only, staff
+  press the same buttons), Maintenance → AI Assistant (API key,
+  model, personal-data mask, connection test, usage/tokens), the
+  `ai_assistant` paid add-on module key gating everyone including the
+  owner, and an `ai_interactions` audit per call. Personal data is
+  masked before sending by default. Anthropic PHP SDK, structured JSON
+  answers, provider faked in tests.
+  **Still open for Dennis:** 12.1 (is masked text to a US-hosted API
+  acceptable, or is a regional / self-hosted model needed?) and a cost
+  cap once usage is visible (12.2). Tier 1 items 3–4 and Tier 2/3 not
+  built.
+  → [planned-work.md #12](planned-work.md#12-ai-assistant--where-ai-fits-this-system-and-what-it-must-not-do-raised-2026-09-15),
+  [open-business-decisions.md #42](open-business-decisions.md#42-ai-assistant-slice-1--defaults-taken-for-the-four-open-decisions-built-2026-09-15)
 
 ## Test server (2026-09-15) -- first real deployment of `backend-php/`
 
@@ -508,4 +516,4 @@ shipped and when.
   → [open-business-decisions.md #7-8](open-business-decisions.md#7-projects)
 
 ---
-Last updated: 2026-09-15 (Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006; Maintenance / Company-Individual batch; eight-character company code; Service Record rules SRV-019/020, SLA removed)
+Last updated: 2026-09-15 (Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006; Maintenance / Company-Individual batch; eight-character company code; Service Record rules SRV-019/020, SLA removed; AI Assistant slice 1)

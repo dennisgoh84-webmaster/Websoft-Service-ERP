@@ -193,6 +193,13 @@ docs/open-business-decisions.md #23).
   > [docs/planned-work.md #8c](docs/planned-work.md) records that the
   > system mailbox should eventually be owned in Central Command and
   > pushed down rather than hand-edited in `.env`.
+- **AI Assistant** needs an Anthropic API key: set it under Maintenance
+  → AI Assistant (stored encrypted), or as `ANTHROPIC_API_KEY` in
+  `backend-php/.env` as the bootstrap fallback. Nothing is sent to the
+  provider until a company has the `ai_assistant` module enabled under
+  Module Control and someone presses "Ask the assistant". Tests never
+  call the provider (`AiClient::fake()`). `ANTHROPIC_BASE_URL` can
+  point the SDK at a proxy or a local stand-in.
 - **WhatsApp** opens a `wa.me` chat link pre-filled with a short message
   (no API/account needed) — you attach the PDF yourself in the chat.
   Needs a phone number set on the relevant Company/Individual record.

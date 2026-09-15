@@ -754,6 +754,80 @@ export interface Incident {
   created_at: string
 }
 
+// AI Assistant (docs/planned-work.md #12, slice 1: incident triage).
+export interface AiSettings {
+  model: string
+  redact_personal_data: boolean
+  api_key_set: boolean
+  api_key_from_env: boolean
+  updated_at: string | null
+}
+
+export interface AiUsageBucket {
+  calls: number
+  ok: number
+  refused: number
+  errors: number
+  input_tokens: number
+  output_tokens: number
+}
+
+export interface AiUsage {
+  this_month: AiUsageBucket
+  all_time: AiUsageBucket
+  recent: {
+    id: string
+    created_at: string
+    user_name: string
+    feature: string
+    entity_type: string | null
+    entity_id: string | null
+    model: string
+    status: 'ok' | 'refused' | 'error'
+    error: string | null
+    input_tokens: number
+    output_tokens: number
+  }[]
+}
+
+export type IncidentTriageRoute = 'job_order' | 'quotation' | 'software_task' | 'callback' | 'close'
+
+export interface IncidentTriageSuggestion {
+  summary: string
+  customer_id: string | null
+  customer_name: string | null
+  customer_confidence: 'high' | 'medium' | 'low' | 'none'
+  customer_reason: string
+  contract_id: string | null
+  contract_number: string | null
+  contract_hours_remaining: number | null
+  priority: JobOrderPriority
+  route: IncidentTriageRoute
+  route_reason: string
+  similar_incidents: {
+    incident_id: string
+    incident_number: string
+    subject: string
+    why_similar: string
+    what_fixed_it: string | null
+  }[]
+  suggested_reply: string
+  personal_data_redacted: boolean
+}
+
+export interface IncidentTriage {
+  id: string
+  incident_id: string
+  created_at: string
+  model: string
+  status: 'ok' | 'refused' | 'error'
+  error: string | null
+  input_tokens: number
+  output_tokens: number
+  /** Null unless status is ok. */
+  suggestion: IncidentTriageSuggestion | null
+}
+
 export interface IncidentFromEmailResult {
   incident: Incident
   job_order_created: boolean
@@ -2474,6 +2548,20 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ assigned_programmer_id: assigned_programmer_id ?? null }),
     }),
+
+  // AI Assistant
+  getAiSettings: () => request<AiSettings>('/ai/settings'),
+  updateAiSettings: (payload: Partial<{ api_key: string | null; model: string; redact_personal_data: boolean }>) =>
+    request<AiSettings>('/ai/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
+  testAiConnection: () =>
+    request<{ ok: boolean; model: string; greeting: string | null; input_tokens: number; output_tokens: number }>('/ai/settings/test', {
+      method: 'POST',
+      body: '{}',
+    }),
+  getAiUsage: () => request<AiUsage>('/ai/usage'),
+  getIncidentTriage: (incidentId: string) => request<IncidentTriage | null>(`/ai/incidents/${incidentId}/triage`),
+  runIncidentTriage: (incidentId: string) =>
+    request<IncidentTriage>(`/ai/incidents/${incidentId}/triage`, { method: 'POST', body: '{}' }),
 
   listServiceRecords: (filters: { job_order_id?: string; employee_user_id?: string; status?: string } = {}) =>
     request<ServiceRecord[]>(`/service-records${qs(filters)}`),

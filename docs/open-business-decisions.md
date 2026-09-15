@@ -1971,3 +1971,34 @@ did not spell out, applied as pragmatic defaults:
 - `App\Models\Company::codePrefix()` / `nextCode()` / `formatCode()`;
   existing companies were recoded from their names by migration
   `2026_09_30_000600`, and re-padded by `2026_09_30_000700`.
+
+## 42. AI Assistant slice 1 — defaults taken for the four open decisions (built 2026-09-15)
+
+Dennis: "Next AI". Built as
+[planned-work.md #12](planned-work.md#12-ai-assistant--where-ai-fits-this-system-and-what-it-must-not-do-raised-2026-09-15)
+recommends — incident triage + resolution suggestions — under its
+rule (call the tested services, propose never commit, no arithmetic on
+money). The four decisions the scoping left open were not decided by
+Dennis; the build takes a safe default for each, all switchable:
+
+42.1. **PDPA / data residency (12.1).** Default: personal data is
+   masked before any text leaves the system (email addresses,
+   telephone numbers, people's names → placeholders); company names
+   and email domains are kept. Owner-switchable under Maintenance →
+   AI Assistant. **Still open:** whether masked text going to
+   Anthropic's US-hosted API is acceptable, or a regional /
+   self-hosted model is required. Until Dennis says, leave masking ON.
+42.2. **Cost model (12.2).** Default: per event, measured — tokens per
+   call recorded and summarised on the settings screen. No cap is
+   enforced yet; decide one once a month of real usage is visible.
+42.3. **Audit (12.3).** Decided by build: every call is an
+   `ai_interactions` row plus an Event Log entry. The prompt is not
+   stored (it can carry customer text); the answer is.
+42.4. **Licensing (12.4).** Decided by build: `ai_assistant` is a paid
+   add-on module key, seeded OFF, and the licence gates the owner too
+   (every other module lets the owner through when disabled).
+
+Also a build default: the model is `claude-opus-5` (Anthropic's
+current recommended default at the time), changeable on the settings
+screen; no server-side refusal fallback is configured.
+

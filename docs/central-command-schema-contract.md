@@ -175,6 +175,23 @@ repository
    too.  Push SQL-based configuration changes (tax rate updates, new
    default settings) to client databases.
 
+## 7. AI Assistant settings (added 2026-09-15)
+
+### `ai_settings` table
+
+One global row, key `default`, like `system_mail_settings` — install-
+level, not per company. A future config push (decision 6 above) may
+write it; per-company licensing is the `ai_assistant` key in
+`company_modules` (section 2), a paid add-on that gates the owner too.
+
+| Column | Type | Notes |
+|---|---|---|
+| `key` | `varchar(20)` PK | Always `default` |
+| `api_key` | `text` nullable | Encrypted with the client's `APP_KEY` (Laravel `encrypted` cast) — a push must write it through the client's own encryption, never plaintext |
+| `model` | `varchar(60)` | Default `claude-opus-5` |
+| `redact_personal_data` | `boolean` | Default `true` (decision 12.1) |
+| `updated_at` | `timestamptz` nullable | |
+
 ---
 
-Last updated: 2026-09-12 (all open questions settled, Central Command built)
+Last updated: 2026-09-15 (AI Assistant settings table added; 2026-09-12: all open questions settled, Central Command built)

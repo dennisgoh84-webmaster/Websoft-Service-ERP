@@ -45,7 +45,8 @@ eventual project.
   built; further commission business rules remain deferred (see
   [docs/open-business-decisions.md](docs/open-business-decisions.md))
 - Management Reporting
-- AI Assistant
+- AI Assistant — slice 1 (incident triage) built 2026-09-15; see
+  [docs/planned-work.md #12](docs/planned-work.md)
 
 "Ticket"/"Timesheet" terminology has been renamed throughout to "Job
 Order"/"Service Record" respectively, at Dennis's request.
@@ -503,6 +504,19 @@ COGS/inventory journal is posted, because whether stock movements post
 to the General Ledger is still an open question (see
 [docs/backlog.md](docs/backlog.md)) and this was not the place to
 answer it quietly.
+
+**AI Assistant slice 1 landed 2026-09-15** (`docs/planned-work.md`
+#12): incident triage + resolution suggestions on the Incidents page,
+a Maintenance → AI Assistant settings screen (API key write-only,
+model, personal-data mask, usage), the `ai_assistant` paid add-on
+module key (gates the owner too) and an `ai_interactions` audit row
+per call. Built under the rule the scoping set: the assistant calls
+the tested services, proposes rather than commits, and never does
+arithmetic on money or hours. Anthropic's PHP SDK is the one new
+dependency; structured JSON answers only; the provider is faked in
+tests (`AiClient::fake()`). Personal data is masked before sending
+by default (decision 12.1's pragmatic default — still Dennis's call
+whether a US-hosted API is acceptable at all).
 
 No other business area has application code yet. **Further commission
 business rules beyond what is built (the report, its rate and

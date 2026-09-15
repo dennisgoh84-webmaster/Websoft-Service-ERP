@@ -14,6 +14,7 @@ import {
   type Incident,
   type IncidentSource,
   type IncidentStatus,
+  type IncidentTriage,
 } from '../lib/api'
 import { formatDate } from '../lib/format'
 
@@ -58,6 +59,13 @@ export default function IncidentsPage() {
   const [jobOrderContractId, setJobOrderContractId] = useState('')
   const [softwareTaskProgrammerId, setSoftwareTaskProgrammerId] = useState('')
   const [working, setWorking] = useState(false)
+  // AI Assistant (planned-work #12, slice 1): the latest triage
+  // suggestion for the expanded incident. It only ever fills in the
+  // pickers below -- staff still press the same buttons.
+  const [triage, setTriage] = useState<IncidentTriage | null>(null)
+  const [triageLoading, setTriageLoading] = useState(false)
+  const [triageError, setTriageError] = useState<string | null>(null)
+  const [aiAvailable, setAiAvailable] = useState(true)
 
   function refresh() {
     api.listIncidents(statusFilter ? { status: statusFilter } : {}).then(setIncidents).catch((e) => setError(e.message))
@@ -102,11 +110,53 @@ export default function IncidentsPage() {
   }
 
   function openPanel(incident: Incident) {
-    setExpandedId(expandedId === incident.id ? null : incident.id)
+    const opening = expandedId !== incident.id
+    setExpandedId(opening ? incident.id : null)
     setPanelCustomerId(incident.customer_id ?? '')
     setCallbackUserId('')
     setJobOrderContractId('')
     setSoftwareTaskProgrammerId('')
+    setTriage(null)
+    setTriageError(null)
+    if (opening && aiAvailable) {
+      // A 403 means the AI Assistant module is not licensed here; hide the card rather than nag.
+      api
+        .getIncidentTriage(incident.id)
+        .then(setTriage)
+        .catch((e: Error) => {
+          if (/not enabled|403|access/i.test(e.message)) setAiAvailable(false)
+        })
+    }
+  }
+
+  async function onAskAi(incident: Incident) {
+    setTriageError(null)
+    setTriageLoading(true)
+    try {
+      const t = await api.runIncidentTriage(incident.id)
+      setTriage(t)
+      if (t.status !== 'ok') setTriageError(t.error ?? 'The assistant declined to answer.')
+    } catch (err) {
+      setTriageError(err instanceof Error ? err.message : 'AI triage failed')
+    } finally {
+      setTriageLoading(false)
+    }
+  }
+
+  function applySuggestion(incident: Incident) {
+    const s = triage?.suggestion
+    if (!s) return
+    if (!incident.customer_id && s.customer_id) setPanelCustomerId(s.customer_id)
+    if (s.contract_id) setJobOrderContractId(s.contract_id)
+    setMessage('Suggestion applied to the pickers below -- review, then press the action you agree with.')
+  }
+
+  const ROUTE_LABEL: Record<string, string> = {
+    job_order: 'Convert to Job Order',
+    quotation: 'Convert to Quotation',
+    software_task: 'Convert to Software Task',
+    callback: 'Mark pending callback',
+    close: 'Close -- no action needed',
   }
 
   async function withPanel(fn: () => Promise<unknown>, successMessage: string) {
@@ -284,6 +334,103 @@ export default function IncidentsPage() {
                     <tr>
                       <td colSpan={7}>
                         <div className="card" style={{ margin: '8px 0' }}>
+                          {aiAvailable && inc.status !== 'converted' && inc.status !== 'closed' && (
+                            <div className="card" style={{ margin: '0 0 12px', background: '#f7f9fc' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <strong>AI triage</strong>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                  <button type="button" className="secondary" onClick={() => onAskAi(inc)} disabled={triageLoading || working}>
+                                    {triageLoading ? 'Asking...' : triage?.suggestion ? 'Ask again' : 'Ask the assistant'}
+                                  </button>
+                                  {triage?.suggestion && (
+                                    <button type="button" onClick={() => applySuggestion(inc)} disabled={working}>
+                                      Fill in the pickers
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              {triageError && <div className="error-banner">{triageError}</div>}
+                              {!triage && !triageLoading && (
+                                <p className="muted" style={{ margin: '6px 0 0' }}>
+                                  Suggests the customer, contract, priority and route, similar past incidents and what fixed
+                                  them, and a draft reply. It proposes only -- nothing changes until you press an action.
+                                </p>
+                              )}
+                              {triage?.suggestion && (
+                                <div style={{ marginTop: 8, fontSize: 14 }}>
+                                  <p style={{ margin: '4px 0' }}>{triage.suggestion.summary}</p>
+                                  <table style={{ marginTop: 6 }}>
+                                    <tbody>
+                                      <tr>
+                                        <th style={{ width: 160 }}>Customer</th>
+                                        <td>
+                                          {triage.suggestion.customer_name ?? <span className="muted">no match</span>}{' '}
+                                          <span className="muted">
+                                            ({triage.suggestion.customer_confidence}) {triage.suggestion.customer_reason}
+                                          </span>
+                                        </td>
+                                      </tr>
+                                      <tr>
+                                        <th>Contract</th>
+                                        <td>
+                                          {triage.suggestion.contract_number ?? <span className="muted">none</span>}
+                                          {triage.suggestion.contract_hours_remaining != null && (
+                                            <span className="muted"> -- {triage.suggestion.contract_hours_remaining} h remaining</span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                      <tr>
+                                        <th>Suggested route</th>
+                                        <td>
+                                          <strong>{ROUTE_LABEL[triage.suggestion.route] ?? triage.suggestion.route}</strong>, priority{' '}
+                                          {triage.suggestion.priority} <span className="muted">-- {triage.suggestion.route_reason}</span>
+                                        </td>
+                                      </tr>
+                                      {triage.suggestion.similar_incidents.length > 0 && (
+                                        <tr>
+                                          <th>Similar incidents</th>
+                                          <td>
+                                            <ul style={{ margin: 0, paddingLeft: 18 }}>
+                                              {triage.suggestion.similar_incidents.map((x) => (
+                                                <li key={x.incident_id}>
+                                                  <span className="muted">{x.incident_number}</span> {x.subject} -- {x.why_similar}
+                                                  {x.what_fixed_it && (
+                                                    <>
+                                                      {' '}
+                                                      <em>Fixed by:</em> {x.what_fixed_it}
+                                                    </>
+                                                  )}
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </td>
+                                        </tr>
+                                      )}
+                                      <tr>
+                                        <th>Draft reply</th>
+                                        <td>
+                                          <textarea readOnly value={triage.suggestion.suggested_reply} rows={3} style={{ width: '100%' }} />
+                                          <button
+                                            type="button"
+                                            className="secondary"
+                                            onClick={() => navigator.clipboard?.writeText(triage.suggestion?.suggested_reply ?? '')}
+                                          >
+                                            Copy reply
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                  <p className="muted" style={{ margin: '6px 0 0', fontSize: 12 }}>
+                                    {triage.model}, {triage.input_tokens} in / {triage.output_tokens} out tokens, {formatDate(triage.created_at)}.
+                                    {triage.suggestion.personal_data_redacted
+                                      ? ' Personal data was masked before sending.'
+                                      : ' Personal data was sent as-is (masking is off under Maintenance → AI Assistant).'}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
                           {!inc.customer_id && (
                             <div className="form-row">
                               <label>Set Company / Individual first</label>

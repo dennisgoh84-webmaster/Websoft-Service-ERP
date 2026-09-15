@@ -804,15 +804,22 @@ All staff (as an assistant within their permitted scope), management (for
 insights).
 
 **Key functions**
-Not yet defined in detail. Candidate functions (not decided) include
-natural-language reporting queries, job order/opportunity summarization, and
-proactive suggestions (e.g. renewal reminders). Any capability that reads
-or acts on business data must respect RBAC and PDPA.
+Built 2026-09-15 (slice 1, see [planned-work.md #12](planned-work.md)):
+**incident triage + resolution suggestions** — for a logged Incident,
+suggest the customer, contract, priority and route, the similar
+resolved incidents and what fixed them, and a draft reply; staff apply
+it through the existing Incident actions. Rule: the assistant calls
+the tested services and narrates, never does arithmetic on money or
+hours, and proposes rather than commits. Candidates not yet built:
+Service Record drafting, AR collections, natural-language reporting,
+portal self-service, renewal prioritisation, supplier bill capture.
 
 **Information managed**
-No transactional data of its own expected; it consumes data from other
-modules within the requesting user's permissions. Whether it needs its own
-logs (e.g. of AI interactions, for audit) is to be decided.
+`ai_settings` (one global row: provider API key — write-only,
+encrypted — model, personal-data mask toggle) and `ai_interactions`
+(the audit of every call: who, which record, model, tokens, status,
+the answer; never the prompt). Everything else is read from other
+modules within the requesting user's permissions.
 
 **Depends on**
 Core / Administration (authentication, RBAC, audit); Reporting (as a
