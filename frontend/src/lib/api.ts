@@ -186,6 +186,8 @@ export interface PublicAdBanner {
 // ---- Company Setup / multi-company ----
 export interface Company {
   id: string
+  /** System-generated, C001 / C002 / ... in creation order; never edited. */
+  code: string
   name: string
   country: string
   currency: string

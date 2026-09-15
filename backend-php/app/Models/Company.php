@@ -18,6 +18,33 @@ use Illuminate\Database\Eloquent\Model;
  */
 class Company extends Model
 {
+    /**
+     * System-generated company code: C001, C002, ... in creation order.
+     * Assigned here on create, deliberately NOT fillable, so it is never
+     * typed in or changed -- a stable short identifier for the entity
+     * where a UUID is unwieldy and a name can be edited.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (Company $company) {
+            if (empty($company->code)) {
+                $company->code = self::nextCode();
+            }
+        });
+    }
+
+    public static function nextCode(): string
+    {
+        $max = 0;
+        foreach (self::query()->whereNotNull('code')->pluck('code') as $code) {
+            if (preg_match('/^C(\d+)$/', (string) $code, $m)) {
+                $max = max($max, (int) $m[1]);
+            }
+        }
+
+        return sprintf('C%03d', $max + 1);
+    }
+
     use HasFactory, HasUuidPrimaryKey;
 
     public $timestamps = false;

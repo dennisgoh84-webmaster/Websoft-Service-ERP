@@ -150,6 +150,9 @@ function CompanyCard({ company, onSaved }: { company: Company; onSaved: () => vo
   return (
     <div className="card">
       <h2>
+        <span className="badge draft" style={{ marginRight: 10, fontFamily: 'monospace' }} title="Company code -- system-generated, never changes">
+          {company.code}
+        </span>
         {company.name}
         {isActiveCompany && (
           <span className="badge active" style={{ marginLeft: 8 }}>
@@ -157,6 +160,10 @@ function CompanyCard({ company, onSaved }: { company: Company; onSaved: () => vo
           </span>
         )}
       </h2>
+      <p className="muted" style={{ marginTop: -6 }}>
+        Company code <strong>{company.code}</strong> -- assigned by the system when the company was
+        created, in creation order; it identifies this entity where a name could change.
+      </p>
       {error && <div className="error-banner">{error}</div>}
       <form onSubmit={onSave}>
         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
@@ -342,8 +349,8 @@ export default function CompanySetupPage() {
         <h2>Add a company</h2>
         <p className="muted">
           A new company starts with the same module catalog (built modules enabled), no customers or
-          contracts of its own, and you added as a user who can switch into it. Set its logo and
-          details above once created.
+          contracts of its own, and you added as a user who can switch into it. It receives the next
+          company code automatically. Set its logo and details above once created.
         </p>
         <form onSubmit={onCreate}>
           <div className="form-row">

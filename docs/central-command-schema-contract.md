@@ -104,6 +104,7 @@ building UI for license management.  Does not write to this table.
 | Column | Type | Purpose |
 |---|---|---|
 | `id` | `uuid` PK | Company identifier within this client database |
+| `code` | `varchar(10)` unique | System-generated short code, `C001`, `C002`, … in creation order (2026-09-15); never edited |
 | `name` | `varchar(200)` | Company name |
 | `registration_number` | `varchar(50)` nullable | UEN / registration number |
 
