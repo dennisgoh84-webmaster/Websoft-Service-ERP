@@ -2193,6 +2193,46 @@ recorded in docs/backlog.md for Dennis to scope rather than assumed.
   Service Record approval onto this framework, and the approval screen
   itself.
 
+### My Ops Dashboard (converted 2026-09-15)
+
+- **My Ops Dashboard** (`app/routers/ops_dashboard.py` ->
+  `App\Http\Controllers\Api\OpsDashboardController`, 13 dedicated
+  tests): the personal freeform task board per staff member, plus the
+  read-only rollup of real ERP work already assigned to them. Two new
+  tables (`ops_task_categories`, `ops_tasks`); the rollup introduces no
+  model of its own, being filtered reads of Job Orders and Software
+  Tasks. Gated on `ops_dashboard`.
+
+  VISIBILITY, confirmed 2026-09-11 and pinned: everyone sees their own
+  board; Owner, Service Lead and Sales Manager may also view AND edit
+  someone else's -- the same "manager-ish" role set already used for
+  Service Record approval and Excess Review. Note the board is personal
+  but still module-gated, so a staff member needs group authority on
+  `ops_dashboard`, not merely an account.
+
+  DETAILS CARRIED ACROSS, each pinned by a test:
+  - A task's owner follows its CATEGORY, not the caller -- a manager
+    creating a task on someone's board creates it owned by them.
+  - `in_progress_count` deliberately counts WATCH as well: a watched
+    item is live work, not an untouched one.
+  - `clear_follow_up_staff` / `clear_follow_up_date` are the only way to
+    REMOVE a follow-up, because omitting a field in a partial update
+    means "leave it alone". Without them there would be no way to
+    express the difference.
+  - Only a real status CHANGE is audited; an edit that leaves the status
+    where it was records nothing.
+  - Archiving sets `is_active` false -- a task is never deleted.
+  - The Job Order rollup sorts undated work LAST (`NULLS LAST`), so a
+    job order with no due date does not sort above one due today.
+  - Someone who is both programmer and tester on the same Software Task
+    appears TWICE in the rollup, once per role, because they owe two
+    different things on it.
+
+  `owner_label`, `due_label` and `cadence_label` stay free text rather
+  than links or dates: this is a personal working board, not a second
+  scheduling system. The one structured follow-up exists so a task can
+  actually chase someone.
+
 ## Not yet converted (pending, in rough priority order)
 
 Everything below still only exists in `backend/` (Python). Each is a
