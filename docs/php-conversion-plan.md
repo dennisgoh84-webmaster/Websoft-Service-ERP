@@ -1340,6 +1340,17 @@ not-yet-converted ones (`/api/announcements/public`,
   (`docs/customer-portal-design.md`, PORTAL-001..006), converted in
   three stages -- auth realm, staff-side access management, data
   endpoints.
+  - **A gap closed 2026-09-15 that was not a conversion gap.** Design
+    §5 specifies Enable / Disable / Reset password per Contact on the
+    Company/Individual detail page. The four endpoints behind it were
+    converted here and are fully tested (`tests/Feature/PortalAccessTest.php`),
+    but **no screen had ever called them** -- `frontend/` had no portal
+    client functions at all, against either backend. So the portal
+    login page rendered and refused every sign-in, because there was no
+    way to create a portal user in the first place. The Contact Person
+    table now carries a "Portal login" column with those three actions,
+    the enabled/locked/must-change status, and the one-time temporary
+    password shown when SMTP is not configured.
   - **PORTAL-001/003 (the second auth realm).** `portal_users` is its
     own table -- one login per Contact, one email per company, never a
     row in staff `users`. A portal session token carries

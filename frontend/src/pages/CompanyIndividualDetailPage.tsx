@@ -10,6 +10,7 @@ import {
   type CompanyIndividualProductUsageRow,
   type CompanyIndividualRelationship,
   type CompanyIndividualType,
+  type PortalAccess,
   type SetupListItem,
 } from '../lib/api'
 import { formatDate, formatDateTime } from '../lib/format'
@@ -92,6 +93,18 @@ export default function CompanyIndividualDetailPage() {
   const [isCustomer, setIsCustomer] = useState(true)
   const [isSupplier, setIsSupplier] = useState(false)
 
+  // Helpdesk Portal logins, one per Contact. Kept keyed by contact id
+  // rather than folded into the Contact row: it is a different record
+  // in a different auth realm (docs/customer-portal-design.md §8), and
+  // it is fetched per contact because the contacts endpoint knows
+  // nothing about portal users.
+  const [portalAccess, setPortalAccess] = useState<Record<string, PortalAccess>>({})
+  // The temporary password, shown once after enable/reset and only when
+  // SMTP is not configured -- with SMTP it is emailed and never
+  // displayed. Cleared as soon as any other portal action runs.
+  const [portalTempPassword, setPortalTempPassword] = useState<{ contactId: string; password: string } | null>(null)
+  const [portalBusyContactId, setPortalBusyContactId] = useState<string | null>(null)
+
   // New-contact form
   const [contactName, setContactName] = useState('')
   const [contactEmail, setContactEmail] = useState('')
@@ -156,6 +169,33 @@ export default function CompanyIndividualDetailPage() {
   }
 
   useEffect(refresh, [id])
+
+  // One call per contact. There is no bulk endpoint, and a customer's
+  // contact list is short; a failure here leaves that contact's cell
+  // blank rather than failing the whole page.
+  useEffect(() => {
+    if (!id || contacts.length === 0) {
+      setPortalAccess({})
+
+      return
+    }
+    let cancelled = false
+    Promise.all(
+      contacts.map((c) =>
+        api
+          .getPortalAccess(id, c.id)
+          .then((access) => [c.id, access] as const)
+          .catch(() => null),
+      ),
+    ).then((rows) => {
+      if (cancelled) return
+      setPortalAccess(Object.fromEntries(rows.filter((r): r is readonly [string, PortalAccess] => r !== null)))
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [id, contacts])
   useEffect(() => {
     api.listCompanyIndividualGroups().then(setGroups).catch((e) => setError(e.message))
     api.listSetupItems({ list_type: 'industry' }).then(setIndustries).catch(() => setIndustries([]))
@@ -325,6 +365,36 @@ export default function CompanyIndividualDetailPage() {
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update contact')
+    }
+  }
+
+  /**
+   * Enable / reset / disable one Contact's Helpdesk Portal login.
+   * The refusals (no contact email, no PDPA consent, archived customer)
+   * all come back from the backend as a message -- they are business
+   * rules, so they are not duplicated here.
+   */
+  async function onPortalAction(contact: Contact, action: 'enable' | 'reset' | 'disable') {
+    if (!id) return
+    if (action === 'disable' && !confirm(`Disable the Helpdesk Portal login for ${contact.name}?`)) return
+    setError(null)
+    setPortalTempPassword(null)
+    setPortalBusyContactId(contact.id)
+    try {
+      const access =
+        action === 'enable'
+          ? await api.enablePortalAccess(id, contact.id)
+          : action === 'reset'
+            ? await api.resetPortalAccessPassword(id, contact.id)
+            : await api.disablePortalAccess(id, contact.id)
+      setPortalAccess((prev) => ({ ...prev, [contact.id]: access }))
+      if (access.temporary_password) {
+        setPortalTempPassword({ contactId: contact.id, password: access.temporary_password })
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update portal access')
+    } finally {
+      setPortalBusyContactId(null)
     }
   }
 
@@ -662,6 +732,12 @@ export default function CompanyIndividualDetailPage() {
       <div className="card">
         <h2>Contact Person</h2>
         <p className="muted">Individual contacts at this Company / Individual -- separate from the quick "Contact person" field above.</p>
+        <p className="muted">
+          "Portal login" is this contact's own Customer Helpdesk Portal sign-in. It needs an
+          email address on the contact, PDPA consent recorded on this Company / Individual, and
+          an unarchived record. Enabling it issues a temporary password the contact must change
+          on first sign-in -- emailed if SMTP is configured, otherwise shown here once.
+        </p>
         <table>
           <thead>
             <tr>
@@ -670,31 +746,93 @@ export default function CompanyIndividualDetailPage() {
               <th>Phone</th>
               <th>Direct line</th>
               <th>Status</th>
+              <th>Portal login</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {contacts.map((c) => (
-              <tr key={c.id}>
-                <td>{c.name}</td>
-                <td>{c.email ?? '-'}</td>
-                <td>{c.phone ?? '-'}</td>
-                <td>{c.direct_line ?? '-'}</td>
-                <td>
-                  <span className={`badge ${c.is_active ? 'active' : 'draft'}`}>
-                    {c.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                </td>
-                <td>
-                  <button className="secondary" onClick={() => onToggleContact(c)}>
-                    {c.is_active ? 'Deactivate' : 'Reactivate'}
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {contacts.map((c) => {
+              const access = portalAccess[c.id]
+              const busy = portalBusyContactId === c.id
+
+              return (
+                <tr key={c.id}>
+                  <td>{c.name}</td>
+                  <td>{c.email ?? '-'}</td>
+                  <td>{c.phone ?? '-'}</td>
+                  <td>{c.direct_line ?? '-'}</td>
+                  <td>
+                    <span className={`badge ${c.is_active ? 'active' : 'draft'}`}>
+                      {c.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td>
+                    {access?.enabled ? (
+                      <>
+                        <span className="badge active">Enabled</span>
+                        {access.locked && <span className="badge draft" style={{ marginLeft: 6 }}>Locked out</span>}
+                        {access.must_change_password && (
+                          <span className="badge draft" style={{ marginLeft: 6 }}>Must set password</span>
+                        )}
+                        <div className="muted" style={{ marginTop: 4 }}>
+                          {access.email}
+                          <br />
+                          {access.last_login_at
+                            ? `Last signed in ${formatDateTime(access.last_login_at)}`
+                            : 'Never signed in'}
+                        </div>
+                      </>
+                    ) : (
+                      <span className="muted">{access ? 'Not enabled' : '-'}</span>
+                    )}
+                    {portalTempPassword?.contactId === c.id && (
+                      <div className="muted" style={{ marginTop: 6 }}>
+                        Temporary password: <strong>{portalTempPassword.password}</strong>
+                        <br />
+                        Shown once -- pass it to the contact now. (Configure SMTP and it is
+                        emailed instead.)
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    <button className="secondary" onClick={() => onToggleContact(c)}>
+                      {c.is_active ? 'Deactivate' : 'Reactivate'}
+                    </button>{' '}
+                    {access?.enabled ? (
+                      <>
+                        <button
+                          className="secondary"
+                          disabled={busy}
+                          onClick={() => onPortalAction(c, 'reset')}
+                        >
+                          Reset portal password
+                        </button>{' '}
+                        <button
+                          className="secondary"
+                          disabled={busy}
+                          onClick={() => onPortalAction(c, 'disable')}
+                        >
+                          Disable portal login
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        className="secondary"
+                        disabled={busy}
+                        onClick={() => onPortalAction(c, 'enable')}
+                      >
+                        {access && !access.enabled && access.email
+                          ? 'Re-enable portal login'
+                          : 'Enable portal login'}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
             {contacts.length === 0 && (
               <tr>
-                <td colSpan={6} className="muted">
+                <td colSpan={7} className="muted">
                   No contact person recorded yet.
                 </td>
               </tr>

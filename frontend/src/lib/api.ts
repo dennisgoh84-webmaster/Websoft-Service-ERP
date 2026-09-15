@@ -354,6 +354,28 @@ export interface Contact {
   is_active: boolean
 }
 
+/**
+ * The staff-side view of one Contact's Helpdesk Portal login
+ * (docs/customer-portal-design.md, PORTAL-001..004). Portal users are a
+ * separate auth realm -- they live in their own table and never in
+ * staff `users` -- so this is the only place a portal login is created.
+ */
+export interface PortalAccess {
+  enabled: boolean
+  email: string | null
+  must_change_password: boolean | null
+  last_login_at: string | null
+  /** True while the 5-wrong-passwords lockout is still running. */
+  locked: boolean
+  /**
+   * Shown ONCE, immediately after enable or reset, and only when SMTP
+   * is not configured -- otherwise the temporary password goes out by
+   * email instead and this is null.
+   */
+  temporary_password: string | null
+  invited_by_email: boolean
+}
+
 export interface Branch {
   id: string
   customer_id: string
@@ -1948,6 +1970,26 @@ export const api = {
     request<Contact>(`/company-individuals/${customerId}/contacts/${contactId}/deactivate`, { method: 'POST' }),
   reactivateContact: (customerId: string, contactId: string) =>
     request<Contact>(`/company-individuals/${customerId}/contacts/${contactId}/reactivate`, { method: 'POST' }),
+
+  // Helpdesk Portal logins, granted per Contact. The backend refuses
+  // without a contact email, without PDPA consent on file, or on an
+  // archived customer, and archiving disables every login under the
+  // customer (PORTAL-004) -- all enforced there, not here.
+  getPortalAccess: (customerId: string, contactId: string) =>
+    request<PortalAccess>(`/company-individuals/${customerId}/contacts/${contactId}/portal-access`),
+  enablePortalAccess: (customerId: string, contactId: string) =>
+    request<PortalAccess>(`/company-individuals/${customerId}/contacts/${contactId}/portal-access`, {
+      method: 'POST',
+    }),
+  resetPortalAccessPassword: (customerId: string, contactId: string) =>
+    request<PortalAccess>(
+      `/company-individuals/${customerId}/contacts/${contactId}/portal-access/reset-password`,
+      { method: 'POST' },
+    ),
+  disablePortalAccess: (customerId: string, contactId: string) =>
+    request<PortalAccess>(`/company-individuals/${customerId}/contacts/${contactId}/portal-access/disable`, {
+      method: 'POST',
+    }),
 
   listBranches: (customerId: string, includeInactive = false) =>
     request<Branch[]>(`/company-individuals/${customerId}/branches${includeInactive ? '?include_inactive=true' : ''}`),

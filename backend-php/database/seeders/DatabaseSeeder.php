@@ -3,6 +3,8 @@
 namespace Database\Seeders;
 
 use App\Models\Account;
+use App\Models\AdBannerSettings;
+use App\Models\Announcement;
 use App\Models\BankAccount;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
@@ -116,6 +118,36 @@ class DatabaseSeeder extends Seeder
         ['6900', 'Other operating expenses', Account::TYPE_EXPENSE],
     ];
 
+    /**
+     * The real Webmaster Consultancy letterhead, from Dennis's own
+     * Quotation (Quote_0160, shared 2026-09-10) -- the same values
+     * backend/scripts/seed_demo.py seeds, not invented ones. They print
+     * on quotations and invoices, and are editable in Company Setup.
+     */
+    private const COMPANY_LETTERHEAD = [
+        'address' => '8 Ubi Road 2 #05-12/13/14 Zervex, Singapore 408538',
+        'phone' => '6709 1233 / 6747 0705',
+        'website' => 'www.websoft.sg',
+        'uen' => '199802145E',
+        'gst_registration_no' => '199802145E',
+    ];
+
+    /** The logo from that same letterhead, stored as a data URI like Company Setup's upload does. */
+    private const LOGO_PATH = __DIR__.'/assets/webmaster_logo.png';
+
+    // The ad banner and "What's New" items, global rather than
+    // company-scoped (see App\Models\Announcement). Same content as
+    // seed_demo.py's DEFAULT_AD_VIDEO_URL / DEFAULT_ANNOUNCEMENTS, so a
+    // seeded PHP install has the same starting point the Python one
+    // does and the Login page's promo panel is not empty.
+    private const AD_VIDEO_URL = 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4';
+
+    private const ANNOUNCEMENTS = [
+        ['New', 'Reference Monitor: break one Chart of Accounts code into named sub-codes for Sales Quotation lines.'],
+        ['Add-on', 'Print/Email/WhatsApp actions are now icon buttons across every document list.'],
+        ['Update', 'Company/Individual replaces the old "Customer" naming throughout the app.'],
+    ];
+
     public function run(): void
     {
         foreach (self::MODULE_CATALOG as $key => [$name, $isBuilt, $_enabled]) {
@@ -128,8 +160,23 @@ class DatabaseSeeder extends Seeder
                 'country' => 'Singapore',
                 'currency' => 'SGD',
                 'timezone' => 'Asia/Singapore',
-            ],
+            ] + self::COMPANY_LETTERHEAD + ['logo' => $this->logoDataUri()],
         );
+
+        // Re-seeding an install that already has a company fills in only
+        // what is still blank. Anything Dennis has since typed into
+        // Company Setup -- a new address, his own logo -- is left alone:
+        // a seeder must not overwrite entered data.
+        $filled = [];
+        foreach (self::COMPANY_LETTERHEAD + ['logo' => $this->logoDataUri()] as $field => $value) {
+            if ($value !== null && ($company->{$field} === null || $company->{$field} === '')) {
+                $company->{$field} = $value;
+                $filled[] = $field;
+            }
+        }
+        if ($filled !== []) {
+            $company->save();
+        }
 
         foreach (self::MODULE_CATALOG as $key => [$name, $_isBuilt, $enabled]) {
             CompanyModule::updateOrCreate(
@@ -219,6 +266,33 @@ class DatabaseSeeder extends Seeder
             ],
         );
 
-        $this->command?->info('Seeded: 1 company, module catalog, Owner/Admin group, Dennis (owner, demo1234), Chart of Accounts, 1 bank account, 1 sample customer.');
+        // The promo video + "What's New" panel on the Login page and on
+        // every signed-in page. updateOrCreate on the fixed singleton
+        // row for the banner; announcements match on their text so a
+        // reseed does not stack duplicates, and an item Dennis has
+        // edited or deactivated keeps its sort_order/is_active.
+        AdBannerSettings::firstOrCreate(['id' => 1], ['video_url' => self::AD_VIDEO_URL]);
+        foreach (self::ANNOUNCEMENTS as $i => [$tag, $text]) {
+            Announcement::firstOrCreate(
+                ['text' => $text],
+                ['tag' => $tag, 'sort_order' => $i, 'is_active' => true],
+            );
+        }
+
+        $this->command?->info('Seeded: 1 company (letterhead + logo), module catalog, Owner/Admin group, Dennis (owner, demo1234), Chart of Accounts, 1 bank account, 1 sample customer, ad banner + 3 announcements.');
+    }
+
+    /**
+     * The letterhead logo as a data URI, matching how Company Setup's
+     * file picker stores an upload. Returns null if the asset is
+     * missing, so a checkout without it still seeds.
+     */
+    private function logoDataUri(): ?string
+    {
+        if (! is_file(self::LOGO_PATH)) {
+            return null;
+        }
+
+        return 'data:image/png;base64,'.base64_encode((string) file_get_contents(self::LOGO_PATH));
     }
 }
