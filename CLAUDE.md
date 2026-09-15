@@ -342,18 +342,7 @@ converted modules.
 record until each remaining module is converted, module by module,
 the same way.
 
-Also converted (2026-09-15): the **document generation stack**
-(`docx_forms.py`, `pdf_convert.py`, `document_email.py`) and the
-`.docx` export / "Email X" endpoints that depend on it, across
-Invoices, Quotations, Service Records, Purchase Orders, Payment
-Vouchers, Receipt Vouchers and the AR Customer Statement -- closing the
-gaps previously recorded against those modules. PDF is produced by
-converting the same `.docx` through LibreOffice headless, exactly as
-`backend/` does, so the Word and PDF outputs can never drift;
-**`libreoffice-writer` must therefore be installed wherever
-`backend-php/` runs** -- `libreoffice-core` alone converts nothing.
-
-And the last six small maintenance modules: **Tax Types**, **GL
+Also converted (2026-09-15), the last six small maintenance modules: **Tax Types**, **GL
 Types**, the **Currency Rate Table**, **Setup Lists** (Nationality /
 Country / State / Area Code / Currency / Industry -- deliberately
 global rather than company-scoped, since a country's name does not
