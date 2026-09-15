@@ -808,7 +808,10 @@ Built 2026-09-15 (slice 1, see [planned-work.md #12](planned-work.md)):
 **incident triage + resolution suggestions** — for a logged Incident,
 suggest the customer, contract, priority and route, the similar
 resolved incidents and what fixed them, and a draft reply; staff apply
-it through the existing Incident actions. Rule: the assistant calls
+it through the existing Incident actions; and (slice 2) a **chat
+panel** on the Incidents, Company / Individual, Contract, Job Order
+and Service Records screens answering in the language asked, over
+read-only tools that run as the user. Rule: the assistant calls
 the tested services and narrates, never does arithmetic on money or
 hours, and proposes rather than commits. Candidates not yet built:
 Service Record drafting, AR collections, natural-language reporting,
@@ -816,7 +819,8 @@ portal self-service, renewal prioritisation, supplier bill capture.
 
 **Information managed**
 `ai_settings` (one global row: provider API key — write-only,
-encrypted — model, personal-data mask toggle) and `ai_interactions`
+encrypted — model, personal-data mask toggle, the assistant's name and
+avatar) and `ai_interactions`
 (the audit of every call: who, which record, model, tokens, status,
 the answer; never the prompt). Everything else is read from other
 modules within the requesting user's permissions.

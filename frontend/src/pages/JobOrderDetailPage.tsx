@@ -1,3 +1,4 @@
+import AiChatPanel from '../components/AiChatPanel'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
@@ -295,6 +296,7 @@ export default function JobOrderDetailPage() {
         )}
       </p>
       {error && <div className="error-banner">{error}</div>}
+      <AiChatPanel context={{ type: 'job_order', id: jobOrder.id, label: `job order ${jobOrder.job_order_number}` }} />
 
       {/* Budget overrun warning (7.1) */}
       {jobOrder.budget_overrun && (jobOrder.budget_overrun.is_over_hours || jobOrder.budget_overrun.is_over_cost) && (

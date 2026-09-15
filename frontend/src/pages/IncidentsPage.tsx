@@ -4,6 +4,7 @@
 // #36 for the confirmed rules this implements.
 import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
+import AiChatPanel from '../components/AiChatPanel'
 import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import SignaturePanel from '../components/SignaturePanel'
 import {
@@ -196,6 +197,13 @@ export default function IncidentsPage() {
           {message}
         </p>
       )}
+      <AiChatPanel
+        context={
+          expandedId
+            ? { type: 'incident', id: expandedId, label: incidents.find((i) => i.id === expandedId)?.incident_number ?? 'this incident' }
+            : { type: 'incident', id: null, label: 'Incidents' }
+        }
+      />
 
       <div className="card">
         <h2>Log an incident</h2>

@@ -2002,3 +2002,14 @@ Also a build default: the model is `claude-opus-5` (Anthropic's
 current recommended default at the time), changeable on the settings
 screen; no server-side refusal fallback is configured.
 
+42.5. **Chat panel (slice 2, same day).** Decided by build: the chat
+   answers in the language it is asked in; its tools run as the asking
+   user (Group Authority + Module Control, same keys as the screens);
+   it is read-only, with at most eight look-ups per question; the
+   browser holds the conversation and the server keeps only the
+   tokens / tools / answer record. The assistant's name and avatar are
+   install-level settings (`ai_settings`); the avatar image is
+   generated outside the system. **Open:** whether the assistant should
+   also serve customers on the Helpdesk Portal (a separate auth realm
+   and scope — see planned-work #12 Tier 2 item 6).
+

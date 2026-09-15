@@ -442,10 +442,19 @@ shipped and when.
   owner, and an `ai_interactions` audit per call. Personal data is
   masked before sending by default. Anthropic PHP SDK, structured JSON
   answers, provider faked in tests.
+  **Slice 2 built the same day:** a chat panel on the Incidents,
+  Company / Individual, Contract, Job Order and Service Records
+  screens — ask in any language (English, 中文, Bahasa Melayu, தமிழ்),
+  answered in the same language, through read-only tools that run
+  with the asking person's own permissions (customers, contracts and
+  hours, job orders, service records, incidents, receivables, AR
+  aging) — plus the assistant's name and avatar under Maintenance →
+  AI Assistant (image generated outside from the /imagine prompt kept
+  there and in planned-work #12).
   **Still open for Dennis:** 12.1 (is masked text to a US-hosted API
   acceptable, or is a regional / self-hosted model needed?) and a cost
-  cap once usage is visible (12.2). Tier 1 items 3–4 and Tier 2/3 not
-  built.
+  cap once usage is visible (12.2). Tier 1 items 3–4, the portal
+  assistant and Tier 3 not built.
   → [planned-work.md #12](planned-work.md#12-ai-assistant--where-ai-fits-this-system-and-what-it-must-not-do-raised-2026-09-15),
   [open-business-decisions.md #42](open-business-decisions.md#42-ai-assistant-slice-1--defaults-taken-for-the-four-open-decisions-built-2026-09-15)
 
@@ -516,4 +525,4 @@ shipped and when.
   → [open-business-decisions.md #7-8](open-business-decisions.md#7-projects)
 
 ---
-Last updated: 2026-09-15 (Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006; Maintenance / Company-Individual batch; eight-character company code; Service Record rules SRV-019/020, SLA removed; AI Assistant slice 1)
+Last updated: 2026-09-15 (Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006; Maintenance / Company-Individual batch; eight-character company code; Service Record rules SRV-019/020, SLA removed; AI Assistant slices 1 and 2)

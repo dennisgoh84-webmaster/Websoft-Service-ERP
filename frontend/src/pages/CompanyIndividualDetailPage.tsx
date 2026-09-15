@@ -1,3 +1,4 @@
+import AiChatPanel from '../components/AiChatPanel'
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -558,6 +559,7 @@ export default function CompanyIndividualDetailPage() {
         </span>
       </p>
       {error && <div className="error-banner">{error}</div>}
+      <AiChatPanel context={{ type: 'customer', id: customer.id, label: customer.name }} />
 
       <div className="card">
         <h2>Profile</h2>

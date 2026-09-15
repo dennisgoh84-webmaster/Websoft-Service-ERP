@@ -16,6 +16,9 @@ export default function AiAssistantPage() {
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState('claude-opus-5')
   const [redact, setRedact] = useState(true)
+  const [assistantName, setAssistantName] = useState('Websoft AI')
+  const [avatar, setAvatar] = useState<string | null>(null)
+  const [avatarChanged, setAvatarChanged] = useState(false)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -28,6 +31,9 @@ export default function AiAssistantPage() {
         setSettings(s)
         setModel(s.model)
         setRedact(s.redact_personal_data)
+        setAssistantName(s.assistant_name)
+        setAvatar(s.assistant_avatar)
+        setAvatarChanged(false)
       })
       .catch((e) => setError(e.message))
     api.getAiUsage().then(setUsage).catch(() => setUsage(null))
@@ -44,6 +50,8 @@ export default function AiAssistantPage() {
         ...(apiKey ? { api_key: apiKey } : {}),
         model,
         redact_personal_data: redact,
+        assistant_name: assistantName.trim() || 'Websoft AI',
+        ...(avatarChanged ? { assistant_avatar: avatar } : {}),
       })
       setApiKey('')
       setMessage('Settings saved.')
@@ -85,6 +93,26 @@ export default function AiAssistantPage() {
     }
   }
 
+  function onAvatarFile(file: File | null) {
+    if (!file) return
+    if (file.size > 300 * 1024) {
+      setError('The avatar image must be 300 KB or smaller -- resize it first.')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      setAvatar(String(reader.result))
+      setAvatarChanged(true)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const IMAGINE_PROMPT =
+    'friendly professional Singaporean female IT support assistant avatar for a business software product, ' +
+    'mid-20s, warm confident smile, neat shoulder-length dark hair, smart navy blouse, small headset, ' +
+    'clean flat vector illustration style, soft blue gradient background, head-and-shoulders portrait, ' +
+    'centered, looking at the viewer, high detail, no text, no logo --ar 1:1 --style raw'
+
   const bucket = (b: AiUsage['this_month']) => (
     <>
       <td>{b.calls}</td>
@@ -101,9 +129,11 @@ export default function AiAssistantPage() {
       <h1>AI Assistant</h1>
       <p className="muted">
         The assistant reads the system's own records and proposes -- it never changes a record itself, and never
-        works out hours or money (those come from the same services every screen uses). First feature: incident
-        triage on the Incidents page, suggesting the customer, contract, priority and route, similar past
-        incidents and what fixed them, and a draft reply. Each company must have the <strong>AI Assistant</strong>{' '}
+        works out hours or money (those come from the same services every screen uses). Two features: incident
+        triage on the Incidents page (customer, contract, priority and route, similar past incidents and what
+        fixed them, a draft reply), and a chat panel on the Incidents, Company / Individual, Contract, Job Order
+        and Service Records screens that answers questions in any language -- English, 中文, Bahasa Melayu,
+        தமிழ் -- looking records up with the asking person's own permissions. Each company must have the <strong>AI Assistant</strong>{' '}
         module enabled under <Link to="/modules">Module Control</Link> -- it is a paid add-on and the module key is
         the licence.
       </p>
@@ -155,6 +185,44 @@ export default function AiAssistantPage() {
               [name] in everything sent to the model provider; company names and email domains are kept so the
               incident can still be matched to a customer. Turn it off only if you have decided customer personal
               data may leave the system (PDPA -- see open decision 12.1).
+            </span>
+          </div>
+          <h3 style={{ marginTop: 18 }}>Name and face</h3>
+          <div className="form-row">
+            <label>Assistant's name</label>
+            <input value={assistantName} onChange={(e) => setAssistantName(e.target.value)} maxLength={40} required />
+            <span className="muted">Shown on every chat panel ("Ask Sofia") and used when she introduces herself.</span>
+          </div>
+          <div className="form-row">
+            <label>Avatar</label>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              {avatar ? (
+                <img src={avatar} alt="Assistant avatar" style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                <span className="muted">No image yet -- a plain placeholder is shown.</span>
+              )}
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(e) => onAvatarFile(e.target.files?.[0] ?? null)} />
+              {avatar && (
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    setAvatar(null)
+                    setAvatarChanged(true)
+                  }}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            <span className="muted">
+              PNG / JPEG / WebP / GIF, square, up to 300 KB. Generate one with an image tool and upload it here -- a
+              ready-made prompt for Midjourney's /imagine (or similar):
+            </span>
+            <textarea readOnly value={IMAGINE_PROMPT} rows={3} style={{ width: '100%', fontSize: 12 }} />
+            <span className="muted">
+              She is an assistant, not a colleague: keep her labelled as the AI assistant wherever she appears, and never
+              present her to customers as a staff member.
             </span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>

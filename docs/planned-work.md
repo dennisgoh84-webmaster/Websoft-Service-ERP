@@ -732,3 +732,57 @@ change — recorded in
 **Not built yet:** Tier 1 items 3 and 4 (Service Record drafting, AR
 collections assistant) and everything in Tier 2/3.
 
+### Built 2026-09-15 — slice 2: the chat panel, in any language, with a name and a face
+
+Dennis: "Can we speak to the AI assistant with instructions in
+multi-language, and can we use /imagine to design a Websoft AI girl?"
+Then: "Chat panel on Incidents, Customer and Contract pages, Open Job
+Order screen, open service records screen; a generated image from an
+/imagine prompt."
+
+- **Chat panel** (`frontend/src/components/AiChatPanel.tsx`) on the
+  Incidents, Company / Individual, Contract, Job Order and Service
+  Records screens. Ask in English, 中文, Bahasa Melayu, தமிழ் or any
+  other language; the assistant replies in the same one (the model does
+  this on instruction — no translation layer). The screen's record is
+  passed as context, so "how many hours are left?" on a contract page
+  needs no id.
+- **Read-only tools that run as the user** (`App\Services\Ai\AiTools`):
+  find customers, a customer's contracts / one contract (hours from
+  `Contract::remainingMinutes()`), job orders (incl. "assigned to me"),
+  service records, incidents, a customer's receivables (the AR
+  statement the AR screen builds) and the AR aging summary (the AR
+  aging report's own rows). Each tool checks the same module key and
+  access level as the screen it mirrors, then Module Control; a
+  refusal is returned as text the assistant relays ("you do not have
+  access to that"), and an id from another company is "not found".
+  The model is told to quote figures, never compute them, and that it
+  cannot change records — it points to the screen that does.
+- **Loop**: the manual tool-use loop over the Anthropic PHP SDK
+  (`AiClient::chat()`), at most 8 tool rounds per question, then a
+  polite stop. The conversation is held by the browser and sent whole
+  each turn; the server stores only the `ai_interactions` row (tokens
+  summed over the rounds, the tools used, the answer) and an Event Log
+  entry, never the prompt. Personal data in tool results is masked
+  under the same 12.1 switch as triage.
+- **Name and face**: `ai_settings.assistant_name` (default "Websoft
+  AI") and `assistant_avatar` (a data URL, ≤ 300 KB, PNG/JPEG/WebP/GIF),
+  set under Maintenance → AI Assistant and shown on every panel. A
+  placeholder avatar is used until an image is uploaded. The image is
+  generated outside the system; the prompt below is on the settings
+  screen for copying. She is labelled as the AI assistant wherever she
+  appears and is never presented to customers as a staff member.
+
+The /imagine prompt (Midjourney or similar; adjust to taste):
+
+> friendly professional Singaporean female IT support assistant avatar
+> for a business software product, mid-20s, warm confident smile, neat
+> shoulder-length dark hair, smart navy blouse, small headset, clean
+> flat vector illustration style, soft blue gradient background,
+> head-and-shoulders portrait, centered, looking at the viewer, high
+> detail, no text, no logo --ar 1:1 --style raw
+
+**Not built:** the assistant on the Customer Portal (Tier 2 item 6 —
+a different auth realm and a different scope, deliberately left for
+its own decision), and any write action through the chat.
+

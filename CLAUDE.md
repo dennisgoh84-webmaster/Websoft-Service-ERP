@@ -45,7 +45,8 @@ eventual project.
   built; further commission business rules remain deferred (see
   [docs/open-business-decisions.md](docs/open-business-decisions.md))
 - Management Reporting
-- AI Assistant — slice 1 (incident triage) built 2026-09-15; see
+- AI Assistant — slices 1 (incident triage) and 2 (multi-language chat
+  panel) built 2026-09-15; see
   [docs/planned-work.md #12](docs/planned-work.md)
 
 "Ticket"/"Timesheet" terminology has been renamed throughout to "Job
@@ -516,7 +517,12 @@ arithmetic on money or hours. Anthropic's PHP SDK is the one new
 dependency; structured JSON answers only; the provider is faked in
 tests (`AiClient::fake()`). Personal data is masked before sending
 by default (decision 12.1's pragmatic default — still Dennis's call
-whether a US-hosted API is acceptable at all).
+whether a US-hosted API is acceptable at all). **Slice 2 the same
+day:** a chat panel on the Incidents, Company/Individual, Contract,
+Job Order and Service Records screens — any language in, the same
+language out — over read-only tools (`App\Services\Ai\AiTools`)
+that run as the signed-in user through the same module keys as the
+screens, plus the assistant's name and avatar as settings.
 
 No other business area has application code yet. **Further commission
 business rules beyond what is built (the report, its rate and

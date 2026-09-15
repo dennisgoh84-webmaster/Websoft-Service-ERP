@@ -56,6 +56,100 @@ class AiClient
     }
 
     /**
+     * One turn of a tool-using conversation. `$messages` is the full
+     * history in the API's shape (user / assistant / tool results);
+     * `$tools` are definitions with camelCase `inputSchema`. The model
+     * may answer with text, with tool calls, or both.
+     *
+     * Fake protocol: each queued answer is either ['text' => '...'] or
+     * ['tool_calls' => [['name' => ..., 'input' => [...]], ...]] (an id
+     * is made up), plus the same __error / __refused / __*_tokens keys
+     * complete() accepts. Every request is recorded with its system
+     * prompt, messages and tool names.
+     *
+     * @throws AiNotConfiguredException
+     * @throws AiException
+     */
+    public static function chat(string $system, array $messages, array $tools, int $maxTokens = 4096, ?string $model = null): AiTurn
+    {
+        $settings = AiSetting::current();
+        $model ??= $settings->model ?: AiSetting::DEFAULT_MODEL;
+
+        if (self::$fakeQueue !== null) {
+            self::$fakeRequests[] = ['system' => $system, 'messages' => $messages, 'tools' => array_column($tools, 'name'), 'model' => $model];
+            $answer = array_shift(self::$fakeQueue);
+            if ($answer === null) {
+                throw new AiException('AiClient::fake() has no answer queued for this call.');
+            }
+            if (($answer['__error'] ?? null) !== null) {
+                throw new AiException($answer['__error']);
+            }
+            if (($answer['__refused'] ?? false) === true) {
+                return new AiTurn(null, [], [], 'refusal', $model, 0, 0, true, $answer['__reason'] ?? null);
+            }
+            $content = [];
+            $calls = [];
+            if (isset($answer['text'])) {
+                $content[] = ['type' => 'text', 'text' => $answer['text']];
+            }
+            foreach ($answer['tool_calls'] ?? [] as $i => $call) {
+                $id = 'toolu_fake_'.count(self::$fakeRequests).'_'.$i;
+                $calls[] = ['id' => $id, 'name' => $call['name'], 'input' => $call['input'] ?? []];
+                $content[] = ['type' => 'tool_use', 'id' => $id, 'name' => $call['name'], 'input' => $call['input'] ?? []];
+            }
+
+            return new AiTurn(
+                $answer['text'] ?? null, $calls, $content, $calls ? 'tool_use' : 'end_turn', $model,
+                $answer['__input_tokens'] ?? 100, $answer['__output_tokens'] ?? 50, false, null,
+            );
+        }
+
+        $apiKey = $settings->effectiveApiKey();
+        if ($apiKey === null) {
+            throw new AiNotConfiguredException(
+                'The AI Assistant has no API key. Set one under Maintenance -> AI Assistant (or ANTHROPIC_API_KEY in .env).'
+            );
+        }
+
+        $client = new Client(apiKey: $apiKey, requestOptions: ['timeout' => 120]);
+
+        try {
+            $message = $client->messages->create(
+                maxTokens: $maxTokens,
+                messages: $messages,
+                model: $model,
+                system: $system,
+                tools: $tools,
+            );
+        } catch (APIStatusException $e) {
+            throw new AiException('The model provider rejected the request: '.$e->getMessage());
+        } catch (APIConnectionException $e) {
+            throw new AiException('Could not reach the model provider: '.$e->getMessage());
+        }
+
+        $inputTokens = (int) ($message->usage->inputTokens ?? 0);
+        $outputTokens = (int) ($message->usage->outputTokens ?? 0);
+        if ($message->stopReason === 'refusal') {
+            return new AiTurn(null, [], [], 'refusal', $model, $inputTokens, $outputTokens, true, $message->stopDetails?->explanation ?? null);
+        }
+
+        $text = null;
+        $calls = [];
+        foreach ($message->content as $block) {
+            if ($block->type === 'text') {
+                $text = ($text ?? '').$block->text;
+            } elseif ($block->type === 'tool_use') {
+                $calls[] = ['id' => $block->id, 'name' => $block->name, 'input' => (array) $block->input];
+            }
+        }
+
+        return new AiTurn(
+            $text, $calls, $message->content, (string) $message->stopReason, $model,
+            $inputTokens, $outputTokens, false, null,
+        );
+    }
+
+    /**
      * @param  array  $schema  a JSON Schema object for the answer
      *
      * @throws AiNotConfiguredException when no API key is set anywhere
@@ -128,6 +222,31 @@ class AiClient
 
         return new AiResult($data, $model, $inputTokens, $outputTokens, false, null);
     }
+}
+
+/**
+ * One assistant turn of a tool-using conversation (see AiChat). The
+ * caller appends `assistantContent` verbatim as the next assistant
+ * message and answers every tool call with a tool_result before the
+ * next turn.
+ */
+class AiTurn
+{
+    /**
+     * @param  array<int, array{id: string, name: string, input: array}>  $toolCalls
+     * @param  mixed  $assistantContent  the content blocks to replay as the assistant message
+     */
+    public function __construct(
+        public readonly ?string $text,
+        public readonly array $toolCalls,
+        public readonly mixed $assistantContent,
+        public readonly string $stopReason,
+        public readonly string $model,
+        public readonly int $inputTokens,
+        public readonly int $outputTokens,
+        public readonly bool $refused,
+        public readonly ?string $refusalReason,
+    ) {}
 }
 
 class AiResult

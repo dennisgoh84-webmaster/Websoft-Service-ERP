@@ -9,9 +9,11 @@ use App\Models\AiInteraction;
 use App\Models\AiSetting;
 use App\Models\Incident;
 use App\Models\User;
+use App\Services\Ai\AiChat;
 use App\Services\Ai\AiClient;
 use App\Services\Ai\AiException;
 use App\Services\Ai\AiNotConfiguredException;
+use App\Services\Ai\AiValidationException;
 use App\Services\Ai\IncidentTriage;
 use App\Services\Audit;
 use App\Services\Authority;
@@ -36,6 +38,8 @@ class AiAssistantController extends Controller
 
     private const SETTINGS_AUDIT_ID = '00000000-0000-0000-0000-000000000004';
 
+    private const MAX_AVATAR_CHARS = 400_000; // ~300 KB of base64, same ceiling as the company logo
+
     // ---- Settings -------------------------------------------------
 
     public function settings(Request $request)
@@ -55,7 +59,18 @@ class AiAssistantController extends Controller
             'api_key' => 'sometimes|nullable|string|max:500',
             'model' => 'sometimes|string|max:60|regex:/^[a-z0-9\-.]+$/',
             'redact_personal_data' => 'sometimes|boolean',
+            'assistant_name' => 'sometimes|string|min:1|max:40',
+            'assistant_avatar' => 'sometimes|nullable|string',
         ]);
+        if (array_key_exists('assistant_avatar', $fields) && $fields['assistant_avatar'] !== null) {
+            $avatar = $fields['assistant_avatar'];
+            if (! preg_match('#^data:image/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$#', $avatar)) {
+                throw new ApiException(422, 'The avatar must be a PNG, JPEG, WebP or GIF image.');
+            }
+            if (strlen($avatar) > self::MAX_AVATAR_CHARS) {
+                throw new ApiException(422, 'The avatar image is too large (about 300 KB at most).');
+            }
+        }
 
         $row = AiSetting::current();
         $oldValue = [];
@@ -70,6 +85,12 @@ class AiAssistantController extends Controller
                 // Record THAT it changed, never the credential itself.
                 $oldValue[$field] = $old ? '(set)' : '(none)';
                 $newValue[$field] = $new ? '(set)' : '(none)';
+            } elseif ($field === 'assistant_avatar') {
+                if ($old == $new) {
+                    continue;
+                }
+                $oldValue[$field] = $old ? '(image)' : '(none)';
+                $newValue[$field] = $new ? '(image)' : '(none)';
             } else {
                 if ($old == $new) {
                     continue;
@@ -179,6 +200,53 @@ class AiAssistantController extends Controller
         ]);
     }
 
+    // ---- Chat ---------------------------------------------------------
+
+    /** The assistant's name and face, for the chat panel. Doubles as the panel's licence probe: 403 hides it. */
+    public function persona(Request $request)
+    {
+        $user = Authenticate::user($request);
+        $this->requireLicensed($user);
+        $row = AiSetting::current();
+
+        return response()->json(['name' => $row->assistantName(), 'avatar' => $row->assistant_avatar]);
+    }
+
+    public function chat(Request $request)
+    {
+        $user = Authenticate::user($request);
+        $this->requireLicensed($user);
+
+        $data = $request->validate([
+            'messages' => 'required|array|min:1|max:'.(AiChat::MAX_HISTORY * 2),
+            'messages.*.role' => 'required|string',
+            'messages.*.content' => 'required|string',
+            'context' => 'sometimes|nullable|array',
+            'context.type' => 'sometimes|nullable|string|max:30',
+            'context.id' => 'sometimes|nullable|string|max:40',
+        ]);
+
+        try {
+            $reply = AiChat::reply($user, $data['messages'], $data['context'] ?? null);
+        } catch (AiValidationException $e) {
+            throw new ApiException(422, $e->getMessage());
+        } catch (AiNotConfiguredException $e) {
+            throw new ApiException(422, $e->getMessage());
+        } catch (AiException $e) {
+            throw new ApiException(502, $e->getMessage());
+        }
+
+        return response()->json([
+            'answer' => $reply['answer'],
+            'refused' => $reply['refused'],
+            'tools_used' => $reply['tools_used'],
+            'model' => $reply['interaction']->model,
+            'input_tokens' => $reply['interaction']->input_tokens,
+            'output_tokens' => $reply['interaction']->output_tokens,
+            'interaction_id' => $reply['interaction']->id,
+        ]);
+    }
+
     // ---- Incident triage ------------------------------------------
 
     public function triageIncident(Request $request, string $incident)
@@ -245,6 +313,8 @@ class AiAssistantController extends Controller
         return [
             'model' => $row->model ?: AiSetting::DEFAULT_MODEL,
             'redact_personal_data' => (bool) $row->redact_personal_data,
+            'assistant_name' => $row->assistantName(),
+            'assistant_avatar' => $row->assistant_avatar,
             'api_key_set' => $row->api_key_set,
             'api_key_from_env' => $row->api_key_from_env,
             'updated_at' => optional($row->updated_at)->toJSON(),

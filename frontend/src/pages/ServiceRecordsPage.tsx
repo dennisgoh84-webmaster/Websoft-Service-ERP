@@ -1,3 +1,4 @@
+import AiChatPanel from '../components/AiChatPanel'
 import { Fragment, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { EmailIcon, PrintIcon, WhatsAppIcon } from '../components/DocActionIcons'
@@ -93,6 +94,7 @@ export default function ServiceRecordsPage() {
         <Link to="/service-record-approval">Service Record Approval</Link>.
       </p>
       {error && <div className="error-banner">{error}</div>}
+      <AiChatPanel context={{ type: 'service_records', label: 'Service Records' }} />
       {message && (
         <p className="muted" style={{ marginBottom: 12 }}>
           {message}

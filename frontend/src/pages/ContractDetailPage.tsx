@@ -1,3 +1,4 @@
+import AiChatPanel from '../components/AiChatPanel'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
@@ -244,6 +245,7 @@ export default function ContractDetailPage() {
         </div>
       </div>
       {error && <div className="error-banner">{error}</div>}
+      <AiChatPanel context={{ type: 'contract', id: contract.id, label: `contract ${contract.contract_number}` }} />
       {message && (
         <p className="muted" style={{ marginBottom: 12 }}>
           {message}

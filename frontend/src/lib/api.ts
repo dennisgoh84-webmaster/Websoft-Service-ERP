@@ -758,6 +758,9 @@ export interface Incident {
 export interface AiSettings {
   model: string
   redact_personal_data: boolean
+  /** The assistant's name and face (slice 2). Avatar is a data URL or null. */
+  assistant_name: string
+  assistant_avatar: string | null
   api_key_set: boolean
   api_key_from_env: boolean
   updated_at: string | null
@@ -788,6 +791,28 @@ export interface AiUsage {
     input_tokens: number
     output_tokens: number
   }[]
+}
+
+export interface AiPersona {
+  name: string
+  avatar: string | null
+}
+
+export interface AiChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export type AiChatContextType = 'incident' | 'customer' | 'contract' | 'job_order' | 'service_records'
+
+export interface AiChatReply {
+  answer: string
+  refused: boolean
+  tools_used: { name: string; summary: string }[]
+  model: string
+  input_tokens: number
+  output_tokens: number
+  interaction_id: string
 }
 
 export type IncidentTriageRoute = 'job_order' | 'quotation' | 'software_task' | 'callback' | 'close'
@@ -2551,7 +2576,15 @@ export const api = {
 
   // AI Assistant
   getAiSettings: () => request<AiSettings>('/ai/settings'),
-  updateAiSettings: (payload: Partial<{ api_key: string | null; model: string; redact_personal_data: boolean }>) =>
+  updateAiSettings: (
+    payload: Partial<{
+      api_key: string | null
+      model: string
+      redact_personal_data: boolean
+      assistant_name: string
+      assistant_avatar: string | null
+    }>,
+  ) =>
     request<AiSettings>('/ai/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
   testAiConnection: () =>
     request<{ ok: boolean; model: string; greeting: string | null; input_tokens: number; output_tokens: number }>('/ai/settings/test', {
@@ -2559,6 +2592,9 @@ export const api = {
       body: '{}',
     }),
   getAiUsage: () => request<AiUsage>('/ai/usage'),
+  getAiPersona: () => request<AiPersona>('/ai/persona'),
+  aiChat: (messages: AiChatMessage[], context?: { type: AiChatContextType; id?: string | null } | null) =>
+    request<AiChatReply>('/ai/chat', { method: 'POST', body: JSON.stringify({ messages, context: context ?? null }) }),
   getIncidentTriage: (incidentId: string) => request<IncidentTriage | null>(`/ai/incidents/${incidentId}/triage`),
   runIncidentTriage: (incidentId: string) =>
     request<IncidentTriage>(`/ai/incidents/${incidentId}/triage`, { method: 'POST', body: '{}' }),

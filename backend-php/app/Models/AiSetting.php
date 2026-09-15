@@ -16,6 +16,10 @@ class AiSetting extends Model
 
     public const DEFAULT_MODEL = 'claude-opus-5';
 
+    public const DEFAULT_ASSISTANT_NAME = 'Websoft AI';
+
+    public const FEATURE_CHAT = 'chat';
+
     protected $table = 'ai_settings';
 
     protected $primaryKey = 'key';
@@ -26,7 +30,7 @@ class AiSetting extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['key', 'api_key', 'model', 'redact_personal_data', 'updated_at'];
+    protected $fillable = ['key', 'api_key', 'model', 'redact_personal_data', 'assistant_name', 'assistant_avatar', 'updated_at'];
 
     protected $hidden = ['api_key'];
 
@@ -38,7 +42,17 @@ class AiSetting extends Model
 
     public static function current(): self
     {
-        return self::firstOrNew(['key' => self::KEY], ['model' => self::DEFAULT_MODEL, 'redact_personal_data' => true]);
+        return self::firstOrNew(['key' => self::KEY], [
+            'model' => self::DEFAULT_MODEL, 'redact_personal_data' => true, 'assistant_name' => self::DEFAULT_ASSISTANT_NAME,
+        ]);
+    }
+
+    /** The name the assistant introduces itself with on every screen. */
+    public function assistantName(): string
+    {
+        $name = trim((string) ($this->assistant_name ?? ''));
+
+        return $name !== '' ? $name : self::DEFAULT_ASSISTANT_NAME;
     }
 
     /** The key in use: the stored one, else the .env bootstrap value. */

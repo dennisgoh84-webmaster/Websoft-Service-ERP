@@ -12,6 +12,8 @@ Route::middleware('auth.jwt')->prefix('ai')->group(function () {
     Route::patch('/settings', [AiAssistantController::class, 'updateSettings']);
     Route::post('/settings/test', [AiAssistantController::class, 'testConnection']);
     Route::get('/usage', [AiAssistantController::class, 'usage']);
+    Route::get('/persona', [AiAssistantController::class, 'persona']);
+    Route::post('/chat', [AiAssistantController::class, 'chat']);
 
     Route::get('/incidents/{incident}/triage', [AiAssistantController::class, 'latestTriage']);
     Route::post('/incidents/{incident}/triage', [AiAssistantController::class, 'triageIncident']);

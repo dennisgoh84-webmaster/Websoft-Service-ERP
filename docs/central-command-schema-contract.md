@@ -190,6 +190,8 @@ write it; per-company licensing is the `ai_assistant` key in
 | `api_key` | `text` nullable | Encrypted with the client's `APP_KEY` (Laravel `encrypted` cast) — a push must write it through the client's own encryption, never plaintext |
 | `model` | `varchar(60)` | Default `claude-opus-5` |
 | `redact_personal_data` | `boolean` | Default `true` (decision 12.1) |
+| `assistant_name` | `varchar(40)` | Default `Websoft AI` |
+| `assistant_avatar` | `text` nullable | `data:image/...;base64,...`, ≤ 400 000 chars |
 | `updated_at` | `timestamptz` nullable | |
 
 ---

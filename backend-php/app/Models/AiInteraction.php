@@ -18,6 +18,8 @@ class AiInteraction extends Model
 
     public const FEATURE_CONNECTION_TEST = 'connection_test';
 
+    public const FEATURE_CHAT = 'chat';
+
     public const STATUS_OK = 'ok';
 
     public const STATUS_REFUSED = 'refused';
