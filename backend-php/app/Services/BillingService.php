@@ -2,10 +2,13 @@
 
 namespace App\Services;
 
+use App\Exceptions\BillingRuleViolation;
+use App\Exceptions\InventoryRuleViolation;
 use App\Models\CompanyIndividual;
 use App\Models\Contract;
 use App\Models\ExcessUsageRecord;
 use App\Models\Invoice;
+use App\Models\StockMovement;
 use App\Support\Money;
 use Illuminate\Support\Carbon;
 
@@ -125,6 +128,154 @@ class BillingService
         );
 
         return $invoice;
+    }
+
+    /**
+     * A manually raised Sales Invoice: one or more lines, each
+     * optionally drawing stock (Dennis, 2026-09-15 -- "Sales invoice
+     * ... when pick stock n update ... will use avg cost to deduct
+     * accordingly").
+     *
+     * The whole thing is one atomic act, as BILL-002 requires of every
+     * invoice in this system -- there is no draft state to leave stock
+     * reserved in. Either every stock line deducts, the header totals,
+     * the GL voucher and the audit entry all land, or nothing does.
+     *
+     * STOCK RULES ARE NOT RE-IMPLEMENTED HERE. Each stock line goes
+     * through App\Services\InventoryService::deductStock(), the same
+     * call a Goods Issue Note makes, so INV-002 holds by construction:
+     * an insufficient quantity refuses the WHOLE invoice rather than
+     * issuing part of it, on-hand quantity can never go negative, and
+     * units leave at the item's weighted average without re-weighting
+     * it.
+     *
+     * GST is applied once to the summed net, via the company's tax
+     * code -- the same single-rate treatment every other invoice and
+     * every quotation in this system uses. Per-line tax codes would be
+     * a new business rule and nobody has asked for one.
+     *
+     * Unlike the auto-issued invoices, `cost_sgd` here is a REAL cost
+     * basis (the summed weighted-average cost of the stock issued), so
+     * the Sales GP report shows a measured margin on these rather than
+     * the stand-in 100% it reports for an invoice with no known cost.
+     *
+     * @param  array<int, array<string, mixed>>  $lines
+     *
+     * @throws InventoryRuleViolation when a stock line
+     *                                asks for more than the warehouse holds
+     */
+    public static function issueSalesInvoice(
+        string $companyId,
+        string $customerId,
+        array $lines,
+        string $actorUserId,
+        ?string $description = null,
+    ): Invoice {
+        if ($lines === []) {
+            throw new BillingRuleViolation('A sales invoice needs at least one line.');
+        }
+
+        $net = Money::of(0);
+        $cost = Money::of(0);
+        $anyCostKnown = false;
+        $prepared = [];
+
+        foreach (array_values($lines) as $i => $line) {
+            $qty = (int) $line['quantity'];
+            $unitPrice = Money::of($line['unit_price_sgd']);
+            $amount = $unitPrice->multipliedBy($qty)->quantize();
+            $net = $net->plus($amount);
+
+            $prepared[] = [
+                'company_id' => $companyId,
+                'line_no' => $i + 1,
+                'description' => $line['description'],
+                'product_id' => $line['product_id'] ?? null,
+                'stock_item_id' => $line['stock_item_id'] ?? null,
+                'warehouse_id' => $line['warehouse_id'] ?? null,
+                'quantity' => $qty,
+                'unit_of_measure' => $line['unit_of_measure'] ?? null,
+                'unit_price_sgd' => $unitPrice->toString(),
+                'line_amount_sgd' => $amount->toString(),
+            ];
+        }
+
+        $invoice = self::buildInvoice(
+            companyId: $companyId,
+            customerId: $customerId,
+            invoiceType: Invoice::TYPE_SALES,
+            description: $description ?? self::describeLines($prepared),
+            netAmount: $net,
+        );
+        $invoice->save();
+
+        // Stock moves only once the invoice exists, so every movement
+        // can reference it -- and because the caller wraps this in a
+        // transaction, a refusal on line 3 unwinds lines 1 and 2 and
+        // the invoice with them.
+        foreach ($prepared as $row) {
+            if ($row['stock_item_id'] !== null) {
+                if ($row['warehouse_id'] === null) {
+                    throw new BillingRuleViolation(
+                        "Line {$row['line_no']} picks stock but names no warehouse to issue it from."
+                    );
+                }
+                $movement = InventoryService::deductStock(
+                    $companyId,
+                    $row['stock_item_id'],
+                    $row['warehouse_id'],
+                    $row['quantity'],
+                    StockMovement::TYPE_ISSUE,
+                    referenceType: 'invoice',
+                    referenceId: $invoice->id,
+                    userId: $actorUserId,
+                    notes: $invoice->invoice_number,
+                );
+                $row['unit_cost_sgd'] = (string) $movement->unit_cost;
+                $row['cost_amount_sgd'] = Money::of($movement->total_cost)->toString();
+                $cost = $cost->plus(Money::of($row['cost_amount_sgd']));
+                $anyCostKnown = true;
+            }
+
+            $invoice->lines()->create($row);
+        }
+
+        // Left null when no line moved stock: an invoice of pure
+        // services has no known cost, and null is what the Sales GP
+        // report reads as "no cost basis" rather than "cost was zero".
+        if ($anyCostKnown) {
+            $invoice->cost_sgd = $cost->toString();
+            $invoice->save();
+        }
+
+        $invoice->refresh(); // pick up issued_at's DB default before posting
+        Posting::postInvoice($invoice, $actorUserId);
+
+        Audit::record(
+            entityType: 'invoice',
+            entityId: $invoice->id,
+            action: 'issued',
+            actorUserId: $actorUserId,
+            details: "{$invoice->invoice_number}, invoice_type=sales, ".count($prepared).' line(s)',
+            newValue: [
+                'invoice_number' => $invoice->invoice_number,
+                'net_sgd' => (string) $invoice->amount_sgd,
+                'gst_sgd' => (string) $invoice->gst_amount_sgd,
+                'total_sgd' => (string) $invoice->total_amount_sgd,
+                'cost_sgd' => $invoice->cost_sgd !== null ? (string) $invoice->cost_sgd : null,
+            ],
+        );
+
+        return $invoice;
+    }
+
+    /** @param  array<int, array<string, mixed>>  $lines */
+    private static function describeLines(array $lines): string
+    {
+        $first = $lines[0]['description'];
+        $rest = count($lines) - 1;
+
+        return $rest > 0 ? "{$first} (+{$rest} more)" : $first;
     }
 
     /** SRV-008: contract value divided by contracted hours. */

@@ -32,6 +32,7 @@ class CompanyFactory extends Factory
         ['2110', 'GST input tax (paid on purchases)', Account::TYPE_LIABILITY],
         ['4000', 'Service contract revenue', Account::TYPE_REVENUE],
         ['4010', 'Excess usage revenue', Account::TYPE_REVENUE],
+        ['4030', 'Hardware sales', Account::TYPE_REVENUE],
         ['5000', 'Cost of services', Account::TYPE_EXPENSE],
     ];
 

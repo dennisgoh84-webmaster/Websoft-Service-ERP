@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
+use App\Exceptions\BillingRuleViolation;
+use App\Exceptions\InventoryRuleViolation;
 use App\Http\Controllers\Api\Concerns\SendsDocuments;
 use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
@@ -10,12 +12,18 @@ use App\Http\Middleware\Authenticate;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\Invoice;
+use App\Models\InvoiceLine;
+use App\Models\Product;
+use App\Models\StockItem;
+use App\Models\Warehouse;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\BillingService;
 use App\Services\DocxForms;
 use App\Services\Posting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Sales invoices. Mirrors backend/app/routers/billing.py -- see
@@ -69,6 +77,23 @@ class InvoiceController extends Controller
             'issued_at' => optional($invoice->issued_at)->toIso8601String(),
             'gl_status' => $glEntry ? 'posted' : 'not_posted',
             'gl_voucher_number' => $glEntry?->voucher_number,
+            'cost_sgd' => $invoice->cost_sgd !== null ? (float) $invoice->cost_sgd : null,
+            // Empty on every auto-issued invoice -- only a manually
+            // raised Sales Invoice carries lines.
+            'lines' => $invoice->lines->map(fn (InvoiceLine $l) => [
+                'id' => $l->id,
+                'line_no' => $l->line_no,
+                'description' => $l->description,
+                'product_id' => $l->product_id,
+                'stock_item_id' => $l->stock_item_id,
+                'warehouse_id' => $l->warehouse_id,
+                'quantity' => $l->quantity,
+                'unit_of_measure' => $l->unit_of_measure,
+                'unit_price_sgd' => (float) $l->unit_price_sgd,
+                'line_amount_sgd' => (float) $l->line_amount_sgd,
+                'unit_cost_sgd' => $l->unit_cost_sgd !== null ? (float) $l->unit_cost_sgd : null,
+                'cost_amount_sgd' => $l->cost_amount_sgd !== null ? (float) $l->cost_amount_sgd : null,
+            ])->values(),
         ];
     }
 
@@ -152,6 +177,89 @@ class InvoiceController extends Controller
         }
 
         return response()->json($this->present($invoice));
+    }
+
+    /**
+     * Raise a Sales Invoice by hand, with lines that may pick stock
+     * (Dennis, 2026-09-15). Everything else in this module issues
+     * invoices automatically off another module's decision; this is
+     * the only entry point a person drives.
+     *
+     * EDIT, not FULL: raising an invoice is the same level of act as
+     * the contract activation and excess-usage decision that issue one
+     * automatically, both of which need EDIT on their own modules.
+     *
+     * The whole thing is one transaction -- a line asking for more
+     * stock than the warehouse holds refuses the entire invoice, and
+     * leaves no half-issued stock behind it.
+     */
+    public function store(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+
+        $data = $request->validate([
+            'customer_id' => 'required|uuid',
+            'description' => 'sometimes|nullable|string',
+            'lines' => 'required|array|min:1',
+            'lines.*.description' => 'required|string',
+            'lines.*.quantity' => 'required|integer|gt:0',
+            'lines.*.unit_price_sgd' => 'required|numeric|min:0',
+            'lines.*.product_id' => 'sometimes|nullable|uuid',
+            'lines.*.stock_item_id' => 'sometimes|nullable|uuid',
+            'lines.*.warehouse_id' => 'sometimes|nullable|uuid',
+            'lines.*.unit_of_measure' => 'sometimes|nullable|string|max:20',
+        ]);
+
+        $this->assertBelongsToCompany($user->company_id, $data);
+
+        try {
+            $invoice = DB::transaction(fn () => BillingService::issueSalesInvoice(
+                companyId: $user->company_id,
+                customerId: $data['customer_id'],
+                lines: $data['lines'],
+                actorUserId: $user->id,
+                description: $data['description'] ?? null,
+            ));
+        } catch (BillingRuleViolation|InventoryRuleViolation $e) {
+            throw new ApiException(422, $e->getMessage());
+        }
+
+        return response()->json($this->present($invoice->fresh()), 201);
+    }
+
+    /**
+     * Every id in the request must belong to the caller's own company.
+     * Without this a valid uuid from another company would be accepted
+     * by the foreign key and quietly issue their stock.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function assertBelongsToCompany(string $companyId, array $data): void
+    {
+        $customer = CompanyIndividual::find($data['customer_id']);
+        if (! $customer || $customer->company_id !== $companyId) {
+            throw new ApiException(404, 'Company / Individual not found');
+        }
+
+        foreach ($data['lines'] as $i => $line) {
+            $checks = [
+                'product_id' => [Product::class, 'Product'],
+                'stock_item_id' => [StockItem::class, 'Stock item'],
+                'warehouse_id' => [Warehouse::class, 'Warehouse'],
+            ];
+            foreach ($checks as $field => [$model, $label]) {
+                $id = $line[$field] ?? null;
+                if ($id === null) {
+                    continue;
+                }
+                $row = $model::find($id);
+                if (! $row || $row->company_id !== $companyId) {
+                    $lineNo = $i + 1;
+                    throw new ApiException(404, "{$label} not found (line {$lineNo})");
+                }
+            }
+        }
     }
 
     private function invoiceOrFail(string $companyId, string $invoiceId): Invoice

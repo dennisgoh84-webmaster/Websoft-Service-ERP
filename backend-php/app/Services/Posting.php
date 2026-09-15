@@ -51,6 +51,11 @@ class Posting
     private const REVENUE_BY_INVOICE_TYPE = [
         Invoice::TYPE_CONTRACT_ANNUAL => '4000',
         Invoice::TYPE_EXCESS_USAGE => '4010',
+        // A manually raised Sales Invoice sells stock items, so it
+        // lands in the seeded "Hardware sales" account rather than a
+        // new one invented here. Remap it in the Chart of Accounts if
+        // Webmaster wants these somewhere else.
+        Invoice::TYPE_SALES => '4030',
     ];
 
     // source_type values -- shared with the Bank step and UNGL endpoints.

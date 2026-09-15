@@ -6,12 +6,20 @@ use App\Models\Concerns\HasUuidPrimaryKey;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Single-line tax invoices (BILL-002: no approval required -- issued
- * directly in "outstanding" status). Mirrors
+ * Tax invoices (BILL-002: no approval required -- issued directly in
+ * "outstanding" status). Mirrors
  * backend/app/models/billing.py's Invoice -- see that file's
  * docstring for the GST and GP-costing conventions.
+ *
+ * Historically every invoice was single-line: one amount, auto-issued
+ * from a contract activation or an excess-usage decision. Since
+ * 2026-09-15 a manually raised Sales Invoice may instead carry
+ * `lines` (see App\Models\InvoiceLine). Lines are OPTIONAL and the
+ * header totals are authoritative either way, so nothing that reads an
+ * invoice needs to know which kind it is holding.
  *
  * Money fields use 'decimal:2' (not 'float') because the service
  * layer computes with them via App\Support\Money -- see
@@ -27,6 +35,13 @@ class Invoice extends Model
     public const TYPE_CONTRACT_ANNUAL = 'contract_annual';
 
     public const TYPE_EXCESS_USAGE = 'excess_usage';
+
+    /**
+     * A manually raised Sales Invoice -- the only type that carries
+     * lines, and the only one that can move stock. See
+     * App\Services\BillingService::issueSalesInvoice().
+     */
+    public const TYPE_SALES = 'sales';
 
     public const STATUS_OUTSTANDING = 'outstanding';
 
@@ -79,6 +94,12 @@ class Invoice extends Model
     public function contract(): BelongsTo
     {
         return $this->belongsTo(Contract::class);
+    }
+
+    /** Empty on every auto-issued invoice -- see the class docblock. */
+    public function lines(): HasMany
+    {
+        return $this->hasMany(InvoiceLine::class)->orderBy('line_no');
     }
 
     /** What is still owed on this invoice (never negative). */
