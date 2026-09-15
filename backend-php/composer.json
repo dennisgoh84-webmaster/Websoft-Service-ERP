@@ -11,6 +11,7 @@
         "firebase/php-jwt": "^7.1",
         "laravel/framework": "^11.31",
         "laravel/tinker": "^2.9",
+        "phpoffice/phpspreadsheet": "^5.9",
         "phpoffice/phpword": "^1.4"
     },
     "require-dev": {

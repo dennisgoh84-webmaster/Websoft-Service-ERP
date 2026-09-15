@@ -1705,6 +1705,62 @@ result, a clear 422 rather than pretending to have sent -- is asserted
 at both the service and HTTP levels. The TLS behaviour is verified
 against the constructed Symfony transport, not by connecting.
 
+### Tax Types + the shared CSV/Excel export helper (converted 2026-09-15)
+
+- **`App\Services\Exports`** -- the port of
+  `backend/app/services/exports.py` (`rows_to_csv` / `rows_to_excel`),
+  including its column-width sizing (longest cell + 2, clamped 10..50)
+  and its bold header row. Every converted module's `/export.csv` and
+  `/export.xlsx` endpoint uses these two functions, exactly as every
+  Python router uses Python's two.
+
+  **DEPENDENCY: `phpoffice/phpspreadsheet`** (recorded the same way
+  `brick/math` and `phpoffice/phpword` were, per CLAUDE.md's "do not
+  introduce unnecessary dependencies" rule). PHP has no built-in XLSX
+  writer, and PhpSpreadsheet is the direct counterpart to the Python
+  backend's `openpyxl`. Python's `/export.xlsx` returns a genuine OOXML
+  package with the
+  `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+  content type, so matching that contract requires a real writer; the
+  alternative is hand-assembling the OOXML zip, which is strictly worse
+  for the same reasons PHPWord was adopted.
+
+  **NOT the same class as the pre-existing `App\Services\ExportService`,
+  deliberately.** That one predates the conversion, serves the
+  backend-php-only report screens (Contract Operation Report, Sales
+  Dashboard drill-downs), and writes "Excel" as an HTML `<table>` served
+  with a `.xls` name -- a long-standing technique Excel opens, but *not*
+  what Python's `/export.xlsx` returns. A converted endpoint therefore
+  cannot use it without changing the API contract, so the two coexist.
+  **Follow-up, not done here:** move those newer screens onto `Exports`
+  and retire `ExportService`, so there is one export writer rather than
+  two. Out of scope of this pass, which converts modules rather than
+  changing already-working screens' output format.
+
+- **Tax Types** (`app/routers/tax_codes.py` ->
+  `App\Http\Controllers\Api\TaxCodeController`, 11 dedicated tests):
+  list (hiding inactive unless `include_inactive`), create (409 on a
+  duplicate code), patch, and both exports. The `tax_codes` table itself
+  already existed -- Billing/Invoicing created and reads it -- so this
+  adds only the maintenance screen's endpoints over it.
+
+  PYTHON DETAILS CARRIED ACROSS DELIBERATELY: `TaxCodeCreate` has no
+  `is_active` field, so a tax code cannot be created pre-deactivated
+  (the column default applies) -- pinned by a test; `rate_percent` is
+  bounded 0..100 on both create and update; the patch handler records
+  only fields whose value actually changed, stringified on both sides,
+  matching Python's per-field `old != new` comparison; and `TaxCodeOut`
+  types `rate_percent` as a float, so the wire format is a bare number
+  rather than the numeric string Eloquent's `decimal:2` cast would
+  otherwise produce.
+
+  ONE HARMLESS ENCODING DIFFERENCE, pinned rather than chased: PHP's
+  `json_encode` writes `9.0` as `9` where Python writes `9.0`. Both
+  parse to the same JavaScript Number, so this is not a contract
+  difference, and no converted module sets `JSON_PRESERVE_ZERO_FRACTION`
+  to force it. The test asserts the value is not a *string*, which is
+  the part that would actually break the frontend.
+
 ## New feature work landed directly in `backend-php/` (not a conversion)
 
 2026-09-22: Dennis asked for a set of new Sales-area features (Job
