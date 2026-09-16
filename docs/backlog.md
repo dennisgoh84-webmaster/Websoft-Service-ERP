@@ -603,10 +603,17 @@ shipped and when.
 - [ ] **Smaller things noticed, not done:** the SMTP transport has no
   connect timeout, so "Send test email" against an unreachable host
   spins until PHP's socket default (60s) rather than failing fast; the
-  promo video is a `<video src>` URL only (direct `.mp4`/`.webm` link,
-  no upload), which the Announcements screen does not say; the
   Outlook Add-in half of Incidents is still scaffold-only, needing a
   real Microsoft 365 tenant + HTTPS host.
+- [x] **Promo video is a `<video src>` URL only (no upload), which the
+  Announcements screen didn't say.** **Settled 2026-09-16:** Dennis --
+  "we added instructions in central command" -- addressed by adding
+  guidance in the separate
+  [websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command)
+  repository rather than a code change here, so the field itself is
+  unchanged (still a direct `.mp4`/`.webm` URL, no upload); outside
+  this session's access, so not independently verified, taken on
+  Dennis's word, same as the WhatsApp OTP item above.
 
 ## Partially open
 
