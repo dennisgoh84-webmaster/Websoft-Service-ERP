@@ -406,16 +406,20 @@ shipped and when.
   already works today. **Dennis confirmed 2026-09-16: provisioned, and
   built in the separate
   [websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command)
-  repository** -- outside this session's access, so not independently
-  verified here, but taken as done on his word. **Note for this repo:**
-  `backend-php`'s own login flow (`AuthController`) still only has the
-  email OTP path from planned-work.md #7's design -- no `whatsapp_otps`
-  table or "choose email or WhatsApp at the OTP step" exists here. If
-  the intent is for THIS system's login screen to offer WhatsApp OTP
-  too (rather than Central Command using the capability for its own
-  purposes), that client-side piece is still to build -- flagging
-  rather than assuming either way.
-  → [planned-work.md #7](planned-work.md#7-whatsapp-otp-as-a-second-login-factor-raised-2026-09-12-deferred)
+  repository.** **This repo's own gap since closed, same day:** a
+  separate pass built WhatsApp OTP directly in `backend-php`/`frontend`
+  too -- a `phone` field on `users`, a `channel` column on
+  `login_otps`, and `WhatsAppSender` (Twilio's WhatsApp API, mirroring
+  `Mailer`'s `isConfigured()`/`send()` contract) -- so a user with both
+  channels available now picks Email or WhatsApp at login
+  (`otp_channel_required` / `POST /api/auth/send-otp`); one channel
+  available sends on it as before. Still blocked on real Twilio
+  credentials in THIS install's own `.env` -- Central Command having
+  its own working account does not put credentials into this app's
+  `backend-php/.env`, so every install here still runs email-only until
+  `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_WHATSAPP_FROM` are
+  set for it specifically.
+  → [planned-work.md #7](planned-work.md#7-whatsapp-otp-as-a-second-login-factor-raised-2026-09-12-built-2026-09-16-blocked-on-credentials)
 - [x] **Server Company Central Command** -- built 2026-09-12, moved to
   its own repository 2026-09-13:
   [websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command).

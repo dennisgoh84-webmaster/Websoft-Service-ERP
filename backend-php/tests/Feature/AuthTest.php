@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\LoginOtp;
 use App\Models\User;
+use App\Services\Jwt;
 use App\Services\Mailer;
 use App\Services\PasswordPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -216,7 +217,7 @@ class AuthTest extends TestCase
         // no channel_token to reuse, so exercise the guard directly with
         // a channel_token minted against this user the same way it would
         // be if a client tried to smuggle 'whatsapp' in anyway.
-        $channelToken = \App\Services\Jwt::createPurposeToken($user->id, 'otp_channel', 10);
+        $channelToken = Jwt::createPurposeToken($user->id, 'otp_channel', 10);
 
         $this->postJson('/api/auth/send-otp', ['channel_token' => $channelToken, 'channel' => 'whatsapp'])
             ->assertStatus(400);
