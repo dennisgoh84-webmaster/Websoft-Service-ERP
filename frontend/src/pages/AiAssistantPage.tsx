@@ -19,6 +19,7 @@ export default function AiAssistantPage() {
   const [assistantName, setAssistantName] = useState('Websoft AI')
   const [avatar, setAvatar] = useState<string | null>(null)
   const [avatarChanged, setAvatarChanged] = useState(false)
+  const [tokenCap, setTokenCap] = useState('')
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -34,6 +35,7 @@ export default function AiAssistantPage() {
         setAssistantName(s.assistant_name)
         setAvatar(s.assistant_avatar)
         setAvatarChanged(false)
+        setTokenCap(s.monthly_token_cap ? String(s.monthly_token_cap) : '')
       })
       .catch((e) => setError(e.message))
     api.getAiUsage().then(setUsage).catch(() => setUsage(null))
@@ -45,6 +47,12 @@ export default function AiAssistantPage() {
     setError(null)
     setMessage(null)
     setSaving(true)
+    const trimmedCap = tokenCap.trim()
+    if (trimmedCap && (!/^\d+$/.test(trimmedCap) || Number(trimmedCap) < 1)) {
+      setError('The monthly token cap must be a whole number of 1 or more, or left blank for unlimited.')
+      setSaving(false)
+      return
+    }
     try {
       await api.updateAiSettings({
         ...(apiKey ? { api_key: apiKey } : {}),
@@ -52,6 +60,7 @@ export default function AiAssistantPage() {
         redact_personal_data: redact,
         assistant_name: assistantName.trim() || 'Websoft AI',
         ...(avatarChanged ? { assistant_avatar: avatar } : {}),
+        monthly_token_cap: trimmedCap ? Number(trimmedCap) : null,
       })
       setApiKey('')
       setMessage('Settings saved.')
@@ -186,6 +195,34 @@ export default function AiAssistantPage() {
               incident can still be matched to a customer. Turn it off only if you have decided customer personal
               data may leave the system (PDPA -- see open decision 12.1).
             </span>
+          </div>
+          <div className="form-row">
+            <label>Monthly token cap</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={tokenCap}
+              onChange={(e) => setTokenCap(e.target.value)}
+              placeholder="Unlimited"
+              style={{ maxWidth: 160 }}
+            />
+            <span className="muted">
+              Once this many tokens (input + output combined) have been used <strong>across the whole installation</strong>{' '}
+              in a calendar month, every AI Assistant feature refuses further calls until the next month starts, or the
+              cap is raised here. Measured in tokens, not SGD, because Anthropic's per-token price differs by model and
+              can change -- see open decision #44. Leave blank for unlimited (the default).
+            </span>
+            {settings && (
+              <span className="muted">
+                {settings.monthly_tokens_used.toLocaleString()} tokens used so far this month
+                {settings.monthly_token_cap ? ` of ${settings.monthly_token_cap.toLocaleString()} cap` : ' (no cap set)'}.
+                {settings.monthly_token_cap !== null && settings.monthly_tokens_used >= settings.monthly_token_cap && (
+                  <span className="badge exceeded" style={{ marginLeft: 6 }}>
+                    Cap reached -- calls are being refused
+                  </span>
+                )}
+              </span>
+            )}
           </div>
           <h3 style={{ marginTop: 18 }}>Name and face</h3>
           <div className="form-row">

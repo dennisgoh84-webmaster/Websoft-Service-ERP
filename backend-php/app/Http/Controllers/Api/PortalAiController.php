@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Middleware\AuthenticatePortal;
 use App\Models\AiSetting;
 use App\Models\PortalUser;
+use App\Services\Ai\AiBudgetExceededException;
 use App\Services\Ai\AiChat;
 use App\Services\Ai\AiException;
 use App\Services\Ai\AiNotConfiguredException;
@@ -67,6 +68,8 @@ class PortalAiController extends Controller
         try {
             $reply = AiPortalChat::reply($portalUser, $data['messages'], $data['context'] ?? null);
         } catch (AiValidationException $e) {
+            throw new ApiException(422, $e->getMessage());
+        } catch (AiBudgetExceededException $e) {
             throw new ApiException(422, $e->getMessage());
         } catch (AiNotConfiguredException $e) {
             throw new ApiException(422, $e->getMessage());

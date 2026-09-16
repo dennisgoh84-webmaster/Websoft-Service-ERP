@@ -23,6 +23,20 @@ shipped and when.
   → [open-business-decisions.md #43](open-business-decisions.md#43-ai-assistant-pdpa-self-declaration-at-login-raised-and-built-2026-09-15),
   [business-requirements.md PDPA-002](business-requirements.md)
 
+- [x] **AI Assistant monthly token spending cap** -- built 2026-09-16,
+  settling decision 12.2/42.2 ahead of the original "wait a month"
+  plan, at Dennis's explicit instruction. An installation-wide
+  `monthly_token_cap` under Maintenance → AI Assistant; once this
+  calendar month's recorded usage (Asia/Singapore, the same boundary
+  the Usage tile uses) reaches it, incident triage, staff chat, portal
+  chat and the settings screen's connection test all refuse with a
+  clear 422 before any provider call or `ai_interactions` row --
+  checked once per request, not per tool-use round, so a capped
+  conversation refuses cleanly rather than dying mid-reply. In tokens,
+  not SGD (no live pricing feed; per-model rates differ and change).
+  Leaving it blank keeps the previous unlimited behaviour.
+  → [open-business-decisions.md #44](open-business-decisions.md#44-ai-assistant-monthly-token-spending-cap-raised-and-built-2026-09-16)
+
 
 - [x] **Backend language conversion, Python/FastAPI → PHP/Laravel**
   -- **COMPLETE 2026-09-15** (the cutover itself is still Dennis's to
@@ -210,9 +224,24 @@ shipped and when.
   clickable drill-downs. Default ledger codes per document header/line
   and multi-currency (original + base SGD) are still waiting on Dennis
   (open items 4b.2 auto-posting accounts and 4b.5 multi-currency).
-- [ ] **Bank Portal / ZSOFT HP Agency** -- still needs Dennis to say
-  what this actually is (an in-app record + Send button, vs. literal
-  automation of a real bank's website) before it can be started safely.
+- [ ] **Bank Portal / ZSOFT HP Agency** -- **described by Dennis
+  2026-09-16**, not yet built. A Maintenance menu item ("Bank Portal
+  Testing - HP Agency") that appears once a "bank module testing"
+  Module Control key is switched on. A page stores each Hire Purchase
+  application's basic data, to be submitted to multiple banks' HP
+  application portals. Dennis: "Condition is the keep the bank portal
+  window open in the background and after the security OTP login then
+  can start transfer submit the data from our HP Agency Page to theirs
+  according to the fields." Submission mechanism, asked and answered
+  2026-09-16: a **browser extension** -- staff logs into the bank's own
+  portal manually (their own credentials, their own OTP) in one tab,
+  then a companion extension reads our HP Agency page's data and fills
+  the bank portal's form fields in the other tab; no server-side
+  automation and no bank credentials/OTP ever touch our backend. Still
+  open before this can be scoped into a build: which bank portal(s)
+  first, their exact field layout/selectors (likely a different
+  extension content-script per bank), and how the extension itself is
+  built, reviewed and distributed to staff machines.
 
 ## Confirmed scope, not yet built
 
@@ -547,6 +576,9 @@ shipped and when.
   still fully open.~~ All 6 items (6.1-6.5) resolved and built:
   approval workflow (DRAFT→PENDING→APPROVED→PAID), automatic clawback
   on write-off, finance-administered payout with Mark Paid action.
+  **Confirmed complete by Dennis 2026-09-16** after running through it
+  live: "any further Commission Management rules beyond what's
+  built... Complete as per now, nothing pending."
   → [open-business-decisions.md #6](open-business-decisions.md#6-commission-management)
 - [x] **Smaller longstanding open questions (sections 7 & 8)** --
   settled and built 2026-09-12. Budget overrun detection + Sales Manager
@@ -556,4 +588,4 @@ shipped and when.
   → [open-business-decisions.md #7-8](open-business-decisions.md#7-projects)
 
 ---
-Last updated: 2026-09-16 (WhatsApp OTP and the Central Command config push confirmed done in the separate websoft-central-command repository; 2026-09-15: Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006; Maintenance / Company-Individual batch; eight-character company code; Service Record rules SRV-019/020, SLA removed; AI Assistant slices 1, 2, 3 + PDPA consent gate)
+Last updated: 2026-09-16 (AI Assistant monthly token spending cap built; WhatsApp OTP and the Central Command config push confirmed done in the separate websoft-central-command repository; 2026-09-15: Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006; Maintenance / Company-Individual batch; eight-character company code; Service Record rules SRV-019/020, SLA removed; AI Assistant slices 1, 2, 3 + PDPA consent gate)
