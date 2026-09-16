@@ -697,6 +697,10 @@ a.icon-button:hover {
 }
 .login-card {
   width: 340px;
+  /* Opts out of .login-layout's align-items: stretch -- the form stays
+     its natural compact height and centers vertically rather than
+     growing to match .login-promo's taller min-height. */
+  align-self: center;
 }
 /* Company logo (2026-09-12): sits above the title, same branding a
    signed-in user sees in the sidebar (see .sidebar .company-logo) --
@@ -714,17 +718,25 @@ a.icon-button:hover {
    advertisements or latest updates and push publish") -- Save there is
    live immediately. Two sizes share the same video/items markup and
    classes:
-   - .login-promo: a narrow, tall column beside the login card
-     (2026-09-12: "empty place to publish promotions..."; later changed
-     to video -- "the right advert panel sample picture can change to
-     video instead"). Wraps below the card on a narrow viewport instead
-     of squeezing it.
+   - .login-promo: a large column beside the login card (2026-09-12:
+     "empty place to publish promotions..."; later changed to video --
+     "the right advert panel sample picture can change to video
+     instead"). Sized generously (2026-09-16: "make the login page
+     video bigger, there are so much space available") -- the login
+     card itself stays compact and vertically centered (`align-self:
+     center` below) rather than being stretched to match, so it doesn't
+     grow just because the panel beside it did. Wraps below the card on
+     a narrow viewport instead of squeezing it.
    - .app-ad-banner: a slimmer version running the full height of every
      page after signing in (2026-09-12: "after login successfully, all
      modules, hide menu bar, then have smaller tall banner on the right
-     for advertisement video"). See .app-shell in Layout.tsx. */
+     for advertisement video") -- left as-is, confirmed the right size
+     already ("inside banner can understand", 2026-09-16). See
+     .app-shell in Layout.tsx. */
 .login-promo {
-  width: 220px;
+  width: 480px;
+  max-width: 100%;
+  min-height: 640px;
   background: linear-gradient(160deg, var(--accent) 0%, #5a1420 100%);
   display: flex;
   flex-direction: column;
