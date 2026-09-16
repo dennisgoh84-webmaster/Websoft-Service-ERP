@@ -243,6 +243,31 @@ shipped and when.
   extension content-script per bank), and how the extension itself is
   built, reviewed and distributed to staff machines.
 
+  **Second tab described 2026-09-16, same page: Insurance Application
+  to Insurance Portal for Quote.** Dennis: prefilled with customer,
+  vehicle and basic driving details, submitted to an insurance
+  quotation portal -- **no OTP** (unlike the bank HP tab) -- and once
+  the quote is out, "now we need to copy back the information to our
+  relevant fields (quote price with additional conditions)." So the
+  same browser extension needs to work in **both directions**: fill
+  forward into the insurer's portal, then read the resulting quote
+  back out of it into our page. Dennis also flagged directly: "this may
+  be done for different insurance company and bank portal because all
+  their format may be different... We may need to also store their
+  format or field name" -- i.e. a per-provider field-mapping table
+  (their field name/selector ↔ our field), not a single hardcoded
+  layout, covering both the HP tab's banks and this tab's insurers.
+  **New open question this raises:** neither "vehicle" nor "driving
+  details" exists anywhere in this system yet (no Vehicle entity, no
+  hire-purchase or insurance record) -- confirmed by search, this is a
+  new business area, not an extension of an existing one. Before any
+  of this (either tab) can be scoped into a build, still needed:
+  which bank(s)/insurer(s) to design for first, their exact field
+  layouts, the field-mapping storage schema, the extension's own
+  build/review/distribution story, and where vehicle + driving-detail
+  data is meant to live (a new entity, and whose record it hangs off
+  -- presumably the customer/CompanyIndividual, but not yet confirmed).
+
 ## Confirmed scope, not yet built
 
 - [x] **Sales module enhancements (Job Implementation Template,
