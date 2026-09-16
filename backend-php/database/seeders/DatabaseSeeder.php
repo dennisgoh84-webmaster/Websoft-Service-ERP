@@ -37,7 +37,7 @@ class DatabaseSeeder extends Seeder
     private const MODULE_CATALOG = [
         'core_administration' => ['Core / Administration', true, true],
         'event_logs' => ['Event Logs', true, true],
-        'crm' => ['CRM', false, false],
+        'crm' => ['CRM', true, true],
         'sales' => ['Sales (Quotations, Product/Service Catalog)', true, true],
         'company_individual_management' => ['Customer Management', true, true],
         'service_contracts' => ['Service Contracts', true, true],

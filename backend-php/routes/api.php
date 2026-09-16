@@ -48,6 +48,7 @@ require __DIR__.'/api/portal.php';
 // any of these. See docs/backlog.md / docs/planned-work.md).
 require __DIR__.'/api/contract_reports.php';
 require __DIR__.'/api/sales_dashboard.php';
+require __DIR__.'/api/crm.php';
 
 // Mirrors backend/app/main.py's GET /api/health.
 Route::get('/health', function () {

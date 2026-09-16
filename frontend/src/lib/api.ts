@@ -3087,4 +3087,20 @@ export const api = {
   stockValuationReport: (warehouseId?: string) =>
     request<StockValuationReport>(`/stock/reports/valuation${qs({ warehouse_id: warehouseId })}`),
   reorderReport: () => request<ReorderItem[]>('/stock/reports/reorder'),
+
+  // Generic request helper for dynamic API calls
+  request: <T,>(method: string, path: string, params?: Record<string, string>, body?: unknown): Promise<T> => {
+    const url = params ? `${path}${qs(params)}` : path
+    const options: RequestInit = {
+      method,
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    }
+    return request<T>(url, options)
+  },
+
+  // Helper to get current user info (mirrors /auth/me)
+  getCurrentUser: () => request<CurrentUser>('/auth/me'),
+
+  // Helper to get a single customer/company individual
+  getCompanyIndividual: (id: string) => request<CompanyIndividual>(`/company-individuals/${id}`),
 }
