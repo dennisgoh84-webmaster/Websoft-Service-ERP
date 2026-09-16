@@ -440,6 +440,21 @@ export interface SystemMailbox {
   password_set: boolean
   configured: boolean
   source: 'database' | 'env' | 'none'
+  // IMAP: reads this same mailbox, alongside the SMTP fields above that send from it.
+  imap_host: string | null
+  imap_port: number
+  imap_username: string | null
+  imap_use_ssl: boolean
+  imap_password_set: boolean
+  imap_configured: boolean
+}
+
+export interface ImapMailboxPayload {
+  imap_host?: string | null
+  imap_port?: number
+  imap_username?: string | null
+  imap_password?: string | null
+  imap_use_ssl?: boolean
 }
 
 export interface Branch {
@@ -2021,6 +2036,12 @@ export const api = {
       from_name?: string | null
     },
   ) => request<SystemMailbox>(`/system-mail/${purpose}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  /** IMAP: reads this same mailbox -- a separate call from updateSystemMail's SMTP send settings. */
+  updateSystemMailImap: (purpose: 'otp' | 'helpdesk', payload: ImapMailboxPayload) =>
+    request<SystemMailbox>(`/system-mail/${purpose}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  /** Connects, logs in, logs out with the saved IMAP credentials. Reads nothing. */
+  testSystemMailImap: (purpose: 'otp' | 'helpdesk') =>
+    request<{ ok: true }>(`/system-mail/${purpose}/test-imap`, { method: 'POST' }),
   testSystemMail: (purpose: 'otp' | 'helpdesk', toEmail: string) =>
     request<{ sent: boolean; to: string }>(`/system-mail/${purpose}/test-email`, {
       method: 'POST',

@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react'
 import { api, type SystemMailbox } from '../lib/api'
 import MailboxSettingsForm from '../components/MailboxSettingsForm'
+import ImapSettingsForm from '../components/ImapSettingsForm'
 
 function sourceNote(m: SystemMailbox): string {
   switch (m.source) {
@@ -63,6 +64,16 @@ export default function SystemEmailPage() {
             refresh()
           }}
           onTest={(to) => api.testSystemMail(m.purpose, to)}
+        />
+        <ImapSettingsForm
+          key={`${m.purpose}-imap-${version}`}
+          purpose={m.purpose}
+          values={m}
+          onSave={async (payload) => {
+            await api.updateSystemMailImap(m.purpose, payload)
+            refresh()
+          }}
+          onTest={() => api.testSystemMailImap(m.purpose)}
         />
       </div>
     )

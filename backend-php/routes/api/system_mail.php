@@ -9,4 +9,5 @@ Route::middleware('auth.jwt')->prefix('system-mail')->group(function () {
     Route::get('', [SystemMailController::class, 'index']);
     Route::patch('/{purpose}', [SystemMailController::class, 'update']);
     Route::post('/{purpose}/test-email', [SystemMailController::class, 'testEmail']);
+    Route::post('/{purpose}/test-imap', [SystemMailController::class, 'testImap']);
 });

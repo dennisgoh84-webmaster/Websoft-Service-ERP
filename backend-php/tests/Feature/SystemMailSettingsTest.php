@@ -153,6 +153,40 @@ class SystemMailSettingsTest extends TestCase
             ->assertOk()->assertJsonPath('password_set', false);
     }
 
+    public function test_imap_settings_save_alongside_smtp_and_hide_the_password(): void
+    {
+        $this->patchJson('/api/system-mail/otp', [
+            'imap_host' => 'imap.office365.com',
+            'imap_username' => 'noreply@webmaster.example',
+            'imap_password' => 'imap-secret',
+        ], $this->headers())->assertOk()
+            ->assertJsonPath('imap_host', 'imap.office365.com')
+            ->assertJsonPath('imap_password_set', true)
+            ->assertJsonPath('imap_configured', true)
+            ->assertJsonMissingPath('imap_password');
+
+        // Encrypted at rest, same as the SMTP password.
+        $raw = (string) DB::table('system_mail_settings')->where('purpose', 'otp')->value('imap_password');
+        $this->assertStringNotContainsString('imap-secret', $raw);
+    }
+
+    public function test_test_imap_requires_saved_credentials_first(): void
+    {
+        $this->postJson('/api/system-mail/otp/test-imap', [], $this->headers())->assertStatus(422);
+    }
+
+    public function test_test_imap_reports_a_connection_failure_clearly(): void
+    {
+        $this->patchJson('/api/system-mail/otp', [
+            'imap_host' => '127.0.0.1', 'imap_port' => 1,
+            'imap_username' => 'someone', 'imap_password' => 'pw',
+        ], $this->headers())->assertOk();
+
+        $this->postJson('/api/system-mail/otp/test-imap', [], $this->headers())
+            ->assertStatus(502)
+            ->assertJsonPath('detail', fn ($detail) => str_contains($detail, 'Could not connect'));
+    }
+
     public function test_an_unknown_purpose_is_404_and_a_view_only_user_cannot_change_anything(): void
     {
         $this->patchJson('/api/system-mail/marketing', ['host' => 'x'], $this->headers())->assertStatus(404);

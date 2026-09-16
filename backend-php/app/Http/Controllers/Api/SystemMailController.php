@@ -8,6 +8,8 @@ use App\Http\Middleware\Authenticate;
 use App\Models\SystemMailSetting;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\ImapClient;
+use App\Services\ImapException;
 use App\Services\Mailer;
 use App\Services\MailerException;
 use App\Services\MailerNotConfiguredException;
@@ -63,6 +65,12 @@ class SystemMailController extends Controller
             'use_tls' => 'sometimes|boolean',
             'from_email' => 'sometimes|nullable|email|max:255',
             'from_name' => 'sometimes|nullable|string|max:255',
+            // IMAP: reads this same mailbox, alongside the SMTP fields above that send from it.
+            'imap_host' => 'sometimes|nullable|string|max:255',
+            'imap_port' => 'sometimes|integer|min:1|max:65535',
+            'imap_username' => 'sometimes|nullable|string|max:255',
+            'imap_password' => 'sometimes|nullable|string',
+            'imap_use_ssl' => 'sometimes|boolean',
         ]);
 
         $row = SystemMailSetting::firstOrNew(['purpose' => $purpose]);
@@ -73,7 +81,7 @@ class SystemMailController extends Controller
             if ($old == $new) {
                 continue;
             }
-            if ($field === 'password') {
+            if ($field === 'password' || $field === 'imap_password') {
                 // Record THAT it changed, never the credential itself.
                 $oldValue[$field] = $old ? '(set)' : '(none)';
                 $newValue[$field] = $new ? '(set)' : '(none)';
@@ -127,6 +135,36 @@ class SystemMailController extends Controller
         return response()->json(['sent' => true, 'to' => $data['to_email']]);
     }
 
+    /** Connect + log in + log out with the saved IMAP credentials -- proves they work, reads nothing. */
+    public function testImap(Request $request, string $purpose)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'full');
+        $this->purposeOrFail($purpose);
+
+        $row = SystemMailSetting::find($purpose);
+        if (! $row || ! $row->isImapConfigured()) {
+            throw new ApiException(422, 'IMAP host, username and password must be saved before testing.');
+        }
+
+        try {
+            ImapClient::testLogin(
+                $row->imap_host,
+                $row->imap_port,
+                $row->imap_username,
+                $row->imap_password,
+                $row->imap_use_ssl,
+            );
+        } catch (ImapException $e) {
+            throw new ApiException(502, $e->getMessage());
+        }
+
+        Audit::record('system_mail_setting', self::AUDIT_IDS[$purpose], 'imap_test_succeeded', $user->id,
+            details: "{$purpose} mailbox: IMAP login succeeded");
+
+        return response()->json(['ok' => true]);
+    }
+
     private function purposeOrFail(string $purpose): void
     {
         if (! in_array($purpose, SystemMailSetting::PURPOSES, true)) {
@@ -154,6 +192,14 @@ class SystemMailController extends Controller
             // shown so an operator knows the row is not yet in charge),
             // or 'none'.
             'source' => $isOtp ? Mailer::otpSource() : ($row?->isConfigured() ? 'database' : 'none'),
+            // IMAP: reads this same mailbox, entirely separate from the
+            // send path above -- see App\Services\ImapClient.
+            'imap_host' => $row?->imap_host,
+            'imap_port' => $row?->imap_port ?? 993,
+            'imap_username' => $row?->imap_username,
+            'imap_use_ssl' => $row?->imap_use_ssl ?? true,
+            'imap_password_set' => (bool) $row?->imap_password_set,
+            'imap_configured' => (bool) $row?->isImapConfigured(),
         ];
     }
 }
