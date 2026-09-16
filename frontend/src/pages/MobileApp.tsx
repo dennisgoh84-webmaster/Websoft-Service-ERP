@@ -992,18 +992,186 @@ function SignoffPanel({ recordId, hasExisting, onDone }: { recordId: string; has
   )
 }
 
+// ── Tab Navigation ─────────────────────────────────────────────────
+
+interface TabItem {
+  id: string
+  label: string
+  icon: string
+}
+
+function getTabsForRole(role: string): TabItem[] {
+  if (role === 'sales_manager') {
+    return [
+      { id: 'crm', label: '📞 CRM', icon: '📞' },
+      { id: 'quotations', label: '📄 Quotations', icon: '📄' },
+      { id: 'jobs', label: '🛠️ Jobs', icon: '🛠️' },
+    ]
+  }
+  if (role === 'sales_engineer') {
+    return [
+      { id: 'crm', label: '📞 CRM', icon: '📞' },
+      { id: 'quotations', label: '📄 Quotations', icon: '📄' },
+      { id: 'jobs', label: '🛠️ Jobs', icon: '🛠️' },
+    ]
+  }
+  // Default: support/operations staff
+  return [
+    { id: 'jobs', label: '🛠️ Jobs', icon: '🛠️' },
+  ]
+}
+
+function TabBar({ tabs, active, onChange }: { tabs: TabItem[]; active: string; onChange: (id: string) => void }) {
+  return (
+    <div style={{
+      display: 'flex', background: MAROON, borderBottom: `1px solid ${MAROON}`,
+      overflowX: 'auto', gap: 0,
+    }}>
+      {tabs.map(tab => (
+        <button
+          key={tab.id}
+          onClick={() => onChange(tab.id)}
+          style={{
+            flex: 1, padding: '12px 8px', border: 'none', background: active === tab.id ? '#a0001a' : MAROON,
+            color: WHITE, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+            borderBottom: active === tab.id ? '3px solid #fff' : 'none',
+          }}
+        >
+          {tab.icon} {tab.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ── Mobile CRM Activities List ──────────────────────────────────────
+
+interface MobileCrmActivity {
+  id: string
+  customer_id: string
+  customer_name: string
+  activity_type: string
+  subject: string
+  activity_date: string
+  status: string
+  created_by_name: string
+}
+
+function MobileCrmActivitiesList({ onSelect }: { onSelect: (id: string) => void }) {
+  const { user } = useAuth()
+  const [activities, setActivities] = useState<MobileCrmActivity[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await mobileRequest<MobileCrmActivity[]>('/crm/activities')
+        setActivities(res)
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load')
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  if (loading) return <div style={{ ...styles.container, padding: 40, textAlign: 'center' }}>Loading...</div>
+  if (error) return <div style={styles.errorBox}>{error}</div>
+
+  const actTypeIcon: Record<string, string> = {
+    call: '☎️', email: '📧', meeting: '👥', note: '📝',
+    follow_up: '↩️', proposal: '💼', demo: '🎬', negotiation: '🤝',
+  }
+
+  return (
+    <div style={styles.container}>
+      <div style={styles.header}>
+        <h1 style={styles.headerTitle}>CRM Activities</h1>
+      </div>
+
+      {activities.length === 0 ? (
+        <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>
+          No CRM activities yet.
+        </div>
+      ) : (
+        activities.map(act => (
+          <div key={act.id} style={{ ...styles.card, cursor: 'pointer' }} onClick={() => onSelect(act.id)}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: '#222' }}>
+                  {actTypeIcon[act.activity_type] || '📌'} {act.subject}
+                </div>
+                <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>{act.customer_name}</div>
+                <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+                  {fmtDate(act.activity_date)} · By {act.created_by_name}
+                </div>
+              </div>
+              <span style={{
+                ...styles.badge,
+                background: act.status === 'completed' ? '#eafaf1' : '#fef9e7',
+                color: act.status === 'completed' ? '#27ae60' : '#f39c12',
+              }}>
+                {act.status}
+              </span>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  )
+}
+
 // ── Main Mobile App Component ───────────────────────────────────────
 
 export default function MobileApp() {
   const { user, loading } = useAuth()
   const [selectedJobOrder, setSelectedJobOrder] = useState<string | null>(null)
+  const [selectedActivity, setSelectedActivity] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<string>('jobs')
 
   if (loading) return <div style={{ ...styles.container, padding: 40, textAlign: 'center' }}>Loading...</div>
   if (!user) return <MobileLogin />
 
+  const tabs = getTabsForRole(user.role)
+  const hasJobsTab = tabs.some(t => t.id === 'jobs')
+  const hasCrmTab = tabs.some(t => t.id === 'crm')
+
+  // If job order detail is open, show it regardless of tab
   if (selectedJobOrder) {
     return <JobOrderDetailView jobOrderId={selectedJobOrder} onBack={() => setSelectedJobOrder(null)} />
   }
 
-  return <JobOrderList onSelect={setSelectedJobOrder} />
+  // If activity detail is open, show it regardless of tab
+  if (selectedActivity) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.header}>
+          <button onClick={() => setSelectedActivity(null)} style={styles.backBtn}>← Back</button>
+          <h1 style={{ ...styles.headerTitle, flex: 1, textAlign: 'center' }}>Activity</h1>
+          <div style={{ width: 50 }} />
+        </div>
+        <div style={{ padding: '16px', color: '#999' }}>Activity detail view coming soon...</div>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <TabBar tabs={tabs} active={activeTab} onChange={setActiveTab} />
+      {activeTab === 'jobs' && hasJobsTab && <JobOrderList onSelect={setSelectedJobOrder} />}
+      {activeTab === 'crm' && hasCrmTab && <MobileCrmActivitiesList onSelect={setSelectedActivity} />}
+      {activeTab === 'quotations' && (
+        <div style={styles.container}>
+          <div style={styles.header}>
+            <h1 style={styles.headerTitle}>My Quotations</h1>
+          </div>
+          <div style={{ padding: '40px 16px', textAlign: 'center', color: '#999' }}>
+            Quotations view coming soon...
+          </div>
+        </div>
+      )}
+    </>
+  )
 }

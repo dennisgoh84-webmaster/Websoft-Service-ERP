@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './lib/AuthContext'
 import { ThemeProvider } from './lib/ThemeContext'
+import { shouldUseMobileApp } from './lib/mobileDetect'
 import AccountingPeriodsPage from './pages/AccountingPeriodsPage'
 import ApprovalAuthoritiesPage from './pages/ApprovalAuthoritiesPage'
 import ApprovalCenterPage from './pages/ApprovalCenterPage'
@@ -81,6 +82,15 @@ function RequireAuth({ children }: { children: ReactElement }) {
   return children
 }
 
+function MobileRedirect({ children }: { children: ReactElement }) {
+  const { user, loading } = useAuth()
+  if (loading) return <p style={{ padding: 24 }}>Loading...</p>
+  if (!user) return children
+  // Redirect authenticated mobile users to /mobile
+  if (shouldUseMobileApp()) return <Navigate to="/mobile" replace />
+  return children
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -96,9 +106,11 @@ function AppRoutes() {
       <Route path="/portal/*" element={<PortalApp />} />
       <Route
         element={
-          <RequireAuth>
-            <Layout />
-          </RequireAuth>
+          <MobileRedirect>
+            <RequireAuth>
+              <Layout />
+            </RequireAuth>
+          </MobileRedirect>
         }
       >
         <Route path="/" element={<DashboardPage />} />
