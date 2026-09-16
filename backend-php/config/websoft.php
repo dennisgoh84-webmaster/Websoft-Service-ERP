@@ -31,6 +31,19 @@ return [
     'smtp_from_email' => env('SMTP_FROM_EMAIL'),
     'smtp_from_name' => env('SMTP_FROM_NAME', 'Web Master Consultancy'),
 
+    // WhatsApp OTP (planned-work.md "WhatsApp OTP as a second login
+    // factor") -- a second, optional login-code channel alongside
+    // email. Blocked until a real WhatsApp Business API account is
+    // provisioned; unset by default so WhatsAppSender::isConfigured()
+    // is false and the login flow behaves exactly as it does today
+    // (email only). Twilio's WhatsApp API is the first provider this
+    // is built against -- see WhatsAppSender's docblock for why, and
+    // for how to add a second provider without touching AuthController.
+    'twilio_account_sid' => env('TWILIO_ACCOUNT_SID'),
+    'twilio_auth_token' => env('TWILIO_AUTH_TOKEN'),
+    // E.164, no "whatsapp:" prefix -- WhatsAppSender adds that itself.
+    'twilio_whatsapp_from' => env('TWILIO_WHATSAPP_FROM'),
+
     // File uploads -- stored on local disk; in Docker this is a named
     // volume so files persist across container restarts.
     'uploads_dir' => env('UPLOADS_DIR', storage_path('app/uploads')),

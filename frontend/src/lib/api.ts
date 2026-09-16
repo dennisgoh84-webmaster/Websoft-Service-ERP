@@ -71,15 +71,27 @@ export function downloadBlob(blob: Blob, filename: string) {
 }
 
 // Login sequence (2026-09-12: forced first-login password change + email
-// OTP second factor -- see backend app/routers/auth.py's module docstring).
-// Only one of access_token/change_token/otp_token is ever set, matching
+// OTP second factor; 2026-09-16: WhatsApp added as a second, optional OTP
+// channel -- see backend AuthController::issueLoginResult()'s docblock for
+// the three-case decision this shape encodes). Only one of
+// access_token/change_token/otp_token/channel_token is ever set, matching
 // `status`; Login.tsx drives the multi-step UI off this shape.
+//
+// `otp_channel_required` only ever happens when a user has BOTH email and
+// WhatsApp available (see availableOtpChannels()) -- with only one channel
+// available, the backend sends on it immediately and returns `otp_required`
+// exactly as it always has, so this step is invisible to any account/install
+// that isn't using WhatsApp OTP.
 export interface LoginResult {
-  status: 'ok' | 'must_change_password' | 'otp_required'
+  status: 'ok' | 'must_change_password' | 'otp_required' | 'otp_channel_required'
   access_token?: string
   token_type?: string
   change_token?: string
   otp_token?: string
+  channel_token?: string
+  available_channels?: Array<'email' | 'whatsapp'>
+  /** Set alongside otp_token: which channel the code was actually sent on. */
+  channel?: 'email' | 'whatsapp'
 }
 
 export async function login(email: string, password: string): Promise<LoginResult> {
@@ -106,6 +118,17 @@ export async function verifyOtp(otpToken: string, code: string): Promise<LoginRe
   return request<LoginResult>('/auth/verify-otp', {
     method: 'POST',
     body: JSON.stringify({ otp_token: otpToken, code }),
+  })
+}
+
+/** The second half of the `otp_channel_required` step -- sends the code
+ * on whichever channel the user picked. Returns the same `otp_required`
+ * shape login() itself returns when there's only one channel, so
+ * Login.tsx's advance() handles both the same way. */
+export async function sendOtp(channelToken: string, channel: 'email' | 'whatsapp'): Promise<LoginResult> {
+  return request<LoginResult>('/auth/send-otp', {
+    method: 'POST',
+    body: JSON.stringify({ channel_token: channelToken, channel }),
   })
 }
 
@@ -2121,6 +2144,11 @@ export const api = {
    * module enablement both say yes)? Drives which nav links show at all.
    * Module management (toggle on/off) is handled from Central Command → Client Control. */
   myModuleAccess: () => request<Record<string, boolean>>('/modules/my-access'),
+
+  /** Bank Portal Testing -- a module-gated placeholder (docs/backlog.md
+   * "Bank Portal / ZSOFT HP Agency"), invisible unless the
+   * `bank_portal_testing` module is switched on for this company. */
+  bankPortalStatus: () => request<{ enabled: boolean; message: string }>('/bank-portal/status'),
 
   // Dynamic filter: free-text `q` matches name/email/phone/mobile/UEN/
   // legacy code/tags; customer_group_id pulls up a whole group of

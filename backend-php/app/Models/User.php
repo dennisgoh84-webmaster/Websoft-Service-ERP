@@ -41,7 +41,7 @@ class User extends Model
 
     protected $fillable = [
         'company_id', 'email', 'hashed_password', 'full_name', 'role',
-        'photo', 'must_change_password', 'is_active',
+        'photo', 'must_change_password', 'is_active', 'phone',
     ];
 
     protected $hidden = ['hashed_password'];

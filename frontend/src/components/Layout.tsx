@@ -148,6 +148,18 @@ export default function Layout() {
     },
     { key: 'system-email', path: '/system-email', label: 'System Email', visible: can('core_administration') },
     { key: 'ai-assistant', path: '/ai-assistant', label: 'AI Assistant', visible: can('core_administration') },
+    {
+      key: 'bank-portal-testing',
+      path: '/bank-portal-testing',
+      label: 'Bank Portal Testing',
+      // Unlike AI Assistant's settings link (always reachable so an
+      // owner can configure it before enabling), this one is gated on
+      // its own module key exactly like a normal module: no staff
+      // account sees it until Dennis switches `bank_portal_testing` on
+      // for their company (the owner role still bypasses, same as
+      // every other module). See BankPortalTestingPage.tsx.
+      visible: can('bank_portal_testing'),
+    },
     { key: 'staff', path: '/staff', label: 'Staff Master', visible: can('core_administration') },
     { key: 'groups', path: '/groups', label: 'Group Authority', visible: can('core_administration') },
     { key: 'product-catalog', path: '/product-catalog', label: 'Product Catalog', visible: can('sales') },

@@ -213,6 +213,13 @@ shipped and when.
 - [ ] **Bank Portal / ZSOFT HP Agency** -- still needs Dennis to say
   what this actually is (an in-app record + Send button, vs. literal
   automation of a real bank's website) before it can be started safely.
+  2026-09-16: a `bank_portal_testing` Module Control gate + placeholder
+  page were built ahead of that scope decision, at Dennis's request, so
+  the feature can be switched on for testing without any user seeing
+  it first -- seeded OFF, same as every module (Module Control read
+  API is out of scope in this repo; enablement is set directly in
+  `company_modules`, or pushed from Central Command). No bank
+  integration exists yet -- see `BankPortalController.php`.
 
 ## Confirmed scope, not yet built
 

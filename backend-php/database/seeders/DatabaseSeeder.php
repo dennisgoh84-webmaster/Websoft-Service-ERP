@@ -71,6 +71,12 @@ class DatabaseSeeder extends Seeder
         'stock_adjustment' => ['Stock Adjustment', true, true],
         'stock_operation_reports' => ['Stock Operation Reports', true, true],
         'ops_dashboard' => ['Ops Dashboard (personal task tracker)', true, true],
+        // Built 2026-09-16 as a gated placeholder only -- docs/backlog.md
+        // "Bank Portal / ZSOFT HP Agency" still needs Dennis to say what
+        // this actually is before real functionality is built. Seeded
+        // OFF, same as ai_assistant: enable per company under Module
+        // Control once there's something to test.
+        'bank_portal_testing' => ['Bank Portal Testing', true, false],
     ];
 
     // A conventional Singapore SME chart of accounts, seeded as a

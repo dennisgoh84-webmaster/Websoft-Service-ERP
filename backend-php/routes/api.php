@@ -65,6 +65,7 @@ require __DIR__.'/api/portal.php';
 require __DIR__.'/api/contract_reports.php';
 require __DIR__.'/api/sales_dashboard.php';
 require __DIR__.'/api/ops_dashboard.php';
+require __DIR__.'/api/bank_portal.php';
 
 // Mirrors backend/app/main.py's GET /api/health.
 Route::get('/health', function () {

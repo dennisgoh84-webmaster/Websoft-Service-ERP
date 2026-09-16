@@ -249,22 +249,6 @@ a migration program") -- explicitly a future need, not to be built now.
 | (Sales) Receipts | Receipt(s) (`app/models/payments.py` `Payment`, the Receipt Voucher) |
 | Chart of Accounts | Chart of Accounts (`app/models/accounting.py` `Account`) |
 
-## 7. WhatsApp OTP as a second login factor (raised 2026-09-12, deferred)
-
-Requested alongside email OTP as: "enhance security with OTP upon
-login either email or handphone whatsapp." Email OTP is built (see
-docs/open-business-decisions.md #27.3) using the existing SMTP mailer;
-WhatsApp OTP is deferred because it needs infrastructure this system
-doesn't have yet -- an automated WhatsApp Business API account
-(Twilio's WhatsApp API or Meta's Cloud API) that can send a templated
-message and have this backend poll/receive the delivery status. Every
-other WhatsApp touchpoint in this system today (Print/Email/WhatsApp
-icon buttons on documents) is a manual `wa.me` deep link a staff member
-opens and sends themselves -- there is no automated send path to build
-on. Build once such an account is provisioned: add a `whatsapp_otps`-
-style flow mirroring `LoginOtp`, and let the user choose email or
-WhatsApp at the OTP step.
-
 This aligns with CLAUDE.md's already-approved Odoo replacement strategy
 (phased, module-by-module, with a parallel-run period and no big-bang
 migration) and its note that "important historical data will eventually
@@ -306,6 +290,50 @@ rule when requirements have not been provided"):
    reference data, with the transactional documents (Contracts,
    Service Records, Quotes, Invoices, Receipts) following once their
    linked Company/Individual and account records already exist here.
+
+---
+
+## 7. WhatsApp OTP as a second login factor (raised 2026-09-12, built 2026-09-16, blocked on credentials)
+
+Requested alongside email OTP as: "enhance security with OTP upon
+login either email or handphone whatsapp." Email OTP is built (see
+docs/open-business-decisions.md #27.3) using the existing SMTP mailer.
+
+WhatsApp OTP is now built as an option in the backend: a `phone` field
+on `users`, a `channel` column on `login_otps` (`email`/`whatsapp`,
+defaulting to `email` so every existing OTP flow is unaffected), and
+`WhatsAppSender` (`app/Services/WhatsAppSender.php`), which sends via
+Twilio's WhatsApp Business API and deliberately mirrors `Mailer`'s
+`isConfigured()`/`send()` shape so `AuthController` treats both
+channels identically -- including "fail open" (grant access rather than
+stranding the user) if a channel that looked configured throws when
+actually sending.
+
+Login behavior now has three cases, decided per-user by which channels
+are available (`AuthController::availableOtpChannels()` -- WhatsApp
+needs both Twilio credentials configured *and* that user having a
+`phone` on file):
+
+- **Neither configured** -- unchanged from before this item: straight
+  to an access token, no OTP step at all (e.g. no SMTP configured).
+- **Exactly one available** -- sends on that channel immediately and
+  challenges for the code, exactly like the email-only flow always has
+  (now also reachable via WhatsApp alone).
+- **Both available** -- the login response is `otp_channel_required`
+  instead of a code being sent; the user picks Email or WhatsApp on the
+  login page, which calls the new `POST /api/auth/send-otp` to send on
+  whichever they chose.
+
+**Still blocked on the one open item this was always waiting on**: a
+real WhatsApp Business API account. `WhatsAppSender::isConfigured()` is
+false with nothing in `.env` (see `.env.example`'s
+`TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_WHATSAPP_FROM`), so
+every install runs exactly as it does today -- email-only -- until
+Twilio (or, later, Meta's Cloud API) credentials are provisioned and
+set. Twilio was picked as the first provider because its WhatsApp API
+needs only a single REST call (Basic Auth, no app-review step, and a
+free sandbox number for testing) -- the faster path to exercising this
+end to end once an account exists.
 
 ---
 
