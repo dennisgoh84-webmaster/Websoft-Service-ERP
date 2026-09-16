@@ -14,6 +14,9 @@ use App\Services\Mailer;
 use App\Services\MailerException;
 use App\Services\MailerNotConfiguredException;
 use App\Services\PasswordPolicy;
+use App\Services\WhatsAppException;
+use App\Services\WhatsAppNotConfiguredException;
+use App\Services\WhatsAppSender;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
@@ -118,6 +121,37 @@ class AuthController extends Controller
         $otp->save();
 
         return response()->json(['status' => 'ok', 'access_token' => Jwt::createAccessToken($user->id), 'token_type' => 'bearer']);
+    }
+
+    /**
+     * The second half of the two-step login-factor choice: called after
+     * issueLoginResult() found BOTH email and WhatsApp available and
+     * returned `otp_channel_required` instead of sending anything yet.
+     * Sends on whichever channel the user picked and returns the same
+     * `otp_required` shape login() already returns when there is only
+     * one channel -- verifyOtp() doesn't need to know which path led here.
+     */
+    public function sendOtp(Request $request)
+    {
+        $data = $request->validate(['channel_token' => 'required|string', 'channel' => 'required|in:email,whatsapp']);
+
+        $payload = Jwt::decodePurposeToken($data['channel_token'], 'otp_channel');
+        if ($payload === null) {
+            throw new ApiException(401, 'This session has expired -- please sign in again.');
+        }
+        $user = User::find($payload['sub']);
+        if (! $user || ! $user->is_active) {
+            throw new ApiException(401, 'Account not found or inactive.');
+        }
+
+        // Re-check rather than trust the client's earlier choice -- the
+        // phone could have been cleared, or WhatsApp un-configured,
+        // between the channel-choice screen rendering and this call.
+        if (! in_array($data['channel'], $this->availableOtpChannels($user), true)) {
+            throw new ApiException(400, 'That channel is not available for this account.');
+        }
+
+        return response()->json($this->sendLoginOtp($user, $data['channel']));
     }
 
     public function forgotPassword(Request $request)
@@ -269,21 +303,82 @@ class AuthController extends Controller
     }
 
     /**
-     * The final step of every successful credential/password/OTP check:
-     * hand back a real access token, unless email OTP is configured, in
-     * which case issue a challenge instead.
+     * The final step of every successful credential/password/OTP check.
+     * Three cases, by how many OTP channels are available for this user
+     * (see availableOtpChannels()):
+     *
+     *   0 -> hand back a real access token directly (unchanged from
+     *        before WhatsApp OTP existed -- e.g. no SMTP configured).
+     *   1 -> send on that one channel immediately and issue a challenge,
+     *        exactly like the email-only version of this method always
+     *        did (now also reachable via WhatsApp alone, e.g. a user
+     *        with a phone on file at an install that has WhatsApp but
+     *        not SMTP configured).
+     *   2 -> BOTH available: don't send anything yet. Return
+     *        `otp_channel_required` and let the user pick -- see
+     *        sendOtp(), which does the actual sending once they have.
+     *        This is the "let the user choose email or WhatsApp at the
+     *        OTP step" behaviour docs/planned-work.md asks for.
      */
     private function issueLoginResult(User $user): array
     {
+        $channels = $this->availableOtpChannels($user);
+
+        if (count($channels) === 0) {
+            return $this->grantAccess($user);
+        }
+        if (count($channels) === 1) {
+            return $this->sendLoginOtp($user, $channels[0]);
+        }
+
+        return [
+            'status' => 'otp_channel_required',
+            'channel_token' => Jwt::createPurposeToken($user->id, 'otp_channel', self::OTP_EXPIRE_MINUTES),
+            'available_channels' => $channels,
+        ];
+    }
+
+    /** Which OTP channels this specific user could receive a code on right now. */
+    private function availableOtpChannels(User $user): array
+    {
+        $channels = [];
         if (Mailer::isConfigured()) {
-            $code = self::generateCode();
-            LoginOtp::create([
-                'user_id' => $user->id,
-                'code_hash' => self::hashOtp($code),
-                'purpose' => 'login',
-                'expires_at' => Carbon::now('UTC')->addMinutes(self::OTP_EXPIRE_MINUTES),
-            ]);
-            try {
+            $channels[] = 'email';
+        }
+        // WhatsApp additionally needs a phone on file for THIS user --
+        // being configured install-wide isn't enough, unlike email
+        // (one shared mailbox already addresses everyone by definition).
+        if (WhatsAppSender::isConfigured() && $user->phone) {
+            $channels[] = 'whatsapp';
+        }
+
+        return $channels;
+    }
+
+    private function grantAccess(User $user): array
+    {
+        return ['status' => 'ok', 'access_token' => Jwt::createAccessToken($user->id), 'token_type' => 'bearer', 'ai_data_consent_required' => $user->needsAiDataConsent()];
+    }
+
+    /** Create the OTP row and actually send it on the given channel. */
+    private function sendLoginOtp(User $user, string $channel): array
+    {
+        $code = self::generateCode();
+        LoginOtp::create([
+            'user_id' => $user->id,
+            'code_hash' => self::hashOtp($code),
+            'purpose' => 'login',
+            'channel' => $channel,
+            'expires_at' => Carbon::now('UTC')->addMinutes(self::OTP_EXPIRE_MINUTES),
+        ]);
+
+        try {
+            if ($channel === 'whatsapp') {
+                WhatsAppSender::send(
+                    $user->phone,
+                    "Your Websoft Service ERP login code is {$code}. It expires in ".self::OTP_EXPIRE_MINUTES.' minutes.'
+                );
+            } else {
                 Mailer::send(
                     $user->email,
                     'Your Websoft Service ERP login code',
@@ -291,17 +386,23 @@ class AuthController extends Controller
                     'It expires in '.self::OTP_EXPIRE_MINUTES." minutes. If you didn't just try to ".
                     'sign in, you can ignore this email.'
                 );
-            } catch (MailerNotConfiguredException|MailerException) {
-                // SMTP looked configured but the actual send failed --
-                // fail OPEN rather than stranding every user outside a
-                // login page they can't get past.
-                return ['status' => 'ok', 'access_token' => Jwt::createAccessToken($user->id), 'token_type' => 'bearer', 'ai_data_consent_required' => $user->needsAiDataConsent()];
             }
-
-            return ['status' => 'otp_required', 'otp_token' => Jwt::createPurposeToken($user->id, 'otp', self::OTP_EXPIRE_MINUTES)];
+        } catch (MailerNotConfiguredException|MailerException|WhatsAppNotConfiguredException|WhatsAppException) {
+            // Looked configured but the actual send failed -- fail OPEN
+            // rather than stranding every user outside a login page they
+            // can't get past. Same contract issueLoginResult() always
+            // had for email; now shared by both channels.
+            return $this->grantAccess($user);
         }
 
-        return ['status' => 'ok', 'access_token' => Jwt::createAccessToken($user->id), 'token_type' => 'bearer', 'ai_data_consent_required' => $user->needsAiDataConsent()];
+        return [
+            'status' => 'otp_required',
+            'otp_token' => Jwt::createPurposeToken($user->id, 'otp', self::OTP_EXPIRE_MINUTES),
+            // So the frontend can say "we texted/emailed you" accurately
+            // instead of guessing -- harmless extra field for any client
+            // that predates WhatsApp OTP and doesn't look at it.
+            'channel' => $channel,
+        ];
     }
 
     private static function hashOtp(string $code): string

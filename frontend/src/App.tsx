@@ -14,6 +14,7 @@ import AiAssistantPage from './pages/AiAssistantPage'
 import AccountsPayablePage from './pages/AccountsPayablePage'
 import BankAccountDetailPage from './pages/BankAccountDetailPage'
 import BankAccountsPage from './pages/BankAccountsPage'
+import BankPortalTestingPage from './pages/BankPortalTestingPage'
 import CommissionPayoutsPage from './pages/CommissionPayoutsPage'
 import ChartOfAccountsPage from './pages/ChartOfAccountsPage'
 import CurrencyRatesPage from './pages/CurrencyRatesPage'
@@ -152,6 +153,7 @@ function AppRoutes() {
         <Route path="/announcements" element={<AnnouncementsPage />} />
         <Route path="/system-email" element={<SystemEmailPage />} />
         <Route path="/ai-assistant" element={<AiAssistantPage />} />
+        <Route path="/bank-portal-testing" element={<BankPortalTestingPage />} />
         <Route path="/staff" element={<StaffMasterPage />} />
         <Route path="/staff/:id" element={<StaffDetailPage />} />
         <Route path="/groups" element={<GroupsPage />} />

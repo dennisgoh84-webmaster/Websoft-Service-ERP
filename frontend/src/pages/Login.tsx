@@ -2,14 +2,17 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import PromoVideoPanel from '../components/PromoVideoPanel'
-import { api, changePassword, forgotPassword, resetPasswordWithOtp, verifyOtp } from '../lib/api'
+import { api, changePassword, forgotPassword, resetPasswordWithOtp, sendOtp, verifyOtp } from '../lib/api'
 import type { LoginResult, PublicBranding } from '../lib/api'
 
 // Login sequence (2026-09-12: password complexity, forced first-login
-// password change, email OTP second factor; "forget password" is a
-// separate email+OTP pair -- see backend app/routers/auth.py's module
-// docstring for the full sequence this page walks through step by step).
-type Step = 'credentials' | 'otp' | 'change_password' | 'forgot_email' | 'forgot_reset'
+// password change, email OTP second factor; 2026-09-16: WhatsApp OTP as a
+// second, optional channel -- 'otp_channel' only ever appears for an
+// account with both email and WhatsApp available, see LoginResult's
+// docblock in lib/api.ts; "forget password" is a separate email+OTP pair
+// -- see backend app/routers/auth.py's module docstring for the full
+// sequence this page walks through step by step).
+type Step = 'credentials' | 'otp_channel' | 'otp' | 'change_password' | 'forgot_email' | 'forgot_reset'
 
 export default function Login() {
   const { login, completeLogin } = useAuth()
@@ -28,6 +31,10 @@ export default function Login() {
 
   const [otpToken, setOtpToken] = useState('')
   const [otpCode, setOtpCode] = useState('')
+  const [otpChannel, setOtpChannel] = useState<'email' | 'whatsapp'>('email')
+
+  const [channelToken, setChannelToken] = useState('')
+  const [availableChannels, setAvailableChannels] = useState<Array<'email' | 'whatsapp'>>([])
 
   const [changeToken, setChangeToken] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -63,12 +70,29 @@ export default function Login() {
     } else if (result.status === 'otp_required' && result.otp_token) {
       setOtpToken(result.otp_token)
       setOtpCode('')
+      setOtpChannel(result.channel ?? 'email')
       setStep('otp')
+    } else if (result.status === 'otp_channel_required' && result.channel_token) {
+      setChannelToken(result.channel_token)
+      setAvailableChannels(result.available_channels ?? [])
+      setStep('otp_channel')
     } else if (result.status === 'must_change_password' && result.change_token) {
       setChangeToken(result.change_token)
       setNewPassword('')
       setConfirmPassword('')
       setStep('change_password')
+    }
+  }
+
+  async function onChooseOtpChannel(channel: 'email' | 'whatsapp') {
+    setError(null)
+    setSubmitting(true)
+    try {
+      await advance(await sendOtp(channelToken, channel))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send code')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -222,10 +246,43 @@ export default function Login() {
             </form>
           )}
 
+          {step === 'otp_channel' && (
+            <div>
+              <p className="muted" style={{ marginBottom: 18 }}>
+                How would you like to receive your one-time code?
+              </p>
+              {error && <div className="error-banner">{error}</div>}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {availableChannels.includes('email') && (
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => onChooseOtpChannel('email')}
+                    style={{ width: '100%' }}
+                  >
+                    {submitting ? 'Sending...' : `Email me a code (${email})`}
+                  </button>
+                )}
+                {availableChannels.includes('whatsapp') && (
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => onChooseOtpChannel('whatsapp')}
+                    style={{ width: '100%' }}
+                  >
+                    {submitting ? 'Sending...' : 'Send me a WhatsApp message'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {step === 'otp' && (
             <form onSubmit={onSubmitOtp}>
               <p className="muted" style={{ marginBottom: 18 }}>
-                We emailed a 6-digit code to {email}. Enter it below to finish signing in.
+                {otpChannel === 'whatsapp'
+                  ? 'We sent a 6-digit code to your WhatsApp. Enter it below to finish signing in.'
+                  : `We emailed a 6-digit code to ${email}. Enter it below to finish signing in.`}
               </p>
               <div className="form-row">
                 <label>One-time code</label>

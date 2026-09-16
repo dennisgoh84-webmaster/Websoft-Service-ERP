@@ -225,9 +225,20 @@ shipped and when.
   and multi-currency (original + base SGD) are still waiting on Dennis
   (open items 4b.2 auto-posting accounts and 4b.5 multi-currency).
 - [ ] **Bank Portal / ZSOFT HP Agency** -- **described by Dennis
-  2026-09-16**, not yet built. A Maintenance menu item ("Bank Portal
-  Testing - HP Agency") that appears once a "bank module testing"
-  Module Control key is switched on. A page stores each Hire Purchase
+  2026-09-16**, not yet built. **2026-09-16, separately: the Module
+  Control gate itself and a placeholder page were built ahead of this
+  scope description** -- `bank_portal_testing`, seeded OFF like every
+  module (Module Control read API is out of scope in this repo;
+  enablement is set directly in `company_modules`, or pushed from
+  Central Command), nav entry + route gated the same way as any other
+  module, see `BankPortalController.php` / `BankPortalTestingPage.tsx`.
+  That page is still only a placeholder -- none of the actual HP/
+  Insurance functionality below exists yet, and the module key/page
+  should be revisited once real fields are being built, but the gate
+  itself is real and testable now: nothing until Dennis switches it
+  on. A Maintenance menu item ("Bank Portal Testing - HP Agency") that
+  appears once a "bank module testing" Module Control key is switched
+  on. A page stores each Hire Purchase
   application's basic data, to be submitted to multiple banks' HP
   application portals. Dennis: "Condition is the keep the bank portal
   window open in the background and after the security OTP login then

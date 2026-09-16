@@ -6,9 +6,12 @@ use App\Models\Concerns\HasUuidPrimaryKey;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * One issued email OTP challenge. Mirrors backend/app/models/core.py's
- * LoginOtp -- see that file's docstring for the full design (only email
- * is built; WhatsApp OTP is deferred, see docs/planned-work.md).
+ * One issued OTP challenge, over email or WhatsApp (`channel`; see
+ * WhatsAppSender and AuthController::availableOtpChannels()). Mirrors
+ * backend/app/models/core.py's LoginOtp -- see that file's docstring
+ * for the full design of everything except `channel`, which postdates
+ * the Python backend (WhatsApp OTP was deferred there; see
+ * docs/planned-work.md).
  */
 class LoginOtp extends Model
 {
@@ -19,8 +22,8 @@ class LoginOtp extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'user_id', 'portal_user_id', 'code_hash', 'purpose', 'attempts',
-        'expires_at', 'consumed_at',
+        'user_id', 'portal_user_id', 'code_hash', 'purpose', 'channel',
+        'attempts', 'expires_at', 'consumed_at',
     ];
 
     protected $casts = [

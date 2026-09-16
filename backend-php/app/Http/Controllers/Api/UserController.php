@@ -87,6 +87,7 @@ class UserController extends Controller
             'role' => $user->role,
             'group_id' => $access?->group_id,
             'photo' => $user->photo,
+            'phone' => $user->phone,
             'must_change_password' => $user->must_change_password,
             'is_active' => $user->is_active,
             'created_at' => $user->created_at,
@@ -175,6 +176,7 @@ class UserController extends Controller
             'full_name' => 'required|string',
             'role' => 'required|in:owner,service_lead,sales_manager,support_engineer,finance',
             'group_id' => 'sometimes|nullable|uuid',
+            'phone' => ['sometimes', 'nullable', 'regex:/^\+[1-9]\d{7,14}$/'],
         ]);
 
         if (User::where('email', $data['email'])->exists()) {
@@ -194,6 +196,7 @@ class UserController extends Controller
             'hashed_password' => PasswordPolicy::hash($data['password']),
             'full_name' => $data['full_name'],
             'role' => $data['role'],
+            'phone' => $data['phone'] ?? null,
             // Confirmed 2026-09-12: every new staff account must set
             // its own password the first time it signs in.
             'must_change_password' => true,
@@ -346,12 +349,15 @@ class UserController extends Controller
             'role' => 'sometimes|in:owner,service_lead,sales_manager,support_engineer,finance',
             'photo' => 'sometimes|nullable|string',
             'group_id' => 'sometimes|nullable|uuid',
+            // E.164: + then country code then subscriber number, digits
+            // only (e.g. +6591234567) -- what WhatsAppSender expects.
+            'phone' => ['sometimes', 'nullable', 'regex:/^\+[1-9]\d{7,14}$/'],
         ]);
 
         $oldValue = [];
         $newValue = [];
 
-        foreach (['full_name', 'role'] as $field) {
+        foreach (['full_name', 'role', 'phone'] as $field) {
             if (! array_key_exists($field, $fields) || $target->{$field} === $fields[$field]) {
                 continue;
             }
