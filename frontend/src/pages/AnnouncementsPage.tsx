@@ -1,19 +1,152 @@
-// Announcements / Ad Banner -- admin screen for the promo video and
-// "What's New" items shown on the Login page and, smaller, on every
-// page after signing in (see components/PromoVideoPanel.tsx).
+// Announcements / Ad Banner -- admin screen for the two promo videos
+// (Login page and, smaller, every page after signing in) and the
+// shared "What's New" items (see components/PromoVideoPanel.tsx).
 // Confirmed 2026-09-12: "is there a place for me to set all these
 // advertisements or latest updates and push publish" -- Save = live
 // immediately here, same as every other admin screen in this system
 // (Company Setup, Module Control, Tax Types, ...); there is no
 // separate draft/publish step.
-import { useEffect, useState, type FormEvent } from 'react'
-import { api, type Announcement } from '../lib/api'
+//
+// The video used to be one shared setting; split 2026-09-16 at
+// Dennis's direct request ("the setting should be separate for login
+// page and inside side menu advert video") into two independent cards,
+// one per App\Models\AdBannerSettings::SLOT_*.
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { api, type AdBannerSettingsInfo, type AdBannerSlot, type Announcement } from '../lib/api'
+
+function formatBytes(n: number): string {
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function VideoSlotCard({ slot, title, description }: { slot: AdBannerSlot; title: string; description: string }) {
+  const [videoSettings, setVideoSettings] = useState<AdBannerSettingsInfo | null>(null)
+  const [videoUrlInput, setVideoUrlInput] = useState('')
+  const [savingVideoUrl, setSavingVideoUrl] = useState(false)
+  const [uploadingVideo, setUploadingVideo] = useState(false)
+  const [videoSaved, setVideoSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const videoFileInputRef = useRef<HTMLInputElement>(null)
+
+  function refresh() {
+    api
+      .getAdBannerSettings(slot)
+      .then((s) => {
+        setVideoSettings(s)
+        setVideoUrlInput(s.video_source === 'url' ? s.video_url ?? '' : '')
+      })
+      .catch((e) => setError(e.message))
+  }
+
+  useEffect(refresh, [slot])
+
+  async function onUploadVideo(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setError(null)
+    setVideoSaved(false)
+    setUploadingVideo(true)
+    try {
+      const s = await api.uploadAdBannerVideo(slot, file)
+      setVideoSettings(s)
+      setVideoUrlInput('')
+      setVideoSaved(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload the video')
+    } finally {
+      setUploadingVideo(false)
+      if (videoFileInputRef.current) videoFileInputRef.current.value = ''
+    }
+  }
+
+  async function onSaveVideoUrl(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setSavingVideoUrl(true)
+    setVideoSaved(false)
+    try {
+      const s = await api.updateAdBannerSettings(slot, videoUrlInput || null)
+      setVideoSettings(s)
+      setVideoSaved(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save the video URL')
+    } finally {
+      setSavingVideoUrl(false)
+    }
+  }
+
+  async function onRemoveVideo() {
+    setError(null)
+    setVideoSaved(false)
+    try {
+      const s = await api.updateAdBannerSettings(slot, null)
+      setVideoSettings(s)
+      setVideoUrlInput('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove the video')
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2>{title}</h2>
+      <p className="muted">{description}</p>
+      <p className="muted">
+        Upload an .mp4 or .webm file (up to 100 MB), or paste a direct link to one hosted
+        elsewhere instead -- not a YouTube / Vimeo / Google Drive page link, which will not
+        play. Only one is ever live: uploading a file replaces a saved URL and vice versa.
+        Leave both empty to show just the items below on a plain colour panel, no video.
+      </p>
+      {error && <div className="error-banner">{error}</div>}
+
+      <p className="muted" style={{ marginBottom: 14 }}>
+        {videoSettings?.video_source === 'upload' &&
+          `Currently: uploaded file "${videoSettings.video_original_filename}"` +
+            (videoSettings.video_file_size_bytes != null ? ` (${formatBytes(videoSettings.video_file_size_bytes)})` : '')}
+        {videoSettings?.video_source === 'url' && `Currently: linked to ${videoSettings.video_url}`}
+        {videoSettings?.video_source === 'none' && 'Currently: no video set.'}
+      </p>
+
+      <div className="form-row">
+        <label>Upload a video file</label>
+        <input
+          ref={videoFileInputRef}
+          type="file"
+          accept="video/mp4,video/webm"
+          onChange={onUploadVideo}
+          disabled={uploadingVideo}
+        />
+        {uploadingVideo && <span className="muted" style={{ marginLeft: 10 }}>Uploading...</span>}
+      </div>
+
+      <form onSubmit={onSaveVideoUrl} style={{ marginTop: 14 }}>
+        <div className="form-row">
+          <label>Or a video URL</label>
+          <input
+            value={videoUrlInput}
+            onChange={(e) => {
+              setVideoUrlInput(e.target.value)
+              setVideoSaved(false)
+            }}
+            placeholder="https://..."
+            style={{ minWidth: 360 }}
+          />
+        </div>
+        <button type="submit" disabled={savingVideoUrl}>
+          {savingVideoUrl ? 'Saving...' : 'Save video URL'}
+        </button>
+        {videoSettings?.video_source !== 'none' && (
+          <button type="button" className="secondary" style={{ marginLeft: 8 }} onClick={onRemoveVideo}>
+            Remove video
+          </button>
+        )}
+        {videoSaved && <span className="muted" style={{ marginLeft: 10 }}>Saved.</span>}
+      </form>
+    </div>
+  )
+}
 
 export default function AnnouncementsPage() {
-  const [videoUrl, setVideoUrl] = useState('')
-  const [savingVideo, setSavingVideo] = useState(false)
-  const [videoSaved, setVideoSaved] = useState(false)
-
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [tag, setTag] = useState('')
   const [text, setText] = useState('')
@@ -23,26 +156,10 @@ export default function AnnouncementsPage() {
   const [error, setError] = useState<string | null>(null)
 
   function refresh() {
-    api.getAdBannerSettings().then((s) => setVideoUrl(s.video_url ?? '')).catch((e) => setError(e.message))
     api.listAnnouncements().then(setAnnouncements).catch((e) => setError(e.message))
   }
 
   useEffect(refresh, [])
-
-  async function onSaveVideo(e: FormEvent) {
-    e.preventDefault()
-    setError(null)
-    setSavingVideo(true)
-    setVideoSaved(false)
-    try {
-      await api.updateAdBannerSettings(videoUrl || null)
-      setVideoSaved(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save the video URL')
-    } finally {
-      setSavingVideo(false)
-    }
-  }
 
   async function onCreate(e: FormEvent) {
     e.preventDefault()
@@ -120,52 +237,31 @@ export default function AnnouncementsPage() {
     <div>
       <h1>Announcements &amp; Ad Banner</h1>
       <p className="muted">
-        Controls the promo video and "What's New" items shown on the Login page and, smaller, on
-        every page after signing in. Saving here takes effect immediately -- there is no separate
-        publish step, and a viewer sees the update the next time that panel loads (an already-open
-        tab won't refresh it live).
+        Controls the two promo videos -- one for the Login page, one for the banner shown
+        alongside every page after signing in -- and the "What's New" items shown with both.
+        Saving here takes effect immediately -- there is no separate publish step, and a viewer
+        sees the update the next time that panel loads (an already-open tab won't refresh it
+        live).
       </p>
       {error && <div className="error-banner">{error}</div>}
 
-      <div className="card">
-        <h2>Advertisement video</h2>
-        <p className="muted">
-          A <strong>direct link to a video file</strong> (an .mp4 or .webm URL that plays when
-          pasted into a browser tab) -- not an upload, and not a YouTube / Vimeo / Google Drive
-          page link, which will not play. Video files are far too large to store the way a logo
-          or photo is; point this at wherever your video is hosted. Leave blank to show just the
-          items below on a plain colour panel, no video.
-        </p>
-        <p className="muted">
-          No size or resolution limit is enforced -- the viewer's browser streams it straight
-          from the link. It plays muted, looped, in a narrow column: 220px wide on the Login
-          page, 150px on every other page, so 720p is more than enough and anything larger only
-          costs bandwidth on every page load. A short loop of a few MB is ideal; H.264 .mp4 plays
-          everywhere. If it fails to load, the panel quietly hides the video rather than showing
-          an error.
-        </p>
-        <form onSubmit={onSaveVideo}>
-          <div className="form-row">
-            <label>Video URL</label>
-            <input
-              value={videoUrl}
-              onChange={(e) => {
-                setVideoUrl(e.target.value)
-                setVideoSaved(false)
-              }}
-              placeholder="https://..."
-              style={{ minWidth: 360 }}
-            />
-          </div>
-          <button type="submit" disabled={savingVideo}>
-            {savingVideo ? 'Saving...' : 'Save video URL'}
-          </button>
-          {videoSaved && <span className="muted" style={{ marginLeft: 10 }}>Saved.</span>}
-        </form>
-      </div>
+      <VideoSlotCard
+        slot="login"
+        title="Login page video"
+        description="Shown tall and wide beside the sign-in form, before anyone has signed in. It plays
+          muted, looped, in a 220px-wide column, so 720p is more than enough."
+      />
+
+      <VideoSlotCard
+        slot="app"
+        title="In-app banner video"
+        description="Shown smaller, in a 150px-wide column, alongside the sidebar on every page after
+          signing in. Independent from the Login page video above -- set it separately."
+      />
 
       <div className="card">
         <h2>What's New items ({sorted.length})</h2>
+        <p className="muted">Shown with both videos above -- these items are not per-slot.</p>
         <table>
           <thead>
             <tr>

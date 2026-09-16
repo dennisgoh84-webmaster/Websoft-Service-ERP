@@ -33,7 +33,11 @@ class DatabaseSeederTest extends TestCase
 
         $this->assertSame(
             'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
-            AdBannerSettings::find(1)?->video_url,
+            AdBannerSettings::find(AdBannerSettings::SLOT_LOGIN)?->video_url,
+        );
+        $this->assertSame(
+            'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+            AdBannerSettings::find(AdBannerSettings::SLOT_APP)?->video_url,
         );
         $this->assertSame(3, Announcement::count());
         $this->assertEqualsCanonicalizing(
@@ -57,7 +61,7 @@ class DatabaseSeederTest extends TestCase
         $this->assertSame('Somewhere Dennis moved the office to', $company->address);
         $this->assertSame('data:image/png;base64,AAAA', $company->logo);
         $this->assertSame(3, Announcement::count());
-        $this->assertSame(1, AdBannerSettings::count());
+        $this->assertSame(2, AdBannerSettings::count());
     }
 
     public function test_a_blank_field_on_an_existing_company_is_filled_in(): void

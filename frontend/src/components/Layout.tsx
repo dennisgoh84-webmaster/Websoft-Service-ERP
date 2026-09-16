@@ -279,7 +279,7 @@ export default function Layout() {
         </div>
         <Outlet />
       </main>
-      <PromoVideoPanel className="app-ad-banner" />
+      <PromoVideoPanel className="app-ad-banner" slot="app" />
     </div>
   )
 }

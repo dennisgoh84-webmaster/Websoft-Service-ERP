@@ -292,7 +292,9 @@ class DatabaseSeeder extends Seeder
             );
         }
 
-        AdBannerSettings::firstOrCreate(['id' => 1], ['video_url' => self::AD_VIDEO_URL]);
+        foreach (AdBannerSettings::SLOTS as $slot) {
+            AdBannerSettings::firstOrCreate(['slot' => $slot], ['video_url' => self::AD_VIDEO_URL]);
+        }
         foreach (self::ANNOUNCEMENTS as $i => [$tag, $text]) {
             Announcement::firstOrCreate(
                 ['text' => $text],

@@ -415,7 +415,7 @@ export default function Login() {
           )}
         </div>
 
-        <PromoVideoPanel className="login-promo" />
+        <PromoVideoPanel className="login-promo" slot="login" />
       </div>
     </div>
   )

@@ -42,16 +42,34 @@ ORDER BY sort_order` to render the announcement list.
 
 ### `ad_banner_settings` table
 
+Split 2026-09-16 from a fixed-`id=1` singleton into two independent
+rows, keyed by `slot` — `login` (the client's Login page, before
+signing in) and `app` (the banner shown alongside the sidebar on every
+page after signing in). Each slot's promo video is independently either
+an external URL or a file the client uploaded locally; Central Command
+can only push a URL to either slot (see below).
+
 | Column | Type | Purpose |
 |---|---|---|
-| `id` | `integer` PK | Singleton row (always id = 1) |
-| `video_url` | `varchar(1000)` nullable | URL of the promo video shown on login + dashboard |
+| `slot` | `varchar(20)` PK | `'login'` or `'app'` |
+| `video_url` | `varchar(1000)` nullable | URL of this slot's promo video, if not using an uploaded file |
+| `video_stored_filename` | `varchar(255)` nullable | Set only when the client uploaded a file locally for this slot — Central Command never writes this |
+| `video_original_filename` | `varchar(255)` nullable | ″ |
+| `video_content_type` | `varchar(100)` nullable | ″ |
+| `video_file_size_bytes` | `bigint` nullable | ″ |
 | `updated_at` | `timestamptz` | Auto-updated on write |
 
-**Central Command writes**: `UPDATE` on the singleton row (id = 1) to
-set or change the promo video URL.
+**Central Command writes**: `UPDATE ... WHERE slot = :slot` to set or
+clear one slot's promo video URL. A push is necessarily URL-only —
+there is no mechanism to transfer an uploaded file's bytes to a remote
+client — so it also clears that slot's `video_stored_filename` and the
+other three upload columns, superseding whatever the client had
+uploaded locally for that slot, the same way saving a URL from the
+client's own admin screen does.
 
 **Central Command's own code**: `App\Services\ClientDbService::pushVideoUrl()`
+(takes a `slot` argument), backed by its own `video_settings` table
+(now also `slot`-columned — see `App\Models\VideoSetting`).
 **Client source model**: `backend-php/app/Models/AdBannerSettings.php`
 
 ---

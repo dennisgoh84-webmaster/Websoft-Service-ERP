@@ -11,8 +11,10 @@ use App\Models\GroupModuleAuthority;
 use App\Models\ModuleCatalog;
 use App\Models\User;
 use App\Models\UserCompanyAccess;
+use App\Services\AdBannerVideo;
 use App\Services\PasswordPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -77,16 +79,32 @@ class AnnouncementTest extends TestCase
 
         // No Authorization header at all -- the Login page calls this
         // before anyone has signed in.
-        $response = $this->getJson('/api/announcements/public');
+        $response = $this->getJson('/api/announcements/public/login');
 
         $response->assertOk()
             ->assertJsonPath('video_url', null)
             ->assertJsonCount(2, 'items')
             ->assertJsonPath('items.0.text', 'First')
             ->assertJsonPath('items.1.text', 'Second');
-        // The settings singleton is created on first read, so the
-        // endpoint never 404s on a fresh install.
-        $this->assertNotNull(AdBannerSettings::find(1));
+        // Each slot's row is created on first read, so the endpoint
+        // never 404s on a fresh install.
+        $this->assertNotNull(AdBannerSettings::find('login'));
+    }
+
+    public function test_unknown_slot_is_404_on_every_video_endpoint(): void
+    {
+        $company = Company::factory()->create();
+        $token = $this->ownerToken($company);
+
+        $this->getJson('/api/announcements/public/sidebar')->assertStatus(404);
+        $this->getJson('/api/announcements/settings/sidebar', $this->headers($token))->assertStatus(404);
+        $this->patchJson('/api/announcements/settings/sidebar', [], $this->headers($token))->assertStatus(404);
+
+        // Validation of the uploaded file itself runs before the slot
+        // check, so a genuinely valid file is needed here to prove the
+        // slot check (not the file requirement) is what 404s.
+        $file = UploadedFile::fake()->createWithContent('promo-clip.mp4', 'video bytes');
+        $this->post('/api/announcements/settings/sidebar/video', ['video' => $file], $this->headers($token))->assertStatus(404);
     }
 
     public function test_owner_can_set_and_read_back_the_promo_video_url(): void
@@ -94,14 +112,14 @@ class AnnouncementTest extends TestCase
         $company = Company::factory()->create();
         $token = $this->ownerToken($company);
 
-        $this->patchJson('/api/announcements/settings', ['video_url' => 'https://example.com/promo.mp4'], $this->headers($token))
+        $this->patchJson('/api/announcements/settings/login', ['video_url' => 'https://example.com/promo.mp4'], $this->headers($token))
             ->assertOk()
             ->assertJson(['video_url' => 'https://example.com/promo.mp4']);
 
-        $this->getJson('/api/announcements/settings', $this->headers($token))
+        $this->getJson('/api/announcements/settings/login', $this->headers($token))
             ->assertOk()
             ->assertJson(['video_url' => 'https://example.com/promo.mp4']);
-        $this->getJson('/api/announcements/public')
+        $this->getJson('/api/announcements/public/login')
             ->assertOk()
             ->assertJsonPath('video_url', 'https://example.com/promo.mp4');
 
@@ -114,9 +132,129 @@ class AnnouncementTest extends TestCase
         // Sending no video_url clears it -- AdBannerSettingsUpdate
         // defaults the field to None, so this is a full replace, not a
         // partial update. Preserved rather than "improved".
-        $this->patchJson('/api/announcements/settings', [], $this->headers($token))
+        $this->patchJson('/api/announcements/settings/login', [], $this->headers($token))
             ->assertOk()
             ->assertJson(['video_url' => null]);
+    }
+
+    public function test_the_two_slots_are_independent(): void
+    {
+        $company = Company::factory()->create();
+        $token = $this->ownerToken($company);
+
+        $this->patchJson('/api/announcements/settings/login', ['video_url' => 'https://example.com/login.mp4'], $this->headers($token))
+            ->assertOk();
+        $this->patchJson('/api/announcements/settings/app', ['video_url' => 'https://example.com/app.mp4'], $this->headers($token))
+            ->assertOk();
+
+        $this->getJson('/api/announcements/public/login')->assertOk()->assertJsonPath('video_url', 'https://example.com/login.mp4');
+        $this->getJson('/api/announcements/public/app')->assertOk()->assertJsonPath('video_url', 'https://example.com/app.mp4');
+
+        $this->assertDatabaseHas('audit_log_entries', [
+            'entity_type' => 'ad_banner_settings',
+            'entity_id' => '00000000-0000-0000-0000-000000000005',
+            'action' => 'updated',
+        ]);
+
+        // Clearing one slot leaves the other alone.
+        $this->patchJson('/api/announcements/settings/login', [], $this->headers($token))->assertOk();
+        $this->getJson('/api/announcements/public/login')->assertOk()->assertJsonPath('video_url', null);
+        $this->getJson('/api/announcements/public/app')->assertOk()->assertJsonPath('video_url', 'https://example.com/app.mp4');
+    }
+
+    public function test_owner_can_upload_a_video_file_and_it_is_served_back(): void
+    {
+        $company = Company::factory()->create();
+        $token = $this->ownerToken($company);
+        $file = UploadedFile::fake()->createWithContent('promo-clip.mp4', 'pretend this is video bytes');
+
+        $upload = $this->post('/api/announcements/settings/login/video', ['video' => $file], $this->headers($token));
+        $upload->assertOk()
+            ->assertJsonPath('video_source', 'upload')
+            ->assertJsonPath('video_original_filename', 'promo-clip.mp4')
+            ->assertJsonPath('video_file_size_bytes', strlen('pretend this is video bytes'));
+        $videoUrl = $upload->json('video_url');
+        $this->assertStringStartsWith('/api/announcements/video/', $videoUrl);
+
+        // The public banner (unauthenticated) resolves to the same served URL.
+        $this->getJson('/api/announcements/public/login')->assertOk()->assertJsonPath('video_url', $videoUrl);
+        // The other slot is untouched -- it doesn't resolve this filename.
+        $this->getJson('/api/announcements/public/app')->assertOk()->assertJsonPath('video_url', null);
+
+        // And that URL actually serves the uploaded bytes back, unauthenticated,
+        // with a real video Content-Type -- pinning a real bug found by hand:
+        // this fake file's CONTENT doesn't read as video (it's plain text), so
+        // content-sniffing it (getMimeType()) served `text/plain`, and the
+        // browser-reported getClientMimeType() proved unreliable too (Laravel's
+        // own upload-faking helper calls a .mp4 `application/mp4`). Either
+        // silently breaks playback since <video> trusts the response header.
+        // The fix derives the type strictly from the file extension instead.
+        $served = $this->get($videoUrl)->assertOk();
+        $served->assertHeader('Content-Type', 'video/mp4');
+        $this->assertSame('pretend this is video bytes', file_get_contents($served->baseResponse->getFile()->getPathname()));
+
+        $this->assertDatabaseHas('audit_log_entries', [
+            'entity_type' => 'ad_banner_settings', 'action' => 'video_uploaded',
+        ]);
+    }
+
+    public function test_uploading_a_video_clears_a_previously_set_url_and_vice_versa(): void
+    {
+        $company = Company::factory()->create();
+        $token = $this->ownerToken($company);
+
+        $this->patchJson('/api/announcements/settings/login', ['video_url' => 'https://example.com/promo.mp4'], $this->headers($token))
+            ->assertOk();
+
+        $file = UploadedFile::fake()->createWithContent('promo-clip.mp4', 'video bytes');
+        $upload = $this->post('/api/announcements/settings/login/video', ['video' => $file], $this->headers($token))
+            ->assertOk()->assertJsonPath('video_source', 'upload');
+        $storedFilename = basename((string) $upload->json('video_url'));
+        $this->assertNotNull(AdBannerVideo::path($storedFilename), 'file should exist on disk after upload');
+
+        // Setting a URL now replaces the upload -- and deletes it from disk.
+        $this->patchJson('/api/announcements/settings/login', ['video_url' => 'https://example.com/other.mp4'], $this->headers($token))
+            ->assertOk()
+            ->assertJsonPath('video_source', 'url')
+            ->assertJsonPath('video_url', 'https://example.com/other.mp4');
+        $this->assertNull(AdBannerVideo::path($storedFilename), 'old file should be deleted once the URL replaces it');
+    }
+
+    public function test_clearing_settings_removes_an_uploaded_file_from_disk_too(): void
+    {
+        $company = Company::factory()->create();
+        $token = $this->ownerToken($company);
+        $file = UploadedFile::fake()->createWithContent('promo-clip.mp4', 'video bytes');
+        $upload = $this->post('/api/announcements/settings/app/video', ['video' => $file], $this->headers($token))->assertOk();
+        $storedFilename = basename((string) $upload->json('video_url'));
+
+        $this->patchJson('/api/announcements/settings/app', [], $this->headers($token))
+            ->assertOk()->assertJsonPath('video_source', 'none')->assertJsonPath('video_url', null);
+        $this->assertNull(AdBannerVideo::path($storedFilename));
+    }
+
+    public function test_video_upload_is_capped_in_size(): void
+    {
+        $company = Company::factory()->create();
+        $token = $this->ownerToken($company);
+        $oversize = UploadedFile::fake()->create('too-big.mp4', 102401); // KB, 1 over the 100MB cap
+
+        $this->post('/api/announcements/settings/login/video', ['video' => $oversize], $this->headers($token))
+            ->assertStatus(422);
+    }
+
+    public function test_serving_the_video_refuses_a_stale_or_unknown_filename(): void
+    {
+        $company = Company::factory()->create();
+        $token = $this->ownerToken($company);
+        $file = UploadedFile::fake()->createWithContent('promo-clip.mp4', 'video bytes');
+        $this->post('/api/announcements/settings/login/video', ['video' => $file], $this->headers($token))->assertOk();
+
+        $this->get('/api/announcements/video/not-the-real-one.mp4')->assertStatus(404);
+
+        // No video configured at all -> every filename 404s.
+        AdBannerSettings::find('login')->update(['video_stored_filename' => null]);
+        $this->get('/api/announcements/video/anything.mp4')->assertStatus(404);
     }
 
     public function test_create_list_update_and_delete_an_announcement(): void
@@ -142,7 +280,7 @@ class AnnouncementTest extends TestCase
             ->assertOk()
             ->assertJson(['is_active' => false, 'text' => 'Quotations module is live']);
         $this->getJson('/api/announcements', $this->headers($token))->assertOk()->assertJsonCount(1);
-        $this->getJson('/api/announcements/public')->assertOk()->assertJsonCount(0, 'items');
+        $this->getJson('/api/announcements/public/login')->assertOk()->assertJsonCount(0, 'items');
 
         $this->delete("/api/announcements/{$id}", [], $this->headers($token))->assertStatus(204);
         // A genuine delete, not a soft-delete -- see the Python
@@ -224,7 +362,7 @@ class AnnouncementTest extends TestCase
         $this->getJson('/api/announcements', $this->headers($viewToken))->assertOk();
         // Reading the settings is FULL-only in the Python router, not
         // VIEW -- unusual, and preserved rather than relaxed.
-        $this->getJson('/api/announcements/settings', $this->headers($viewToken))->assertStatus(403);
+        $this->getJson('/api/announcements/settings/login', $this->headers($viewToken))->assertStatus(403);
 
         $editToken = $this->tokenForLevel($company, GroupModuleAuthority::EDIT);
         $this->postJson('/api/announcements', ['text' => 'x'], $this->headers($editToken))->assertStatus(403);
@@ -238,6 +376,6 @@ class AnnouncementTest extends TestCase
         $this->getJson('/api/announcements', $this->headers($token))->assertStatus(403);
         // ...but the public banner still works, since it has no gate at
         // all -- the Login page must never depend on Module Control.
-        $this->getJson('/api/announcements/public')->assertOk();
+        $this->getJson('/api/announcements/public/app')->assertOk();
     }
 }

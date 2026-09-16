@@ -621,14 +621,24 @@ shipped and when.
   Outlook Add-in half of Incidents is still scaffold-only, needing a
   real Microsoft 365 tenant + HTTPS host.
 - [x] **Promo video is a `<video src>` URL only (no upload), which the
-  Announcements screen didn't say.** **Settled 2026-09-16:** Dennis --
-  "we added instructions in central command" -- addressed by adding
-  guidance in the separate
-  [websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command)
-  repository rather than a code change here, so the field itself is
-  unchanged (still a direct `.mp4`/`.webm` URL, no upload); outside
-  this session's access, so not independently verified, taken on
-  Dennis's word, same as the WhatsApp OTP item above.
+  Announcements screen didn't say.** First marked settled 2026-09-16
+  by pointing to guidance added in the separate websoft-central-command
+  repository rather than a code change here -- **superseded the same
+  day**: Dennis asked directly, in this repo, "have the video advert
+  change to a source file rather than a public URL." Built for real:
+  an upload option alongside the existing URL field (whichever was set
+  most recently wins -- only one is ever live), stored on disk under
+  `uploads_dir`/ad_banner (`App\Services\AdBannerVideo`), served
+  through its own unauthenticated endpoint (`GET /api/announcements/
+  video/{filename}`, since the Login page plays it before anyone has
+  signed in). See open-business-decisions.md #28.3/#30.2.
+- [x] **Same day, follow-up: the promo video was one shared setting,
+  and Dennis wanted the Login page and the in-app banner set
+  independently.** `ad_banner_settings` is now keyed by `slot`
+  (`login` / `app`) instead of a fixed `id = 1` singleton, each with
+  its own upload-or-URL; Central Command also gained the ability to
+  push a video URL to either slot independently. See
+  open-business-decisions.md #45.
 
 ## Partially open
 

@@ -37,6 +37,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+# Raises upload_max_filesize/post_max_size above PHP's tiny defaults --
+# see that file's own comment for why (the ad banner's video upload).
+COPY docker/php-uploads.ini /usr/local/etc/php/conf.d/zz-uploads.ini
+
 WORKDIR /var/www/html
 
 # Dependencies first, so a code-only change does not re-resolve them.

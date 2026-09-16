@@ -1457,14 +1457,22 @@ and OTP also."
    (`Login.tsx`'s `PROMO_VIDEO_URL`) with a short text caption below
    it. No real advertisement video exists yet, so a well-known CC0
    sample clip (hosted on MDN's own infrastructure) stands in --
-   swap the URL for the real one once available. Chosen as an external
-   URL rather than building video file upload/storage: a video is far
-   too large to hold inline the way the logo/photo/PDPA document
-   above do, and no video-hosting infrastructure exists in this system
-   -- introducing one is a bigger architecture decision than this
-   request asked for. The panel falls back to the plain gradient +
-   caption (its original look) if the video URL doesn't load in a
-   given deployment, so it never shows a broken box.
+   swap the URL for the real one once available. Originally an
+   external URL only, not an upload: a video is far too large to hold
+   inline the way the logo/photo/PDPA document above do, and no
+   video-hosting infrastructure existed in this system. **Reversed
+   2026-09-16, at Dennis's direct request: "have the video advert
+   change to a source file rather than a public URL."** Built as a
+   real file upload after all -- stored on disk under `uploads_dir`/
+   ad_banner (never inline in the row the way the logo/photo are,
+   which is exactly the scale problem the original reasoning
+   flagged), served through its own unauthenticated endpoint since the
+   Login page needs to play it before anyone has signed in. The
+   external-URL option is kept alongside it, not removed -- whichever
+   was set most recently (upload or URL) replaces the other, so
+   exactly one is ever live. The panel still falls back to the plain
+   gradient + caption (its original look) if the video doesn't load in
+   a given deployment, so it never shows a broken box.
 
 28.4. **DECIDED, built.** "Forget password, and OTP also": a
    self-service email+OTP flow, separate from the login sequence --
@@ -1529,10 +1537,12 @@ the promo video and "What's New" items were still hardcoded in
    public` is the one unauthenticated read both the Login page and the
    signed-in ad banner use.
 
-30.2. **DECIDED by implementation.** The video field takes a URL, not
-   an upload -- consistent with #28.3's reasoning (a video is too large
-   to hold inline, and this system has no video-hosting
-   infrastructure). "What's New" items support a real delete (not just
+30.2. **DECIDED by implementation, reversed 2026-09-16 (see #28.3).**
+   The video field originally took a URL only, not an upload --
+   consistent with #28.3's original reasoning. Now takes either: an
+   uploaded file (stored on disk, served through its own
+   unauthenticated endpoint) or an external URL, whichever was set
+   most recently. "What's New" items support a real delete (not just
    the usual soft-delete/is_active pattern), since these are marketing
    blurbs with no downstream references, not audited business/
    financial records; `is_active` is still offered as a quick hide/
@@ -2112,4 +2122,42 @@ Maintenance → AI Assistant. Yes pls proceed to build in the settings."
 - No cap set (the default) is unlimited, exactly as before this was
   built — existing installations are unaffected until an owner sets
   one.
+
+## 45. Promo video split into two independent slots + Central Command push (raised and built 2026-09-16)
+
+Requested as: "The setting should be separate for login page page and
+inside side menu advert video… And this settings should be available
+from central command to push out also…" — a direct follow-up to
+#28.3/#29.2/#30.2, which had the Login page and the in-app banner
+sharing one setting. Dennis's immediately preceding question ("Verify
+issit only one video setting page or one more for login page") had
+just confirmed there was only the one shared setting, which is what
+prompted this change.
+
+45.1. **DECIDED, built.** `ad_banner_settings` is now keyed by `slot`
+   (`App\Models\AdBannerSettings::SLOT_LOGIN` / `SLOT_APP`) instead of
+   a fixed `id = 1` singleton — one row for the Login page, one for the
+   in-app banner, each independently either an uploaded file or an
+   external URL (same either/or rule as before, just per-slot now). An
+   existing install's single setting becomes the `login` row on
+   upgrade, and an `app` row is created alongside it carrying the same
+   content, so nothing changes visually until Dennis deliberately sets
+   them apart — see the migration that added `slot`. Both routes
+   (`/announcements/public/{slot}`, `/announcements/settings/{slot}`,
+   `/announcements/settings/{slot}/video`) and the Announcements admin
+   screen (two independent video cards now, one per slot) follow the
+   same split; the "What's New" items stay shared across both, since
+   they were never part of the request.
+
+45.2. **DECIDED, built.** Central Command can now push a video URL to
+   either slot independently — `App\Services\ClientDbService::
+   pushVideoUrl()` (websoft-central-command) takes a `slot` argument
+   and writes `UPDATE ad_banner_settings ... WHERE slot = :slot`; its
+   own `video_settings` table gained a matching `slot` column, and the
+   Advertisements admin screen there gained a slot selector on the
+   video form. A push is necessarily URL-only — Central Command has no
+   mechanism to transfer an uploaded file's bytes to a client's server,
+   only to write a row into its database — so pushing a URL also clears
+   whatever that slot had uploaded locally, the same way saving a URL
+   from the client's own admin screen already superseded an upload.
 

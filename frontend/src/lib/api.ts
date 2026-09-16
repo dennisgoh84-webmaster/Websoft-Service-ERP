@@ -202,11 +202,27 @@ export interface Announcement {
   created_at: string
 }
 
+/** The two independent promo-video settings (2026-09-16 split): `login`
+ * is shown on the Login page before signing in, `app` is the banner
+ * shown alongside the sidebar on every page after signing in. */
+export type AdBannerSlot = 'login' | 'app'
+
 /** Read by the Login page and the app-wide ad banner alike -- the one
  * unauthenticated view (only active announcements, already ordered). */
 export interface PublicAdBanner {
   video_url: string | null
   items: Announcement[]
+}
+
+/** Maintenance -> Announcements & Ad Banner's admin view of the video slot --
+ * either an uploaded file or an external URL, never both (see the backend's
+ * AdBannerSettings model docblock for why). `video_url` here is already the
+ * fully playable URL either way. */
+export interface AdBannerSettingsInfo {
+  video_url: string | null
+  video_source: 'upload' | 'url' | 'none'
+  video_original_filename: string | null
+  video_file_size_bytes: number | null
 }
 
 // ---- Company Setup / multi-company ----
@@ -2019,8 +2035,9 @@ export const api = {
 
   // Announcements / ad banner -- getPublicAdBanner is the only
   // unauthenticated call here (used by both the Login page and the
-  // app-wide banner); the rest back the Announcements admin screen.
-  getPublicAdBanner: () => request<PublicAdBanner>('/announcements/public'),
+  // app-wide banner, each passing its own slot); the rest back the
+  // Announcements admin screen.
+  getPublicAdBanner: (slot: AdBannerSlot) => request<PublicAdBanner>(`/announcements/public/${slot}`),
   // Maintenance -> System Email (the two system mailboxes).
   getSystemMail: () => request<{ otp: SystemMailbox; helpdesk: SystemMailbox }>('/system-mail'),
   updateSystemMail: (
@@ -2048,12 +2065,32 @@ export const api = {
       body: JSON.stringify({ to_email: toEmail }),
     }),
 
-  getAdBannerSettings: () => request<{ video_url: string | null }>('/announcements/settings'),
-  updateAdBannerSettings: (videoUrl: string | null) =>
-    request<{ video_url: string | null }>('/announcements/settings', {
+  getAdBannerSettings: (slot: AdBannerSlot) => request<AdBannerSettingsInfo>(`/announcements/settings/${slot}`),
+  updateAdBannerSettings: (slot: AdBannerSlot, videoUrl: string | null) =>
+    request<AdBannerSettingsInfo>(`/announcements/settings/${slot}`, {
       method: 'PATCH',
       body: JSON.stringify({ video_url: videoUrl }),
     }),
+  /** Replaces whichever of a URL / a previous upload was live for THIS slot -- only one video is ever active per slot. */
+  uploadAdBannerVideo: async (slot: AdBannerSlot, file: File): Promise<AdBannerSettingsInfo> => {
+    const formData = new FormData()
+    formData.append('video', file)
+    const token = getToken()
+    const res = await fetch(`/api/announcements/settings/${slot}/video`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'X-Device-Id': getDeviceId(),
+      },
+      body: formData,
+    })
+    if (!res.ok) {
+      let detail = res.statusText
+      try { const b = await res.json(); detail = b.detail ?? detail } catch { /* */ }
+      throw new Error(detail)
+    }
+    return res.json()
+  },
   listAnnouncements: () => request<Announcement[]>('/announcements'),
   createAnnouncement: (payload: { tag?: string | null; text: string; sort_order?: number }) =>
     request<Announcement>('/announcements', { method: 'POST', body: JSON.stringify(payload) }),
