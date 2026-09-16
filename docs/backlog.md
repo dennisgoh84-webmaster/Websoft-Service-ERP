@@ -262,11 +262,25 @@ shipped and when.
   hire-purchase or insurance record) -- confirmed by search, this is a
   new business area, not an extension of an existing one. Before any
   of this (either tab) can be scoped into a build, still needed:
-  which bank(s)/insurer(s) to design for first, their exact field
-  layouts, the field-mapping storage schema, the extension's own
-  build/review/distribution story, and where vehicle + driving-detail
-  data is meant to live (a new entity, and whose record it hangs off
-  -- presumably the customer/CompanyIndividual, but not yet confirmed).
+  their exact field layouts, the extension's own build/review/
+  distribution story, and where vehicle + driving-detail data is
+  meant to live (a new entity, and whose record it hangs off --
+  presumably the customer/CompanyIndividual, but not yet confirmed).
+
+  **Settled 2026-09-16: first banks are DBS and UOB.** Field-mapping
+  storage settled too, deliberately smaller than the rest of this
+  system's pattern: Dennis -- "Don't need to have setup master files
+  for them, just flat file and manually key in the data to store
+  there." So per-bank/insurer field mappings are a flat file (no
+  Setup List master, no CRUD admin screen, no database table with an
+  owner-editable UI) -- engineering keys the mapping in when a
+  provider is added, from the field names/selectors captured off that
+  provider's actual form (see the testing/hand-off process agreed the
+  same day: save the real form's page source, blank/dummy data only,
+  and hand it over rather than a screenshot, since that carries the
+  real field names the mapping needs -- verified field-by-field
+  against the live portal since nothing here can be reached or tested
+  directly). Still blocked on: the actual DBS/UOB page sources.
 
 ## Confirmed scope, not yet built
 
