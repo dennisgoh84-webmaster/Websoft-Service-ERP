@@ -99,6 +99,38 @@ class AuthTest extends TestCase
         $this->assertArrayNotHasKey('access_token', $response->json());
     }
 
+    public function test_change_password_rejects_reusing_the_current_password(): void
+    {
+        $company = Company::factory()->create();
+        $user = User::factory()->for($company)->create([
+            'hashed_password' => PasswordPolicy::hash('demo1234'),
+            'must_change_password' => true,
+        ]);
+        $changeToken = $this->post('/api/auth/login', ['username' => $user->email, 'password' => 'demo1234'])
+            ->json('change_token');
+
+        $this->postJson('/api/auth/change-password', ['change_token' => $changeToken, 'new_password' => 'demo1234'])
+            ->assertStatus(422)
+            ->assertJsonPath('detail', 'New password must be different from your current password.');
+        $this->assertTrue($user->fresh()->must_change_password, 'a rejected change must not clear the forced-change flag');
+    }
+
+    public function test_change_password_accepts_a_genuinely_new_password(): void
+    {
+        $company = Company::factory()->create();
+        $user = User::factory()->for($company)->create([
+            'hashed_password' => PasswordPolicy::hash('demo1234'),
+            'must_change_password' => true,
+        ]);
+        $changeToken = $this->post('/api/auth/login', ['username' => $user->email, 'password' => 'demo1234'])
+            ->json('change_token');
+
+        $this->postJson('/api/auth/change-password', ['change_token' => $changeToken, 'new_password' => 'newpass99'])
+            ->assertOk()->assertJson(['status' => 'ok']);
+        $this->assertFalse($user->fresh()->must_change_password);
+        $this->assertTrue(PasswordPolicy::verify('newpass99', $user->fresh()->hashed_password));
+    }
+
     public function test_me_requires_a_valid_bearer_token(): void
     {
         $this->getJson('/api/auth/me')->assertStatus(401);

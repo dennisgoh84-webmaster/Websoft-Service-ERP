@@ -77,6 +77,9 @@ class AuthController extends Controller
         } catch (InvalidArgumentException $e) {
             throw new ApiException(422, $e->getMessage());
         }
+        if (PasswordPolicy::verify($data['new_password'], $user->hashed_password)) {
+            throw new ApiException(422, 'New password must be different from your current password.');
+        }
 
         $user->hashed_password = PasswordPolicy::hash($data['new_password']);
         $user->must_change_password = false;
