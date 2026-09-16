@@ -265,6 +265,17 @@ on. Build once such an account is provisioned: add a `whatsapp_otps`-
 style flow mirroring `LoginOtp`, and let the user choose email or
 WhatsApp at the OTP step.
 
+**Dennis confirmed 2026-09-16: the WhatsApp Business API account is
+provisioned, and built in the separate
+[websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command)
+repository** -- outside this session's access, so not independently
+verified here, but taken as done on his word. **Still open for this
+repo:** `backend-php`'s own login flow (`AuthController`) has no
+`whatsapp_otps` table or OTP-channel choice yet -- if staff should be
+able to pick WhatsApp at THIS system's login screen (not only a
+capability Central Command uses itself), that client-side piece
+remains to build.
+
 This aligns with CLAUDE.md's already-approved Odoo replacement strategy
 (phased, module-by-module, with a parallel-run period and no big-bang
 migration) and its note that "important historical data will eventually
@@ -345,7 +356,12 @@ already has `is_active` and `expires_at` fields per module per company).
 > (open question 4 below, answered: yes, `.env` stays as the way to
 > recover the first admin until the row is filled in). That is the
 > table Central Command can now push into; the push itself, and open
-> questions 1-3, are still Central Command's side.
+> questions 1-3, were Central Command's side.
+>
+> **Dennis confirmed 2026-09-16: the push is now built in the separate
+> [websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command)
+> repository** -- outside this session's access, so not independently
+> verified here, but taken as done on his word.
 
 **Dennis's instruction: build the server/system configuration in
 Central Command and push it down to each client deployment, rather

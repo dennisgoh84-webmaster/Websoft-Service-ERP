@@ -322,9 +322,20 @@ shipped and when.
   Quotations/Invoices/Receipts/Chart of Accounts. 6 open questions on
   access method, field mapping, cutover sequencing.
   → [planned-work.md #6](planned-work.md#6-odoo-migration-program----contacts-subscriptions-timesheets-sales-quotationsinvoicesreceipts-chart-of-accounts-raised-2026-09-12)
-- [ ] **WhatsApp OTP** as a second login factor -- blocked on
+- [x] **WhatsApp OTP** as a second login factor -- was blocked on
   provisioning a WhatsApp Business API account (Twilio/Meta); email OTP
-  already works today.
+  already works today. **Dennis confirmed 2026-09-16: provisioned, and
+  built in the separate
+  [websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command)
+  repository** -- outside this session's access, so not independently
+  verified here, but taken as done on his word. **Note for this repo:**
+  `backend-php`'s own login flow (`AuthController`) still only has the
+  email OTP path from planned-work.md #7's design -- no `whatsapp_otps`
+  table or "choose email or WhatsApp at the OTP step" exists here. If
+  the intent is for THIS system's login screen to offer WhatsApp OTP
+  too (rather than Central Command using the capability for its own
+  purposes), that client-side piece is still to build -- flagging
+  rather than assuming either way.
   → [planned-work.md #7](planned-work.md#7-whatsapp-otp-as-a-second-login-factor-raised-2026-09-12-deferred)
 - [x] **Server Company Central Command** -- built 2026-09-12, moved to
   its own repository 2026-09-13:
@@ -338,17 +349,16 @@ shipped and when.
   push for tax rate changes, new defaults), full push activity log.
   Admin login: `admin` / `Admin123`.
   → [planned-work.md #8](planned-work.md#8-server-company-central-command----remote-adbanner-push--license-enforcement-raised-2026-09-12)
-- [ ] **Server/system config pushed from Central Command, not set per
-  client** -- raised 2026-09-15. ~~The blocker is on this side: `.env`
-  is a file and no push can reach it, so the settings must move into a
-  database table first.~~ **This side done 2026-09-15:** the system
-  mailboxes are in `system_mail_settings` (two rows -- `otp` for
-  sign-in codes / resets / portal invites, `helpdesk` for the Outlook
-  Add-in's Incident / Job Order acknowledgements) with a Maintenance →
-  System Email screen; `.env` stays the bootstrap fallback for `otp`
-  only. What remains is the push from Central Command into that table.
-  Distinct from the per-company mailbox in Company Setup, which stays
-  client-side.
+- [x] **Server/system config pushed from Central Command, not set per
+  client** -- raised 2026-09-15. This side (the `system_mail_settings`
+  table + Maintenance → System Email screen, `.env` kept only as the
+  `otp` bootstrap fallback) was done 2026-09-15. **Dennis confirmed
+  2026-09-16: the push itself is now built in the separate
+  [websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command)
+  repository** -- outside this session's access, so not independently
+  verified here, but taken as done on his word. Distinct from the
+  per-company mailbox in Company Setup, which stays client-side and is
+  unaffected.
   → [planned-work.md #8c](planned-work.md#8c-serversystem-configuration-push-raised-2026-09-15)
 
 - [x] **No Dockerfile for `backend-php/`** -- found and written
@@ -546,4 +556,4 @@ shipped and when.
   → [open-business-decisions.md #7-8](open-business-decisions.md#7-projects)
 
 ---
-Last updated: 2026-09-15 (Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006; Maintenance / Company-Individual batch; eight-character company code; Service Record rules SRV-019/020, SLA removed; AI Assistant slices 1, 2, 3 + PDPA consent gate)
+Last updated: 2026-09-16 (WhatsApp OTP and the Central Command config push confirmed done in the separate websoft-central-command repository; 2026-09-15: Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006; Maintenance / Company-Individual batch; eight-character company code; Service Record rules SRV-019/020, SLA removed; AI Assistant slices 1, 2, 3 + PDPA consent gate)
