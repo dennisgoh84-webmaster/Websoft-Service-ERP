@@ -23,6 +23,20 @@ shipped and when.
   → [open-business-decisions.md #43](open-business-decisions.md#43-ai-assistant-pdpa-self-declaration-at-login-raised-and-built-2026-09-15),
   [business-requirements.md PDPA-002](business-requirements.md)
 
+- [x] **AI Assistant monthly token spending cap** -- built 2026-09-16,
+  settling decision 12.2/42.2 ahead of the original "wait a month"
+  plan, at Dennis's explicit instruction. An installation-wide
+  `monthly_token_cap` under Maintenance → AI Assistant; once this
+  calendar month's recorded usage (Asia/Singapore, the same boundary
+  the Usage tile uses) reaches it, incident triage, staff chat, portal
+  chat and the settings screen's connection test all refuse with a
+  clear 422 before any provider call or `ai_interactions` row --
+  checked once per request, not per tool-use round, so a capped
+  conversation refuses cleanly rather than dying mid-reply. In tokens,
+  not SGD (no live pricing feed; per-model rates differ and change).
+  Leaving it blank keeps the previous unlimited behaviour.
+  → [open-business-decisions.md #44](open-business-decisions.md#44-ai-assistant-monthly-token-spending-cap-raised-and-built-2026-09-16)
+
 
 - [x] **Backend language conversion, Python/FastAPI → PHP/Laravel**
   -- **COMPLETE 2026-09-15** (the cutover itself is still Dennis's to
@@ -210,16 +224,74 @@ shipped and when.
   clickable drill-downs. Default ledger codes per document header/line
   and multi-currency (original + base SGD) are still waiting on Dennis
   (open items 4b.2 auto-posting accounts and 4b.5 multi-currency).
-- [ ] **Bank Portal / ZSOFT HP Agency** -- still needs Dennis to say
-  what this actually is (an in-app record + Send button, vs. literal
-  automation of a real bank's website) before it can be started safely.
-  2026-09-16: a `bank_portal_testing` Module Control gate + placeholder
-  page were built ahead of that scope decision, at Dennis's request, so
-  the feature can be switched on for testing without any user seeing
-  it first -- seeded OFF, same as every module (Module Control read
-  API is out of scope in this repo; enablement is set directly in
-  `company_modules`, or pushed from Central Command). No bank
-  integration exists yet -- see `BankPortalController.php`.
+- [ ] **Bank Portal / ZSOFT HP Agency** -- **described by Dennis
+  2026-09-16**, not yet built. **2026-09-16, separately: the Module
+  Control gate itself and a placeholder page were built ahead of this
+  scope description** -- `bank_portal_testing`, seeded OFF like every
+  module (Module Control read API is out of scope in this repo;
+  enablement is set directly in `company_modules`, or pushed from
+  Central Command), nav entry + route gated the same way as any other
+  module, see `BankPortalController.php` / `BankPortalTestingPage.tsx`.
+  That page is still only a placeholder -- none of the actual HP/
+  Insurance functionality below exists yet, and the module key/page
+  should be revisited once real fields are being built, but the gate
+  itself is real and testable now: nothing until Dennis switches it
+  on. A Maintenance menu item ("Bank Portal Testing - HP Agency") that
+  appears once a "bank module testing" Module Control key is switched
+  on. A page stores each Hire Purchase
+  application's basic data, to be submitted to multiple banks' HP
+  application portals. Dennis: "Condition is the keep the bank portal
+  window open in the background and after the security OTP login then
+  can start transfer submit the data from our HP Agency Page to theirs
+  according to the fields." Submission mechanism, asked and answered
+  2026-09-16: a **browser extension** -- staff logs into the bank's own
+  portal manually (their own credentials, their own OTP) in one tab,
+  then a companion extension reads our HP Agency page's data and fills
+  the bank portal's form fields in the other tab; no server-side
+  automation and no bank credentials/OTP ever touch our backend. Still
+  open before this can be scoped into a build: which bank portal(s)
+  first, their exact field layout/selectors (likely a different
+  extension content-script per bank), and how the extension itself is
+  built, reviewed and distributed to staff machines.
+
+  **Second tab described 2026-09-16, same page: Insurance Application
+  to Insurance Portal for Quote.** Dennis: prefilled with customer,
+  vehicle and basic driving details, submitted to an insurance
+  quotation portal -- **no OTP** (unlike the bank HP tab) -- and once
+  the quote is out, "now we need to copy back the information to our
+  relevant fields (quote price with additional conditions)." So the
+  same browser extension needs to work in **both directions**: fill
+  forward into the insurer's portal, then read the resulting quote
+  back out of it into our page. Dennis also flagged directly: "this may
+  be done for different insurance company and bank portal because all
+  their format may be different... We may need to also store their
+  format or field name" -- i.e. a per-provider field-mapping table
+  (their field name/selector ↔ our field), not a single hardcoded
+  layout, covering both the HP tab's banks and this tab's insurers.
+  **New open question this raises:** neither "vehicle" nor "driving
+  details" exists anywhere in this system yet (no Vehicle entity, no
+  hire-purchase or insurance record) -- confirmed by search, this is a
+  new business area, not an extension of an existing one. Before any
+  of this (either tab) can be scoped into a build, still needed:
+  their exact field layouts, the extension's own build/review/
+  distribution story, and where vehicle + driving-detail data is
+  meant to live (a new entity, and whose record it hangs off --
+  presumably the customer/CompanyIndividual, but not yet confirmed).
+
+  **Settled 2026-09-16: first banks are DBS and UOB.** Field-mapping
+  storage settled too, deliberately smaller than the rest of this
+  system's pattern: Dennis -- "Don't need to have setup master files
+  for them, just flat file and manually key in the data to store
+  there." So per-bank/insurer field mappings are a flat file (no
+  Setup List master, no CRUD admin screen, no database table with an
+  owner-editable UI) -- engineering keys the mapping in when a
+  provider is added, from the field names/selectors captured off that
+  provider's actual form (see the testing/hand-off process agreed the
+  same day: save the real form's page source, blank/dummy data only,
+  and hand it over rather than a screenshot, since that carries the
+  real field names the mapping needs -- verified field-by-field
+  against the live portal since nothing here can be reached or tested
+  directly). Still blocked on: the actual DBS/UOB page sources.
 
 ## Confirmed scope, not yet built
 
@@ -329,9 +401,20 @@ shipped and when.
   Quotations/Invoices/Receipts/Chart of Accounts. 6 open questions on
   access method, field mapping, cutover sequencing.
   → [planned-work.md #6](planned-work.md#6-odoo-migration-program----contacts-subscriptions-timesheets-sales-quotationsinvoicesreceipts-chart-of-accounts-raised-2026-09-12)
-- [ ] **WhatsApp OTP** as a second login factor -- blocked on
+- [x] **WhatsApp OTP** as a second login factor -- was blocked on
   provisioning a WhatsApp Business API account (Twilio/Meta); email OTP
-  already works today.
+  already works today. **Dennis confirmed 2026-09-16: provisioned, and
+  built in the separate
+  [websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command)
+  repository** -- outside this session's access, so not independently
+  verified here, but taken as done on his word. **Note for this repo:**
+  `backend-php`'s own login flow (`AuthController`) still only has the
+  email OTP path from planned-work.md #7's design -- no `whatsapp_otps`
+  table or "choose email or WhatsApp at the OTP step" exists here. If
+  the intent is for THIS system's login screen to offer WhatsApp OTP
+  too (rather than Central Command using the capability for its own
+  purposes), that client-side piece is still to build -- flagging
+  rather than assuming either way.
   → [planned-work.md #7](planned-work.md#7-whatsapp-otp-as-a-second-login-factor-raised-2026-09-12-deferred)
 - [x] **Server Company Central Command** -- built 2026-09-12, moved to
   its own repository 2026-09-13:
@@ -345,17 +428,16 @@ shipped and when.
   push for tax rate changes, new defaults), full push activity log.
   Admin login: `admin` / `Admin123`.
   → [planned-work.md #8](planned-work.md#8-server-company-central-command----remote-adbanner-push--license-enforcement-raised-2026-09-12)
-- [ ] **Server/system config pushed from Central Command, not set per
-  client** -- raised 2026-09-15. ~~The blocker is on this side: `.env`
-  is a file and no push can reach it, so the settings must move into a
-  database table first.~~ **This side done 2026-09-15:** the system
-  mailboxes are in `system_mail_settings` (two rows -- `otp` for
-  sign-in codes / resets / portal invites, `helpdesk` for the Outlook
-  Add-in's Incident / Job Order acknowledgements) with a Maintenance →
-  System Email screen; `.env` stays the bootstrap fallback for `otp`
-  only. What remains is the push from Central Command into that table.
-  Distinct from the per-company mailbox in Company Setup, which stays
-  client-side.
+- [x] **Server/system config pushed from Central Command, not set per
+  client** -- raised 2026-09-15. This side (the `system_mail_settings`
+  table + Maintenance → System Email screen, `.env` kept only as the
+  `otp` bootstrap fallback) was done 2026-09-15. **Dennis confirmed
+  2026-09-16: the push itself is now built in the separate
+  [websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command)
+  repository** -- outside this session's access, so not independently
+  verified here, but taken as done on his word. Distinct from the
+  per-company mailbox in Company Setup, which stays client-side and is
+  unaffected.
   → [planned-work.md #8c](planned-work.md#8c-serversystem-configuration-push-raised-2026-09-15)
 
 - [x] **No Dockerfile for `backend-php/`** -- found and written
@@ -544,6 +626,9 @@ shipped and when.
   still fully open.~~ All 6 items (6.1-6.5) resolved and built:
   approval workflow (DRAFT→PENDING→APPROVED→PAID), automatic clawback
   on write-off, finance-administered payout with Mark Paid action.
+  **Confirmed complete by Dennis 2026-09-16** after running through it
+  live: "any further Commission Management rules beyond what's
+  built... Complete as per now, nothing pending."
   → [open-business-decisions.md #6](open-business-decisions.md#6-commission-management)
 - [x] **Smaller longstanding open questions (sections 7 & 8)** --
   settled and built 2026-09-12. Budget overrun detection + Sales Manager
@@ -553,4 +638,4 @@ shipped and when.
   → [open-business-decisions.md #7-8](open-business-decisions.md#7-projects)
 
 ---
-Last updated: 2026-09-15 (Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006; Maintenance / Company-Individual batch; eight-character company code; Service Record rules SRV-019/020, SLA removed; AI Assistant slices 1, 2, 3 + PDPA consent gate)
+Last updated: 2026-09-16 (AI Assistant monthly token spending cap built; WhatsApp OTP and the Central Command config push confirmed done in the separate websoft-central-command repository; 2026-09-15: Python backend retired; system mailboxes in the database; Quotation status model SALES-008; Contract–Quotation link SALES-006; Maintenance / Company-Individual batch; eight-character company code; Service Record rules SRV-019/020, SLA removed; AI Assistant slices 1, 2, 3 + PDPA consent gate)

@@ -10,6 +10,8 @@ use App\Models\AiSetting;
 use App\Models\Incident;
 use App\Models\PortalUser;
 use App\Models\User;
+use App\Services\Ai\AiBudget;
+use App\Services\Ai\AiBudgetExceededException;
 use App\Services\Ai\AiChat;
 use App\Services\Ai\AiClient;
 use App\Services\Ai\AiException;
@@ -62,6 +64,7 @@ class AiAssistantController extends Controller
             'redact_personal_data' => 'sometimes|boolean',
             'assistant_name' => 'sometimes|string|min:1|max:40',
             'assistant_avatar' => 'sometimes|nullable|string',
+            'monthly_token_cap' => 'sometimes|nullable|integer|min:1',
         ]);
         if (array_key_exists('assistant_avatar', $fields) && $fields['assistant_avatar'] !== null) {
             $avatar = $fields['assistant_avatar'];
@@ -128,6 +131,7 @@ class AiAssistantController extends Controller
             'created_at' => Carbon::now('UTC'),
         ]);
         try {
+            AiBudget::assertWithinCap();
             $result = AiClient::complete(
                 'You are checking a connection. Reply with the JSON you were asked for.',
                 'Reply with {"ok": true, "greeting": "<one short friendly sentence>"}.',
@@ -135,6 +139,8 @@ class AiAssistantController extends Controller
                     'properties' => ['ok' => ['type' => 'boolean'], 'greeting' => ['type' => 'string']]],
                 256,
             );
+        } catch (AiBudgetExceededException $e) {
+            throw new ApiException(422, $e->getMessage());
         } catch (AiNotConfiguredException $e) {
             throw new ApiException(422, $e->getMessage());
         } catch (AiException $e) {
@@ -237,6 +243,8 @@ class AiAssistantController extends Controller
             $reply = AiChat::reply($user, $data['messages'], $data['context'] ?? null);
         } catch (AiValidationException $e) {
             throw new ApiException(422, $e->getMessage());
+        } catch (AiBudgetExceededException $e) {
+            throw new ApiException(422, $e->getMessage());
         } catch (AiNotConfiguredException $e) {
             throw new ApiException(422, $e->getMessage());
         } catch (AiException $e) {
@@ -266,6 +274,8 @@ class AiAssistantController extends Controller
 
         try {
             $interaction = IncidentTriage::suggest($inc, $user);
+        } catch (AiBudgetExceededException $e) {
+            throw new ApiException(422, $e->getMessage());
         } catch (AiNotConfiguredException $e) {
             throw new ApiException(422, $e->getMessage());
         } catch (AiException $e) {
@@ -322,6 +332,9 @@ class AiAssistantController extends Controller
             'redact_personal_data' => (bool) $row->redact_personal_data,
             'assistant_name' => $row->assistantName(),
             'assistant_avatar' => $row->assistant_avatar,
+            'monthly_token_cap' => $row->monthly_token_cap,
+            // Install-wide, unlike the company-scoped usage() endpoint -- the cap it is measured against is install-wide too.
+            'monthly_tokens_used' => AiBudget::tokensUsedThisMonth(),
             'api_key_set' => $row->api_key_set,
             'api_key_from_env' => $row->api_key_from_env,
             'updated_at' => optional($row->updated_at)->toJSON(),

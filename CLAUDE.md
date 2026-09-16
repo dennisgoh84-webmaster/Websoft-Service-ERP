@@ -528,7 +528,21 @@ Customer Helpdesk Portal, its own auth realm (`auth.portal`) and its
 own hard-scoped read-only tools (`App\Services\Ai\AiPortalTools`,
 never a customer id as input) so a portal customer can only ever see
 their own contracts, job orders, service records, invoices, payments
-and incidents; she never raises an Incident herself.
+and incidents; she never raises an Incident herself. **The same day,**
+a one-time PDPA self-declaration gates every staff login (Dennis:
+"they must acknowledge, tick then can login") -- recorded once as the
+structurally-protected `users.ai_data_consent_at`, never editable or
+clearable by any path including Staff Master's own edit form -- see
+[docs/open-business-decisions.md #43](docs/open-business-decisions.md#43-ai-assistant-pdpa-self-declaration-at-login-raised-and-built-2026-09-15).
+**Landed 2026-09-16:** an installation-wide monthly token spending cap
+(`App\Services\Ai\AiBudget`, decision 12.2), settled ahead of the
+original month-of-evidence plan at Dennis's explicit instruction --
+once a calendar month's usage reaches the configured cap, incident
+triage, staff chat, portal chat and the settings screen's connection
+test all refuse before any provider call, with no `ai_interactions`
+row written for the refused call; unset (the default) is unlimited,
+as before. See
+[docs/open-business-decisions.md #44](docs/open-business-decisions.md#44-ai-assistant-monthly-token-spending-cap-raised-and-built-2026-09-16).
 
 No other business area has application code yet. **Further commission
 business rules beyond what is built (the report, its rate and

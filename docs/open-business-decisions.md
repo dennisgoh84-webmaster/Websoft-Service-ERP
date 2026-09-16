@@ -1990,8 +1990,12 @@ Dennis; the build takes a safe default for each, all switchable:
    has explicitly agreed to it** -- see #43 below, the self-declaration
    built the same day.
 42.2. **Cost model (12.2).** Default: per event, measured — tokens per
-   call recorded and summarised on the settings screen. No cap is
-   enforced yet; decide one once a month of real usage is visible.
+   call recorded and summarised on the settings screen. **Settled
+   2026-09-16:** "A spending cap, once you've seen a month of real
+   usage on the tokens tracked in Maintenance → AI Assistant. Yes pls
+   proceed to build in the settings" — see #44 below for the cap that
+   was built the same day, ahead of the original month-of-evidence
+   plan, at Dennis's explicit instruction.
 42.3. **Audit (12.3).** Decided by build: every call is an
    `ai_interactions` row plus an Event Log entry. The prompt is not
    stored (it can carry customer text); the answer is.
@@ -2065,4 +2069,47 @@ has its own login and its own chat (slice 3) but no equivalent
 declaration -- Dennis's instruction named "the login screen" and "the
 staff master file" specifically, which are both staff-side. Worth
 raising if the portal chat is to continue.
+
+## 44. AI Assistant monthly token spending cap (raised and built 2026-09-16)
+
+Dennis, settling decision 12.2/42.2 ahead of the original "wait a
+month" plan: "Whether masked text going to Anthropic's US-hosted API
+is acceptable at all, versus a regional or self-hosted model. Settled
+in the login screen using the terms and conditions…. A spending cap,
+once you've seen a month of real usage on the tokens tracked in
+Maintenance → AI Assistant. Yes pls proceed to build in the settings."
+
+**Built as `App\Services\Ai\AiBudget`:**
+
+- **Measured in tokens, not SGD.** This system has no live Anthropic
+  pricing feed, and the per-token rate differs by model and can
+  change — a hardcoded price table would be inventing a figure nobody
+  gave us (CLAUDE.md: "never assume a business rule when requirements
+  have not been provided"), and a stale one could silently under- or
+  over-state real spend. The token count is the one number the system
+  can state honestly, and it is already what the Usage tile shows.
+  Moving to a currency figure later is possible once Dennis has real
+  invoices to calibrate a per-model SGD/1M-token table against — until
+  then this is a pragmatic default, not a claim that tokens are the
+  final unit Dennis wants.
+- **Installation-wide, not per company** — `ai_settings.monthly_token_cap`
+  sits on the single shared settings row, matching that the API key
+  and the resulting bill are already shared globally, not per company.
+- **Checked once per request** — at the top of incident triage, a chat
+  turn (staff or portal) and the settings screen's connection test —
+  never per tool-use round inside one chat reply, so a capped
+  conversation gets a clean refusal before the next question rather
+  than dying partway through answering one.
+- **A capped call never reaches the provider and writes no
+  `ai_interactions` row** — `AiBudgetExceededException` is a sibling of
+  `AiNotConfiguredException` (both extend `\RuntimeException` directly,
+  neither catches the other), so it is refused with the same 422
+  pattern as "no API key configured," before any cost is incurred.
+- **Same month boundary as the Usage tile** — both use
+  `Carbon::now('Asia/Singapore')->startOfMonth()->utc()`, so the figure
+  a cap is checked against can never disagree with what the settings
+  screen displays.
+- No cap set (the default) is unlimited, exactly as before this was
+  built — existing installations are unaffected until an owner sets
+  one.
 

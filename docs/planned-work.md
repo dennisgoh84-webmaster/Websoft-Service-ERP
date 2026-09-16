@@ -324,16 +324,29 @@ needs both Twilio credentials configured *and* that user having a
   login page, which calls the new `POST /api/auth/send-otp` to send on
   whichever they chose.
 
-**Still blocked on the one open item this was always waiting on**: a
-real WhatsApp Business API account. `WhatsAppSender::isConfigured()` is
-false with nothing in `.env` (see `.env.example`'s
+**The one open item this was always waiting on**: a real WhatsApp
+Business API account. `WhatsAppSender::isConfigured()` is false with
+nothing in `.env` (see `.env.example`'s
 `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_WHATSAPP_FROM`), so
 every install runs exactly as it does today -- email-only -- until
-Twilio (or, later, Meta's Cloud API) credentials are provisioned and
-set. Twilio was picked as the first provider because its WhatsApp API
-needs only a single REST call (Basic Auth, no app-review step, and a
-free sandbox number for testing) -- the faster path to exercising this
-end to end once an account exists.
+Twilio (or, later, Meta's Cloud API) credentials are set for THIS
+install. Twilio was picked as the first provider because its WhatsApp
+API needs only a single REST call (Basic Auth, no app-review step, and
+a free sandbox number for testing) -- the faster path to exercising
+this end to end once an account exists.
+
+**Dennis confirmed 2026-09-16: a WhatsApp Business API account is now
+provisioned and in use by the separate
+[websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command)
+repository** -- taken as done on his word, not independently verified
+here. That is a *different* install's `.env`, though: Central Command
+having its own working Twilio account does not by itself put real
+credentials into this system's `backend-php/.env` (there is no config
+push for Twilio settings the way `system_mail_settings` has one for
+the system mailbox -- see §8c) -- this app's own
+`TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_WHATSAPP_FROM` still
+need to be set explicitly before this install's login screen actually
+offers WhatsApp.
 
 ---
 
@@ -373,7 +386,12 @@ already has `is_active` and `expires_at` fields per module per company).
 > (open question 4 below, answered: yes, `.env` stays as the way to
 > recover the first admin until the row is filled in). That is the
 > table Central Command can now push into; the push itself, and open
-> questions 1-3, are still Central Command's side.
+> questions 1-3, were Central Command's side.
+>
+> **Dennis confirmed 2026-09-16: the push is now built in the separate
+> [websoft-central-command](https://github.com/dennisgoh84-webmaster/websoft-central-command)
+> repository** -- outside this session's access, so not independently
+> verified here, but taken as done on his word.
 
 **Dennis's instruction: build the server/system configuration in
 Central Command and push it down to each client deployment, rather

@@ -30,13 +30,14 @@ class AiSetting extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['key', 'api_key', 'model', 'redact_personal_data', 'assistant_name', 'assistant_avatar', 'updated_at'];
+    protected $fillable = ['key', 'api_key', 'model', 'redact_personal_data', 'assistant_name', 'assistant_avatar', 'monthly_token_cap', 'updated_at'];
 
     protected $hidden = ['api_key'];
 
     protected $casts = [
         'api_key' => 'encrypted',
         'redact_personal_data' => 'boolean',
+        'monthly_token_cap' => 'integer',
         'updated_at' => 'datetime',
     ];
 

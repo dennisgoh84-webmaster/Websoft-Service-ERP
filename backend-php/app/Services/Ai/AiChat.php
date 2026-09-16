@@ -44,6 +44,7 @@ class AiChat
     {
         $history = self::validateHistory($history);
         $settings = AiSetting::current();
+        AiBudget::assertWithinCap($settings);
         $redact = (bool) $settings->redact_personal_data;
 
         $interaction = new AiInteraction([
