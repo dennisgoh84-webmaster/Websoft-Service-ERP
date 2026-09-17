@@ -1,16 +1,13 @@
 /**
- * Mobile Web App for Support Staff (planned-work.md #1).
+ * Mobile Web App for Support Staff & Sales (planned-work.md #1).
  *
  * Separate from the desktop app -- mobile-optimized, no sidebar.
- * Staff sees only their own assigned Job Orders. Features:
- * - Time In / Time Out (replaces manual minutes)
- * - Work description
- * - Photo/video attachments (camera + gallery for work photos)
- * - Customer sign-off: finger-drawn signature + typed name + chop photo
- *   (camera-only, auto-watermarked with SR number + timestamp)
+ * Staff sees role-appropriate tabs:
+ * - Support: Job Orders with Time In/Out, Service Records, sign-off
+ * - Sales: CRM Activities, Quotations, Job Orders
  *
  * Confirmed decisions (2026-09-12):
- * - Same login, own jobs only
+ * - Same login, own jobs/activities only (managers see all)
  * - Time in/out replaces manual minutes (auto-computed)
  * - Camera-only + watermark for chop (no re-use rule)
  * - Live connection assumed
@@ -22,6 +19,8 @@ import { useAuth } from '../lib/AuthContext'
 import { getToken } from '../lib/api'
 import { getDeviceId } from '../lib/deviceId'
 import { formatDate } from '../lib/format'
+import MobileQuotationsPage from './Mobile/MobileQuotationsPage'
+import MobileCrmActivityDetailPage from './Mobile/MobileCrmActivityDetailPage'
 
 // ── API helpers (talk to /api/mobile/*) ─────────────────────────────
 
@@ -1146,14 +1145,10 @@ export default function MobileApp() {
   // If activity detail is open, show it regardless of tab
   if (selectedActivity) {
     return (
-      <div style={styles.container}>
-        <div style={styles.header}>
-          <button onClick={() => setSelectedActivity(null)} style={styles.backBtn}>← Back</button>
-          <h1 style={{ ...styles.headerTitle, flex: 1, textAlign: 'center' }}>Activity</h1>
-          <div style={{ width: 50 }} />
-        </div>
-        <div style={{ padding: '16px', color: '#999' }}>Activity detail view coming soon...</div>
-      </div>
+      <MobileCrmActivityDetailPage
+        activityId={selectedActivity}
+        onBack={() => setSelectedActivity(null)}
+      />
     )
   }
 
@@ -1162,16 +1157,7 @@ export default function MobileApp() {
       <TabBar tabs={tabs} active={activeTab} onChange={setActiveTab} />
       {activeTab === 'jobs' && hasJobsTab && <JobOrderList onSelect={setSelectedJobOrder} />}
       {activeTab === 'crm' && hasCrmTab && <MobileCrmActivitiesList onSelect={setSelectedActivity} />}
-      {activeTab === 'quotations' && (
-        <div style={styles.container}>
-          <div style={styles.header}>
-            <h1 style={styles.headerTitle}>My Quotations</h1>
-          </div>
-          <div style={{ padding: '40px 16px', textAlign: 'center', color: '#999' }}>
-            Quotations view coming soon...
-          </div>
-        </div>
-      )}
+      {activeTab === 'quotations' && <MobileQuotationsPage />}
     </>
   )
 }
