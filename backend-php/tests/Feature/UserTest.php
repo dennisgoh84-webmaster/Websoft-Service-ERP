@@ -58,6 +58,7 @@ class UserTest extends TestCase
         [, $token] = $this->ownerToken($company);
 
         $response = $this->postJson('/api/users', [
+            'username' => 'newstaff',
             'email' => 'newstaff@example.com',
             'password' => 'demo1234',
             'full_name' => 'New Staff',
@@ -91,7 +92,7 @@ class UserTest extends TestCase
         $existing = User::factory()->for($company)->create();
 
         $this->postJson('/api/users', [
-            'email' => $existing->email, 'password' => 'demo1234', 'full_name' => 'Dup', 'role' => 'finance',
+            'username' => 'dupuser', 'email' => $existing->email, 'password' => 'demo1234', 'full_name' => 'Dup', 'role' => 'finance',
         ], $this->headers($token))->assertStatus(409);
     }
 

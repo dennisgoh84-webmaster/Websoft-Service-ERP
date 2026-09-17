@@ -13,6 +13,7 @@ export default function StaffMasterPage() {
   const [showInactive, setShowInactive] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [username, setUsername] = useState('')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -41,12 +42,14 @@ export default function StaffMasterPage() {
     setError(null)
     try {
       await api.createStaff({
+        username,
         full_name: fullName,
         email,
         password,
         role,
         group_id: groupId || null,
       })
+      setUsername('')
       setFullName('')
       setEmail('')
       setPassword('')
@@ -83,6 +86,15 @@ export default function StaffMasterPage() {
           <div className="form-row">
             <label>Full name</label>
             <input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+          </div>
+          <div className="form-row">
+            <label>Username (3-20 characters, letters/numbers/underscore/hyphen)</label>
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value.toLowerCase())}
+              pattern="^[a-zA-Z0-9_-]{3,20}$"
+              required
+            />
           </div>
           <div className="form-row">
             <label>Email</label>
