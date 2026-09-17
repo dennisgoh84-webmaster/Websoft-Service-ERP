@@ -28,8 +28,10 @@ export default function StaffDetailPage() {
   const [notFound, setNotFound] = useState(false)
 
   const [fullName, setFullName] = useState('')
+  const [email, setEmail] = useState('')
   const [role, setRole] = useState<UserRole>('support_engineer')
   const [photo, setPhoto] = useState<string | null>(null)
+  const [forcePasswordChange, setForcePasswordChange] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const [newPassword, setNewPassword] = useState('')
@@ -42,8 +44,10 @@ export default function StaffDetailPage() {
       .then((u) => {
         setStaff(u)
         setFullName(u.full_name)
+        setEmail(u.email)
         setRole(u.role)
         setPhoto(u.photo)
+        setForcePasswordChange(u.force_password_change_on_login)
       })
       .catch(() => setNotFound(true))
     api.getStaffAuditLog(id).then(setAuditLog).catch((e) => setError(e.message))
@@ -65,7 +69,13 @@ export default function StaffDetailPage() {
     setError(null)
     setSaving(true)
     try {
-      const updated = await api.updateStaff(id, { full_name: fullName, role, photo })
+      const updated = await api.updateStaff(id, {
+        full_name: fullName,
+        email: email !== staff?.email ? email : undefined,
+        role,
+        photo,
+        force_password_change_on_login: forcePasswordChange,
+      })
       setStaff(updated)
       refresh()
     } catch (err) {
@@ -192,8 +202,17 @@ export default function StaffDetailPage() {
             <input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
           </div>
           <div className="form-row">
+            <label>Username (cannot be changed)</label>
+            <input value={staff.username} disabled title="Username cannot be changed after account creation." />
+          </div>
+          <div className="form-row">
             <label>Email</label>
-            <input value={staff.email} disabled title="Email cannot be changed here." />
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
           </div>
           <div className="form-row">
             <label>Role (named-responsibility rules only, e.g. SRV-004/SRV-011)</label>
@@ -205,6 +224,14 @@ export default function StaffDetailPage() {
               ))}
             </select>
           </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+            <input
+              type="checkbox"
+              checked={forcePasswordChange}
+              onChange={(e) => setForcePasswordChange(e.target.checked)}
+            />
+            Force password change on next login
+          </label>
           <p className="muted">
             Group Authority (general module access) is set per company below, since a Group belongs
             to a single company.

@@ -10,6 +10,7 @@ use App\Models\Company;
 use App\Models\Group;
 use App\Models\User;
 use App\Models\UserCompanyAccess;
+use App\Models\UserPasswordHistory;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\PasswordPolicy;
@@ -75,12 +76,14 @@ class UserController extends Controller
 
         return [
             'id' => $user->id,
+            'username' => $user->username,
             'full_name' => $user->full_name,
             'email' => $user->email,
             'role' => $user->role,
             'group_id' => $access?->group_id,
             'photo' => $user->photo,
             'must_change_password' => $user->must_change_password,
+            'force_password_change_on_login' => $user->force_password_change_on_login,
             'is_active' => $user->is_active,
             'created_at' => $user->created_at,
         ];
@@ -110,12 +113,15 @@ class UserController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'full');
 
         $data = $request->validate([
+            'username' => 'required|string',
             'email' => 'required|email',
             'password' => 'required|string',
             'full_name' => 'required|string',
             'role' => 'required|in:owner,service_lead,sales_manager,support_engineer,finance',
             'group_id' => 'sometimes|nullable|uuid',
         ]);
+
+        $this->validateUsername($data['username']);
 
         if (User::where('email', $data['email'])->exists()) {
             throw new ApiException(409, 'A user with this email already exists.');
@@ -128,10 +134,12 @@ class UserController extends Controller
             throw new ApiException(422, $e->getMessage());
         }
 
+        $hashedPassword = PasswordPolicy::hash($data['password']);
         $newUser = User::create([
             'company_id' => $user->company_id,
+            'username' => $data['username'],
             'email' => $data['email'],
-            'hashed_password' => PasswordPolicy::hash($data['password']),
+            'hashed_password' => $hashedPassword,
             'full_name' => $data['full_name'],
             'role' => $data['role'],
             // Confirmed 2026-09-12: every new staff account must set
@@ -139,14 +147,18 @@ class UserController extends Controller
             'must_change_password' => true,
         ]);
 
+        // Record initial password in history
+        $this->recordPasswordHistory($newUser->id, $hashedPassword);
+
         // New staff start with access to the company they were created
         // in, with the Group chosen for them there.
         UserCompanyAccess::create(['user_id' => $newUser->id, 'company_id' => $user->company_id, 'group_id' => $groupId]);
 
         Audit::record(
             'user', $newUser->id, 'created', $user->id,
-            details: "email={$data['email']}, role={$data['role']}",
+            details: "username={$data['username']}, email={$data['email']}, role={$data['role']}",
             newValue: [
+                'username' => $data['username'],
                 'email' => $data['email'],
                 'full_name' => $data['full_name'],
                 'role' => $data['role'],
@@ -283,10 +295,17 @@ class UserController extends Controller
         $target = $this->userOrFail($userId);
         $fields = $request->validate([
             'full_name' => 'sometimes|string',
+            'email' => 'sometimes|email',
             'role' => 'sometimes|in:owner,service_lead,sales_manager,support_engineer,finance',
             'photo' => 'sometimes|nullable|string',
             'group_id' => 'sometimes|nullable|uuid',
+            'force_password_change_on_login' => 'sometimes|boolean',
         ]);
+
+        // Username cannot be edited after creation
+        if ($request->has('username')) {
+            throw new ApiException(400, 'Username cannot be changed after account creation. Please contact an administrator to reset your account.');
+        }
 
         $oldValue = [];
         $newValue = [];
@@ -298,6 +317,25 @@ class UserController extends Controller
             $oldValue[$field] = $target->{$field};
             $newValue[$field] = $fields[$field];
             $target->{$field} = $fields[$field];
+        }
+
+        // Handle email change
+        if (array_key_exists('email', $fields) && $target->email !== $fields['email']) {
+            if (User::where('email', $fields['email'])->where('id', '!=', $userId)->exists()) {
+                throw new ApiException(409, 'A user with this email already exists.');
+            }
+            $oldValue['email'] = $target->email;
+            $newValue['email'] = $fields['email'];
+            $target->email = $fields['email'];
+        }
+
+        // Handle force password change flag
+        if (array_key_exists('force_password_change_on_login', $fields)) {
+            if ($target->force_password_change_on_login !== $fields['force_password_change_on_login']) {
+                $oldValue['force_password_change_on_login'] = $target->force_password_change_on_login;
+                $newValue['force_password_change_on_login'] = $fields['force_password_change_on_login'];
+                $target->force_password_change_on_login = $fields['force_password_change_on_login'];
+            }
         }
 
         if (array_key_exists('photo', $fields)) {
@@ -373,17 +411,35 @@ class UserController extends Controller
         Authority::requireModuleAccess($actingUser, self::MODULE, 'full');
 
         $target = $this->userOrFail($userId);
-        $data = $request->validate(['new_password' => 'required|string']);
+        $data = $request->validate([
+            'new_password' => 'required|string',
+            'force_password_change_on_login' => 'sometimes|boolean',
+        ]);
         try {
             PasswordPolicy::validateComplexity($data['new_password']);
         } catch (InvalidArgumentException $e) {
             throw new ApiException(422, $e->getMessage());
         }
 
-        $target->hashed_password = PasswordPolicy::hash($data['new_password']);
+        // Check if password was recently used (password reuse prevention)
+        if ($this->checkPasswordReuse($target->id, $data['new_password'])) {
+            throw new ApiException(422, 'This password has been used recently. Please choose a different password.');
+        }
+
+        $hashedPassword = PasswordPolicy::hash($data['new_password']);
+        $target->hashed_password = $hashedPassword;
         // An admin-issued reset is a temporary password -- force the
         // user to set their own on next sign-in, same as a brand-new account.
         $target->must_change_password = true;
+
+        // Optionally set force password change flag
+        if (array_key_exists('force_password_change_on_login', $data)) {
+            $target->force_password_change_on_login = $data['force_password_change_on_login'];
+        }
+
+        // Record password in history
+        $this->recordPasswordHistory($target->id, $hashedPassword);
+
         Audit::record('user', $target->id, 'password_reset', $actingUser->id);
         $target->save();
 
@@ -401,5 +457,47 @@ class UserController extends Controller
         if (strlen($photo) > self::MAX_PHOTO_CHARS) {
             throw new ApiException(400, 'Photo is too large -- please use an image under ~300 KB.');
         }
+    }
+
+    private function validateUsername(string $username, ?string $excludeUserId = null): void
+    {
+        // Alphanumeric, underscore, hyphen only; 3-20 chars
+        if (! preg_match('/^[a-zA-Z0-9_-]{3,20}$/', $username)) {
+            throw new ApiException(400, 'Username must be 3-20 characters, containing only letters, numbers, underscore, or hyphen.');
+        }
+
+        $query = User::where('username', $username);
+        if ($excludeUserId) {
+            $query->where('id', '!=', $excludeUserId);
+        }
+        if ($query->exists()) {
+            throw new ApiException(409, 'That username is already taken.');
+        }
+    }
+
+    private function checkPasswordReuse(string $userId, string $plainPassword): bool
+    {
+        // Check last 5 password history entries
+        $history = UserPasswordHistory::where('user_id', $userId)
+            ->orderByDesc('set_at')
+            ->limit(5)
+            ->get();
+
+        foreach ($history as $entry) {
+            if (PasswordPolicy::verify($plainPassword, $entry->hashed_password)) {
+                return true; // Password was used recently
+            }
+        }
+
+        return false;
+    }
+
+    private function recordPasswordHistory(string $userId, string $hashedPassword): void
+    {
+        UserPasswordHistory::create([
+            'user_id' => $userId,
+            'hashed_password' => $hashedPassword,
+            'set_at' => now(),
+        ]);
     }
 }

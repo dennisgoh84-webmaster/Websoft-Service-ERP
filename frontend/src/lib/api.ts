@@ -207,6 +207,7 @@ export interface Company {
 // ---- Staff Master ----
 export interface StaffUser {
   id: string
+  username: string
   full_name: string
   email: string
   role: UserRole
@@ -216,6 +217,8 @@ export interface StaffUser {
   /** Confirmed 2026-09-12: true for a new hire, or right after an admin
    * password reset, until they set their own password at next sign-in. */
   must_change_password: boolean
+  /** Admin-forced password change on next login. */
+  force_password_change_on_login: boolean
   is_active: boolean
   created_at: string
 }
@@ -1765,6 +1768,7 @@ export const api = {
     requestBlob(`/users/export.xlsx${includeInactive ? '?include_inactive=true' : ''}`),
   getStaff: (id: string) => request<StaffUser>(`/users/${id}`),
   createStaff: (payload: {
+    username: string
     full_name: string
     email: string
     password: string
@@ -1773,14 +1777,25 @@ export const api = {
   }) => request<StaffUser>('/users', { method: 'POST', body: JSON.stringify(payload) }),
   updateStaff: (
     id: string,
-    payload: { full_name?: string; role?: UserRole; group_id?: string | null; photo?: string | null },
+    payload: {
+      full_name?: string
+      email?: string
+      role?: UserRole
+      group_id?: string | null
+      photo?: string | null
+      force_password_change_on_login?: boolean
+    },
   ) => request<StaffUser>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deactivateStaff: (id: string) => request<StaffUser>(`/users/${id}/deactivate`, { method: 'POST' }),
   reactivateStaff: (id: string) => request<StaffUser>(`/users/${id}/reactivate`, { method: 'POST' }),
-  resetStaffPassword: (id: string, new_password: string) =>
+  resetStaffPassword: (
+    id: string,
+    new_password: string,
+    force_password_change_on_login?: boolean,
+  ) =>
     request<StaffUser>(`/users/${id}/reset-password`, {
       method: 'POST',
-      body: JSON.stringify({ new_password }),
+      body: JSON.stringify({ new_password, force_password_change_on_login }),
     }),
   getStaffAuditLog: (id: string) => request<AuditLogEntry[]>(`/users/${id}/audit-log`),
   getStaffCompanyAccess: (id: string) =>

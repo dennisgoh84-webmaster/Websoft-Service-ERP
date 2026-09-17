@@ -40,14 +40,15 @@ class User extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'company_id', 'email', 'hashed_password', 'full_name', 'role',
-        'photo', 'must_change_password', 'is_active',
+        'company_id', 'username', 'email', 'hashed_password', 'full_name', 'role',
+        'photo', 'must_change_password', 'force_password_change_on_login', 'is_active',
     ];
 
     protected $hidden = ['hashed_password'];
 
     protected $casts = [
         'must_change_password' => 'boolean',
+        'force_password_change_on_login' => 'boolean',
         'is_active' => 'boolean',
         'created_at' => 'datetime',
     ];
@@ -60,5 +61,10 @@ class User extends Model
     public function companyAccess(): HasMany
     {
         return $this->hasMany(UserCompanyAccess::class);
+    }
+
+    public function passwordHistory(): HasMany
+    {
+        return $this->hasMany(UserPasswordHistory::class);
     }
 }
