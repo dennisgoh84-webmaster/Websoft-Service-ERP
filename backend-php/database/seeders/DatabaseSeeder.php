@@ -156,6 +156,7 @@ class DatabaseSeeder extends Seeder
         $dennis = User::firstOrCreate(
             ['email' => 'dennis@websoft.example'],
             [
+                'username' => 'dennis',
                 'company_id' => $company->id,
                 'hashed_password' => PasswordPolicy::hash('demo1234'),
                 'full_name' => 'Dennis',
