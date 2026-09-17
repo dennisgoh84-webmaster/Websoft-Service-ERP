@@ -16,13 +16,19 @@ class UserFactory extends Factory
 
     public function definition(): array
     {
+        $email = fake()->unique()->safeEmail();
+        // Generate username from email part (before @)
+        $username = strtolower(explode('@', $email)[0]);
+
         return [
             'company_id' => Company::factory(),
-            'email' => fake()->unique()->safeEmail(),
+            'username' => $username,
+            'email' => $email,
             'hashed_password' => PasswordPolicy::hash('demo1234'),
             'full_name' => fake()->name(),
             'role' => User::ROLE_SUPPORT_ENGINEER,
             'must_change_password' => false,
+            'force_password_change_on_login' => false,
             'is_active' => true,
         ];
     }
