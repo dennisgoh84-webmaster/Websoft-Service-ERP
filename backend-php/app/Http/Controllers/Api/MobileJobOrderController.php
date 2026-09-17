@@ -16,14 +16,16 @@ class MobileJobOrderController extends Controller
     public function index(Request $request)
     {
         // Delegate to JobOrderController
-        $controller = new JobOrderController();
+        $controller = new JobOrderController;
+
         return $controller->index($request);
     }
 
     public function show(Request $request, string $jobOrderId)
     {
         // Delegate to JobOrderController
-        $controller = new JobOrderController();
+        $controller = new JobOrderController;
+
         return $controller->show($request, $jobOrderId);
     }
 
@@ -31,6 +33,7 @@ class MobileJobOrderController extends Controller
     {
         // Delegate to ServiceRecordController or existing logic
         $user = Authenticate::user($request);
+
         // TODO: Implement time-in logic for mobile
         return response()->json(['status' => 'ok']);
     }
@@ -39,6 +42,7 @@ class MobileJobOrderController extends Controller
     {
         // Delegate to ServiceRecordController
         $user = Authenticate::user($request);
+
         // TODO: Implement time-out logic for mobile
         return response()->json(['status' => 'ok']);
     }
@@ -70,6 +74,7 @@ class MobileJobOrderController extends Controller
     public function getOpenTimeIn(Request $request)
     {
         $user = Authenticate::user($request);
+
         // TODO: Get the currently open time-in for this user
         return response()->json(null);
     }

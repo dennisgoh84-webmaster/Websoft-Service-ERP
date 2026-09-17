@@ -4,9 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Company;
 use App\Models\CompanyIndividual;
+use App\Models\CompanyModule;
 use App\Models\Group;
 use App\Models\GroupModuleAuthority;
-use App\Models\ProspectActivity;
+use App\Models\ModuleCatalog;
 use App\Models\User;
 use App\Models\UserCompanyAccess;
 use App\Services\PasswordPolicy;
@@ -49,15 +50,15 @@ class CrmProspectActivityTest extends TestCase
     private function setupGroupAuthority(Company $company, string $accessLevel = 'edit'): Group
     {
         // Ensure the module exists in the catalog
-        \App\Models\ModuleCatalog::firstOrCreate(
+        ModuleCatalog::firstOrCreate(
             ['key' => self::MODULE],
             ['name' => 'CRM', 'is_built' => true],
         );
 
         // Enable the module for the company
-        \App\Models\CompanyModule::updateOrCreate(
+        CompanyModule::updateOrCreate(
             ['company_id' => $company->id, 'module_key' => self::MODULE],
-            ['enabled' => true, 'license_type' => \App\Models\CompanyModule::ADD_ON],
+            ['enabled' => true, 'license_type' => CompanyModule::ADD_ON],
         );
 
         $group = Group::factory()->for($company)->create();
