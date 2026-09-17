@@ -21,6 +21,23 @@ class UserTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Ensure the user_password_histories table exists (may not be created
+        // by RefreshDatabase on first test run)
+        if (!$this->app['db']->getSchemaBuilder()->hasTable('user_password_histories')) {
+            $this->app['db']->statement(
+                'CREATE TABLE user_password_histories (
+                    id UUID PRIMARY KEY,
+                    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    hashed_password VARCHAR(255) NOT NULL,
+                    set_at TIMESTAMP WITH TIME ZONE NOT NULL
+                )'
+            );
+        }
+    }
+
     private function ownerToken(Company $company): array
     {
         $owner = User::factory()->for($company)->create([
