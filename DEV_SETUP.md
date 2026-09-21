@@ -47,8 +47,16 @@ cp .env.example .env                 # then set DB_* to the database above
 composer install
 php artisan key:generate
 php artisan migrate --seed           # apply all migrations + load the demo data
-php artisan serve                    # http://127.0.0.1:8000
+php artisan serve --no-reload        # http://127.0.0.1:8000
 ```
+
+`--no-reload` matters here, not just style: `php artisan serve` silently
+ignores `PHP_CLI_SERVER_WORKERS` (set to 4 in `.env.example`) unless
+`--no-reload` is passed -- without it, Laravel keeps a single worker so
+it can restart the server on every `.env` change, and every request
+(reports especially, being the slowest) queues behind whichever one is
+already running. `--no-reload` trades that auto-restart for real
+concurrency, which is what a shared dev/test server needs.
 
 `php artisan migrate:fresh --seed` resets the database and reseeds it.
 The seeder creates one company (Webmaster, with its letterhead and
@@ -142,7 +150,7 @@ Run each command in a separate terminal (or use `&` / tmux / screen):
 
 ```bash
 # Terminal 1: ERP Backend
-cd backend-php && php artisan serve
+cd backend-php && php artisan serve --no-reload
 
 # Terminal 2: ERP Frontend (includes Mobile at /mobile)
 cd frontend && npm run dev -- --port 5173

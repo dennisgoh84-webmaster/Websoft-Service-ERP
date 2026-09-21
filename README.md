@@ -94,7 +94,7 @@ archival), InvoiceNow / Peppol, and financial audit trails.
 
 ```bash
 # Local, once Postgres is running (see DEV_SETUP.md for the full setup)
-cd backend-php && php artisan migrate --seed && php artisan serve
+cd backend-php && php artisan migrate --seed && php artisan serve --no-reload
 cd frontend && npm install && npm run dev
 ```
 
