@@ -2,15 +2,16 @@
 
 namespace App\Services;
 
+use Exception;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
-use Exception;
 
 class UpgradeService
 {
     private string $backupDir;
+
     private string $appRoot;
 
     public function __construct()
@@ -18,7 +19,7 @@ class UpgradeService
         $this->appRoot = base_path();
         $this->backupDir = storage_path('upgrades/backups');
 
-        if (!File::isDirectory($this->backupDir)) {
+        if (! File::isDirectory($this->backupDir)) {
             File::makeDirectory($this->backupDir, 0755, true);
         }
     }
@@ -35,14 +36,14 @@ class UpgradeService
             if ($currentVersion === $targetVersion) {
                 return [
                     'success' => false,
-                    'error' => 'Already at version ' . $targetVersion,
+                    'error' => 'Already at version '.$targetVersion,
                 ];
             }
 
             // Step 2: Create backup
             $backupPath = $this->createBackup($currentVersion, $targetVersion);
 
-            if (!$backupPath) {
+            if (! $backupPath) {
                 return [
                     'success' => false,
                     'error' => 'Failed to create backup',
@@ -52,22 +53,24 @@ class UpgradeService
             // Step 3: Pull latest code from GitHub
             $pullResult = $this->pullLatestCode($targetVersion);
 
-            if (!$pullResult['success']) {
+            if (! $pullResult['success']) {
                 $this->rollbackCodeFromBackup($backupPath);
+
                 return [
                     'success' => false,
-                    'error' => 'Failed to pull latest code: ' . $pullResult['error'],
+                    'error' => 'Failed to pull latest code: '.$pullResult['error'],
                 ];
             }
 
             // Step 4: Run migrations
             $migrationResult = $this->runMigrations();
 
-            if (!$migrationResult['success']) {
+            if (! $migrationResult['success']) {
                 $this->rollbackCodeFromBackup($backupPath);
+
                 return [
                     'success' => false,
-                    'error' => 'Migration failed: ' . $migrationResult['error'],
+                    'error' => 'Migration failed: '.$migrationResult['error'],
                 ];
             }
 
@@ -77,7 +80,7 @@ class UpgradeService
 
             return [
                 'success' => true,
-                'message' => 'Successfully upgraded to version ' . $targetVersion,
+                'message' => 'Successfully upgraded to version '.$targetVersion,
                 'version' => $targetVersion,
                 'backup_path' => $backupPath,
                 'release_notes' => $pullResult['release_notes'] ?? null,
@@ -102,7 +105,7 @@ class UpgradeService
             // Find the backup to restore from
             $backupPath = $this->findBackupForRollback($fromVersion ?? $currentVersion);
 
-            if (!$backupPath) {
+            if (! $backupPath) {
                 return [
                     'success' => false,
                     'error' => 'No backup found for rollback',
@@ -112,10 +115,10 @@ class UpgradeService
             // Restore code from backup
             $restoreResult = $this->restoreCodeFromBackup($backupPath);
 
-            if (!$restoreResult['success']) {
+            if (! $restoreResult['success']) {
                 return [
                     'success' => false,
-                    'error' => 'Failed to restore code: ' . $restoreResult['error'],
+                    'error' => 'Failed to restore code: '.$restoreResult['error'],
                 ];
             }
 
@@ -123,10 +126,10 @@ class UpgradeService
             // For now, we'll just run migrations fresh against the restored code
             $migrationResult = $this->runMigrations();
 
-            if (!$migrationResult['success']) {
+            if (! $migrationResult['success']) {
                 return [
                     'success' => false,
-                    'error' => 'Migration after rollback failed: ' . $migrationResult['error'],
+                    'error' => 'Migration after rollback failed: '.$migrationResult['error'],
                 ];
             }
 
@@ -138,7 +141,7 @@ class UpgradeService
 
             return [
                 'success' => true,
-                'message' => 'Successfully rolled back to version ' . $targetVersion,
+                'message' => 'Successfully rolled back to version '.$targetVersion,
                 'version' => $targetVersion,
             ];
 
@@ -158,10 +161,10 @@ class UpgradeService
         try {
             $timestamp = now()->format('YmdHis');
             $backupSubdir = "{$fromVersion}_to_{$toVersion}/{$timestamp}";
-            $backupPath = $this->backupDir . '/' . $backupSubdir;
+            $backupPath = $this->backupDir.'/'.$backupSubdir;
 
             // Create code backup (excluding large directories)
-            if (!File::makeDirectory($backupPath, 0755, true)) {
+            if (! File::makeDirectory($backupPath, 0755, true)) {
                 throw new Exception('Failed to create backup directory');
             }
 
@@ -199,7 +202,7 @@ class UpgradeService
                 timeout: 300 // 5 minutes
             );
 
-            if (!$result->successful()) {
+            if (! $result->successful()) {
                 return [
                     'success' => false,
                     'error' => $result->errorOutput(),
@@ -252,7 +255,7 @@ class UpgradeService
                 // Extract version from migration filename
                 // e.g., "2026_09_16_000100_create_system_mail_settings"
                 if (preg_match('/^(\d{4}_\d{2}_\d{2})/', $migration->migration, $matches)) {
-                    return 'v' . str_replace('_', '.', $matches[1]);
+                    return 'v'.str_replace('_', '.', $matches[1]);
                 }
             }
 
@@ -277,7 +280,7 @@ class UpgradeService
             }
 
             // Get the most recent backup
-            usort($backups, fn($a, $b) => filemtime($b) <=> filemtime($a));
+            usort($backups, fn ($a, $b) => filemtime($b) <=> filemtime($a));
 
             $latestBackup = $backups[0];
             $subDirs = glob("{$latestBackup}/*", GLOB_ONLYDIR);
@@ -286,7 +289,7 @@ class UpgradeService
                 return null;
             }
 
-            usort($subDirs, fn($a, $b) => filemtime($b) <=> filemtime($a));
+            usort($subDirs, fn ($a, $b) => filemtime($b) <=> filemtime($a));
 
             return $subDirs[0];
 
@@ -344,7 +347,7 @@ class UpgradeService
      */
     private function copyDirectory(string $source, string $destination): void
     {
-        if (!File::isDirectory($destination)) {
+        if (! File::isDirectory($destination)) {
             File::makeDirectory($destination, 0755, true);
         }
 
@@ -367,6 +370,7 @@ class UpgradeService
         // Extract from path like: /backups/v2.1.0_to_v2.2.0/20260917120000
         if (preg_match('/(\w+_\d{8}\d{6})/', $backupPath, $matches)) {
             $parts = explode('_to_', basename(dirname($backupPath)));
+
             return $parts[0] ?? 'unknown';
         }
 

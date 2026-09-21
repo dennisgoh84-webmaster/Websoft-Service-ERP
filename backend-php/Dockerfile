@@ -72,6 +72,10 @@ RUN mkdir -p \
     && chown -R www-data:www-data storage bootstrap/cache
 
 COPY docker/nginx.conf /etc/nginx/sites-available/default
+# Overwrites the base image's stock pool (2 start servers, 5 max) --
+# see that file's own comment for why the stock size made concurrent
+# report requests visibly queue behind each other.
+COPY docker/www.conf /usr/local/etc/php-fpm.d/www.conf
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 

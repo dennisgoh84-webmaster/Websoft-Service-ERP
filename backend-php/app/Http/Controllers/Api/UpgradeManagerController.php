@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers\Api;
 
-use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
 use App\Http\Controllers\Controller;
 use App\Services\UpgradeService;
 use Exception;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class UpgradeManagerController extends Controller
 {
@@ -55,7 +55,7 @@ class UpgradeManagerController extends Controller
         try {
             $result = $this->upgradeService->executeUpgrade($targetVersion, $backupId);
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 return response()->json($result, 400);
             }
 
@@ -69,7 +69,7 @@ class UpgradeManagerController extends Controller
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'error' => 'Upgrade failed: ' . $e->getMessage(),
+                'error' => 'Upgrade failed: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -79,7 +79,7 @@ class UpgradeManagerController extends Controller
         try {
             $result = $this->upgradeService->executeRollback($fromVersion, $toVersion, $backupId);
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 return response()->json($result, 400);
             }
 
@@ -92,7 +92,7 @@ class UpgradeManagerController extends Controller
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'error' => 'Rollback failed: ' . $e->getMessage(),
+                'error' => 'Rollback failed: '.$e->getMessage(),
             ], 500);
         }
     }
