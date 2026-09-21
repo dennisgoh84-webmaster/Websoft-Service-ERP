@@ -10,6 +10,11 @@ class UserPasswordHistory extends Model
 {
     use HasUuidPrimaryKey;
 
+    // The migration names the table singular (user_password_history),
+    // not Eloquent's default plural guess -- without this, every query
+    // silently 42P01s against a table that doesn't exist.
+    protected $table = 'user_password_history';
+
     public $timestamps = false;
 
     protected $fillable = ['user_id', 'hashed_password', 'set_at'];

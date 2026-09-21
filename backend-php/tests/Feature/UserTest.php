@@ -8,6 +8,7 @@ use App\Models\GroupModuleAuthority;
 use App\Models\ModuleCatalog;
 use App\Models\User;
 use App\Models\UserCompanyAccess;
+use App\Models\UserPasswordHistory;
 use App\Services\PasswordPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -165,5 +166,110 @@ class UserTest extends TestCase
         // that as-is behaviour rather than assuming a stricter rule
         // that was never confirmed.
         $this->getJson("/api/users/{$otherStaff->id}", $this->headers($token))->assertOk();
+    }
+
+    public function test_username_is_required_and_stored_on_creation(): void
+    {
+        $company = Company::factory()->create();
+        [, $token] = $this->ownerToken($company);
+
+        $response = $this->postJson('/api/users', [
+            'username' => 'newstaff', 'email' => 'newstaff2@example.com', 'password' => 'demo1234',
+            'full_name' => 'New Staff', 'role' => 'support_engineer',
+        ], $this->headers($token));
+
+        $response->assertOk()->assertJson(['username' => 'newstaff']);
+        $this->assertDatabaseHas('users', ['email' => 'newstaff2@example.com', 'username' => 'newstaff']);
+    }
+
+    public function test_invalid_username_format_is_rejected(): void
+    {
+        $company = Company::factory()->create();
+        [, $token] = $this->ownerToken($company);
+
+        $this->postJson('/api/users', [
+            'username' => 'a', 'email' => 'shortname@example.com', 'password' => 'demo1234',
+            'full_name' => 'X', 'role' => 'finance',
+        ], $this->headers($token))->assertStatus(400);
+    }
+
+    public function test_duplicate_username_is_rejected(): void
+    {
+        $company = Company::factory()->create();
+        [, $token] = $this->ownerToken($company);
+        User::factory()->for($company)->create(['username' => 'taken']);
+
+        $this->postJson('/api/users', [
+            'username' => 'taken', 'email' => 'newperson@example.com', 'password' => 'demo1234',
+            'full_name' => 'X', 'role' => 'finance',
+        ], $this->headers($token))->assertStatus(409);
+    }
+
+    public function test_username_cannot_be_changed_after_creation(): void
+    {
+        $company = Company::factory()->create();
+        [, $token] = $this->ownerToken($company);
+        $staff = User::factory()->for($company)->create(['username' => 'original']);
+
+        $this->patchJson("/api/users/{$staff->id}", ['username' => 'changed'], $this->headers($token))
+            ->assertStatus(400);
+        $this->assertDatabaseHas('users', ['id' => $staff->id, 'username' => 'original']);
+    }
+
+    public function test_email_can_be_changed_via_update(): void
+    {
+        $company = Company::factory()->create();
+        [, $token] = $this->ownerToken($company);
+        $staff = User::factory()->for($company)->create();
+
+        $this->patchJson("/api/users/{$staff->id}", ['email' => 'newaddress@example.com'], $this->headers($token))
+            ->assertOk()->assertJson(['email' => 'newaddress@example.com']);
+        $this->assertDatabaseHas('users', ['id' => $staff->id, 'email' => 'newaddress@example.com']);
+    }
+
+    public function test_changing_email_to_one_already_in_use_is_rejected(): void
+    {
+        $company = Company::factory()->create();
+        [, $token] = $this->ownerToken($company);
+        $existing = User::factory()->for($company)->create();
+        $staff = User::factory()->for($company)->create();
+
+        $this->patchJson("/api/users/{$staff->id}", ['email' => $existing->email], $this->headers($token))
+            ->assertStatus(409);
+    }
+
+    public function test_force_password_change_on_login_is_settable_via_update_and_reset(): void
+    {
+        $company = Company::factory()->create();
+        [, $token] = $this->ownerToken($company);
+        $staff = User::factory()->for($company)->create(['force_password_change_on_login' => false]);
+
+        $this->patchJson("/api/users/{$staff->id}", ['force_password_change_on_login' => true], $this->headers($token))
+            ->assertOk()->assertJson(['force_password_change_on_login' => true]);
+
+        $this->postJson(
+            "/api/users/{$staff->id}/reset-password",
+            ['new_password' => 'brandnewpass1', 'force_password_change_on_login' => false],
+            $this->headers($token)
+        )->assertOk()->assertJson(['force_password_change_on_login' => false]);
+    }
+
+    public function test_password_cannot_be_reused_within_the_last_five(): void
+    {
+        $company = Company::factory()->create();
+        [, $token] = $this->ownerToken($company);
+        $staff = User::factory()->for($company)->create();
+        UserPasswordHistory::create([
+            'user_id' => $staff->id,
+            'hashed_password' => PasswordPolicy::hash('originalpass1'),
+            'set_at' => now(),
+        ]);
+
+        $this->postJson("/api/users/{$staff->id}/reset-password", ['new_password' => 'originalpass1'], $this->headers($token))
+            ->assertStatus(422);
+
+        $this->postJson("/api/users/{$staff->id}/reset-password", ['new_password' => 'freshpass123'], $this->headers($token))
+            ->assertOk();
+        $this->assertDatabaseHas('user_password_history', ['user_id' => $staff->id]);
     }
 }

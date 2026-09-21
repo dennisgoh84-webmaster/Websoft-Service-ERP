@@ -11,6 +11,7 @@ use App\Models\Company;
 use App\Models\Group;
 use App\Models\User;
 use App\Models\UserCompanyAccess;
+use App\Models\UserPasswordHistory;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\PasswordPolicy;
@@ -39,7 +40,10 @@ class UserController extends Controller
     use SendsExports;
 
     /** @var array<int, string> */
-    private const EXPORT_FIELDS = ['full_name', 'email', 'role', 'group_name', 'is_active'];
+    private const EXPORT_FIELDS = ['username', 'full_name', 'email', 'role', 'group_name', 'is_active'];
+
+    /** Last N passwords a user may not reuse (Staff Master, 2026-09-25). */
+    private const PASSWORD_HISTORY_DEPTH = 5;
 
     private const MODULE = 'core_administration';
 
@@ -82,6 +86,7 @@ class UserController extends Controller
 
         return [
             'id' => $user->id,
+            'username' => $user->username,
             'full_name' => $user->full_name,
             'email' => $user->email,
             'role' => $user->role,
@@ -89,6 +94,7 @@ class UserController extends Controller
             'photo' => $user->photo,
             'phone' => $user->phone,
             'must_change_password' => $user->must_change_password,
+            'force_password_change_on_login' => $user->force_password_change_on_login,
             'is_active' => $user->is_active,
             'created_at' => $user->created_at,
             // PDPA self-declaration for the AI Assistant (2026-09-15) --
@@ -140,6 +146,7 @@ class UserController extends Controller
             $groupId = $this->accessRow($u->id, $companyId)?->group_id;
 
             return [
+                'username' => $u->username,
                 'full_name' => $u->full_name,
                 'email' => $u->email,
                 'role' => $u->role,
@@ -171,6 +178,7 @@ class UserController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'full');
 
         $data = $request->validate([
+            'username' => 'required|string',
             'email' => 'required|email',
             'password' => 'required|string',
             'full_name' => 'required|string',
@@ -178,6 +186,8 @@ class UserController extends Controller
             'group_id' => 'sometimes|nullable|uuid',
             'phone' => ['sometimes', 'nullable', 'regex:/^\+[1-9]\d{7,14}$/'],
         ]);
+
+        $this->validateUsername($data['username']);
 
         if (User::where('email', $data['email'])->exists()) {
             throw new ApiException(409, 'A user with this email already exists.');
@@ -190,10 +200,12 @@ class UserController extends Controller
             throw new ApiException(422, $e->getMessage());
         }
 
+        $hashedPassword = PasswordPolicy::hash($data['password']);
         $newUser = User::create([
             'company_id' => $user->company_id,
+            'username' => $data['username'],
             'email' => $data['email'],
-            'hashed_password' => PasswordPolicy::hash($data['password']),
+            'hashed_password' => $hashedPassword,
             'full_name' => $data['full_name'],
             'role' => $data['role'],
             'phone' => $data['phone'] ?? null,
@@ -201,6 +213,7 @@ class UserController extends Controller
             // its own password the first time it signs in.
             'must_change_password' => true,
         ]);
+        $this->recordPasswordHistory($newUser->id, $hashedPassword);
 
         // New staff start with access to the company they were created
         // in, with the Group chosen for them there.
@@ -208,8 +221,9 @@ class UserController extends Controller
 
         Audit::record(
             'user', $newUser->id, 'created', $user->id,
-            details: "email={$data['email']}, role={$data['role']}",
+            details: "username={$data['username']}, email={$data['email']}, role={$data['role']}",
             newValue: [
+                'username' => $data['username'],
                 'email' => $data['email'],
                 'full_name' => $data['full_name'],
                 'role' => $data['role'],
@@ -344,11 +358,21 @@ class UserController extends Controller
         Authority::requireModuleAccess($actingUser, self::MODULE, 'full');
 
         $target = $this->userOrFail($userId);
+
+        // Username is set once at account creation and reset only the
+        // way a password is (by an admin, not a self-edit) -- see
+        // validateUsername()'s docblock.
+        if ($request->has('username')) {
+            throw new ApiException(400, 'Username cannot be changed after account creation.');
+        }
+
         $fields = $request->validate([
             'full_name' => 'sometimes|string',
+            'email' => 'sometimes|email',
             'role' => 'sometimes|in:owner,service_lead,sales_manager,support_engineer,finance',
             'photo' => 'sometimes|nullable|string',
             'group_id' => 'sometimes|nullable|uuid',
+            'force_password_change_on_login' => 'sometimes|boolean',
             // E.164: + then country code then subscriber number, digits
             // only (e.g. +6591234567) -- what WhatsAppSender expects.
             'phone' => ['sometimes', 'nullable', 'regex:/^\+[1-9]\d{7,14}$/'],
@@ -357,13 +381,22 @@ class UserController extends Controller
         $oldValue = [];
         $newValue = [];
 
-        foreach (['full_name', 'role', 'phone'] as $field) {
+        foreach (['full_name', 'role', 'phone', 'force_password_change_on_login'] as $field) {
             if (! array_key_exists($field, $fields) || $target->{$field} === $fields[$field]) {
                 continue;
             }
             $oldValue[$field] = $target->{$field};
             $newValue[$field] = $fields[$field];
             $target->{$field} = $fields[$field];
+        }
+
+        if (array_key_exists('email', $fields) && $target->email !== $fields['email']) {
+            if (User::where('email', $fields['email'])->where('id', '!=', $target->id)->exists()) {
+                throw new ApiException(409, 'A user with this email already exists.');
+            }
+            $oldValue['email'] = $target->email;
+            $newValue['email'] = $fields['email'];
+            $target->email = $fields['email'];
         }
 
         if (array_key_exists('photo', $fields)) {
@@ -439,17 +472,28 @@ class UserController extends Controller
         Authority::requireModuleAccess($actingUser, self::MODULE, 'full');
 
         $target = $this->userOrFail($userId);
-        $data = $request->validate(['new_password' => 'required|string']);
+        $data = $request->validate([
+            'new_password' => 'required|string',
+            'force_password_change_on_login' => 'sometimes|boolean',
+        ]);
         try {
             PasswordPolicy::validateComplexity($data['new_password']);
         } catch (InvalidArgumentException $e) {
             throw new ApiException(422, $e->getMessage());
         }
+        if ($this->wasPasswordUsedRecently($target->id, $data['new_password'])) {
+            throw new ApiException(422, 'That password was used recently -- choose one of the last '.self::PASSWORD_HISTORY_DEPTH." you haven't.");
+        }
 
-        $target->hashed_password = PasswordPolicy::hash($data['new_password']);
+        $hashedPassword = PasswordPolicy::hash($data['new_password']);
+        $target->hashed_password = $hashedPassword;
         // An admin-issued reset is a temporary password -- force the
         // user to set their own on next sign-in, same as a brand-new account.
         $target->must_change_password = true;
+        if (array_key_exists('force_password_change_on_login', $data)) {
+            $target->force_password_change_on_login = $data['force_password_change_on_login'];
+        }
+        $this->recordPasswordHistory($target->id, $hashedPassword);
         Audit::record('user', $target->id, 'password_reset', $actingUser->id);
         $target->save();
 
@@ -467,5 +511,36 @@ class UserController extends Controller
         if (strlen($photo) > self::MAX_PHOTO_CHARS) {
             throw new ApiException(400, 'Photo is too large -- please use an image under ~300 KB.');
         }
+    }
+
+    /**
+     * Separate from email (confirmed with Dennis, 2026-09-25) and
+     * immutable after account creation -- like a password, it is reset
+     * by an admin rather than edited, though no reset-username action
+     * exists yet since nobody has asked to change one in practice.
+     */
+    private function validateUsername(string $username): void
+    {
+        if (! preg_match('/^[a-zA-Z0-9_-]{3,20}$/', $username)) {
+            throw new ApiException(400, 'Username must be 3-20 characters: letters, numbers, underscore or hyphen only.');
+        }
+        if (User::where('username', $username)->exists()) {
+            throw new ApiException(409, 'That username is already taken.');
+        }
+    }
+
+    /** Last PASSWORD_HISTORY_DEPTH passwords may not be reused, on either an admin reset or a self-service change. */
+    private function wasPasswordUsedRecently(string $userId, string $plainPassword): bool
+    {
+        return UserPasswordHistory::where('user_id', $userId)
+            ->orderByDesc('set_at')
+            ->limit(self::PASSWORD_HISTORY_DEPTH)
+            ->get()
+            ->contains(fn (UserPasswordHistory $entry) => PasswordPolicy::verify($plainPassword, $entry->hashed_password));
+    }
+
+    private function recordPasswordHistory(string $userId, string $hashedPassword): void
+    {
+        UserPasswordHistory::create(['user_id' => $userId, 'hashed_password' => $hashedPassword, 'set_at' => now()]);
     }
 }
