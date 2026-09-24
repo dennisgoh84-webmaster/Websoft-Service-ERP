@@ -1,11 +1,13 @@
 // Operations Reports -- filterable listing reports over Contracts, Job
 // Orders and Service Records (module_key "operations_reports"). Every
-// export is written to Event Logs (see app/routers/reports.py). Same
-// dynamic-filter + one-Export-button pattern as Invoices; a report type
-// selector switches which filter panel and columns show.
+// export is written to Event Logs (see app/routers/reports.py). Reports
+// are picked from a card launcher grouped CONTRACTS / JOBS / USAGE
+// (components/ReportLauncher.tsx, 2026-09-24); each then shows only its
+// own filter panel and columns.
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
+import { ReportHeader, ReportLauncher, useSelectedReport, type ReportSection } from '../components/ReportLauncher'
 import {
   api,
   downloadBlob,
@@ -39,10 +41,69 @@ type ReportType =
   | 'contract-expiry-listing'
   | 'contract-renewal-due-listing'
 
+const SECTIONS: ReportSection<ReportType>[] = [
+  {
+    label: 'Contracts',
+    reports: [
+      {
+        key: 'contracts',
+        title: 'Service Contracts',
+        summary: 'All service contracts, filtered however you need.',
+        details:
+          'Every service contract with its company / individual, kind, status, contracted / consumed / remaining amount, value, and start and end dates. Narrow it by status or kind, or use "Expiring within (days)" to find contracts ending soon.',
+        filters: ['Company / Individual', 'Status', 'Kind', 'Expiring within', 'Period (months)'],
+      },
+      {
+        key: 'contract-expiry-listing',
+        title: 'Contract Expiry Listing',
+        summary: 'Contracts that end between two dates.',
+        details: 'Every contract whose end date falls between the two dates you choose -- use it to plan renewals for a coming month or quarter.',
+        filters: ['Expiry from', 'Expiry to'],
+      },
+      {
+        key: 'contract-renewal-due-listing',
+        title: 'Contract due for Renewal Listing',
+        summary: 'Contracts already inside their 30-day renewal window.',
+        details: 'Contracts ending within the next 30 days -- the same window that flags a contract for renewal on its own page. Nothing to set: it always shows what needs action now.',
+        filters: [],
+      },
+    ],
+  },
+  {
+    label: 'Jobs',
+    reports: [
+      {
+        key: 'job-orders',
+        title: 'Job Orders',
+        summary: 'Job orders by status, assignee and date.',
+        details: 'Every job order with its subject, priority, status, assignee and due date. Tick "Overdue only" to see just the jobs that are past due and still open.',
+        filters: ['Company / Individual', 'Status', 'Assigned to', 'Overdue only', 'Period (months)'],
+      },
+      {
+        key: 'service-records',
+        title: 'Service Records',
+        summary: 'Work done on site, by status, outcome and staff.',
+        details: 'Every service record with its work date, employee, hours, status, outcome and whether it was late -- use it to review what was done for a customer or by a technician over a period.',
+        filters: ['Company / Individual', 'Status', 'Outcome', 'Staff', 'Period (months)'],
+      },
+    ],
+  },
+  {
+    label: 'Usage',
+    reports: [
+      {
+        key: 'customer-product-usage',
+        title: 'Company / Individual Product Usage',
+        summary: 'Which customers use which products.',
+        details: 'Each company / individual with the products they use, filterable by product and by industry -- useful for upgrade campaigns and support planning.',
+        filters: ['Company / Individual', 'Product', 'Industry'],
+      },
+    ],
+  },
+]
+
 export default function OperationsReportsPage() {
-  const [searchParams] = useSearchParams()
-  const preselectedReport = (searchParams.get('report') as ReportType | null) ?? 'contracts'
-  const [reportType, setReportType] = useState<ReportType>(preselectedReport)
+  const [reportType, openReport] = useSelectedReport(SECTIONS)
   const [contractExpiryFrom, setContractExpiryFrom] = useState('')
   const [contractExpiryTo, setContractExpiryTo] = useState('')
   const [expiryListingRows, setExpiryListingRows] = useState<Contract[]>([])
@@ -244,25 +305,21 @@ export default function OperationsReportsPage() {
   return (
     <div>
       <h1>Operations Reports</h1>
-      <p className="muted">
-        Filterable reports over Contracts, Job Orders and Service Records. Every export is recorded
-        in Event Logs.
-      </p>
+      {!reportType ? (
+        <>
+          <p className="muted">
+            Choose a report. Each one shows what it covers and which filters it takes. Every export is
+            recorded in Event Logs.
+          </p>
+          <ReportLauncher sections={SECTIONS} onOpen={(key) => { resetFilters(); openReport(key) }} />
+        </>
+      ) : (
+        <>
+      <ReportHeader sections={SECTIONS} current={reportType} onBack={() => openReport(null)} />
       {error && <div className="error-banner">{error}</div>}
 
       <div className="card">
         <div className="filter-bar">
-          <div className="form-row" style={{ margin: 0 }}>
-            <label>Report</label>
-            <select value={reportType} onChange={(e) => { setReportType(e.target.value as ReportType); resetFilters() }}>
-              <option value="contracts">Service Contracts</option>
-              <option value="job-orders">Job Orders</option>
-              <option value="service-records">Service Records</option>
-              <option value="customer-product-usage">CompanyIndividual Product Usage</option>
-              <option value="contract-expiry-listing">Contract Expiry Listing</option>
-              <option value="contract-renewal-due-listing">Contract due for Renewal Listing</option>
-            </select>
-          </div>
 
           {reportType !== 'contract-expiry-listing' && reportType !== 'contract-renewal-due-listing' && (
             <div className="form-row" style={{ margin: 0 }}>
@@ -710,6 +767,8 @@ export default function OperationsReportsPage() {
           )}
         </div>
       </div>
+        </>
+      )}
     </div>
   )
 }

@@ -1,5 +1,6 @@
-// Accounting Reports -- segmented into AR / AP / Bank / GL / Supporting
-// / Analysis, per Dennis's 2026-09-11 ask. Most of these are the same
+// Accounting Reports -- a card launcher grouped AR / AP / BANK / GL / GST
+// (Dennis, 2026-09-24; see components/ReportLauncher.tsx), each report
+// then opening with only its own filters. Most of these are the same
 // figures already shown inline elsewhere (Invoices' aging widget,
 // Accounts Payable's aging widget, General Ledger's trial balance,
 // Chart of Accounts, Bank Master File, Tax Types); this screen is the
@@ -10,6 +11,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
+import { ReportHeader, ReportLauncher, useSelectedReport, type ReportSection } from '../components/ReportLauncher'
 import {
   api,
   downloadBlob,
@@ -38,29 +40,113 @@ type ReportType =
   | 'sales-gp'
   | 'commission'
 
-const REPORT_GROUPS: { label: string; options: { value: ReportType; label: string }[] }[] = [
-  { label: 'AR', options: [{ value: 'ar-aging', label: 'AR Aging' }] },
-  { label: 'AP', options: [{ value: 'ap-aging', label: 'AP Aging' }] },
-  { label: 'Bank', options: [{ value: 'bank-accounts', label: 'Bank Accounts Listing' }] },
-  { label: 'GL', options: [
-    { value: 'trial-balance', label: 'Trial Balance' },
-    { value: 'account-ledger', label: 'Account Ledger' },
-  ] },
+// Sales Invoice Listing and Commission sit under AR (they are views of
+// sales invoices and what has been collected on them); Chart of Accounts
+// under GL and Tax Types under GST, next to the reports that use them.
+const SECTIONS: ReportSection<ReportType>[] = [
   {
-    label: 'Sales',
-    options: [
-      { value: 'sales-gp', label: 'Sales Invoice Listing (GP)' },
-      { value: 'commission', label: 'Commission' },
+    label: 'AR',
+    reports: [
+      {
+        key: 'ar-aging',
+        title: 'AR Aging',
+        summary: 'Who owes you money, and how overdue it is.',
+        details:
+          'Every unpaid sales invoice, totalled per company / individual and split by how many days past due it is -- current, 1-30, 31-60, 61-90 and over 90 days. Use it to plan collection follow-ups and for month-end review. Change "As at" to see what was outstanding on an earlier date.',
+        filters: ['As at date'],
+      },
+      {
+        key: 'sales-gp',
+        title: 'Sales Invoice Listing (GP)',
+        summary: 'Invoices with revenue, cost and gross profit.',
+        details:
+          'Every sales invoice issued in the chosen months, with its revenue, cost and gross profit in dollars and as a percentage -- shows which jobs and customers actually make money.',
+        filters: ['Period (months)'],
+      },
+      {
+        key: 'commission',
+        title: 'Commission',
+        summary: 'Commission earned per salesperson.',
+        details:
+          'Commission per salesperson per month, worked out only on the part of each invoice that a receipt has actually settled -- so unpaid invoices earn nothing yet. The commission rate itself is set on this report.',
+        filters: ['Period (months)'],
+      },
     ],
   },
   {
-    label: 'Supporting',
-    options: [
-      { value: 'chart-of-accounts', label: 'Chart of Accounts Listing' },
-      { value: 'tax-types', label: 'Tax Types Listing' },
+    label: 'AP',
+    reports: [
+      {
+        key: 'ap-aging',
+        title: 'AP Aging',
+        summary: 'What you owe suppliers, and how overdue it is.',
+        details:
+          'Every unpaid supplier bill, totalled per supplier and split by how many days past due it is -- current, 1-30, 31-60, 61-90 and over 90 days. Use it to plan payment runs. Change "As at" to see what was owed on an earlier date.',
+        filters: ['As at date'],
+      },
     ],
   },
-  { label: 'Analysis', options: [{ value: 'gst-return', label: 'GST Return' }] },
+  {
+    label: 'Bank',
+    reports: [
+      {
+        key: 'bank-accounts',
+        title: 'Bank Accounts Listing',
+        summary: "Every bank account set up for this company.",
+        details:
+          'Each bank account with its bank, account name and number, currency and status. To see transactions and reconcile an account, open it from Bank Accounts.',
+        filters: [],
+      },
+    ],
+  },
+  {
+    label: 'GL',
+    reports: [
+      {
+        key: 'trial-balance',
+        title: 'Trial Balance',
+        summary: 'Debit and credit balance of every account.',
+        details:
+          'The balance of every general ledger account as at the chosen date. Total debits must equal total credits; if they do not, something was posted unbalanced. The starting point for month-end and year-end checks.',
+        filters: ['As at date'],
+      },
+      {
+        key: 'account-ledger',
+        title: 'Account Ledger',
+        summary: 'Every posting to one account, with a running balance.',
+        details:
+          'Every posted debit and credit for a single account, with a running balance. It opens in GL Transactions, where you choose the account and the date range and can export the result.',
+        filters: ['Account', 'Date range'],
+      },
+      {
+        key: 'chart-of-accounts',
+        title: 'Chart of Accounts Listing',
+        summary: 'The full list of general ledger accounts.',
+        details: 'Every account code with its name, type and status -- handy when checking which code a transaction should go to.',
+        filters: [],
+      },
+    ],
+  },
+  {
+    label: 'GST',
+    reports: [
+      {
+        key: 'gst-return',
+        title: 'GST Return',
+        summary: 'The figures you need for your GST return.',
+        details:
+          'Output tax on sales invoices and input tax on supplier bills for the chosen months, totalled per tax code with the net amount and number of documents. Read-only: it does not file anything or post to the ledger.',
+        filters: ['Period (months)'],
+      },
+      {
+        key: 'tax-types',
+        title: 'Tax Types Listing',
+        summary: 'Every tax code and its rate.',
+        details: 'Every tax code set up for this company with its rate and status -- the codes used on invoices and bills and summed in the GST Return.',
+        filters: [],
+      },
+    ],
+  },
 ]
 
 function firstOfMonth(): string {
@@ -72,7 +158,7 @@ function today(): string {
 }
 
 export default function AccountingReportsPage() {
-  const [reportType, setReportType] = useState<ReportType>('ar-aging')
+  const [reportType, openReport] = useSelectedReport(SECTIONS)
   const [asAt, setAsAt] = useState('')
   const [periodStart, setPeriodStart] = useState(firstOfMonth())
   const [periodEnd, setPeriodEnd] = useState(today())
@@ -170,28 +256,21 @@ export default function AccountingReportsPage() {
   return (
     <div>
       <h1>Accounting Reports</h1>
-      <p className="muted">
-        AR, AP, Bank, GL, Supporting and Analysis reports in one place. Every export is recorded in
-        Event Logs.
-      </p>
+      {!reportType ? (
+        <>
+          <p className="muted">
+            Choose a report. Each one shows what it covers and which filters it takes. Every export is
+            recorded in Event Logs.
+          </p>
+          <ReportLauncher sections={SECTIONS} onOpen={openReport} />
+        </>
+      ) : (
+        <>
+      <ReportHeader sections={SECTIONS} current={reportType} onBack={() => openReport(null)} />
       {error && <div className="error-banner">{error}</div>}
 
       <div className="card">
         <div className="filter-bar">
-          <div className="form-row" style={{ margin: 0 }}>
-            <label>Report</label>
-            <select value={reportType} onChange={(e) => setReportType(e.target.value as ReportType)}>
-              {REPORT_GROUPS.map((group) => (
-                <optgroup key={group.label} label={group.label}>
-                  {group.options.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </div>
           {usesDateRange ? (
             <>
               <div className="form-row" style={{ margin: 0 }}>
@@ -224,14 +303,16 @@ export default function AccountingReportsPage() {
               </>
             )
           )}
-          <ExportControl
-            formats={[
-              { value: 'csv', label: 'CSV' },
-              { value: 'excel', label: 'Excel' },
-            ]}
-            onExport={onExport}
-            onError={setError}
-          />
+          {reportType !== 'account-ledger' && (
+            <ExportControl
+              formats={[
+                { value: 'csv', label: 'CSV' },
+                { value: 'excel', label: 'Excel' },
+              ]}
+              onExport={onExport}
+              onError={setError}
+            />
+          )}
         </div>
 
         {reportType === 'ar-aging' && arAging && (
@@ -753,6 +834,8 @@ export default function AccountingReportsPage() {
           </>
         )}
       </div>
+        </>
+      )}
     </div>
   )
 }

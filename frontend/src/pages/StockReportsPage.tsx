@@ -1,3 +1,6 @@
+// Stock Operation Reports -- the same card launcher as Accounting and
+// Operations Reports (components/ReportLauncher.tsx, 2026-09-24); each
+// report keeps its own filters.
 import { useEffect, useState } from 'react'
 import {
   api,
@@ -8,31 +11,67 @@ import {
   type ReorderItem,
 } from '../lib/api'
 import { formatMoney as money, formatDate } from '../lib/format'
+import { ReportHeader, ReportLauncher, useSelectedReport, type ReportSection } from '../components/ReportLauncher'
 
-type Tab = 'valuation' | 'reorder' | 'movements'
+type ReportType = 'valuation' | 'reorder' | 'movements'
+
+const SECTIONS: ReportSection<ReportType>[] = [
+  {
+    label: 'Inventory',
+    reports: [
+      {
+        key: 'valuation',
+        title: 'Stock Valuation',
+        summary: 'What your stock on hand is worth.',
+        details: 'Quantity on hand and value of every stock item, per warehouse or across all of them, with the grand total -- the figure to compare against the inventory account at month-end.',
+        filters: ['Warehouse'],
+      },
+      {
+        key: 'reorder',
+        title: 'Reorder Alert',
+        summary: 'Items at or below their reorder level.',
+        details: 'Every item whose quantity on hand has fallen to or below its reorder level, with the shortfall -- the list to work from when raising purchase orders.',
+        filters: [],
+      },
+    ],
+  },
+  {
+    label: 'Movements',
+    reports: [
+      {
+        key: 'movements',
+        title: 'Stock Movements',
+        summary: 'Every stock in, out and transfer.',
+        details: 'Each stock movement with its date, item, warehouse, type, quantity, unit cost and source document -- use it to trace why an item\'s balance changed.',
+        filters: ['Item', 'Warehouse'],
+      },
+    ],
+  },
+]
 
 export default function StockReportsPage() {
-  const [tab, setTab] = useState<Tab>('valuation')
+  const [reportType, openReport] = useSelectedReport(SECTIONS)
   const [error, setError] = useState<string | null>(null)
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>Stock Operation Reports</h2>
-      {error && <p className="error">{error}</p>}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        {(['valuation', 'reorder', 'movements'] as Tab[]).map((t) => (
-          <button
-            key={t}
-            className={tab === t ? '' : 'secondary'}
-            onClick={() => setTab(t)}
-          >
-            {t === 'valuation' ? 'Stock Valuation' : t === 'reorder' ? 'Reorder Alert' : 'Stock Movements'}
-          </button>
-        ))}
-      </div>
-      {tab === 'valuation' && <ValuationTab onError={setError} />}
-      {tab === 'reorder' && <ReorderTab onError={setError} />}
-      {tab === 'movements' && <MovementsTab onError={setError} />}
+    <div>
+      <h1>Stock Operation Reports</h1>
+      {!reportType ? (
+        <>
+          <p className="muted">Choose a report. Each one shows what it covers and which filters it takes.</p>
+          <ReportLauncher sections={SECTIONS} onOpen={(key) => { setError(null); openReport(key) }} />
+        </>
+      ) : (
+        <>
+          <ReportHeader sections={SECTIONS} current={reportType} onBack={() => openReport(null)} />
+          {error && <div className="error-banner">{error}</div>}
+          <div className="card">
+            {reportType === 'valuation' && <ValuationTab onError={setError} />}
+            {reportType === 'reorder' && <ReorderTab onError={setError} />}
+            {reportType === 'movements' && <MovementsTab onError={setError} />}
+          </div>
+        </>
+      )}
     </div>
   )
 }

@@ -976,3 +976,102 @@ a.icon-button:hover {
     padding: 0;
   }
 }
+
+/* ── Report launcher (components/ReportLauncher.tsx) ──────────────── */
+.report-sections {
+  display: grid;
+  /* auto-fill keeps a screen with few sections from stretching its cards */
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.report-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.report-count {
+  background: var(--neutral-bg);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+button.report-tile {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 0 0 10px;
+  font-family: inherit;
+  font-weight: normal;
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+button.report-tile:hover,
+button.report-tile:focus-visible {
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+.report-tile strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.report-tile > span {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.report-tile .report-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.report-filters em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--neutral-bg);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.report-header h2 {
+  margin: 0 0 4px;
+}
+.report-header .muted {
+  margin: 0 0 14px;
+  max-width: 820px;
+}
+.report-crumb {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: -4px 0 14px;
+}
+button.report-back {
+  display: inline;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+button.report-back:hover {
+  background: none;
+  text-decoration: underline;
+}
