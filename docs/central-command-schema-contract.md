@@ -86,6 +86,58 @@ Central Command sends an empty URL, i.e. clears and releases the slot.
 
 ---
 
+## 1b. Remote Upgrades (added 2026-09-24)
+
+Central Command starts an upgrade or rollback of a client install by
+writing a row into the client's `upgrade_requests` table; a systemd
+timer on the client's own host (`deploy/upgrade-agent.sh`) picks it up
+within a minute, runs `deploy/upgrade.sh <target_ref>`, and reports
+back. Central Command never runs code on the client — it only queues
+work and reads the result. The client's database is never restored by
+an upgrade or rollback, only migrated forward.
+
+### `upgrade_agent_state` table (singleton, `id = 1`)
+
+Written by the client's agent on every heartbeat; **read-only for
+Central Command.**
+
+| Column | Type | Purpose |
+|---|---|---|
+| `id` | `smallint` PK | Always `1` |
+| `current_sha` | `varchar(40)` | Commit checked out on the host |
+| `current_subject` | `text` | Its commit message subject |
+| `current_committed_at` | `timestamptz` | Its commit date |
+| `remote_sha` / `remote_subject` / `remote_committed_at` | ″ | Same for `origin/main` as last fetched |
+| `commits_behind` | `integer` | `HEAD..origin/main` count — 0 means up to date |
+| `agent_host` | `varchar(200)` | Hostname the agent runs on |
+| `last_heartbeat_at` | `timestamptz` | Agent is considered offline after 5 minutes without one |
+
+### `upgrade_requests` table
+
+| Column | Type | Purpose |
+|---|---|---|
+| `id` | `uuid` PK | Central Command generates it |
+| `kind` | `varchar(10)` | `'upgrade'` or `'rollback'` (label only; both check out `target_ref`) |
+| `target_ref` | `varchar(80)` | Commit sha (normally `remote_sha`, or a previous `from_sha` for a rollback) |
+| `status` | `varchar(10)` | `pending` → `running` → `succeeded` \| `failed`; `cancelled` only from `pending` |
+| `requested_by` | `varchar(200)` | `central-command:<admin uuid>` |
+| `requested_at` / `started_at` / `finished_at` | `timestamptz` | Lifecycle timestamps |
+| `from_sha` / `to_sha` | `varchar(40)` | Commit before / after the run |
+| `log` | `text` | Tail of `deploy/upgrade.sh` output (≤ 60 KB) |
+| `error` | `text` | Short failure reason |
+
+**Central Command writes**: `INSERT` with `status = 'pending'` (refused
+by its own code while another request is pending/running), and `UPDATE
+... SET status = 'cancelled' WHERE status = 'pending'`. Everything else
+is written by the client's agent through its own API.
+
+**Central Command's own code**: `App\Services\ClientDbService::readUpgradeStatus()`,
+`requestUpgrade()`, `cancelUpgradeRequest()`
+**Client source**: `backend-php/app/Models/UpgradeRequest.php`,
+`UpgradeAgentState.php`, `deploy/upgrade-agent.sh`
+
+---
+
 ## 2. License Enforcement
 
 Central Command disables/enables module licenses remotely for non-paying

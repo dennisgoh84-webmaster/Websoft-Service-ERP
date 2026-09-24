@@ -1,14 +1,17 @@
 <?php
 
-use App\Http\Controllers\Api\UpgradeManagerController;
+// Remote-controlled upgrades. The two agent routes are called only by
+// deploy/upgrade-agent.sh on this server's own host, authenticated by
+// the X-Upgrade-Agent-Token header (see UpgradeAgentController), so
+// they sit outside the auth.jwt group. Central Command never calls
+// them -- it writes into `upgrade_requests` directly.
+
+use App\Http\Controllers\Api\UpgradeAgentController;
 use Illuminate\Support\Facades\Route;
 
-/*
- * System administration endpoints
- * These require admin authentication and handle system-level operations
- */
-
-Route::middleware(['api', 'auth:sanctum', 'admin'])->prefix('admin/system')->group(function () {
-    // Upgrade manager endpoint - called by Central Command to upgrade/rollback
-    Route::post('/upgrade-manager', [UpgradeManagerController::class, 'manager']);
+Route::prefix('system/upgrade-agent')->group(function () {
+    Route::post('/heartbeat', [UpgradeAgentController::class, 'heartbeat']);
+    Route::post('/report', [UpgradeAgentController::class, 'report']);
 });
+
+Route::middleware('auth.jwt')->get('/system/upgrade/status', [UpgradeAgentController::class, 'status']);

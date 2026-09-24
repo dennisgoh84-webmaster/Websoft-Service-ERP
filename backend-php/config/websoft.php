@@ -47,4 +47,9 @@ return [
     // File uploads -- stored on local disk; in Docker this is a named
     // volume so files persist across container restarts.
     'uploads_dir' => env('UPLOADS_DIR', storage_path('app/uploads')),
+
+    // Shared secret for the host-side upgrade agent (deploy/upgrade-agent.sh).
+    // Generated into .env by deploy/install.sh / upgrade.sh. Empty = agent
+    // endpoints disabled (503). See App\Http\Controllers\Api\UpgradeAgentController.
+    'upgrade_agent_token' => env('UPGRADE_AGENT_TOKEN'),
 ];

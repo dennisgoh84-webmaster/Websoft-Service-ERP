@@ -61,6 +61,7 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Web Master Consultancy}
+      UPGRADE_AGENT_TOKEN: ${UPGRADE_AGENT_TOKEN:-}
     depends_on:
       db:
         condition: service_healthy

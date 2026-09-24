@@ -59,6 +59,26 @@ cannot undo. If the dump comes out empty the script stops before
 anything touches the schema. Backups land in `backups/`, last 10 kept,
 and the rollback commands are printed at the end.
 
+### Upgrades from Central Command (no SSH needed after the first deploy)
+
+`install.sh` and `upgrade.sh` both install a systemd timer,
+`websoft-upgrade-agent.timer`, that runs `deploy/upgrade-agent.sh`
+once a minute. The agent reports the checked-out commit to the app
+and performs any upgrade or rollback that Central Command has queued
+in the `upgrade_requests` table, by running `./deploy/upgrade.sh
+<commit>` exactly as you would by hand. So the deploy that brings in
+this version is the last one you need to do over SSH.
+
+- The shared secret lives in `.env` as `UPGRADE_AGENT_TOKEN`
+  (generated automatically).
+- `systemctl status websoft-upgrade-agent.timer` shows the timer;
+  `backups/upgrade-logs/agent.log` is the agent's own log and each
+  run's full output is in `backups/upgrade-logs/upgrade-<id>.log`.
+- If the installer could not write systemd units (no sudo), run
+  `sudo ./deploy/install-upgrade-agent.sh` once.
+- An agent-driven upgrade leaves the checkout detached at that commit;
+  a manual `./deploy/upgrade.sh` goes back onto `main` by itself.
+
 Uploaded files and the database are in named Docker volumes. Nothing
 in either script deletes them — neither ever runs `down -v`.
 

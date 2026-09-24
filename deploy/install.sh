@@ -103,6 +103,9 @@ ADMIN_PW_CMD="docker compose exec backend-php php artisan user:set-password $ADM
 say "Starting the application"
 $COMPOSE up -d
 
+say "Enabling remote upgrades from Central Command"
+./deploy/install-upgrade-agent.sh || warn "upgrade agent timer not installed -- see above"
+
 # ---- report ---------------------------------------------------------
 
 say "Done"
