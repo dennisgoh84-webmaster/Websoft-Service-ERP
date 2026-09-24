@@ -3,6 +3,7 @@
 // this is where rates would be maintained ahead of that.
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, type CurrencyRate } from '../lib/api'
+import { formatDate } from '../lib/format'
 
 export default function CurrencyRatesPage() {
   const [rates, setRates] = useState<CurrencyRate[]>([])
@@ -78,7 +79,7 @@ export default function CurrencyRatesPage() {
               <tr key={r.id} style={{ opacity: r.is_active ? 1 : 0.6 }}>
                 <td>{r.currency_code}</td>
                 <td>{r.rate_to_base}</td>
-                <td>{r.effective_date}</td>
+                <td>{formatDate(r.effective_date)}</td>
                 <td>
                   <span className={`badge ${r.is_active ? 'active' : 'draft'}`}>
                     {r.is_active ? 'Active' : 'Retired'}

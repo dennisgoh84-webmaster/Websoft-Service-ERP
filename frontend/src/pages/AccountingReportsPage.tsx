@@ -24,7 +24,7 @@ import {
   type TrialBalance,
 } from '../lib/api'
 import { isoToMonth, monthEndISO, monthStartISO } from '../lib/period'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 
 type ReportType =
   | 'ar-aging'
@@ -236,7 +236,7 @@ export default function AccountingReportsPage() {
 
         {reportType === 'ar-aging' && arAging && (
           <>
-            <h2>AR Aging as at {arAging.as_at}</h2>
+            <h2>AR Aging as at {formatDate(arAging.as_at)}</h2>
             <div className="stat-grid">
               <div className="card stat-tile">
                 <div className="stat-value stat-value-text">{money(arAging.current)}</div>
@@ -305,7 +305,7 @@ export default function AccountingReportsPage() {
 
         {reportType === 'ap-aging' && apAging && (
           <>
-            <h2>AP Aging as at {apAging.as_at}</h2>
+            <h2>AP Aging as at {formatDate(apAging.as_at)}</h2>
             <div className="report-table-wrap" style={{ overflowX: 'auto' }}>
               <table>
                 <thead>
@@ -590,7 +590,7 @@ export default function AccountingReportsPage() {
                   {salesGP.rows.map((r) => (
                     <tr key={r.invoice_id}>
                       <td>{r.invoice_number}</td>
-                      <td>{r.issued_at.slice(0, 10)}</td>
+                      <td>{formatDate(r.issued_at)}</td>
                       <td>{r.customer_name}</td>
                       <td>{money(r.revenue_sgd)}</td>
                       <td>

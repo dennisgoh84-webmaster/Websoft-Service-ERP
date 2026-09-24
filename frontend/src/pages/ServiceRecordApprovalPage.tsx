@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type PendingServiceRecord } from '../lib/api'
+import { formatDate } from '../lib/format'
 
 export default function ServiceRecordApprovalPage() {
   const [pending, setPending] = useState<PendingServiceRecord[]>([])
@@ -93,7 +94,7 @@ export default function ServiceRecordApprovalPage() {
                 </td>
                 <td>{r.employee_name}</td>
                 <td>
-                  {r.work_date}
+                  {formatDate(r.work_date)}
                   {r.is_late && <span className="badge exceeded" style={{ marginLeft: 6 }}>late</span>}
                   {r.is_approval_overdue && (
                     <span className="badge exceeded" style={{ marginLeft: 6 }} title="Submitted more than a week ago (SRV-019)">

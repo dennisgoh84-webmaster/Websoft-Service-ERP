@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
 import { api, downloadBlob, type Contract, type CompanyIndividual, type JobOrder, type JobOrderBillingClassification, type JobOrderPriority, type JobOrderType, type Product } from '../lib/api'
+import { formatDate } from '../lib/format'
 
 export default function JobOrdersPage() {
   const [jobOrders, setJobOrders] = useState<JobOrder[]>([])
@@ -320,7 +321,7 @@ export default function JobOrdersPage() {
                   <td>
                     {t.due_date ? (
                       overdue ? (
-                        <span className="badge exceeded">{t.due_date}</span>
+                        <span className="badge exceeded">{formatDate(t.due_date)}</span>
                       ) : (
                         t.due_date
                       )

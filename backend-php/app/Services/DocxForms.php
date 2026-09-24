@@ -97,16 +97,25 @@ class DocxForms
         return var_export((float) ($value ?? 0), true);
     }
 
-    /** Python's `date.isoformat()`; null-safe like the callers' own guards. */
-    private static function isoDate(mixed $value): string
+    /**
+     * DD/MM/YYYY on every generated document (Dennis, 2026-09-24: "all
+     * date/time format to follow DD/MM/YYYY") -- was Python's
+     * `date.isoformat()`. Null-safe like the callers' own guards, and
+     * accepts the bare YYYY-MM-DD strings the statement lines carry.
+     */
+    private static function docDate(mixed $value): string
     {
-        if ($value === null) {
+        if ($value === null || $value === '') {
             return '';
         }
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('d/m/Y');
+        }
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', (string) $value, $m)) {
+            return "{$m[3]}/{$m[2]}/{$m[1]}";
+        }
 
-        return $value instanceof \DateTimeInterface
-            ? $value->format('Y-m-d')
-            : (string) $value;
+        return (string) $value;
     }
 
     /**
@@ -230,9 +239,9 @@ class DocxForms
 
         $meta = $section->addTextRun();
         self::addRun($meta, "{$invoice->invoice_number}\n", ['bold' => true]);
-        self::addRun($meta, 'Issued: '.self::isoDate($invoice->issued_at)."\n");
+        self::addRun($meta, 'Issued: '.self::docDate($invoice->issued_at)."\n");
         if ($invoice->due_date) {
-            self::addRun($meta, 'Due: '.self::isoDate($invoice->due_date)."\n");
+            self::addRun($meta, 'Due: '.self::docDate($invoice->due_date)."\n");
         }
 
         $section->addText('Bill To', ['italic' => true]);
@@ -302,9 +311,9 @@ class DocxForms
 
         $meta = $section->addTextRun();
         self::addRun($meta, "{$quotation->quotation_number}\n", ['bold' => true]);
-        self::addRun($meta, 'Date: '.self::isoDate($quotation->quotation_date)."\n");
+        self::addRun($meta, 'Date: '.self::docDate($quotation->quotation_date)."\n");
         if ($quotation->valid_until) {
-            self::addRun($meta, 'Valid Until: '.self::isoDate($quotation->valid_until)."\n");
+            self::addRun($meta, 'Valid Until: '.self::docDate($quotation->valid_until)."\n");
         }
 
         $section->addText('To', ['italic' => true]);
@@ -382,7 +391,7 @@ class DocxForms
 
         $meta = $section->addTextRun();
         self::addRun($meta, "{$payment->voucher_number}\n", ['bold' => true]);
-        self::addRun($meta, 'Date: '.self::isoDate($payment->payment_date)."\n");
+        self::addRun($meta, 'Date: '.self::docDate($payment->payment_date)."\n");
         self::addRun($meta, "Method: {$payment->method}\n");
         if ($payment->reference) {
             self::addRun($meta, "Reference: {$payment->reference}\n");
@@ -447,7 +456,7 @@ class DocxForms
 
         $meta = $section->addTextRun();
         self::addRun($meta, "{$po->po_number}\n", ['bold' => true]);
-        self::addRun($meta, 'Date: '.self::isoDate($po->order_date)."\n");
+        self::addRun($meta, 'Date: '.self::docDate($po->order_date)."\n");
         self::addRun($meta, 'Status: '.ucwords(str_replace('_', ' ', (string) $po->status))."\n");
 
         $section->addText('Supplier', ['italic' => true]);
@@ -512,7 +521,7 @@ class DocxForms
 
         $meta = $section->addTextRun();
         self::addRun($meta, "{$payment->voucher_number}\n", ['bold' => true]);
-        self::addRun($meta, 'Date: '.self::isoDate($payment->payment_date)."\n");
+        self::addRun($meta, 'Date: '.self::docDate($payment->payment_date)."\n");
         self::addRun($meta, "Method: {$payment->method}\n");
         if ($payment->reference) {
             self::addRun($meta, "Reference: {$payment->reference}\n");
@@ -572,7 +581,7 @@ class DocxForms
         $meta = $section->addTextRun();
         self::addRun($meta, "{$record->service_record_number}\n", ['bold' => true]);
         self::addRun($meta, "Job Order: {$jobOrder?->job_order_number} -- {$jobOrder?->subject}\n");
-        self::addRun($meta, 'Work Date: '.self::isoDate($record->work_date)."\n");
+        self::addRun($meta, 'Work Date: '.self::docDate($record->work_date)."\n");
         self::addRun($meta, 'Status: '.ucwords((string) $record->status)."\n");
 
         $section->addText('Company / Individual', ['italic' => true]);
@@ -633,7 +642,7 @@ class DocxForms
 
         $meta = $section->addTextRun();
         self::addRun($meta, ($customer?->name ?? '')."\n", ['bold' => true]);
-        self::addRun($meta, "As at: {$statement['as_at']}\n");
+        self::addRun($meta, 'As at: '.self::docDate($statement['as_at'])."\n");
         if (($statement['payment_terms_days'] ?? null) !== null) {
             self::addRun($meta, "Payment terms: Net {$statement['payment_terms_days']} days\n");
         }
@@ -648,8 +657,8 @@ class DocxForms
         foreach ($statement['lines'] as $line) {
             $table->addRow();
             self::cell($table, 2400, $line['invoice_number'].($line['is_disputed'] ? ' (disputed)' : ''));
-            self::cell($table, 1600, (string) $line['issued_on']);
-            self::cell($table, 1600, $line['due_date'] !== null ? (string) $line['due_date'] : '-');
+            self::cell($table, 1600, self::docDate($line['issued_on']));
+            self::cell($table, 1600, $line['due_date'] !== null ? self::docDate($line['due_date']) : '-');
             self::cell($table, 1700, self::money($line['total_amount_sgd']));
             self::cell($table, 1900, self::money($line['outstanding_sgd']));
         }

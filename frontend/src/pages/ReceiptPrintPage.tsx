@@ -5,7 +5,7 @@ import { useParams } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
 import { api, downloadBlob, type CompanyIndividual, type Payment } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 
 const METHOD_LABELS: Record<string, string> = {
   bank_transfer: 'Bank transfer',
@@ -79,7 +79,7 @@ export default function ReceiptPrintPage() {
           </div>
           <div className="form-meta-row">
             <span className="muted">Date</span>
-            <span>: {payment.payment_date}</span>
+            <span>: {formatDate(payment.payment_date)}</span>
           </div>
           <div className="form-meta-row">
             <span className="muted">Method</span>

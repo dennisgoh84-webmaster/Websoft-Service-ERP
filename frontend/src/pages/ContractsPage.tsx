@@ -11,7 +11,7 @@ import {
   type StaffUser,
 } from '../lib/api'
 import { isoToMonth, monthEndISO, monthStartISO } from '../lib/period'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 
 const KIND_LABELS: Record<ContractKind, string> = {
   service_support: 'Service Support (deduct hrs)',
@@ -371,7 +371,7 @@ export default function ContractsPage() {
                     {c.products.length > 0 ? c.products.map((p) => p.product_name).join(', ') : '-'}
                   </td>
                   <td>
-                    {c.start_date} &rarr; {c.end_date}
+                    {formatDate(c.start_date)} &rarr; {formatDate(c.end_date)}
                   </td>
                   <td>
                     <Link to={`/contracts/${c.id}`}>Open</Link>

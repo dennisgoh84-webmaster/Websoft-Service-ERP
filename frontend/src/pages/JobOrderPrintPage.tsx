@@ -9,6 +9,7 @@ import { useParams } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
 import { api, type Contract, type CurrentUser, type CompanyIndividual, type JobOrder, type ServiceRecord } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
+import { formatDate } from '../lib/format'
 
 export default function JobOrderPrintPage() {
   const { id } = useParams<{ id: string }>()
@@ -80,7 +81,7 @@ export default function JobOrderPrintPage() {
           </div>
           <div className="form-meta-row">
             <span className="muted">Date</span>
-            <span>: {jobOrder.created_at.slice(0, 10)}</span>
+            <span>: {formatDate(jobOrder.created_at)}</span>
           </div>
           <div className="form-meta-row">
             <span className="muted">Status</span>
@@ -93,7 +94,7 @@ export default function JobOrderPrintPage() {
           {jobOrder.due_date && (
             <div className="form-meta-row">
               <span className="muted">Due</span>
-              <span>: {jobOrder.due_date}</span>
+              <span>: {formatDate(jobOrder.due_date)}</span>
             </div>
           )}
           <div className="form-meta-row">
@@ -133,7 +134,7 @@ export default function JobOrderPrintPage() {
               {records.map((r) => (
                 <tr key={r.id}>
                   <td>{userName(r.employee_user_id)}</td>
-                  <td>{r.work_date}</td>
+                  <td>{formatDate(r.work_date)}</td>
                   <td>
                     {r.raw_minutes}m &rarr; {r.rounded_minutes}m
                     {r.deducted_minutes != null && <> &rarr; {r.deducted_minutes}m</>}

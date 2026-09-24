@@ -18,7 +18,7 @@ import {
   type Account,
   type GLTransactions,
 } from '../lib/api'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 
 const VOUCHER_TYPE_LABELS: Record<string, string> = {
   journal: 'JV',
@@ -211,7 +211,7 @@ export default function GLTransactionsPage() {
               <tbody>
                 {data.rows.map((r) => (
                   <tr key={r.line_id}>
-                    <td>{r.entry_date}</td>
+                    <td>{formatDate(r.entry_date)}</td>
                     <td>
                       <span className="muted">{r.voucher_number}</span>
                     </td>

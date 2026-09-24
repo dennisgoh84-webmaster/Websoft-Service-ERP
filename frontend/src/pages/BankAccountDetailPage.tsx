@@ -5,7 +5,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api, type BankAccount, type BankLedger, type BankReconciliation } from '../lib/api'
-import { formatMoney } from '../lib/format'
+import { formatMoney, formatDate } from '../lib/format'
 
 export default function BankAccountDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -150,7 +150,7 @@ export default function BankAccountDetailPage() {
           <div style={{ fontSize: 20, fontVariantNumeric: 'tabular-nums' }}>
             {formatMoney(ledger.opening_balance_sgd)}
           </div>
-          {ledger.opening_balance_date && <div className="muted">as at {ledger.opening_balance_date}</div>}
+          {ledger.opening_balance_date && <div className="muted">as at {formatDate(ledger.opening_balance_date)}</div>}
         </div>
         <div>
           <div className="muted" style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -200,7 +200,7 @@ export default function BankAccountDetailPage() {
             <tbody>
               {ledger.rows.map((r) => (
                 <tr key={r.id} style={r.is_voided ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>
-                  <td>{r.transaction_date}</td>
+                  <td>{formatDate(r.transaction_date)}</td>
                   <td>
                     {r.transaction_number}
                     {r.source_type && (
@@ -357,7 +357,7 @@ export default function BankAccountDetailPage() {
                           onChange={() => toggleChecked(r.id)}
                         />
                       </td>
-                      <td>{r.transaction_date}</td>
+                      <td>{formatDate(r.transaction_date)}</td>
                       <td>{r.description}</td>
                       <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                         {r.debit_sgd ? formatMoney(r.debit_sgd) : ''}
@@ -400,7 +400,7 @@ export default function BankAccountDetailPage() {
             <tbody>
               {reconciliations.map((r) => (
                 <tr key={r.id}>
-                  <td>{r.statement_date}</td>
+                  <td>{formatDate(r.statement_date)}</td>
                   <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     {formatMoney(r.statement_balance_sgd)}
                   </td>

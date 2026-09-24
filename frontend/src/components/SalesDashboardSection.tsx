@@ -8,7 +8,7 @@ import {
   type SalesDashboardSummary,
   type SalesDashboardTopCustomerRow,
 } from '../lib/api'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 import ExportControl from './ExportControl'
 
 /**
@@ -141,7 +141,7 @@ export default function SalesDashboardSection() {
                 <tr key={r.invoice_id}>
                   <td>{r.invoice_number}</td>
                   <td>{r.customer_name}</td>
-                  <td className="muted">{r.due_date ?? '-'}</td>
+                  <td className="muted">{formatDate(r.due_date)}</td>
                   <td>{money(r.outstanding_sgd)}</td>
                 </tr>
               ))}

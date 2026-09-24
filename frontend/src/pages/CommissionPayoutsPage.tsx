@@ -7,6 +7,7 @@ import {
   type CommissionPayoutStatus,
   type CurrentUser,
 } from '../lib/api'
+import { formatDate } from '../lib/format'
 
 const STATUS_BADGES: Record<CommissionPayoutStatus, string> = {
   draft: 'muted',
@@ -286,7 +287,7 @@ export default function CommissionPayoutsPage() {
                   <td>
                     {p.paid_date ? (
                       <>
-                        {p.paid_date}
+                        {formatDate(p.paid_date)}
                         {p.paid_reference && (
                           <span className="muted" style={{ marginLeft: 4 }}>
                             ({p.paid_reference})

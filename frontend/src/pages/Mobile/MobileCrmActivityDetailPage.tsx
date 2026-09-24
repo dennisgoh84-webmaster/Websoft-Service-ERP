@@ -155,8 +155,8 @@ export default function MobileCrmActivityDetailPage({
     async function load() {
       try {
         const [act, custs] = await Promise.all([
-          api.request<CrmActivity>(`/crm/activities/${activityId}`),
-          api.request<CompanyIndividual[]>('/company-individuals'),
+          api.request<CrmActivity>('GET', `/crm/activities/${activityId}`),
+          api.request<CompanyIndividual[]>('GET', '/company-individuals'),
         ])
         if (act) {
           setActivity(act)
@@ -183,19 +183,16 @@ export default function MobileCrmActivityDetailPage({
     setSaving(true)
     setError('')
     try {
-      await api.request(`/crm/activities/${activityId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          customer_id: formData.customer_id,
-          activity_type: formData.activity_type,
-          subject: formData.subject,
-          description: formData.description || null,
-          activity_date: formData.activity_date ? `${formData.activity_date} 12:00:00` : null,
-          status: formData.status,
-        }),
+      await api.request('PATCH', `/crm/activities/${activityId}`, undefined, {
+        customer_id: formData.customer_id,
+        activity_type: formData.activity_type,
+        subject: formData.subject,
+        description: formData.description || null,
+        activity_date: formData.activity_date ? `${formData.activity_date} 12:00:00` : null,
+        status: formData.status,
       })
       // Reload activity
-      const updated = await api.request<CrmActivity>(`/crm/activities/${activityId}`)
+      const updated = await api.request<CrmActivity>('GET', `/crm/activities/${activityId}`)
       if (updated) {
         setActivity(updated)
         setIsEditing(false)
@@ -211,7 +208,7 @@ export default function MobileCrmActivityDetailPage({
     if (!confirm('Delete this activity? This cannot be undone.')) return
     setSaving(true)
     try {
-      await api.request(`/crm/activities/${activityId}`, { method: 'DELETE' })
+      await api.request('DELETE', `/crm/activities/${activityId}`)
       onBack()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to delete')

@@ -13,7 +13,7 @@ import {
   type QuotationStatus,
   type ReferenceCode,
 } from '../lib/api'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 
 // wa.me needs digits only (country code + number, no "+", spaces or dashes).
@@ -539,7 +539,7 @@ export default function QuotationsPage() {
                     </div>
                   </td>
                   <td>{customerName(q.customer_id)}</td>
-                  <td>{q.quotation_date}</td>
+                  <td>{formatDate(q.quotation_date)}</td>
                   <td>{q.valid_until ?? <span className="muted">-</span>}</td>
                   <td>{money(q.total_amount_sgd)}</td>
                   <td>

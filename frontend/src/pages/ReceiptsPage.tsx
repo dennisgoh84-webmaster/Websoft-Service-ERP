@@ -5,7 +5,7 @@ import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type BankAccount, type CompanyIndividual, type Invoice, type Payment } from '../lib/api'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 
 const METHODS = [
   { value: 'bank_transfer', label: 'Bank transfer' },
@@ -280,7 +280,7 @@ export default function ReceiptsPage() {
                 <Fragment key={p.id}>
                 <tr>
                   <td style={{ whiteSpace: 'nowrap' }}>{p.voucher_number}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>{p.payment_date}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>{formatDate(p.payment_date)}</td>
                   <td>{customerName(p.customer_id)}</td>
                   <td>{money(p.amount_sgd)}</td>
                   <td>

@@ -208,7 +208,7 @@ export default function InvoicesPage() {
       setError(`${statement.customer_name} has no phone number on file -- add one on the Company/Individual page first.`)
       return
     }
-    const text = `Statement of Accounts as at ${statement.as_at}, total outstanding ${money(statement.total_outstanding_sgd)}. PDF to follow.`
+    const text = `Statement of Accounts as at ${formatDate(statement.as_at)}, total outstanding ${money(statement.total_outstanding_sgd)}. PDF to follow.`
     window.open(`https://wa.me/${customer.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank')
   }
 
@@ -504,7 +504,7 @@ export default function InvoicesPage() {
       {aging && (
         <div className="card">
           <div className="filter-bar">
-            <h2 style={{ margin: 0 }}>Aging as at {aging.as_at}</h2>
+            <h2 style={{ margin: 0 }}>Aging as at {formatDate(aging.as_at)}</h2>
             <ExportControl
               formats={[
                 { value: 'csv', label: 'CSV' },
@@ -625,7 +625,7 @@ export default function InvoicesPage() {
             </div>
           </div>
           <p className="muted">
-            As at {statement.as_at} &middot;{' '}
+            As at {formatDate(statement.as_at)} &middot;{' '}
             {statement.payment_terms_days === null
               ? 'no payment terms agreed'
               : `Net ${statement.payment_terms_days} days`}{' '}

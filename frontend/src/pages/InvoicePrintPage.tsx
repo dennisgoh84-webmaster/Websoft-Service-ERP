@@ -102,7 +102,7 @@ export default function InvoicePrintPage() {
           {invoice.due_date && (
             <div className="form-meta-row">
               <span className="muted">Due Date</span>
-              <span>: {invoice.due_date}</span>
+              <span>: {formatDate(invoice.due_date)}</span>
             </div>
           )}
         </div>

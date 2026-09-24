@@ -4,7 +4,7 @@ import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type Account, type APAgingReport, type CompanyIndividual, type PurchaseOrder, type SupplierInvoice } from '../lib/api'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 
 const BILL_BADGE: Record<string, string> = {
   awaiting_match: 'draft',
@@ -131,7 +131,7 @@ export default function AccountsPayablePage() {
       {aging && (
         <div className="card">
           <div className="filter-bar">
-            <h2 style={{ margin: 0 }}>AP aging as at {aging.as_at}</h2>
+            <h2 style={{ margin: 0 }}>AP aging as at {formatDate(aging.as_at)}</h2>
             <ExportControl
               formats={[
                 { value: 'csv', label: 'CSV' },

@@ -1155,7 +1155,7 @@ export default function CompanyIndividualDetailPage() {
                   <span className={`badge ${row.contract_status}`}>{row.contract_status}</span>
                 </td>
                 <td className="muted">
-                  {row.start_date} &rarr; {row.end_date}
+                  {formatDate(row.start_date)} &rarr; {formatDate(row.end_date)}
                 </td>
               </tr>
             ))}

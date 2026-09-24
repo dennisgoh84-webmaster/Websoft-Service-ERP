@@ -41,7 +41,7 @@ AGENT_LOG="$LOG_DIR/agent.log"
 exec 9>"$LOG_DIR/.agent.lock"
 flock -n 9 || exit 0
 
-log() { printf '%s %s\n' "$(date -Is)" "$*" >>"$AGENT_LOG"; }
+log() { printf '%s %s\n' "$(date '+%d/%m/%Y %H:%M:%S')" "$*" >>"$AGENT_LOG"; }
 
 # api <path> <json | @file>  -- prints the response body; non-zero on any HTTP or transport error.
 api() {
@@ -95,8 +95,9 @@ read -r REQ_ID REQ_KIND REQ_TARGET <<<"$PARSED"
 # ---- 2. run the request ----
 UPGRADE_LOG="$LOG_DIR/upgrade-$REQ_ID.log"
 log "request $REQ_ID: $REQ_KIND -> $REQ_TARGET (from $CUR_SHA)"
+stamp() { date '+%d/%m/%Y %H:%M:%S'; }
 {
-  echo "== $(date -Is) $REQ_KIND to $REQ_TARGET requested; currently at $CUR_SHA"
+  echo "== $(stamp) $REQ_KIND to $REQ_TARGET requested; currently at $CUR_SHA"
   echo "== running: $UPGRADE_CMD $REQ_TARGET"
 } >"$UPGRADE_LOG"
 
@@ -107,7 +108,7 @@ else
   OK=false; ERR="$(basename "$UPGRADE_CMD") exited with status $RC -- see the log"
 fi
 TO_SHA=$(git rev-parse HEAD)
-echo "== $(date -Is) finished: success=$OK now at $TO_SHA" >>"$UPGRADE_LOG"
+echo "== $(stamp) finished: success=$OK now at $TO_SHA" >>"$UPGRADE_LOG"
 log "request $REQ_ID finished success=$OK at $TO_SHA"
 
 REPORT="$LOG_DIR/pending-report-$REQ_ID.json"

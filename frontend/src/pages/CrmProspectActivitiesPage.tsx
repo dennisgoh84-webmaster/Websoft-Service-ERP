@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type CompanyIndividual, type User } from '../lib/api'
+import { api, type CompanyIndividual, type CurrentUser } from '../lib/api'
+import { formatDate } from '../lib/format'
 
 interface ProspectActivity {
   id: string
@@ -40,7 +41,7 @@ const ACTIVITY_STATUSES = [
 export default function CrmProspectActivitiesPage() {
   const [activities, setActivities] = useState<ProspectActivity[]>([])
   const [customers, setCustomers] = useState<CompanyIndividual[]>([])
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // Form state for new activity
@@ -58,13 +59,13 @@ export default function CrmProspectActivitiesPage() {
   const [filterActivityBy, setFilterActivityBy] = useState('')
 
   function refresh() {
-    const params: Record<string, string | undefined> = {}
+    const params: Record<string, string> = {}
     if (filterCustomer) params.customer_id = filterCustomer
     if (filterActivityType) params.activity_type = filterActivityType
     if (filterStatus) params.status = filterStatus
     if (filterActivityBy) params.created_by_user_id = filterActivityBy
 
-    api.request('GET', '/api/crm/activities', { params })
+    api.request<ProspectActivity[]>('GET', '/crm/activities', params)
       .then(setActivities)
       .catch((e) => setError(e.message))
   }
@@ -91,7 +92,7 @@ export default function CrmProspectActivitiesPage() {
     e.preventDefault()
     setError(null)
     try {
-      await api.request('POST', '/api/crm/activities', undefined, {
+      await api.request('POST', '/crm/activities', undefined, {
         customer_id: customerId,
         activity_type: activityType,
         subject,
@@ -111,7 +112,7 @@ export default function CrmProspectActivitiesPage() {
     }
   }
 
-  const canViewAllActivities = currentUser?.role === 'owner' || currentUser?.role === 'manager'
+  const canViewAllActivities = currentUser?.role === 'owner' || currentUser?.role === 'sales_manager'
 
   return (
     <div>
@@ -237,7 +238,7 @@ export default function CrmProspectActivitiesPage() {
           <tbody>
             {activities.map((a) => (
               <tr key={a.id}>
-                <td>{new Date(a.activity_date || a.created_at).toLocaleDateString()}</td>
+                <td>{formatDate(a.activity_date || a.created_at)}</td>
                 <td>
                   <Link to={`/company-individuals/${a.customer_id}`}>{customerName(a.customer_id)}</Link>
                 </td>

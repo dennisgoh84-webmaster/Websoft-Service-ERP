@@ -1058,7 +1058,6 @@ interface MobileCrmActivity {
 }
 
 function MobileCrmActivitiesList({ onSelect }: { onSelect: (id: string) => void }) {
-  const { user } = useAuth()
   const [activities, setActivities] = useState<MobileCrmActivity[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')

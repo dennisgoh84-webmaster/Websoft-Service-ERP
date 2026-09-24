@@ -7,6 +7,7 @@ import { useParams } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
 import { api, downloadBlob, type CompanyIndividual, type JobOrder, type ServiceRecord } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
+import { formatDate } from '../lib/format'
 
 export default function ServiceRecordPrintPage() {
   const { id } = useParams<{ id: string }>()
@@ -81,7 +82,7 @@ export default function ServiceRecordPrintPage() {
           </div>
           <div className="form-meta-row">
             <span className="muted">Work Date</span>
-            <span>: {record.work_date}</span>
+            <span>: {formatDate(record.work_date)}</span>
           </div>
           <div className="form-meta-row">
             <span className="muted">Status</span>

@@ -5,7 +5,7 @@ import { useParams } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
 import { api, downloadBlob, type CompanyIndividual, type Quotation } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 
 export default function QuotationPrintPage() {
   const { id } = useParams<{ id: string }>()
@@ -93,7 +93,7 @@ export default function QuotationPrintPage() {
           </div>
           <div className="form-meta-row">
             <span className="muted">Date</span>
-            <span>: {quotation.quotation_date}</span>
+            <span>: {formatDate(quotation.quotation_date)}</span>
           </div>
           {quotation.valid_until && (
             <div className="form-meta-row">

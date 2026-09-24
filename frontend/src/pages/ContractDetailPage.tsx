@@ -204,7 +204,7 @@ export default function ContractDetailPage() {
       <p>
         <span className={`badge ${contract.status}`}>{contract.status}</span>{' '}
         <span className="muted">
-          {kindLabel} &middot; {contract.start_date} &rarr; {contract.end_date}
+          {kindLabel} &middot; {formatDate(contract.start_date)} &rarr; {formatDate(contract.end_date)}
         </span>
       </p>
       {/* The client, always in the header (Dennis, 2026-09-15). */}

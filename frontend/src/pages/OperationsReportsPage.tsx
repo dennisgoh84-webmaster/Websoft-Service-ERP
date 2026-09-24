@@ -494,8 +494,8 @@ export default function OperationsReportsPage() {
                     <td>{c.consumed_hours.toFixed(1)}</td>
                     <td>{c.remaining_hours.toFixed(1)}</td>
                     <td>{money(c.contract_value_sgd)}</td>
-                    <td>{c.start_date}</td>
-                    <td>{c.end_date}</td>
+                    <td>{formatDate(c.start_date)}</td>
+                    <td>{formatDate(c.end_date)}</td>
                   </tr>
                 ))}
                 {contracts.length === 0 && (
@@ -575,7 +575,7 @@ export default function OperationsReportsPage() {
               <tbody>
                 {serviceRecords.map((r) => (
                   <tr key={r.id}>
-                    <td>{r.work_date}</td>
+                    <td>{formatDate(r.work_date)}</td>
                     <td>{customerName(jobOrderById.get(r.job_order_id)?.customer_id ?? '')}</td>
                     <td>{staffName(r.employee_user_id)}</td>
                     <td>{(r.rounded_minutes / 60).toFixed(2)}</td>
@@ -622,7 +622,7 @@ export default function OperationsReportsPage() {
                       <span className={`badge ${row.contract_status}`}>{row.contract_status}</span>
                     </td>
                     <td className="muted">
-                      {row.start_date} &rarr; {row.end_date}
+                      {formatDate(row.start_date)} &rarr; {formatDate(row.end_date)}
                     </td>
                   </tr>
                 ))}
@@ -659,7 +659,7 @@ export default function OperationsReportsPage() {
                     </td>
                     <td>{c.remaining_hours.toFixed(1)}</td>
                     <td>{money(c.contract_value_sgd)}</td>
-                    <td>{c.end_date}</td>
+                    <td>{formatDate(c.end_date)}</td>
                   </tr>
                 ))}
                 {expiryListingRows.length === 0 && (
@@ -695,7 +695,7 @@ export default function OperationsReportsPage() {
                       <span className={`badge ${c.status}`}>{c.status}</span>
                     </td>
                     <td>{c.remaining_hours.toFixed(1)}</td>
-                    <td>{c.end_date}</td>
+                    <td>{formatDate(c.end_date)}</td>
                   </tr>
                 ))}
                 {renewalDueRows.length === 0 && (

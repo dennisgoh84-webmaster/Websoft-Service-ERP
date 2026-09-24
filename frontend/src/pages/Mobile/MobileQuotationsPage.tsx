@@ -70,7 +70,7 @@ export default function MobileQuotationsPage() {
   useEffect(() => {
     async function loadQuotations() {
       try {
-        const res = await api.request<MobileQuotation[]>('/quotations')
+        const res = await api.request<MobileQuotation[]>('GET', '/quotations')
         setQuotations(res || [])
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Failed to load quotations')

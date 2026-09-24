@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { api, type CompanyIndividual } from '../lib/api'
+import { formatDate, formatDateTime } from '../lib/format'
 
 interface ProspectActivity {
   id: string
@@ -55,7 +56,7 @@ export default function CrmProspectActivityDetailPage() {
   useEffect(() => {
     if (!activityId) return
     api
-      .request('GET', `/api/crm/activities/${activityId}`)
+      .request<ProspectActivity>('GET', `/crm/activities/${activityId}`)
       .then((a) => {
         setActivity(a)
         setActivityType(a.activity_type)
@@ -74,7 +75,7 @@ export default function CrmProspectActivityDetailPage() {
     if (!activity || !activityId) return
     setError(null)
     try {
-      await api.request('PATCH', `/api/crm/activities/${activityId}`, undefined, {
+      await api.request('PATCH', `/crm/activities/${activityId}`, undefined, {
         activity_type: activityType,
         subject,
         description: description || undefined,
@@ -83,7 +84,7 @@ export default function CrmProspectActivityDetailPage() {
       })
       setIsEditing(false)
       // Reload the activity to get the updated data
-      const updated = await api.request('GET', `/api/crm/activities/${activityId}`)
+      const updated = await api.request<ProspectActivity>('GET', `/crm/activities/${activityId}`)
       setActivity(updated)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update activity')
@@ -95,7 +96,7 @@ export default function CrmProspectActivityDetailPage() {
     if (!window.confirm('Are you sure you want to delete this activity?')) return
     setError(null)
     try {
-      await api.request('DELETE', `/api/crm/activities/${activityId}`)
+      await api.request('DELETE', `/crm/activities/${activityId}`)
       navigate('/crm/activities')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete activity')
@@ -145,7 +146,7 @@ export default function CrmProspectActivityDetailPage() {
           </div>
           <div>
             <p className="label">Created At</p>
-            <p>{new Date(activity.created_at).toLocaleString()}</p>
+            <p>{formatDateTime(activity.created_at)}</p>
           </div>
           {activity.last_edited_by_name && (
             <>
@@ -155,7 +156,7 @@ export default function CrmProspectActivityDetailPage() {
               </div>
               <div>
                 <p className="label">Last Edited At</p>
-                <p>{new Date(activity.updated_at).toLocaleString()}</p>
+                <p>{formatDateTime(activity.updated_at)}</p>
               </div>
             </>
           )}
@@ -215,7 +216,7 @@ export default function CrmProspectActivityDetailPage() {
               <div>
                 <p className="label">Activity Date</p>
                 <p>
-                  {activity.activity_date ? new Date(activity.activity_date).toLocaleDateString() : 'Not set'}
+                  {activity.activity_date ? formatDate(activity.activity_date) : 'Not set'}
                 </p>
               </div>
             </div>

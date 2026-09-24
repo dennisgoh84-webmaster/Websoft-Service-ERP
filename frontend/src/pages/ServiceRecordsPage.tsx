@@ -6,6 +6,7 @@ import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type CompanyIndividual, type CurrentUser, type JobOrder, type ServiceRecord } from '../lib/api'
+import { formatDate } from '../lib/format'
 
 // wa.me needs digits only (country code + number, no "+", spaces or dashes).
 function waNumber(phone: string): string {
@@ -81,7 +82,7 @@ export default function ServiceRecordsPage() {
       setError(`${customer?.name ?? 'This customer'} has no phone number on file -- add one on the Company/Individual page first.`)
       return
     }
-    const text = `Service Record ${r.service_record_number} for ${jobOrderSubject(r.job_order_id)}, ${r.work_date}. PDF to follow.`
+    const text = `Service Record ${r.service_record_number} for ${jobOrderSubject(r.job_order_id)}, ${formatDate(r.work_date)}. PDF to follow.`
     window.open(`https://wa.me/${waNumber(customer.phone)}?text=${encodeURIComponent(text)}`, '_blank')
   }
 
@@ -161,7 +162,7 @@ export default function ServiceRecordsPage() {
                     <Link to={`/job-orders/${r.job_order_id}`}>{jobOrderSubject(r.job_order_id)}</Link>
                   </td>
                   <td>{userName(r.employee_user_id)}</td>
-                  <td>{r.work_date}</td>
+                  <td>{formatDate(r.work_date)}</td>
                   <td>
                     {r.raw_minutes}m &rarr; {r.rounded_minutes}m
                     {r.deducted_minutes != null && <> &rarr; {r.deducted_minutes}m deducted</>}

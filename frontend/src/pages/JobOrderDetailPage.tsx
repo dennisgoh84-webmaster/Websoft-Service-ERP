@@ -14,7 +14,7 @@ import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ProjectSchedulePanel from '../components/ProjectSchedulePanel'
 import SignaturePanel from '../components/SignaturePanel'
 import { useAuth } from '../lib/AuthContext'
-import { formatDateTime } from '../lib/format'
+import { formatDateTime, formatDate } from '../lib/format'
 
 /** SRV-020 labels. */
 const BILLING_LABELS: Record<JobOrderBillingClassification, string> = {
@@ -245,7 +245,7 @@ export default function JobOrderDetailPage() {
         {jobOrder.due_date && (
           <>
             {' '}
-            &middot; <span className="muted">Due {jobOrder.due_date}</span>
+            &middot; <span className="muted">Due {formatDate(jobOrder.due_date)}</span>
           </>
         )}
         {jobOrder.closed_at && (
@@ -560,7 +560,7 @@ export default function JobOrderDetailPage() {
             {records.map((r) => (
               <tr key={r.id}>
                 <td>{userName(r.employee_user_id)}</td>
-                <td>{r.work_date}</td>
+                <td>{formatDate(r.work_date)}</td>
                 <td>
                   {r.raw_minutes}m &rarr; {r.rounded_minutes}m
                   {r.deducted_minutes != null && <> &rarr; {r.deducted_minutes}m deducted</>}

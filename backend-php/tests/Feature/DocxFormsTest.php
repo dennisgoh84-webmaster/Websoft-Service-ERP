@@ -121,8 +121,8 @@ class DocxFormsTest extends TestCase
         $this->assertStringContainsString('Business Reg# 201812345A', $text);
         $this->assertStringContainsString('GST Reg# M2-1234567-8', $text);
         $this->assertStringContainsString($invoice->invoice_number, $text);
-        $this->assertStringContainsString('Issued: '.$invoice->issued_at->format('Y-m-d'), $text);
-        $this->assertStringContainsString('Due: '.$invoice->due_date->toDateString(), $text);
+        $this->assertStringContainsString('Issued: '.$invoice->issued_at->format('d/m/Y'), $text);
+        $this->assertStringContainsString('Due: '.$invoice->due_date->format('d/m/Y'), $text);
         // Bill To block.
         $this->assertStringContainsString('Bill To', $text);
         $this->assertStringContainsString('Acme Logistics Pte Ltd', $text);
@@ -182,8 +182,8 @@ class DocxFormsTest extends TestCase
 
         $this->assertStringContainsString('QUOTATION', $text);
         $this->assertStringContainsString('QUO-2026-0001', $text);
-        $this->assertStringContainsString('Date: 2026-09-01', $text);
-        $this->assertStringContainsString('Valid Until: 2026-09-30', $text);
+        $this->assertStringContainsString('Date: 01/09/2026', $text);
+        $this->assertStringContainsString('Valid Until: 30/09/2026', $text);
         $this->assertStringContainsString('UoM', $text);
         $this->assertStringContainsString('Managed IT support', $text);
         $this->assertStringContainsString('Hours', $text);
@@ -227,7 +227,7 @@ class DocxFormsTest extends TestCase
 
         $this->assertStringContainsString('OFFICIAL RECEIPT', $text);
         $this->assertStringContainsString('RV-2026-0001', $text);
-        $this->assertStringContainsString('Date: 2026-09-10', $text);
+        $this->assertStringContainsString('Date: 10/09/2026', $text);
         $this->assertStringContainsString('Method: bank_transfer', $text);
         $this->assertStringContainsString('Reference: DBS-99182', $text);
         $this->assertStringContainsString('Received From', $text);
@@ -271,7 +271,7 @@ class DocxFormsTest extends TestCase
 
         $this->assertStringContainsString('PURCHASE ORDER', $text);
         $this->assertStringContainsString('PO-2026-0001', $text);
-        $this->assertStringContainsString('Date: 2026-09-05', $text);
+        $this->assertStringContainsString('Date: 05/09/2026', $text);
         // Python: status.value.replace('_', ' ').title().
         $this->assertStringContainsString('Status: Pending Approval', $text);
         $this->assertStringContainsString('Supplier', $text);
@@ -314,7 +314,7 @@ class DocxFormsTest extends TestCase
 
         $this->assertStringContainsString('PAYMENT VOUCHER', $text);
         $this->assertStringContainsString('PV-2026-0001', $text);
-        $this->assertStringContainsString('Date: 2026-09-11', $text);
+        $this->assertStringContainsString('Date: 11/09/2026', $text);
         $this->assertStringContainsString('Method: cheque', $text);
         $this->assertStringContainsString('Reference: CHQ-0042', $text);
         $this->assertStringContainsString('Paid To', $text);
@@ -347,7 +347,7 @@ class DocxFormsTest extends TestCase
         $this->assertStringContainsString('SERVICE RECORD', $text);
         $this->assertStringContainsString('SR-2026-0001', $text);
         $this->assertStringContainsString('Job Order: JO-2026-0001 -- Server not booting', $text);
-        $this->assertStringContainsString('Work Date: 2026-09-12', $text);
+        $this->assertStringContainsString('Work Date: 12/09/2026', $text);
         $this->assertStringContainsString('Status: Approved', $text);
         $this->assertStringContainsString('Company / Individual', $text);
         $this->assertStringContainsString('Acme Logistics Pte Ltd', $text);
@@ -400,7 +400,7 @@ class DocxFormsTest extends TestCase
 
         $this->assertStringContainsString('STATEMENT OF ACCOUNTS', $text);
         $this->assertStringContainsString('Acme Logistics Pte Ltd', $text);
-        $this->assertStringContainsString('As at: '.now()->toDateString(), $text);
+        $this->assertStringContainsString('As at: '.now()->format('d/m/Y'), $text);
         $this->assertStringContainsString('Payment terms: Net 30 days', $text);
         $this->assertStringContainsString('Outstanding ($)', $text);
         $this->assertStringContainsString($invoice->invoice_number.' (disputed)', $text);

@@ -4,7 +4,7 @@ import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type Account, type JournalEntry, type TrialBalance } from '../lib/api'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 
 interface DraftLine {
   accountId: string
@@ -362,7 +362,7 @@ export default function GeneralLedgerPage() {
                 <Fragment key={v.id}>
                 <tr>
                   <td>{v.voucher_number}</td>
-                  <td>{v.entry_date}</td>
+                  <td>{formatDate(v.entry_date)}</td>
                   <td>
                     {v.narration}
                     <div className="muted">

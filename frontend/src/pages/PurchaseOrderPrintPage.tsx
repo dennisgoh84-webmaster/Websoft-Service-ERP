@@ -7,7 +7,7 @@ import { useParams } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
 import { api, downloadBlob, type CompanyIndividual, type PurchaseOrder } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, formatDate } from '../lib/format'
 
 export default function PurchaseOrderPrintPage() {
   const { id } = useParams<{ id: string }>()
@@ -100,7 +100,7 @@ export default function PurchaseOrderPrintPage() {
           </div>
           <div className="form-meta-row">
             <span className="muted">Date</span>
-            <span>: {po.order_date}</span>
+            <span>: {formatDate(po.order_date)}</span>
           </div>
           <div className="form-meta-row">
             <span className="muted">Status</span>

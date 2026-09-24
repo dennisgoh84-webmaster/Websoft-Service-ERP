@@ -3601,6 +3601,4 @@ export const api = {
   // Helper to get current user info (mirrors /auth/me)
   getCurrentUser: () => request<CurrentUser>('/auth/me'),
 
-  // Helper to get a single customer/company individual
-  getCompanyIndividual: (id: string) => request<CompanyIndividual>(`/company-individuals/${id}`),
 }
