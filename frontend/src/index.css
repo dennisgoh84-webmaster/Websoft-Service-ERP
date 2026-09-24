@@ -1075,3 +1075,125 @@ button.report-back:hover {
   background: none;
   text-decoration: underline;
 }
+
+/* ── Report filters (components/ReportFilters.tsx) ─────────────────── */
+.report-filter-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: flex-end;
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.report-filter-grid .form-row {
+  margin: 0;
+}
+.report-filter-grid .report-companies {
+  flex-basis: 100%;
+}
+.report-filter-actions {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  margin-left: auto;
+}
+.company-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+button.company-chip {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-family: inherit;
+}
+button.company-chip:hover {
+  background: var(--surface);
+  border-color: var(--accent);
+}
+button.company-chip.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+button.company-chip:disabled {
+  opacity: 1;
+  cursor: default;
+}
+button.company-chip.all {
+  border-style: dashed;
+  color: var(--text-muted);
+}
+.multi-pick {
+  position: relative;
+}
+button.multi-pick-toggle {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 220px;
+  max-width: 280px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-weight: normal;
+  text-align: left;
+}
+button.multi-pick-toggle:hover {
+  background: var(--surface);
+  border-color: var(--accent);
+}
+.multi-pick-toggle span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.multi-pick-panel {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  width: 300px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 8px;
+}
+.multi-pick-panel > input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 6px;
+}
+.multi-pick-list {
+  max-height: 240px;
+  overflow: auto;
+}
+label.multi-pick-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  font-size: 13.5px;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 4px;
+}
+label.multi-pick-item:hover {
+  background: var(--neutral-bg);
+}
+.multi-pick-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  margin-top: 6px;
+}

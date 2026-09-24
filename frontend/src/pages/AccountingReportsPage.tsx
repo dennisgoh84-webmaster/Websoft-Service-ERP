@@ -1,6 +1,8 @@
-// Accounting Reports -- a card launcher grouped AR / AP / BANK / GL / GST
-// (Dennis, 2026-09-24; see components/ReportLauncher.tsx), each report
-// then opening with only its own filters. Most of these are the same
+// Accounting Reports -- a card launcher grouped AR / AP / BANK / GL / GST /
+// SALES / SETUP (Dennis, 2026-09-24; see components/ReportLauncher.tsx),
+// each report then opening with only its own filters: which of the
+// user's companies (one or several), the relevant customer / supplier /
+// salesperson, and an accounting period or exact date range. Most of these are the same
 // figures already shown inline elsewhere (Invoices' aging widget,
 // Accounts Payable's aging widget, General Ledger's trial balance,
 // Chart of Accounts, Bank Master File, Tax Types); this screen is the
@@ -12,20 +14,23 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
 import { ReportHeader, ReportLauncher, useSelectedReport, type ReportSection } from '../components/ReportLauncher'
+import { AsAtPicker, CompanyPicker, MultiPick, PeriodRange } from '../components/ReportFilters'
+import { useAuth } from '../lib/AuthContext'
 import {
   api,
   downloadBlob,
   type Account,
+  type AccountingReportFilters,
   type AgingReport,
   type APAgingReport,
   type BankAccount,
   type CommissionReport,
   type GSTReturn,
   type SalesGPReport,
+  type ReportFilterOptions,
   type TaxCode,
   type TrialBalance,
 } from '../lib/api'
-import { isoToMonth, monthEndISO, monthStartISO } from '../lib/period'
 import { formatMoney as money, formatDate } from '../lib/format'
 
 type ReportType =
@@ -40,9 +45,6 @@ type ReportType =
   | 'sales-gp'
   | 'commission'
 
-// Sales Invoice Listing and Commission sit under AR (they are views of
-// sales invoices and what has been collected on them); Chart of Accounts
-// under GL and Tax Types under GST, next to the reports that use them.
 const SECTIONS: ReportSection<ReportType>[] = [
   {
     label: 'AR',
@@ -53,23 +55,7 @@ const SECTIONS: ReportSection<ReportType>[] = [
         summary: 'Who owes you money, and how overdue it is.',
         details:
           'Every unpaid sales invoice, totalled per company / individual and split by how many days past due it is -- current, 1-30, 31-60, 61-90 and over 90 days. Use it to plan collection follow-ups and for month-end review. Change "As at" to see what was outstanding on an earlier date.',
-        filters: ['As at date'],
-      },
-      {
-        key: 'sales-gp',
-        title: 'Sales Invoice Listing (GP)',
-        summary: 'Invoices with revenue, cost and gross profit.',
-        details:
-          'Every sales invoice issued in the chosen months, with its revenue, cost and gross profit in dollars and as a percentage -- shows which jobs and customers actually make money.',
-        filters: ['Period (months)'],
-      },
-      {
-        key: 'commission',
-        title: 'Commission',
-        summary: 'Commission earned per salesperson.',
-        details:
-          'Commission per salesperson per month, worked out only on the part of each invoice that a receipt has actually settled -- so unpaid invoices earn nothing yet. The commission rate itself is set on this report.',
-        filters: ['Period (months)'],
+        filters: ['Company', 'Customer', 'Accounting period', 'As at date'],
       },
     ],
   },
@@ -82,7 +68,7 @@ const SECTIONS: ReportSection<ReportType>[] = [
         summary: 'What you owe suppliers, and how overdue it is.',
         details:
           'Every unpaid supplier bill, totalled per supplier and split by how many days past due it is -- current, 1-30, 31-60, 61-90 and over 90 days. Use it to plan payment runs. Change "As at" to see what was owed on an earlier date.',
-        filters: ['As at date'],
+        filters: ['Company', 'Supplier', 'Accounting period', 'As at date'],
       },
     ],
   },
@@ -107,8 +93,8 @@ const SECTIONS: ReportSection<ReportType>[] = [
         title: 'Trial Balance',
         summary: 'Debit and credit balance of every account.',
         details:
-          'The balance of every general ledger account as at the chosen date. Total debits must equal total credits; if they do not, something was posted unbalanced. The starting point for month-end and year-end checks.',
-        filters: ['As at date'],
+          'The balance of every general ledger account as at the chosen date. With several companies ticked, accounts with the same code and name are added together. Total debits must equal total credits; if they do not, something was posted unbalanced. The starting point for month-end and year-end checks.',
+        filters: ['Company', 'Accounting period', 'As at date'],
       },
       {
         key: 'account-ledger',
@@ -117,13 +103,6 @@ const SECTIONS: ReportSection<ReportType>[] = [
         details:
           'Every posted debit and credit for a single account, with a running balance. It opens in GL Transactions, where you choose the account and the date range and can export the result.',
         filters: ['Account', 'Date range'],
-      },
-      {
-        key: 'chart-of-accounts',
-        title: 'Chart of Accounts Listing',
-        summary: 'The full list of general ledger accounts.',
-        details: 'Every account code with its name, type and status -- handy when checking which code a transaction should go to.',
-        filters: [],
       },
     ],
   },
@@ -135,30 +114,76 @@ const SECTIONS: ReportSection<ReportType>[] = [
         title: 'GST Return',
         summary: 'The figures you need for your GST return.',
         details:
-          'Output tax on sales invoices and input tax on supplier bills for the chosen months, totalled per tax code with the net amount and number of documents. Read-only: it does not file anything or post to the ledger.',
-        filters: ['Period (months)'],
+          'Output tax on sales invoices and input tax on supplier bills for the chosen period, totalled per tax code with the net amount and number of documents. With several companies ticked the figures are added together as a group view -- each company still files its own return. Read-only: it does not file anything or post to the ledger.',
+        filters: ['Company', 'Accounting period', 'Date from – to'],
+      },
+    ],
+  },
+  {
+    label: 'Sales',
+    reports: [
+      {
+        key: 'sales-gp',
+        title: 'Sales Invoice Listing (GP)',
+        summary: 'Invoices with revenue, cost and gross profit.',
+        details:
+          'Every sales invoice issued in the chosen period, with its revenue, cost and gross profit in dollars and as a percentage -- shows which jobs and customers actually make money.',
+        filters: ['Company', 'Customer', 'Accounting period', 'Date from – to'],
+      },
+      {
+        key: 'commission',
+        title: 'Commission',
+        summary: 'Commission earned per salesperson.',
+        details:
+          'Commission per salesperson per month, each company at its own rate, worked out only on the part of each invoice that a receipt has actually settled -- so unpaid invoices earn nothing yet. The commission rate itself is set on this report.',
+        filters: ['Company', 'Salesperson', 'Accounting period', 'Date from – to'],
+      },
+    ],
+  },
+  {
+    label: 'Setup',
+    reports: [
+      {
+        key: 'chart-of-accounts',
+        title: 'Chart of Accounts Listing',
+        summary: 'The full list of general ledger accounts.',
+        details: 'Every account code in your current company with its name, type and status -- handy when checking which code a transaction should go to.',
+        filters: [],
       },
       {
         key: 'tax-types',
         title: 'Tax Types Listing',
         summary: 'Every tax code and its rate.',
-        details: 'Every tax code set up for this company with its rate and status -- the codes used on invoices and bills and summed in the GST Return.',
+        details: 'Every tax code set up for your current company with its rate and status -- the codes used on invoices and bills and summed in the GST Return.',
         filters: [],
       },
     ],
   },
 ]
 
+function isoLocal(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 function firstOfMonth(): string {
   const d = new Date()
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)
+  return isoLocal(new Date(d.getFullYear(), d.getMonth(), 1))
 }
 function today(): string {
-  return new Date().toISOString().slice(0, 10)
+  return isoLocal(new Date())
 }
+
+const USES_COMPANIES: ReportType[] = ['ar-aging', 'ap-aging', 'trial-balance', 'gst-return', 'sales-gp', 'commission']
+const USES_AS_AT: ReportType[] = ['ar-aging', 'ap-aging', 'trial-balance']
+const USES_RANGE: ReportType[] = ['gst-return', 'sales-gp', 'commission']
 
 export default function AccountingReportsPage() {
   const [reportType, openReport] = useSelectedReport(SECTIONS)
+  const { user } = useAuth()
+  const [companyIds, setCompanyIds] = useState<string[]>(user?.company_id ? [user.company_id] : [])
+  const [customerIds, setCustomerIds] = useState<string[]>([])
+  const [supplierIds, setSupplierIds] = useState<string[]>([])
+  const [staffIds, setStaffIds] = useState<string[]>([])
+  const [options, setOptions] = useState<ReportFilterOptions>({ customers: [], suppliers: [], sales_staff: [] })
   const [asAt, setAsAt] = useState('')
   const [periodStart, setPeriodStart] = useState(firstOfMonth())
   const [periodEnd, setPeriodEnd] = useState(today())
@@ -176,17 +201,38 @@ export default function AccountingReportsPage() {
   const [commissionRateInput, setCommissionRateInput] = useState('')
   const [savingRate, setSavingRate] = useState(false)
 
-  const usesDateRange = reportType === 'gst-return' || reportType === 'sales-gp' || reportType === 'commission'
+  const multiCompany = companyIds.length > 1
+  const filters: AccountingReportFilters = {
+    company_ids: companyIds.join(','),
+    customer_ids: customerIds.join(','),
+    supplier_ids: supplierIds.join(','),
+    sales_staff_ids: staffIds.join(','),
+  }
+  const asAtFilters: AccountingReportFilters = { ...filters, as_at: asAt || undefined }
+  const rangeFilters: AccountingReportFilters = { ...filters, period_start: periodStart, period_end: periodEnd }
+  const filterKey = JSON.stringify({ filters, asAt, periodStart, periodEnd })
+
+  // Party choices follow the ticked companies; drop any picks that no longer exist.
+  const companyKey = companyIds.join(',')
+  useEffect(() => {
+    if (!companyKey) return
+    api.reportFilterOptions(companyKey).then((o) => {
+      setOptions(o)
+      const keep = (ids: string[], opts: { id: string }[]) => ids.filter((id) => id === 'unassigned' || opts.some((x) => x.id === id))
+      setCustomerIds((ids) => keep(ids, o.customers))
+      setSupplierIds((ids) => keep(ids, o.suppliers))
+      setStaffIds((ids) => keep(ids, o.sales_staff))
+    }).catch(() => setOptions({ customers: [], suppliers: [], sales_staff: [] }))
+  }, [companyKey])
 
   useEffect(() => {
     setError(null)
-    const at = asAt || undefined
     if (reportType === 'ar-aging') {
-      api.reportArAging(at).then(setArAging).catch((e) => setError(e.message))
+      api.reportArAging(asAtFilters).then(setArAging).catch((e) => setError(e.message))
     } else if (reportType === 'ap-aging') {
-      api.reportApAging(at).then(setApAging).catch((e) => setError(e.message))
+      api.reportApAging(asAtFilters).then(setApAging).catch((e) => setError(e.message))
     } else if (reportType === 'trial-balance') {
-      api.reportTrialBalance(at).then(setTrialBalance).catch((e) => setError(e.message))
+      api.reportTrialBalance(asAtFilters).then(setTrialBalance).catch((e) => setError(e.message))
     } else if (reportType === 'bank-accounts') {
       api.listBankAccounts().then(setBankAccounts).catch((e) => setError(e.message))
     } else if (reportType === 'chart-of-accounts') {
@@ -194,23 +240,25 @@ export default function AccountingReportsPage() {
     } else if (reportType === 'tax-types') {
       api.listTaxCodes().then(setTaxCodes).catch((e) => setError(e.message))
     } else if (reportType === 'gst-return') {
-      api.reportGstReturn(periodStart, periodEnd).then(setGstReturn).catch((e) => setError(e.message))
+      api.reportGstReturn(rangeFilters).then(setGstReturn).catch((e) => setError(e.message))
     } else if (reportType === 'sales-gp') {
-      api.reportSalesGP(periodStart, periodEnd).then(setSalesGP).catch((e) => setError(e.message))
+      api.reportSalesGP(rangeFilters).then(setSalesGP).catch((e) => setError(e.message))
     } else if (reportType === 'commission') {
-      api.reportCommission(periodStart, periodEnd).then((r) => {
+      api.reportCommission(rangeFilters).then((r) => {
         setCommission(r)
         setCommissionRateInput(String(r.rate_percent))
       }).catch((e) => setError(e.message))
     }
-  }, [reportType, asAt, periodStart, periodEnd])
+    // filterKey captures every filter value; the objects built from it are new each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportType, filterKey])
 
   async function onSaveCommissionRate() {
     setError(null)
     setSavingRate(true)
     try {
       await api.updateCommissionSettings(Number(commissionRateInput) || 0)
-      const r = await api.reportCommission(periodStart, periodEnd)
+      const r = await api.reportCommission(rangeFilters)
       setCommission(r)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save commission rate')
@@ -221,37 +269,29 @@ export default function AccountingReportsPage() {
 
   async function onExport(format: string) {
     setError(null)
-    const at = asAt || undefined
-    const ext = format === 'csv' ? 'csv' : 'xlsx'
+    const csv = format === 'csv'
+    const ext = csv ? 'csv' : 'xlsx'
     if (reportType === 'ar-aging') {
-      downloadBlob(format === 'csv' ? await api.exportArAgingReportCsv(at) : await api.exportArAgingReportExcel(at), `ar-aging-report.${ext}`)
+      downloadBlob(csv ? await api.exportArAgingReportCsv(asAtFilters) : await api.exportArAgingReportExcel(asAtFilters), `ar-aging-report.${ext}`)
     } else if (reportType === 'ap-aging') {
-      downloadBlob(format === 'csv' ? await api.exportApAgingReportCsv(at) : await api.exportApAgingReportExcel(at), `ap-aging-report.${ext}`)
+      downloadBlob(csv ? await api.exportApAgingReportCsv(asAtFilters) : await api.exportApAgingReportExcel(asAtFilters), `ap-aging-report.${ext}`)
     } else if (reportType === 'trial-balance') {
-      downloadBlob(format === 'csv' ? await api.exportTrialBalanceReportCsv(at) : await api.exportTrialBalanceReportExcel(at), `trial-balance-report.${ext}`)
+      downloadBlob(csv ? await api.exportTrialBalanceReportCsv(asAtFilters) : await api.exportTrialBalanceReportExcel(asAtFilters), `trial-balance-report.${ext}`)
     } else if (reportType === 'bank-accounts') {
-      downloadBlob(format === 'csv' ? await api.exportBankAccountsCsv() : await api.exportBankAccountsExcel(), `bank-accounts.${ext}`)
+      downloadBlob(csv ? await api.exportBankAccountsCsv() : await api.exportBankAccountsExcel(), `bank-accounts.${ext}`)
     } else if (reportType === 'chart-of-accounts') {
-      downloadBlob(format === 'csv' ? await api.exportAccountsCsv() : await api.exportAccountsExcel(), `chart-of-accounts.${ext}`)
+      downloadBlob(csv ? await api.exportAccountsCsv() : await api.exportAccountsExcel(), `chart-of-accounts.${ext}`)
     } else if (reportType === 'tax-types') {
-      downloadBlob(format === 'csv' ? await api.exportTaxCodesCsv() : await api.exportTaxCodesExcel(), `tax-types.${ext}`)
+      downloadBlob(csv ? await api.exportTaxCodesCsv() : await api.exportTaxCodesExcel(), `tax-types.${ext}`)
     } else if (reportType === 'sales-gp') {
-      downloadBlob(
-        format === 'csv' ? await api.exportSalesGPReportCsv(periodStart, periodEnd) : await api.exportSalesGPReportExcel(periodStart, periodEnd),
-        `sales-gp-report.${ext}`,
-      )
+      downloadBlob(csv ? await api.exportSalesGPReportCsv(rangeFilters) : await api.exportSalesGPReportExcel(rangeFilters), `sales-gp-report.${ext}`)
     } else if (reportType === 'commission') {
-      downloadBlob(
-        format === 'csv' ? await api.exportCommissionReportCsv(periodStart, periodEnd) : await api.exportCommissionReportExcel(periodStart, periodEnd),
-        `commission-report.${ext}`,
-      )
+      downloadBlob(csv ? await api.exportCommissionReportCsv(rangeFilters) : await api.exportCommissionReportExcel(rangeFilters), `commission-report.${ext}`)
     } else if (reportType === 'gst-return') {
-      downloadBlob(
-        format === 'csv' ? await api.exportGstReturnCsv(periodStart, periodEnd) : await api.exportGstReturnExcel(periodStart, periodEnd),
-        `gst-return.${ext}`,
-      )
+      downloadBlob(csv ? await api.exportGstReturnCsv(rangeFilters) : await api.exportGstReturnExcel(rangeFilters), `gst-return.${ext}`)
     }
   }
+
 
   return (
     <div>
@@ -270,48 +310,41 @@ export default function AccountingReportsPage() {
       {error && <div className="error-banner">{error}</div>}
 
       <div className="card">
-        <div className="filter-bar">
-          {usesDateRange ? (
-            <>
-              <div className="form-row" style={{ margin: 0 }}>
-                <label>Period from</label>
-                <input
-                  type="month"
-                  value={isoToMonth(periodStart)}
-                  onChange={(e) => setPeriodStart(monthStartISO(e.target.value))}
-                />
-              </div>
-              <div className="form-row" style={{ margin: 0 }}>
-                <label>Period to</label>
-                <input
-                  type="month"
-                  value={isoToMonth(periodEnd)}
-                  onChange={(e) => setPeriodEnd(monthEndISO(e.target.value))}
-                />
-              </div>
-            </>
-          ) : (
-            (reportType === 'ar-aging' || reportType === 'ap-aging' || reportType === 'trial-balance') && (
-              <>
-                <div className="form-row" style={{ margin: 0 }}>
-                  <label>As at</label>
-                  <input type="date" value={asAt} onChange={(e) => setAsAt(e.target.value)} />
-                </div>
-                <button type="button" className="secondary" onClick={() => setAsAt('')}>
-                  Reset to today
-                </button>
-              </>
-            )
+        <div className="report-filter-grid">
+          {USES_COMPANIES.includes(reportType) && <CompanyPicker value={companyIds} onChange={setCompanyIds} />}
+          {(reportType === 'ar-aging' || reportType === 'sales-gp') && (
+            <MultiPick label="Customer" allLabel="All customers" options={options.customers} value={customerIds} onChange={setCustomerIds} />
+          )}
+          {reportType === 'ap-aging' && (
+            <MultiPick label="Supplier" allLabel="All suppliers" options={options.suppliers} value={supplierIds} onChange={setSupplierIds} />
+          )}
+          {reportType === 'commission' && (
+            <MultiPick
+              label="Salesperson"
+              allLabel="All salespeople"
+              options={[...options.sales_staff, { id: 'unassigned', name: 'Unassigned (no salesperson on the contract)' }]}
+              value={staffIds}
+              onChange={setStaffIds}
+            />
+          )}
+          {USES_AS_AT.includes(reportType) && <AsAtPicker value={asAt} onChange={setAsAt} />}
+          {USES_RANGE.includes(reportType) && (
+            <PeriodRange from={periodStart} to={periodEnd} onChange={(f, t) => { setPeriodStart(f); setPeriodEnd(t) }} />
+          )}
+          {!USES_COMPANIES.includes(reportType) && reportType !== 'account-ledger' && (
+            <p className="muted" style={{ margin: 0 }}>Your current company. Switch company from the menu to list another.</p>
           )}
           {reportType !== 'account-ledger' && (
-            <ExportControl
-              formats={[
-                { value: 'csv', label: 'CSV' },
-                { value: 'excel', label: 'Excel' },
-              ]}
-              onExport={onExport}
-              onError={setError}
-            />
+            <div className="report-filter-actions">
+              <ExportControl
+                formats={[
+                  { value: 'csv', label: 'CSV' },
+                  { value: 'excel', label: 'Excel' },
+                ]}
+                onExport={onExport}
+                onError={setError}
+              />
+            </div>
           )}
         </div>
 
@@ -348,6 +381,7 @@ export default function AccountingReportsPage() {
               <table>
                 <thead>
                   <tr>
+                    {multiCompany && <th>Company</th>}
                     <th>Company / Individual</th>
                     <th>Current</th>
                     <th>1-30</th>
@@ -359,7 +393,8 @@ export default function AccountingReportsPage() {
                 </thead>
                 <tbody>
                   {arAging.rows.map((r) => (
-                    <tr key={r.customer_id}>
+                    <tr key={`${r.company_id}-${r.customer_id}`}>
+                      {multiCompany && <td>{r.company_name}</td>}
                       <td>{r.customer_name}</td>
                       <td>{money(r.current)}</td>
                       <td>{money(r.days_1_30)}</td>
@@ -373,7 +408,7 @@ export default function AccountingReportsPage() {
                   ))}
                   {arAging.rows.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="muted">
+                      <td colSpan={multiCompany ? 8 : 7} className="muted">
                         Nothing outstanding.
                       </td>
                     </tr>
@@ -391,6 +426,7 @@ export default function AccountingReportsPage() {
               <table>
                 <thead>
                   <tr>
+                    {multiCompany && <th>Company</th>}
                     <th>Supplier</th>
                     <th>Current</th>
                     <th>1-30</th>
@@ -402,7 +438,8 @@ export default function AccountingReportsPage() {
                 </thead>
                 <tbody>
                   {apAging.rows.map((r) => (
-                    <tr key={r.supplier_id}>
+                    <tr key={`${r.company_id}-${r.supplier_id}`}>
+                      {multiCompany && <td>{r.company_name}</td>}
                       <td>{r.supplier_name}</td>
                       <td>{money(r.current)}</td>
                       <td>{money(r.days_1_30)}</td>
@@ -416,7 +453,7 @@ export default function AccountingReportsPage() {
                   ))}
                   {apAging.rows.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="muted">
+                      <td colSpan={multiCompany ? 8 : 7} className="muted">
                         Nothing owed.
                       </td>
                     </tr>
@@ -629,7 +666,7 @@ export default function AccountingReportsPage() {
         {reportType === 'sales-gp' && salesGP && (
           <>
             <h2>
-              Sales Invoice Listing (GP): {salesGP.period_start} to {salesGP.period_end}
+              Sales Invoice Listing (GP): {formatDate(salesGP.period_start)} to {formatDate(salesGP.period_end)}
             </h2>
             <p className="muted">
               GP = revenue (net of GST) minus product cost. A row without a cost basis (no dot
@@ -658,6 +695,7 @@ export default function AccountingReportsPage() {
               <table>
                 <thead>
                   <tr>
+                    {multiCompany && <th>Company</th>}
                     <th>Invoice</th>
                     <th>Date</th>
                     <th>Customer</th>
@@ -670,6 +708,7 @@ export default function AccountingReportsPage() {
                 <tbody>
                   {salesGP.rows.map((r) => (
                     <tr key={r.invoice_id}>
+                      {multiCompany && <td>{r.company_name}</td>}
                       <td>{r.invoice_number}</td>
                       <td>{formatDate(r.issued_at)}</td>
                       <td>{r.customer_name}</td>
@@ -689,7 +728,7 @@ export default function AccountingReportsPage() {
                   ))}
                   {salesGP.rows.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="muted">
+                      <td colSpan={multiCompany ? 8 : 7} className="muted">
                         No invoices in this date range.
                       </td>
                     </tr>
@@ -703,7 +742,7 @@ export default function AccountingReportsPage() {
         {reportType === 'commission' && commission && (
           <>
             <h2>
-              Commission: {commission.period_start} to {commission.period_end}
+              Commission: {formatDate(commission.period_start)} to {formatDate(commission.period_end)}
             </h2>
             <p className="muted">
               Formula (confirmed with Dennis, 2026-09-12): rate % of gross profit, applied to the
@@ -741,6 +780,7 @@ export default function AccountingReportsPage() {
               <table>
                 <thead>
                   <tr>
+                    {multiCompany && <th>Company</th>}
                     <th>Month</th>
                     <th>Salesperson</th>
                     <th>Commission</th>
@@ -748,7 +788,8 @@ export default function AccountingReportsPage() {
                 </thead>
                 <tbody>
                   {commission.rows.map((r, i) => (
-                    <tr key={`${r.month}-${r.sales_staff_id ?? 'none'}-${i}`}>
+                    <tr key={`${r.company_id}-${r.month}-${r.sales_staff_id ?? 'none'}-${i}`}>
+                      {multiCompany && <td>{r.company_name}</td>}
                       <td>{r.month}</td>
                       <td>{r.sales_staff_name}</td>
                       <td>{money(r.commission_sgd)}</td>
@@ -756,7 +797,7 @@ export default function AccountingReportsPage() {
                   ))}
                   {commission.rows.length === 0 && (
                     <tr>
-                      <td colSpan={3} className="muted">
+                      <td colSpan={multiCompany ? 4 : 3} className="muted">
                         No receipts applied to invoices in this date range.
                       </td>
                     </tr>
@@ -770,7 +811,7 @@ export default function AccountingReportsPage() {
         {reportType === 'gst-return' && gstReturn && (
           <>
             <h2>
-              GST Return: {gstReturn.period_start} to {gstReturn.period_end}
+              GST Return: {formatDate(gstReturn.period_start)} to {formatDate(gstReturn.period_end)}
             </h2>
             <p className="muted">
               Tax point = invoice date, output vs input tax only -- this does not file a return or

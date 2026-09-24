@@ -25,7 +25,7 @@ import {
   type SetupListItem,
   type StaffUser,
 } from '../lib/api'
-import { isoToMonth, monthEndISO, monthStartISO } from '../lib/period'
+import { PeriodRange } from '../components/ReportFilters'
 import { formatMoney as money, formatDate } from '../lib/format'
 
 // NEW FEATURE (not a Python->PHP conversion -- see
@@ -51,7 +51,7 @@ const SECTIONS: ReportSection<ReportType>[] = [
         summary: 'All service contracts, filtered however you need.',
         details:
           'Every service contract with its company / individual, kind, status, contracted / consumed / remaining amount, value, and start and end dates. Narrow it by status or kind, or use "Expiring within (days)" to find contracts ending soon.',
-        filters: ['Company / Individual', 'Status', 'Kind', 'Expiring within', 'Period (months)'],
+        filters: ['Company / Individual', 'Status', 'Kind', 'Expiring within', 'Accounting period', 'Date from – to'],
       },
       {
         key: 'contract-expiry-listing',
@@ -77,14 +77,14 @@ const SECTIONS: ReportSection<ReportType>[] = [
         title: 'Job Orders',
         summary: 'Job orders by status, assignee and date.',
         details: 'Every job order with its subject, priority, status, assignee and due date. Tick "Overdue only" to see just the jobs that are past due and still open.',
-        filters: ['Company / Individual', 'Status', 'Assigned to', 'Overdue only', 'Period (months)'],
+        filters: ['Company / Individual', 'Status', 'Assigned to', 'Overdue only', 'Accounting period', 'Date from – to'],
       },
       {
         key: 'service-records',
         title: 'Service Records',
         summary: 'Work done on site, by status, outcome and staff.',
         details: 'Every service record with its work date, employee, hours, status, outcome and whether it was late -- use it to review what was done for a customer or by a technician over a period.',
-        filters: ['Company / Individual', 'Status', 'Outcome', 'Staff', 'Period (months)'],
+        filters: ['Company / Individual', 'Status', 'Outcome', 'Staff', 'Accounting period', 'Date from – to'],
       },
     ],
   },
@@ -489,24 +489,7 @@ export default function OperationsReportsPage() {
           {reportType !== 'customer-product-usage' &&
             reportType !== 'contract-expiry-listing' &&
             reportType !== 'contract-renewal-due-listing' && (
-            <>
-              <div className="form-row" style={{ margin: 0 }}>
-                <label>Period from</label>
-                <input
-                  type="month"
-                  value={isoToMonth(startDate)}
-                  onChange={(e) => setStartDate(monthStartISO(e.target.value))}
-                />
-              </div>
-              <div className="form-row" style={{ margin: 0 }}>
-                <label>Period to</label>
-                <input
-                  type="month"
-                  value={isoToMonth(endDate)}
-                  onChange={(e) => setEndDate(monthEndISO(e.target.value))}
-                />
-              </div>
-            </>
+            <PeriodRange from={startDate} to={endDate} onChange={(f, t) => { setStartDate(f); setEndDate(t) }} />
           )}
 
           <button type="button" className="secondary" onClick={resetFilters}>

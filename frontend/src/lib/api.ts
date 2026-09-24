@@ -1095,6 +1095,9 @@ export interface Payment {
 }
 
 export interface AgingRow {
+  /** Set by Accounting Reports, which can span several companies. */
+  company_id?: string
+  company_name?: string
   customer_id: string
   customer_name: string
   current: number
@@ -1107,6 +1110,8 @@ export interface AgingRow {
 
 export interface AgingReport {
   as_at: string
+  /** Accounting Reports only: "C001 Name" for each company covered. */
+  companies?: string[]
   rows: AgingRow[]
   current: number
   days_1_30: number
@@ -1351,6 +1356,7 @@ export interface GSTReturnRow {
 
 export interface GSTReturn {
   period_start: string
+  companies?: string[]
   period_end: string
   output_rows: GSTReturnRow[]
   input_rows: GSTReturnRow[]
@@ -1361,6 +1367,9 @@ export interface GSTReturn {
 
 // ---- Sales GP + Commission (2026-09-12) ----
 export interface SalesGPRow {
+  /** Set by Accounting Reports, which can span several companies. */
+  company_id?: string
+  company_name?: string
   invoice_id: string
   invoice_number: string
   issued_at: string
@@ -1375,6 +1384,7 @@ export interface SalesGPRow {
 
 export interface SalesGPReport {
   period_start: string
+  companies?: string[]
   period_end: string
   rows: SalesGPRow[]
   total_revenue_sgd: number
@@ -1384,6 +1394,9 @@ export interface SalesGPReport {
 }
 
 export interface CommissionRow {
+  /** Set by Accounting Reports, which can span several companies. */
+  company_id?: string
+  company_name?: string
   month: string
   sales_staff_id: string | null
   sales_staff_name: string
@@ -1392,6 +1405,7 @@ export interface CommissionRow {
 
 export interface CommissionReport {
   period_start: string
+  companies?: string[]
   period_end: string
   rate_percent: number
   rows: CommissionRow[]
@@ -1528,6 +1542,7 @@ export interface TrialBalanceRow {
 
 export interface TrialBalance {
   as_at: string | null
+  companies?: string[]
   rows: TrialBalanceRow[]
   total_debit: number
   total_credit: number
@@ -1634,6 +1649,9 @@ export interface SupplierPayment {
 }
 
 export interface APAgingRow {
+  /** Set by Accounting Reports, which can span several companies. */
+  company_id?: string
+  company_name?: string
   supplier_id: string
   supplier_name: string
   current: number
@@ -1646,6 +1664,7 @@ export interface APAgingRow {
 
 export interface APAgingReport {
   as_at: string
+  companies?: string[]
   rows: APAgingRow[]
   total: number
 }
@@ -2031,6 +2050,29 @@ export interface ReorderItem {
   reorder_level: number; current_stock: number; shortfall: number
 }
 
+
+/** Accounting Reports filters (2026-09-24). The *_ids are comma-separated;
+ * company_ids defaults server-side to the user's current company. */
+export type AccountingReportFilters = {
+  company_ids?: string
+  customer_ids?: string
+  supplier_ids?: string
+  sales_staff_ids?: string
+  as_at?: string
+  period_start?: string
+  period_end?: string
+}
+
+export interface ReportFilterOption {
+  id: string
+  name: string
+}
+
+export interface ReportFilterOptions {
+  customers: ReportFilterOption[]
+  suppliers: ReportFilterOption[]
+  sales_staff: ReportFilterOption[]
+}
 
 export const api = {
   me: () => request<CurrentUser>('/auth/me'),
@@ -3153,43 +3195,32 @@ export const api = {
     requestBlob(`/reports/operations/customer-product-usage/export.xlsx${qs(filters)}`),
 
   // ---- Accounting Reports ----
-  reportArAging: (as_at?: string) => request<AgingReport>(`/reports/accounting/ar-aging${qs({ as_at })}`),
-  exportArAgingReportCsv: (as_at?: string) => requestBlob(`/reports/accounting/ar-aging/export.csv${qs({ as_at })}`),
-  exportArAgingReportExcel: (as_at?: string) =>
-    requestBlob(`/reports/accounting/ar-aging/export.xlsx${qs({ as_at })}`),
+  reportArAging: (f: AccountingReportFilters = {}) => request<AgingReport>(`/reports/accounting/ar-aging${qs(f)}`),
+  exportArAgingReportCsv: (f: AccountingReportFilters = {}) => requestBlob(`/reports/accounting/ar-aging/export.csv${qs(f)}`),
+  exportArAgingReportExcel: (f: AccountingReportFilters = {}) => requestBlob(`/reports/accounting/ar-aging/export.xlsx${qs(f)}`),
 
-  reportApAging: (as_at?: string) => request<APAgingReport>(`/reports/accounting/ap-aging${qs({ as_at })}`),
-  exportApAgingReportCsv: (as_at?: string) => requestBlob(`/reports/accounting/ap-aging/export.csv${qs({ as_at })}`),
-  exportApAgingReportExcel: (as_at?: string) =>
-    requestBlob(`/reports/accounting/ap-aging/export.xlsx${qs({ as_at })}`),
+  reportApAging: (f: AccountingReportFilters = {}) => request<APAgingReport>(`/reports/accounting/ap-aging${qs(f)}`),
+  exportApAgingReportCsv: (f: AccountingReportFilters = {}) => requestBlob(`/reports/accounting/ap-aging/export.csv${qs(f)}`),
+  exportApAgingReportExcel: (f: AccountingReportFilters = {}) => requestBlob(`/reports/accounting/ap-aging/export.xlsx${qs(f)}`),
 
-  reportTrialBalance: (as_at?: string) =>
-    request<TrialBalance>(`/reports/accounting/trial-balance${qs({ as_at })}`),
-  exportTrialBalanceReportCsv: (as_at?: string) =>
-    requestBlob(`/reports/accounting/trial-balance/export.csv${qs({ as_at })}`),
-  exportTrialBalanceReportExcel: (as_at?: string) =>
-    requestBlob(`/reports/accounting/trial-balance/export.xlsx${qs({ as_at })}`),
+  reportTrialBalance: (f: AccountingReportFilters = {}) => request<TrialBalance>(`/reports/accounting/trial-balance${qs(f)}`),
+  exportTrialBalanceReportCsv: (f: AccountingReportFilters = {}) => requestBlob(`/reports/accounting/trial-balance/export.csv${qs(f)}`),
+  exportTrialBalanceReportExcel: (f: AccountingReportFilters = {}) => requestBlob(`/reports/accounting/trial-balance/export.xlsx${qs(f)}`),
 
-  reportGstReturn: (period_start: string, period_end: string) =>
-    request<GSTReturn>(`/reports/accounting/gst-return${qs({ period_start, period_end })}`),
-  exportGstReturnCsv: (period_start: string, period_end: string) =>
-    requestBlob(`/reports/accounting/gst-return/export.csv${qs({ period_start, period_end })}`),
-  exportGstReturnExcel: (period_start: string, period_end: string) =>
-    requestBlob(`/reports/accounting/gst-return/export.xlsx${qs({ period_start, period_end })}`),
+  reportGstReturn: (f: AccountingReportFilters = {}) => request<GSTReturn>(`/reports/accounting/gst-return${qs(f)}`),
+  exportGstReturnCsv: (f: AccountingReportFilters = {}) => requestBlob(`/reports/accounting/gst-return/export.csv${qs(f)}`),
+  exportGstReturnExcel: (f: AccountingReportFilters = {}) => requestBlob(`/reports/accounting/gst-return/export.xlsx${qs(f)}`),
 
-  reportSalesGP: (period_start: string, period_end: string) =>
-    request<SalesGPReport>(`/reports/accounting/sales-gp${qs({ period_start, period_end })}`),
-  exportSalesGPReportCsv: (period_start: string, period_end: string) =>
-    requestBlob(`/reports/accounting/sales-gp/export.csv${qs({ period_start, period_end })}`),
-  exportSalesGPReportExcel: (period_start: string, period_end: string) =>
-    requestBlob(`/reports/accounting/sales-gp/export.xlsx${qs({ period_start, period_end })}`),
+  reportSalesGP: (f: AccountingReportFilters = {}) => request<SalesGPReport>(`/reports/accounting/sales-gp${qs(f)}`),
+  exportSalesGPReportCsv: (f: AccountingReportFilters = {}) => requestBlob(`/reports/accounting/sales-gp/export.csv${qs(f)}`),
+  exportSalesGPReportExcel: (f: AccountingReportFilters = {}) => requestBlob(`/reports/accounting/sales-gp/export.xlsx${qs(f)}`),
 
-  reportCommission: (period_start: string, period_end: string) =>
-    request<CommissionReport>(`/reports/accounting/commission${qs({ period_start, period_end })}`),
-  exportCommissionReportCsv: (period_start: string, period_end: string) =>
-    requestBlob(`/reports/accounting/commission/export.csv${qs({ period_start, period_end })}`),
-  exportCommissionReportExcel: (period_start: string, period_end: string) =>
-    requestBlob(`/reports/accounting/commission/export.xlsx${qs({ period_start, period_end })}`),
+  reportCommission: (f: AccountingReportFilters = {}) => request<CommissionReport>(`/reports/accounting/commission${qs(f)}`),
+  exportCommissionReportCsv: (f: AccountingReportFilters = {}) => requestBlob(`/reports/accounting/commission/export.csv${qs(f)}`),
+  exportCommissionReportExcel: (f: AccountingReportFilters = {}) => requestBlob(`/reports/accounting/commission/export.xlsx${qs(f)}`),
+
+  reportFilterOptions: (company_ids: string) =>
+    request<ReportFilterOptions>(`/reports/accounting/filter-options${qs({ company_ids })}`),
   getCommissionSettings: () => request<{ rate_percent: number }>('/reports/accounting/commission-settings'),
   updateCommissionSettings: (rate_percent: number) =>
     request<{ rate_percent: number }>('/reports/accounting/commission-settings', {

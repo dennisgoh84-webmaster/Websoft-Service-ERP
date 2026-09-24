@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\ApiException;
 use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\CommissionSettings;
+use App\Models\Company;
+use App\Models\CompanyIndividual;
 use App\Models\GroupModuleAuthority;
 use App\Models\User;
 use App\Services\AccountsReceivableService;
@@ -88,30 +91,153 @@ class ReportController extends Controller
     /** @var array<int, string> */
     private const COMMISSION_FIELDS = ['month', 'sales_staff_name', 'commission_sgd'];
 
-    private function trialBalanceRows(string $companyId, ?Carbon $asAt): array
+    // ── Scope: which of the user's companies, and which parties ─────
+    //
+    // Every report below takes `company_ids` (comma-separated; defaults
+    // to the user's current company) so one report can cover several of
+    // the user's own companies at once (Dennis, 2026-09-24: "company
+    // selection, and multiple company selection"). Each id must be one
+    // this user can switch to (CompanyController::accessibleCompanyIds)
+    // and, for anyone but the owner, have this module enabled -- the
+    // same two checks that already guard the current company.
+    // Customer / supplier / salesperson filters are applied to the
+    // rows the shared services return, so the figures stay the ones
+    // the AR / AP / Commission screens themselves show.
+
+    /** @return array<string, string> company id => "C001 Name", in the order requested */
+    private function companyScope(Request $request, User $user): array
     {
-        return array_map(fn (array $r) => [
-            'account_id' => $r['account_id'],
-            'code' => $r['code'],
-            'name' => $r['name'],
-            'account_type' => $r['account_type'],
-            'debit_sgd' => $r['debit_sgd']->toFloat(),
-            'credit_sgd' => $r['credit_sgd']->toFloat(),
-            'balance_sgd' => $r['balance_sgd']->toFloat(),
-        ], Ledger::accountBalances($companyId, $asAt));
+        $requested = $this->idList($request, 'company_ids');
+        $ids = $requested === [] ? [$user->company_id] : $requested;
+        $accessible = CompanyController::accessibleCompanyIds($user);
+        foreach ($ids as $id) {
+            if (! in_array($id, $accessible, true)) {
+                throw new ApiException(403, 'You do not have access to one of the selected companies.');
+            }
+            if ($user->role !== User::ROLE_OWNER && ! Authority::isModuleEnabled($id, self::MODULE)) {
+                throw new ApiException(403, 'Accounting Reports is not enabled for one of the selected companies.');
+            }
+        }
+        $companies = Company::whereIn('id', $ids)->get()->keyBy('id');
+        $scope = [];
+        foreach ($ids as $id) {
+            $c = $companies->get($id);
+            $scope[$id] = $c ? trim("{$c->code} {$c->name}") : $id;
+        }
+
+        return $scope;
+    }
+
+    /** @return array<int, string> */
+    private function idList(Request $request, string $key): array
+    {
+        $raw = $request->query($key);
+        $parts = is_array($raw) ? $raw : explode(',', (string) $raw);
+
+        return array_values(array_unique(array_filter(array_map('trim', $parts), fn ($v) => $v !== '')));
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function onlyIds(array $rows, string $field, array $ids): array
+    {
+        if ($ids === []) {
+            return $rows;
+        }
+
+        return array_values(array_filter($rows, fn (array $r) => in_array((string) ($r[$field] ?? ''), $ids, true)));
+    }
+
+    /** Export columns: a Company column first, but only when more than one company is in the report. */
+    private function withCompanyColumn(array $fields, array $scope): array
+    {
+        return count($scope) > 1 ? ['company_name', ...$fields] : $fields;
+    }
+
+    /** Choices for the customer / supplier / salesperson filters across the selected companies. */
+    public function filterOptions(Request $request)
+    {
+        $user = $this->viewer($request);
+        $scope = $this->companyScope($request, $user);
+        $ids = array_keys($scope);
+        $multi = count($ids) > 1;
+        $label = function ($row) use ($scope, $multi) {
+            return $multi ? "{$row->name} ({$this->companyCode($scope[$row->company_id] ?? '')})" : $row->name;
+        };
+
+        $parties = CompanyIndividual::whereIn('company_id', $ids)->orderBy('name')->get(['id', 'name', 'company_id', 'is_customer', 'is_supplier']);
+
+        return response()->json([
+            'customers' => $parties->where('is_customer', true)->map(fn ($c) => ['id' => $c->id, 'name' => $label($c)])->values(),
+            'suppliers' => $parties->where('is_supplier', true)->map(fn ($c) => ['id' => $c->id, 'name' => $label($c)])->values(),
+            'sales_staff' => User::whereIn('company_id', $ids)->where('is_active', true)->orderBy('full_name')
+                ->get(['id', 'full_name', 'company_id'])
+                ->map(fn ($u) => ['id' => $u->id, 'name' => $multi ? "{$u->full_name} ({$this->companyCode($scope[$u->company_id] ?? '')})" : $u->full_name])
+                ->values(),
+        ]);
+    }
+
+    private function companyCode(string $label): string
+    {
+        return strtok($label, ' ') ?: $label;
+    }
+
+    // ── Trial balance ───────────────────────────────────────────────
+
+    /**
+     * One row per account. Across several companies accounts are
+     * matched by code + name (each company keeps its own chart of
+     * accounts) and their figures added together.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function trialBalanceRows(array $scope, ?Carbon $asAt): array
+    {
+        $byKey = [];
+        foreach (array_keys($scope) as $companyId) {
+            foreach (Ledger::accountBalances($companyId, $asAt) as $r) {
+                $key = $r['code']."\u{1F}".$r['name'];
+                if (! isset($byKey[$key])) {
+                    $byKey[$key] = [
+                        'account_id' => $r['account_id'],
+                        'code' => $r['code'],
+                        'name' => $r['name'],
+                        'account_type' => $r['account_type'],
+                        'debit_sgd' => 0.0,
+                        'credit_sgd' => 0.0,
+                        'balance_sgd' => 0.0,
+                    ];
+                }
+                $byKey[$key]['debit_sgd'] += $r['debit_sgd']->toFloat();
+                $byKey[$key]['credit_sgd'] += $r['credit_sgd']->toFloat();
+                $byKey[$key]['balance_sgd'] += $r['balance_sgd']->toFloat();
+            }
+        }
+        $rows = array_values($byKey);
+        foreach ($rows as &$row) {
+            foreach (['debit_sgd', 'credit_sgd', 'balance_sgd'] as $f) {
+                $row[$f] = round($row[$f], 2);
+            }
+        }
+        unset($row);
+        usort($rows, fn ($a, $b) => strcmp((string) $a['code'], (string) $b['code']));
+
+        return $rows;
     }
 
     public function trialBalance(Request $request)
     {
         $user = $this->viewer($request);
 
-        return response()->json($this->trialBalanceReport($user->company_id, $this->asAt($request)));
+        return response()->json($this->trialBalanceReport($this->companyScope($request, $user), $this->asAt($request)));
     }
 
     public function trialBalanceCsv(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->trialBalanceReport($user->company_id, $this->asAt($request))['rows'];
+        $rows = $this->trialBalanceReport($this->companyScope($request, $user), $this->asAt($request))['rows'];
         $this->auditExport($user, 'Accounting Report: Trial Balance', 'csv', count($rows));
 
         return $this->csvResponse(self::TRIAL_BALANCE_FIELDS, $rows, 'trial-balance-report.csv');
@@ -120,21 +246,22 @@ class ReportController extends Controller
     public function trialBalanceExcel(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->trialBalanceReport($user->company_id, $this->asAt($request))['rows'];
+        $rows = $this->trialBalanceReport($this->companyScope($request, $user), $this->asAt($request))['rows'];
         $this->auditExport($user, 'Accounting Report: Trial Balance', 'excel', count($rows));
 
         return $this->xlsxResponse(self::TRIAL_BALANCE_FIELDS, $rows, 'Trial Balance', 'trial-balance-report.xlsx');
     }
 
     /** @return array<string, mixed> */
-    private function trialBalanceReport(string $companyId, ?Carbon $asAt): array
+    private function trialBalanceReport(array $scope, ?Carbon $asAt): array
     {
-        $rows = $this->trialBalanceRows($companyId, $asAt);
+        $rows = $this->trialBalanceRows($scope, $asAt);
         $totalDebit = round(array_sum(array_column($rows, 'debit_sgd')), 2);
         $totalCredit = round(array_sum(array_column($rows, 'credit_sgd')), 2);
 
         return [
             'as_at' => $asAt?->toDateString(),
+            'companies' => array_values($scope),
             'rows' => $rows,
             'total_debit' => $totalDebit,
             'total_credit' => $totalCredit,
@@ -148,34 +275,46 @@ class ReportController extends Controller
     {
         $user = $this->viewer($request);
 
-        return response()->json($this->arAgingReport($user->company_id, $this->asAt($request)));
+        return response()->json($this->arAgingReport($request, $this->companyScope($request, $user)));
     }
 
     public function arAgingCsv(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->arAgingReport($user->company_id, $this->asAt($request))['rows'];
+        $scope = $this->companyScope($request, $user);
+        $rows = $this->arAgingReport($request, $scope)['rows'];
         $this->auditExport($user, 'Accounting Report: AR Aging', 'csv', count($rows));
 
-        return $this->csvResponse(self::AR_AGING_FIELDS, $rows, 'ar-aging-report.csv');
+        return $this->csvResponse($this->withCompanyColumn(self::AR_AGING_FIELDS, $scope), $rows, 'ar-aging-report.csv');
     }
 
     public function arAgingExcel(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->arAgingReport($user->company_id, $this->asAt($request))['rows'];
+        $scope = $this->companyScope($request, $user);
+        $rows = $this->arAgingReport($request, $scope)['rows'];
         $this->auditExport($user, 'Accounting Report: AR Aging', 'excel', count($rows));
 
-        return $this->xlsxResponse(self::AR_AGING_FIELDS, $rows, 'AR Aging', 'ar-aging-report.xlsx');
+        return $this->xlsxResponse($this->withCompanyColumn(self::AR_AGING_FIELDS, $scope), $rows, 'AR Aging', 'ar-aging-report.xlsx');
     }
 
     /** @return array<string, mixed> */
-    private function arAgingReport(string $companyId, ?Carbon $asAt): array
+    private function arAgingReport(Request $request, array $scope): array
     {
-        [$resolvedAsAt, $rows] = AccountsReceivableService::agingRows($companyId, $asAt);
+        $asAt = $this->asAt($request);
+        $customerIds = $this->idList($request, 'customer_ids');
+        $rows = [];
+        $resolvedAsAt = null;
+        foreach ($scope as $companyId => $companyName) {
+            [$resolvedAsAt, $companyRows] = AccountsReceivableService::agingRows($companyId, $asAt);
+            foreach ($this->onlyIds($companyRows, 'customer_id', $customerIds) as $r) {
+                $rows[] = ['company_id' => $companyId, 'company_name' => $companyName, ...$r];
+            }
+        }
 
         return [
-            'as_at' => $resolvedAsAt->toDateString(),
+            'as_at' => ($resolvedAsAt ?? $asAt ?? Carbon::today())->toDateString(),
+            'companies' => array_values($scope),
             'rows' => $rows,
             'current' => array_sum(array_column($rows, 'current')),
             'days_1_30' => array_sum(array_column($rows, 'days_1_30')),
@@ -190,34 +329,46 @@ class ReportController extends Controller
     {
         $user = $this->viewer($request);
 
-        return response()->json($this->apAgingReport($user->company_id, $this->asAt($request)));
+        return response()->json($this->apAgingReport($request, $this->companyScope($request, $user)));
     }
 
     public function apAgingCsv(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->apAgingReport($user->company_id, $this->asAt($request))['rows'];
+        $scope = $this->companyScope($request, $user);
+        $rows = $this->apAgingReport($request, $scope)['rows'];
         $this->auditExport($user, 'Accounting Report: AP Aging', 'csv', count($rows));
 
-        return $this->csvResponse(self::AP_AGING_FIELDS, $rows, 'ap-aging-report.csv');
+        return $this->csvResponse($this->withCompanyColumn(self::AP_AGING_FIELDS, $scope), $rows, 'ap-aging-report.csv');
     }
 
     public function apAgingExcel(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->apAgingReport($user->company_id, $this->asAt($request))['rows'];
+        $scope = $this->companyScope($request, $user);
+        $rows = $this->apAgingReport($request, $scope)['rows'];
         $this->auditExport($user, 'Accounting Report: AP Aging', 'excel', count($rows));
 
-        return $this->xlsxResponse(self::AP_AGING_FIELDS, $rows, 'AP Aging', 'ap-aging-report.xlsx');
+        return $this->xlsxResponse($this->withCompanyColumn(self::AP_AGING_FIELDS, $scope), $rows, 'AP Aging', 'ap-aging-report.xlsx');
     }
 
     /** @return array<string, mixed> */
-    private function apAgingReport(string $companyId, ?Carbon $asAt): array
+    private function apAgingReport(Request $request, array $scope): array
     {
-        [$resolvedAsAt, $rows] = PayablesService::agingRows($companyId, $asAt);
+        $asAt = $this->asAt($request);
+        $supplierIds = $this->idList($request, 'supplier_ids');
+        $rows = [];
+        $resolvedAsAt = null;
+        foreach ($scope as $companyId => $companyName) {
+            [$resolvedAsAt, $companyRows] = PayablesService::agingRows($companyId, $asAt);
+            foreach ($this->onlyIds($companyRows, 'supplier_id', $supplierIds) as $r) {
+                $rows[] = ['company_id' => $companyId, 'company_name' => $companyName, ...$r];
+            }
+        }
 
         return [
-            'as_at' => $resolvedAsAt->toDateString(),
+            'as_at' => ($resolvedAsAt ?? $asAt ?? Carbon::today())->toDateString(),
+            'companies' => array_values($scope),
             'rows' => $rows,
             'total' => array_sum(array_column($rows, 'total')),
         ];
@@ -230,13 +381,13 @@ class ReportController extends Controller
         $user = $this->viewer($request);
         [$start, $end] = $this->period($request);
 
-        return response()->json(ReportsService::gstReturn($user->company_id, $start, $end));
+        return response()->json($this->gstReturnReport($this->companyScope($request, $user), $start, $end));
     }
 
     public function gstReturnCsv(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->gstReturnRows($request);
+        $rows = $this->gstReturnRows($request, $user);
         $this->auditExport($user, 'Accounting Report: GST Return', 'csv', count($rows));
 
         return $this->csvResponse(self::GST_FIELDS, $rows, 'gst-return.csv');
@@ -245,10 +396,57 @@ class ReportController extends Controller
     public function gstReturnExcel(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->gstReturnRows($request);
+        $rows = $this->gstReturnRows($request, $user);
         $this->auditExport($user, 'Accounting Report: GST Return', 'excel', count($rows));
 
         return $this->xlsxResponse(self::GST_FIELDS, $rows, 'GST Return', 'gst-return.xlsx');
+    }
+
+    /**
+     * The shared service's figures per company, added together per tax
+     * code when several companies are selected (a group-level view --
+     * each company still files its own return).
+     *
+     * @return array<string, mixed>
+     */
+    private function gstReturnReport(array $scope, Carbon $start, Carbon $end): array
+    {
+        $merge = function (array $into, array $rows): array {
+            foreach ($rows as $r) {
+                $code = $r['tax_code'];
+                if (! isset($into[$code])) {
+                    $into[$code] = ['tax_code' => $code, 'net_sgd' => 0.0, 'tax_sgd' => 0.0, 'document_count' => 0];
+                }
+                $into[$code]['net_sgd'] = round($into[$code]['net_sgd'] + $r['net_sgd'], 2);
+                $into[$code]['tax_sgd'] = round($into[$code]['tax_sgd'] + $r['tax_sgd'], 2);
+                $into[$code]['document_count'] += $r['document_count'];
+            }
+
+            return $into;
+        };
+        $output = [];
+        $input = [];
+        $totalOutput = 0.0;
+        $totalInput = 0.0;
+        foreach (array_keys($scope) as $companyId) {
+            $r = ReportsService::gstReturn($companyId, $start, $end);
+            $output = $merge($output, $r['output_rows']);
+            $input = $merge($input, $r['input_rows']);
+            $totalOutput += $r['total_output_tax_sgd'];
+            $totalInput += $r['total_input_tax_sgd'];
+        }
+
+        return [
+            'period_start' => $start->toDateString(),
+            'period_end' => $end->toDateString(),
+            'companies' => array_values($scope),
+            'output_rows' => array_values($output),
+            'input_rows' => array_values($input),
+            'total_output_tax_sgd' => round($totalOutput, 2),
+            'total_input_tax_sgd' => round($totalInput, 2),
+            // Negative means reclaimable.
+            'net_gst_payable_sgd' => round($totalOutput - $totalInput, 2),
+        ];
     }
 
     /**
@@ -258,11 +456,10 @@ class ReportController extends Controller
      *
      * @return array<int, array<string, mixed>>
      */
-    private function gstReturnRows(Request $request): array
+    private function gstReturnRows(Request $request, User $user): array
     {
-        $user = Authenticate::user($request);
         [$start, $end] = $this->period($request);
-        $report = ReportsService::gstReturn($user->company_id, $start, $end);
+        $report = $this->gstReturnReport($this->companyScope($request, $user), $start, $end);
 
         return [
             ...array_map(fn (array $r) => [...$r, 'direction' => 'output'], $report['output_rows']),
@@ -277,43 +474,53 @@ class ReportController extends Controller
         $user = $this->viewer($request);
         [$start, $end] = $this->period($request);
 
-        return response()->json($this->salesGpReport($user->company_id, $start, $end));
+        return response()->json($this->salesGpReport($request, $this->companyScope($request, $user), $start, $end));
     }
 
     public function salesGpCsv(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->salesGpExportRows($request);
+        $scope = $this->companyScope($request, $user);
+        $rows = $this->salesGpExportRows($request, $scope);
         $this->auditExport($user, 'Accounting Report: Sales GP', 'csv', count($rows));
 
-        return $this->csvResponse(self::SALES_GP_FIELDS, $rows, 'sales-gp-report.csv');
+        return $this->csvResponse($this->withCompanyColumn(self::SALES_GP_FIELDS, $scope), $rows, 'sales-gp-report.csv');
     }
 
     public function salesGpExcel(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->salesGpExportRows($request);
+        $scope = $this->companyScope($request, $user);
+        $rows = $this->salesGpExportRows($request, $scope);
         $this->auditExport($user, 'Accounting Report: Sales GP', 'excel', count($rows));
 
-        return $this->xlsxResponse(self::SALES_GP_FIELDS, $rows, 'Sales GP', 'sales-gp-report.xlsx');
+        return $this->xlsxResponse($this->withCompanyColumn(self::SALES_GP_FIELDS, $scope), $rows, 'Sales GP', 'sales-gp-report.xlsx');
     }
 
     /** @return array<string, mixed> */
-    private function salesGpReport(string $companyId, Carbon $start, Carbon $end): array
+    private function salesGpReport(Request $request, array $scope, Carbon $start, Carbon $end): array
     {
-        $names = ReportsService::customerNames($companyId);
-        $rows = array_map(fn (array $r) => [
-            'invoice_id' => $r['invoice_id'],
-            'invoice_number' => $r['invoice_number'],
-            'issued_at' => optional($r['issued_at'])->toIso8601String(),
-            'customer_id' => $r['customer_id'],
-            'customer_name' => $names[$r['customer_id']] ?? '',
-            'revenue_sgd' => $r['revenue_sgd'],
-            'cost_sgd' => $r['cost_sgd'],
-            'gp_sgd' => $r['gp_sgd'],
-            'gp_percent' => $r['gp_percent'],
-            'has_cost_basis' => $r['has_cost_basis'],
-        ], ReportsService::salesGpRows($companyId, $start, $end));
+        $customerIds = $this->idList($request, 'customer_ids');
+        $rows = [];
+        foreach ($scope as $companyId => $companyName) {
+            $names = ReportsService::customerNames($companyId);
+            foreach ($this->onlyIds(ReportsService::salesGpRows($companyId, $start, $end), 'customer_id', $customerIds) as $r) {
+                $rows[] = [
+                    'company_id' => $companyId,
+                    'company_name' => $companyName,
+                    'invoice_id' => $r['invoice_id'],
+                    'invoice_number' => $r['invoice_number'],
+                    'issued_at' => optional($r['issued_at'])->toIso8601String(),
+                    'customer_id' => $r['customer_id'],
+                    'customer_name' => $names[$r['customer_id']] ?? '',
+                    'revenue_sgd' => $r['revenue_sgd'],
+                    'cost_sgd' => $r['cost_sgd'],
+                    'gp_sgd' => $r['gp_sgd'],
+                    'gp_percent' => $r['gp_percent'],
+                    'has_cost_basis' => $r['has_cost_basis'],
+                ];
+            }
+        }
 
         $totalRevenue = round(array_sum(array_column($rows, 'revenue_sgd')), 2);
         $totalCost = round(array_sum(array_column($rows, 'cost_sgd')), 2);
@@ -322,6 +529,7 @@ class ReportController extends Controller
         return [
             'period_start' => $start->toDateString(),
             'period_end' => $end->toDateString(),
+            'companies' => array_values($scope),
             'rows' => $rows,
             'total_revenue_sgd' => $totalRevenue,
             'total_cost_sgd' => $totalCost,
@@ -331,12 +539,12 @@ class ReportController extends Controller
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function salesGpExportRows(Request $request): array
+    private function salesGpExportRows(Request $request, array $scope): array
     {
-        $user = Authenticate::user($request);
         [$start, $end] = $this->period($request);
 
         return array_map(fn (array $r) => [
+            'company_name' => $r['company_name'],
             'invoice_number' => $r['invoice_number'],
             // The date only: an exact issue time is more than a
             // listing needs, and Python drops it here for the same
@@ -347,7 +555,7 @@ class ReportController extends Controller
             'cost_sgd' => $r['cost_sgd'],
             'gp_sgd' => $r['gp_sgd'],
             'gp_percent' => $r['gp_percent'],
-        ], $this->salesGpReport($user->company_id, $start, $end)['rows']);
+        ], $this->salesGpReport($request, $scope, $start, $end)['rows']);
     }
 
     // ── Commission ──────────────────────────────────────────────────
@@ -391,64 +599,85 @@ class ReportController extends Controller
         $user = $this->viewer($request);
         [$start, $end] = $this->period($request);
 
-        return response()->json($this->commissionReport($user->company_id, $start, $end));
+        return response()->json($this->commissionReport($request, $user, $this->companyScope($request, $user), $start, $end));
     }
 
     public function commissionCsv(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->commissionExportRows($request);
+        $scope = $this->companyScope($request, $user);
+        $rows = $this->commissionExportRows($request, $user, $scope);
         $this->auditExport($user, 'Accounting Report: Commission', 'csv', count($rows));
 
-        return $this->csvResponse(self::COMMISSION_FIELDS, $rows, 'commission-report.csv');
+        return $this->csvResponse($this->withCompanyColumn(self::COMMISSION_FIELDS, $scope), $rows, 'commission-report.csv');
     }
 
     public function commissionExcel(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->commissionExportRows($request);
+        $scope = $this->companyScope($request, $user);
+        $rows = $this->commissionExportRows($request, $user, $scope);
         $this->auditExport($user, 'Accounting Report: Commission', 'excel', count($rows));
 
-        return $this->xlsxResponse(self::COMMISSION_FIELDS, $rows, 'Commission', 'commission-report.xlsx');
+        return $this->xlsxResponse($this->withCompanyColumn(self::COMMISSION_FIELDS, $scope), $rows, 'Commission', 'commission-report.xlsx');
     }
 
-    /** @return array<string, mixed> */
-    private function commissionReport(string $companyId, Carbon $start, Carbon $end): array
+    /**
+     * Each company's commission at its own rate. `rate_percent` is the
+     * user's CURRENT company's rate -- the one the rate box on screen
+     * edits.
+     *
+     * @return array<string, mixed>
+     */
+    private function commissionReport(Request $request, User $user, array $scope, Carbon $start, Carbon $end): array
     {
-        $rawRows = ReportsService::commissionRows($companyId, $start, $end);
-        $names = ReportsService::userNames(array_column($rawRows, 'sales_staff_id'));
-        $rows = array_map(fn (array $r) => [
-            'month' => $r['month'],
-            'sales_staff_id' => $r['sales_staff_id'],
-            // An invoice whose contract names no salesperson still
-            // earns commission -- it is reported against "Unassigned"
-            // rather than dropped.
-            'sales_staff_name' => $r['sales_staff_id'] === null
-                ? 'Unassigned'
-                : ($names[$r['sales_staff_id']] ?? 'Unassigned'),
-            'commission_sgd' => $r['commission_sgd'],
-        ], $rawRows);
+        // 'unassigned' selects the rows with no salesperson on the contract.
+        $staffIds = $this->idList($request, 'sales_staff_ids');
+        $rows = [];
+        foreach ($scope as $companyId => $companyName) {
+            $rawRows = ReportsService::commissionRows($companyId, $start, $end);
+            $names = ReportsService::userNames(array_column($rawRows, 'sales_staff_id'));
+            foreach ($rawRows as $r) {
+                if ($staffIds !== [] && ! in_array($r['sales_staff_id'] ?? 'unassigned', $staffIds, true)) {
+                    continue;
+                }
+                $rows[] = [
+                    'company_id' => $companyId,
+                    'company_name' => $companyName,
+                    'month' => $r['month'],
+                    'sales_staff_id' => $r['sales_staff_id'],
+                    // An invoice whose contract names no salesperson still
+                    // earns commission -- it is reported against "Unassigned"
+                    // rather than dropped.
+                    'sales_staff_name' => $r['sales_staff_id'] === null
+                        ? 'Unassigned'
+                        : ($names[$r['sales_staff_id']] ?? 'Unassigned'),
+                    'commission_sgd' => $r['commission_sgd'],
+                ];
+            }
+        }
 
         return [
             'period_start' => $start->toDateString(),
             'period_end' => $end->toDateString(),
-            'rate_percent' => (float) ReportsService::commissionRatePercent($companyId),
+            'companies' => array_values($scope),
+            'rate_percent' => (float) ReportsService::commissionRatePercent($user->company_id),
             'rows' => $rows,
             'total_commission_sgd' => round(array_sum(array_column($rows, 'commission_sgd')), 2),
         ];
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function commissionExportRows(Request $request): array
+    private function commissionExportRows(Request $request, User $user, array $scope): array
     {
-        $user = Authenticate::user($request);
         [$start, $end] = $this->period($request);
 
         return array_map(fn (array $r) => [
+            'company_name' => $r['company_name'],
             'month' => $r['month'],
             'sales_staff_name' => $r['sales_staff_name'],
             'commission_sgd' => $r['commission_sgd'],
-        ], $this->commissionReport($user->company_id, $start, $end)['rows']);
+        ], $this->commissionReport($request, $user, $scope, $start, $end)['rows']);
     }
 
     // ── Shared ──────────────────────────────────────────────────────

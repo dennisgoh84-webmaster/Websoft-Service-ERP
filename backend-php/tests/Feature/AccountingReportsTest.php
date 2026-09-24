@@ -179,6 +179,14 @@ class AccountingReportsTest extends TestCase
         $fromReports = $this->getJson('/api/reports/accounting/ar-aging', $this->headers($token))->assertOk()->json();
         $fromArScreen = $this->getJson('/api/accounts-receivable/aging', $this->headers($token))->assertOk()->json();
 
+        // The report adds which company each row came from (it can span
+        // several); the figures themselves must still be identical.
+        unset($fromReports['companies']);
+        $fromReports['rows'] = array_map(function (array $r) {
+            unset($r['company_id'], $r['company_name']);
+
+            return $r;
+        }, $fromReports['rows']);
         $this->assertSame($fromArScreen, $fromReports);
     }
 
@@ -520,6 +528,98 @@ class AccountingReportsTest extends TestCase
             ->assertOk()->assertJsonCount(0, 'rows');
         $this->getJson($this->periodUrl('sales-gp'), $this->headers($token))
             ->assertOk()->assertJsonCount(0, 'rows');
+    }
+
+    // ── Company / party filters (2026-09-24) ────────────────────────
+
+    public function test_one_report_can_cover_several_of_the_users_companies(): void
+    {
+        $companyA = Company::factory()->create(['code' => 'C001', 'name' => 'Alpha']);
+        $companyB = Company::factory()->create(['code' => 'C002', 'name' => 'Beta']);
+        $token = $this->ownerToken($companyA);
+        $this->invoice($companyA, CompanyIndividual::factory()->for($companyA)->create(), [
+            'amount_sgd' => '100.00', 'gst_amount_sgd' => '0.00', 'total_amount_sgd' => '100.00',
+            'due_date' => now()->subDays(5)->toDateString(),
+        ]);
+        $this->invoice($companyB, CompanyIndividual::factory()->for($companyB)->create(), [
+            'amount_sgd' => '250.00', 'gst_amount_sgd' => '0.00', 'total_amount_sgd' => '250.00',
+            'due_date' => now()->subDays(5)->toDateString(),
+        ]);
+
+        $both = $this->getJson("/api/reports/accounting/ar-aging?company_ids={$companyA->id},{$companyB->id}", $this->headers($token))
+            ->assertOk()->assertJsonCount(2, 'rows');
+        $this->assertEquals(350, $both->json('total'));
+        $this->assertEqualsCanonicalizing(['C001 Alpha', 'C002 Beta'], array_column($both->json('rows'), 'company_name'));
+
+        $onlyB = $this->getJson("/api/reports/accounting/ar-aging?company_ids={$companyB->id}", $this->headers($token))
+            ->assertOk()->assertJsonCount(1, 'rows');
+        $this->assertEquals(250, $onlyB->json('total'));
+
+        $gp = $this->getJson($this->periodUrl('sales-gp')."&company_ids={$companyA->id},{$companyB->id}", $this->headers($token))
+            ->assertOk()->assertJsonCount(2, 'rows');
+        $this->assertEquals(350, $gp->json('total_revenue_sgd'));
+    }
+
+    public function test_the_export_gains_a_company_column_only_when_several_companies_are_in_it(): void
+    {
+        $companyA = Company::factory()->create();
+        $companyB = Company::factory()->create();
+        $token = $this->ownerToken($companyA);
+
+        $single = $this->get($this->periodUrl('sales-gp/export.csv'), $this->headers($token))->assertOk()->getContent();
+        $this->assertStringContainsString('invoice_number,', strtok($single, "\n"));
+        $this->assertStringNotContainsString('company_name', strtok($single, "\n"));
+
+        $multi = $this->get($this->periodUrl('sales-gp/export.csv')."&company_ids={$companyA->id},{$companyB->id}", $this->headers($token))->assertOk()->getContent();
+        $this->assertStringContainsString('company_name,invoice_number,', strtok($multi, "\n"));
+    }
+
+    public function test_a_company_the_user_cannot_switch_to_is_refused(): void
+    {
+        $company = Company::factory()->create();
+        $other = Company::factory()->create();
+        ModuleCatalog::firstOrCreate(['key' => 'accounting_reports'], ['name' => 'Accounting Reports', 'is_built' => true]);
+        CompanyModule::updateOrCreate(['company_id' => $company->id, 'module_key' => 'accounting_reports'], ['enabled' => true]);
+        $group = Group::factory()->for($company)->create();
+        GroupModuleAuthority::create(['group_id' => $group->id, 'module_key' => 'accounting_reports', 'access_level' => GroupModuleAuthority::VIEW]);
+        $user = User::factory()->for($company)->create([
+            'role' => User::ROLE_SUPPORT_ENGINEER,
+            'hashed_password' => PasswordPolicy::hash('demo1234'),
+        ]);
+        UserCompanyAccess::create(['user_id' => $user->id, 'company_id' => $company->id, 'group_id' => $group->id]);
+        $token = $this->post('/api/auth/login', ['username' => $user->email, 'password' => 'demo1234'])->json('access_token');
+
+        $this->getJson("/api/reports/accounting/ar-aging?company_ids={$company->id}", $this->headers($token))->assertOk();
+        $this->getJson("/api/reports/accounting/ar-aging?company_ids={$company->id},{$other->id}", $this->headers($token))->assertStatus(403);
+        $this->get("/api/reports/accounting/ar-aging/export.csv?company_ids={$other->id}", $this->headers($token))->assertStatus(403);
+    }
+
+    public function test_customer_filter_narrows_ar_aging_to_the_chosen_customers(): void
+    {
+        $company = Company::factory()->create();
+        $token = $this->ownerToken($company);
+        $acme = CompanyIndividual::factory()->for($company)->create(['name' => 'Acme']);
+        $beta = CompanyIndividual::factory()->for($company)->create(['name' => 'Beta']);
+        $this->invoice($company, $acme, ['due_date' => now()->subDays(5)->toDateString()]);
+        $this->invoice($company, $beta, ['due_date' => now()->subDays(5)->toDateString()]);
+
+        $response = $this->getJson("/api/reports/accounting/ar-aging?customer_ids={$beta->id}", $this->headers($token))
+            ->assertOk()->assertJsonCount(1, 'rows');
+        $this->assertSame('Beta', $response->json('rows.0.customer_name'));
+    }
+
+    public function test_filter_options_list_parties_across_the_selected_companies(): void
+    {
+        $companyA = Company::factory()->create(['code' => 'C001']);
+        $companyB = Company::factory()->create(['code' => 'C002']);
+        $token = $this->ownerToken($companyA);
+        CompanyIndividual::factory()->for($companyA)->create(['name' => 'Acme', 'is_customer' => true, 'is_supplier' => false]);
+        CompanyIndividual::factory()->for($companyB)->create(['name' => 'Bolt', 'is_customer' => false, 'is_supplier' => true]);
+
+        $response = $this->getJson("/api/reports/accounting/filter-options?company_ids={$companyA->id},{$companyB->id}", $this->headers($token))->assertOk();
+
+        $this->assertSame(['Acme (C001)'], array_column($response->json('customers'), 'name'));
+        $this->assertSame(['Bolt (C002)'], array_column($response->json('suppliers'), 'name'));
     }
 
     private function periodUrl(string $path): string

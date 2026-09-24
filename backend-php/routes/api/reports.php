@@ -15,6 +15,9 @@ use App\Http\Controllers\Api\ReportController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.jwt')->prefix('reports/accounting')->group(function () {
+    // Customer / supplier / salesperson choices across ?company_ids=.
+    Route::get('/filter-options', [ReportController::class, 'filterOptions']);
+
     Route::get('/ar-aging', [ReportController::class, 'arAging']);
     Route::get('/ar-aging/export.csv', [ReportController::class, 'arAgingCsv']);
     Route::get('/ar-aging/export.xlsx', [ReportController::class, 'arAgingExcel']);
