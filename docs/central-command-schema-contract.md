@@ -31,11 +31,19 @@ Command, not at the client side.
 | `text` | `text` not null | One-line announcement message |
 | `sort_order` | `integer` not null, default 0 | Display order (ascending) |
 | `is_active` | `boolean` not null, default true | Soft-delete: false hides the announcement |
+| `source` | `varchar(10)` not null, default `'local'`, check in (`'central'`, `'local'`) | Who owns the row (added 2026-09-24). Central Command stamps every pushed row `'central'`; the client ERP treats those as **read-only** (403 on edit/hide/delete). `'local'` rows are the client's own "company announcements" — Central Command never reads or writes them. |
 | `created_at` | `timestamptz` | Auto-set on insert |
 
 **Central Command writes**: `INSERT`, `UPDATE`, and soft-delete
-(`is_active = false`).  The client ERP reads `WHERE is_active = true
-ORDER BY sort_order` to render the announcement list.
+(`is_active = false`), always with `source = 'central'` (the upsert's
+`ON CONFLICT ... DO UPDATE` sets it too, so rows pushed before the
+`source` column existed become `'central'` on their next push).  The
+client ERP renders `WHERE is_active = true`, Central Command's rows
+first (`source = 'central'`), then its own, each group `ORDER BY
+sort_order`.  Pushes are one-way (2026-09-24): the client cannot edit,
+reorder, hide or delete a `'central'` row, so hide/show and ordering
+are set in Central Command and mirrored by the next push (which sends
+hidden rows too, as `is_active = false`).
 
 **Central Command's own code**: `App\Services\ClientDbService::pushAnnouncements()`
 **Client source model**: `backend-php/app/Models/Announcement.php`
@@ -57,6 +65,7 @@ can only push a URL to either slot (see below).
 | `video_original_filename` | `varchar(255)` nullable | ″ |
 | `video_content_type` | `varchar(100)` nullable | ″ |
 | `video_file_size_bytes` | `bigint` nullable | ″ |
+| `managed_by_central_command` | `boolean` not null, default false | Added 2026-09-24. `true` while Central Command owns this slot's video: the client's own admin screen is locked for it (403 on save/upload/remove). Set on every non-empty URL push; cleared when Central Command pushes an empty URL, which hands the slot back to the client. |
 | `updated_at` | `timestamptz` | Auto-updated on write |
 
 **Central Command writes**: `UPDATE ... WHERE slot = :slot` to set or
@@ -65,7 +74,10 @@ there is no mechanism to transfer an uploaded file's bytes to a remote
 client — so it also clears that slot's `video_stored_filename` and the
 other three upload columns, superseding whatever the client had
 uploaded locally for that slot, the same way saving a URL from the
-client's own admin screen does.
+client's own admin screen does. The same statement sets
+`managed_by_central_command` to whether the pushed URL is non-empty
+(one-way lock, see the column above); pushing a hidden video from
+Central Command sends an empty URL, i.e. clears and releases the slot.
 
 **Central Command's own code**: `App\Services\ClientDbService::pushVideoUrl()`
 (takes a `slot` argument), backed by its own `video_settings` table

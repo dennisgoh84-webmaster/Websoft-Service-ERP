@@ -47,6 +47,13 @@ use Illuminate\Support\Facades\DB;
  * client's server, only to write a row into its database, so pushing
  * a URL replaces whatever a client had uploaded locally for that slot,
  * the same as setting one here would.
+ *
+ * Central Command's pushes are ONE-WAY (Dennis, 2026-09-24: "when
+ * it's pushed to the client, they cannot amend it"): an announcement
+ * with source = 'central' and a slot with managed_by_central_command
+ * set are read-only here -- every write endpoint refuses them with a
+ * 403. The client's own "company announcements" (source = 'local')
+ * stay fully editable and are never sent back to Central Command.
  */
 class AnnouncementController extends Controller
 {
@@ -105,18 +112,49 @@ class AnnouncementController extends Controller
             'text' => $a->text,
             'sort_order' => $a->sort_order,
             'is_active' => $a->is_active,
+            'source' => $a->source,
             'created_at' => $a->created_at?->toIso8601String(),
         ];
+    }
+
+    private function requireLocal(Announcement $a): void
+    {
+        if ($a->isManagedByCentralCommand()) {
+            throw new ApiException(403, 'This announcement is managed by Central Command and cannot be changed here.');
+        }
+    }
+
+    private function requireNotCentrallyManaged(AdBannerSettings $settings): void
+    {
+        if ($settings->managed_by_central_command) {
+            throw new ApiException(403, 'This video is managed by Central Command and cannot be changed here.');
+        }
+    }
+
+    /**
+     * Central Command's platform announcements first, then this
+     * company's own, each group in its own sort order -- the two are
+     * ordered independently on their respective admin screens, so
+     * interleaving them by sort_order alone would be meaningless.
+     */
+    private function orderedAnnouncements(bool $activeOnly)
+    {
+        $q = Announcement::query();
+        if ($activeOnly) {
+            $q->where('is_active', true);
+        }
+
+        return $q->orderByRaw("CASE WHEN source = 'central' THEN 0 ELSE 1 END")
+            ->orderBy('sort_order')
+            ->orderBy('created_at')
+            ->get();
     }
 
     /** Unauthenticated: one slot's video URL plus only the ACTIVE announcements (shared across slots), already ordered. */
     public function publicAdBanner(string $slot)
     {
         $settings = $this->getOrCreateSettings($slot);
-        $items = Announcement::where('is_active', true)
-            ->orderBy('sort_order')
-            ->orderBy('created_at')
-            ->get();
+        $items = $this->orderedAnnouncements(activeOnly: true);
 
         return response()->json([
             'video_url' => $this->effectiveVideoUrl($settings),
@@ -151,6 +189,7 @@ class AnnouncementController extends Controller
         $newUrl = $data['video_url'] ?? null;
 
         $settings = $this->getOrCreateSettings($slot);
+        $this->requireNotCentrallyManaged($settings);
         $oldUrl = $settings->video_url;
         $oldStoredFilename = $settings->video_stored_filename;
         $oldOriginalFilename = $settings->video_original_filename;
@@ -207,6 +246,7 @@ class AnnouncementController extends Controller
         $file = $request->file('video');
 
         $settings = $this->getOrCreateSettings($slot);
+        $this->requireNotCentrallyManaged($settings);
         $oldUrl = $settings->video_url;
         $oldStoredFilename = $settings->video_stored_filename;
         $oldOriginalFilename = $settings->video_original_filename;
@@ -297,6 +337,7 @@ class AnnouncementController extends Controller
             'video_source' => $settings->hasUploadedVideo() ? 'upload' : ($settings->video_url ? 'url' : 'none'),
             'video_original_filename' => $settings->video_original_filename,
             'video_file_size_bytes' => $settings->video_file_size_bytes,
+            'managed_by_central_command' => (bool) $settings->managed_by_central_command,
         ];
     }
 
@@ -310,7 +351,7 @@ class AnnouncementController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $rows = Announcement::orderBy('sort_order')->orderBy('created_at')->get();
+        $rows = $this->orderedAnnouncements(activeOnly: false);
 
         return response()->json($rows->map(fn (Announcement $a) => $this->present($a))->all());
     }
@@ -331,6 +372,7 @@ class AnnouncementController extends Controller
                 'tag' => $data['tag'] ?? null,
                 'text' => $data['text'],
                 'sort_order' => $data['sort_order'] ?? 0,
+                'source' => Announcement::SOURCE_LOCAL,
             ]);
 
             Audit::record(
@@ -360,6 +402,7 @@ class AnnouncementController extends Controller
         ]);
 
         $announcement = $this->announcementOr404($announcementId);
+        $this->requireLocal($announcement);
 
         // Python uses model_dump(exclude_unset=True): only the fields
         // actually present in the request body are applied, and the
@@ -406,6 +449,7 @@ class AnnouncementController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'full');
 
         $announcement = $this->announcementOr404($announcementId);
+        $this->requireLocal($announcement);
 
         DB::transaction(function () use ($announcement, $user) {
             // The audit entry is written BEFORE the delete, same order

@@ -199,6 +199,9 @@ export interface Announcement {
   text: string
   sort_order: number
   is_active: boolean
+  /** 'central' = pushed by Central Command, read-only here (one-way);
+   * 'local' = this company's own announcement, editable and never sent back. */
+  source: 'central' | 'local'
   created_at: string
 }
 
@@ -223,6 +226,10 @@ export interface AdBannerSettingsInfo {
   video_source: 'upload' | 'url' | 'none'
   video_original_filename: string | null
   video_file_size_bytes: number | null
+  /** True while Central Command owns this slot's video: the form is locked
+   * and every write to it is refused (403) until Central Command releases
+   * the slot by pushing an empty URL. */
+  managed_by_central_command: boolean
 }
 
 // ---- Company Setup / multi-company ----

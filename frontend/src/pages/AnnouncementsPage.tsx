@@ -11,6 +11,12 @@
 // Dennis's direct request ("the setting should be separate for login
 // page and inside side menu advert video") into two independent cards,
 // one per App\Models\AdBannerSettings::SLOT_*.
+//
+// Anything Central Command pushed is ONE-WAY (2026-09-24: "when it's
+// pushed to the client, they cannot amend it"): a video slot it owns
+// is shown locked, and its platform announcements are listed
+// read-only above the company's own, which stay fully editable and
+// never flow back.
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { api, type AdBannerSettingsInfo, type AdBannerSlot, type Announcement } from '../lib/api'
 
@@ -87,10 +93,18 @@ function VideoSlotCard({ slot, title, description }: { slot: AdBannerSlot; title
     }
   }
 
+  const locked = videoSettings?.managed_by_central_command === true
+
   return (
     <div className="card">
       <h2>{title}</h2>
       <p className="muted">{description}</p>
+      {locked && (
+        <div className="error-banner" style={{ background: '#fff7e6', borderColor: '#f0c36d', color: '#7a4b00' }}>
+          This video is managed by Central Command and cannot be changed here. It will unlock if
+          Central Command clears the video for this slot.
+        </div>
+      )}
       <p className="muted">
         Upload an .mp4 or .webm file (up to 100 MB), or paste a direct link to one hosted
         elsewhere instead -- not a YouTube / Vimeo / Google Drive page link, which will not
@@ -114,7 +128,7 @@ function VideoSlotCard({ slot, title, description }: { slot: AdBannerSlot; title
           type="file"
           accept="video/mp4,video/webm"
           onChange={onUploadVideo}
-          disabled={uploadingVideo}
+          disabled={uploadingVideo || locked}
         />
         {uploadingVideo && <span className="muted" style={{ marginLeft: 10 }}>Uploading...</span>}
       </div>
@@ -130,12 +144,13 @@ function VideoSlotCard({ slot, title, description }: { slot: AdBannerSlot; title
             }}
             placeholder="https://..."
             style={{ minWidth: 360 }}
+            disabled={locked}
           />
         </div>
-        <button type="submit" disabled={savingVideoUrl}>
+        <button type="submit" disabled={savingVideoUrl || locked}>
           {savingVideoUrl ? 'Saving...' : 'Save video URL'}
         </button>
-        {videoSettings?.video_source !== 'none' && (
+        {videoSettings?.video_source !== 'none' && !locked && (
           <button type="button" className="secondary" style={{ marginLeft: 8 }} onClick={onRemoveVideo}>
             Remove video
           </button>
@@ -169,7 +184,7 @@ export default function AnnouncementsPage() {
       await api.createAnnouncement({
         tag: tag || undefined,
         text,
-        sort_order: announcements.length,
+        sort_order: local.length,
       })
       setTag('')
       setText('')
@@ -204,17 +219,22 @@ export default function AnnouncementsPage() {
     }
   }
 
+  // Reorders within the company's own list only. Every row whose
+  // position changed gets its index written back, which also repairs
+  // any ties left over from earlier inserts.
   async function onMove(a: Announcement, direction: -1 | 1) {
-    const sorted = [...announcements].sort((x, y) => x.sort_order - y.sort_order)
-    const index = sorted.findIndex((x) => x.id === a.id)
-    const swapWith = sorted[index + direction]
-    if (!swapWith) return
+    const index = local.findIndex((x) => x.id === a.id)
+    const target = index + direction
+    if (target < 0 || target >= local.length) return
+    const next = [...local]
+    ;[next[index], next[target]] = [next[target], next[index]]
     setError(null)
     try {
-      await Promise.all([
-        api.updateAnnouncement(a.id, { sort_order: swapWith.sort_order }),
-        api.updateAnnouncement(swapWith.id, { sort_order: a.sort_order }),
-      ])
+      await Promise.all(
+        next
+          .map((row, i) => (row.sort_order === i ? null : api.updateAnnouncement(row.id, { sort_order: i })))
+          .filter((p): p is Promise<Announcement> => p !== null),
+      )
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reorder announcements')
@@ -231,7 +251,9 @@ export default function AnnouncementsPage() {
     }
   }
 
-  const sorted = [...announcements].sort((a, b) => a.sort_order - b.sort_order)
+  const bySort = (a: Announcement, b: Announcement) => a.sort_order - b.sort_order
+  const central = announcements.filter((a) => a.source === 'central').sort(bySort)
+  const local = announcements.filter((a) => a.source !== 'central').sort(bySort)
 
   return (
     <div>
@@ -260,8 +282,48 @@ export default function AnnouncementsPage() {
       />
 
       <div className="card">
-        <h2>What's New items ({sorted.length})</h2>
-        <p className="muted">Shown with both videos above -- these items are not per-slot.</p>
+        <h2>Platform announcements from Central Command ({central.length})</h2>
+        <p className="muted">
+          Pushed by Web Master Consultancy and shown first, with both videos above. Read-only here
+          -- one-way from Central Command. Hidden ones are listed greyed out.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Tag</th>
+              <th>Text</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {central.map((a) => (
+              <tr key={a.id} style={{ opacity: a.is_active ? 1 : 0.6 }}>
+                <td className="muted">{a.tag ?? '-'}</td>
+                <td>{a.text}</td>
+                <td>
+                  <span className={`badge ${a.is_active ? 'active' : 'draft'}`}>
+                    {a.is_active ? 'Active' : 'Hidden'}
+                  </span>
+                </td>
+              </tr>
+            ))}
+            {central.length === 0 && (
+              <tr>
+                <td colSpan={3} className="muted">
+                  Nothing pushed from Central Command yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="card">
+        <h2>Company announcements ({local.length})</h2>
+        <p className="muted">
+          Your own items, shown after the platform announcements above with both videos. Fully
+          editable here and never sent to Central Command.
+        </p>
         <table>
           <thead>
             <tr>
@@ -272,7 +334,7 @@ export default function AnnouncementsPage() {
             </tr>
           </thead>
           <tbody>
-            {sorted.map((a, i) => (
+            {local.map((a, i) => (
               <tr key={a.id} style={{ opacity: a.is_active ? 1 : 0.6 }}>
                 <td className="muted">{a.tag ?? '-'}</td>
                 <td>
@@ -294,7 +356,7 @@ export default function AnnouncementsPage() {
                   </button>
                   <button
                     className="secondary"
-                    disabled={i === sorted.length - 1}
+                    disabled={i === local.length - 1}
                     onClick={() => onMove(a, 1)}
                   >
                     &darr;
@@ -308,10 +370,10 @@ export default function AnnouncementsPage() {
                 </td>
               </tr>
             ))}
-            {sorted.length === 0 && (
+            {local.length === 0 && (
               <tr>
                 <td colSpan={4} className="muted">
-                  No announcements yet.
+                  No company announcements yet.
                 </td>
               </tr>
             )}

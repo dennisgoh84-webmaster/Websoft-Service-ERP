@@ -56,11 +56,13 @@ class AdBannerSettings extends Model
     protected $fillable = [
         'slot', 'video_url',
         'video_stored_filename', 'video_original_filename', 'video_content_type', 'video_file_size_bytes',
+        'managed_by_central_command',
     ];
 
     protected $casts = [
         'updated_at' => 'datetime',
         'video_file_size_bytes' => 'integer',
+        'managed_by_central_command' => 'boolean',
     ];
 
     public function hasUploadedVideo(): bool
