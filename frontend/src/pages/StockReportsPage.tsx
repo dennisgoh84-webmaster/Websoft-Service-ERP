@@ -11,6 +11,7 @@ import {
   type ReorderItem,
 } from '../lib/api'
 import { formatMoney as money, formatDate } from '../lib/format'
+import ExportControl from '../components/ExportControl'
 import { ReportHeader, ReportLauncher, useSelectedReport, type ReportSection } from '../components/ReportLauncher'
 
 type ReportType = 'valuation' | 'reorder' | 'movements'
@@ -55,7 +56,7 @@ export default function StockReportsPage() {
 
   return (
     <div>
-      <h1>Stock Operation Reports</h1>
+      <h1 className="no-print">Stock Operation Reports</h1>
       {!reportType ? (
         <>
           <p className="muted">Choose a report. Each one shows what it covers and which filters it takes.</p>
@@ -65,6 +66,9 @@ export default function StockReportsPage() {
         <>
           <ReportHeader sections={SECTIONS} current={reportType} onBack={() => openReport(null)} />
           {error && <div className="error-banner">{error}</div>}
+          <div className="report-filter-actions" style={{ marginBottom: 10 }}>
+            <ExportControl formats={[{ value: 'pdf', label: 'PDF (Print)' }]} onExport={async () => window.print()} onError={setError} />
+          </div>
           <div className="card">
             {reportType === 'valuation' && <ValuationTab onError={setError} />}
             {reportType === 'reorder' && <ReorderTab onError={setError} />}

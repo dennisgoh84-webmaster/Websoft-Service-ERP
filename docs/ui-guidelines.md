@@ -42,6 +42,12 @@ does it.
 
 ## 2. Export (CSV / Excel) -- for every list/report screen
 
+Report screens (Accounting, Operations, Stock) also offer **PDF (Print)**
+(2026-09-24): `window.print()`, with the print stylesheet hiding the
+filters and `ReportHeader` printing the company, report title, the
+filters in force and the print time -- the same browser print route the
+print forms use, so no server-side PDF step.
+
 Every screen whose main content is a table of records gets an Export
 control, placed in the filter bar (or, if there's no filter bar, at the top
 of the card) so it exports whatever the current filters show.
@@ -61,7 +67,8 @@ rather than hand-rolling a select + button:
 />
 ```
 
-It renders the format `<select>` + a single **"Export"** button (never
+It renders a single **"Export"** button with the format `<select>` to its
+right (order changed 2026-09-24 at Dennis's request) (never
 "Export CSV" as the permanent label -- the format select already says
 that), shows "Exporting..." and disables itself while the request is in
 flight, and surfaces a thrown error the same way the rest of the page

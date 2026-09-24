@@ -124,6 +124,24 @@ class OperationsReportTest extends TestCase
         $this->assertSame([$alreadyExpired->id], $statusIds);
     }
 
+    public function test_contracts_report_takes_several_companies_individuals_at_once(): void
+    {
+        $company = Company::factory()->create();
+        $token = $this->ownerToken($company);
+        [$a, $b, $c] = CompanyIndividual::factory()->for($company)->count(3)->create()->all();
+        $forA = Contract::factory()->for($company)->create(['customer_id' => $a->id]);
+        $forB = Contract::factory()->for($company)->create(['customer_id' => $b->id]);
+        $forC = Contract::factory()->for($company)->create(['customer_id' => $c->id]);
+
+        $ids = collect($this->getJson(
+            "/api/reports/operations/contracts?customer_ids={$a->id},{$b->id}",
+            $this->headers($token),
+        )->assertOk()->json())->pluck('id')->all();
+
+        $this->assertEqualsCanonicalizing([$forA->id, $forB->id], $ids);
+        $this->assertNotContains($forC->id, $ids);
+    }
+
     public function test_contracts_csv_export_carries_the_customer_name_and_formatted_hours(): void
     {
         $company = Company::factory()->create();

@@ -1,48 +1,10 @@
 // Filter controls shared by the report screens (Dennis, 2026-09-24:
 // "company selection, and multiple company selection, ACC period and
-// date selection from and to").
+// date selection from and to" -- "company" there meaning the Company /
+// Individual file, i.e. customers and suppliers).
 import { useEffect, useRef, useState } from 'react'
-import { api, type AccountingPeriod, type Company } from '../lib/api'
+import { api, type AccountingPeriod } from '../lib/api'
 import { formatDate } from '../lib/format'
-
-/** One or several of the user's own companies; at least one always stays selected. */
-export function CompanyPicker({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
-  const [companies, setCompanies] = useState<Company[]>([])
-  useEffect(() => {
-    api.listMyCompanies().then(setCompanies).catch(() => setCompanies([]))
-  }, [])
-
-  const toggle = (id: string) => {
-    const next = value.includes(id) ? value.filter((x) => x !== id) : [...value, id]
-    if (next.length > 0) onChange(next)
-  }
-  const allSelected = companies.length > 0 && companies.every((c) => value.includes(c.id))
-
-  return (
-    <div className="form-row report-companies">
-      <label>Company{companies.length > 1 ? ' (tick one or more)' : ''}</label>
-      <div className="company-chips">
-        {companies.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            className={`company-chip${value.includes(c.id) ? ' on' : ''}`}
-            onClick={() => toggle(c.id)}
-            disabled={companies.length === 1}
-            title={c.name}
-          >
-            {c.code} {c.name}
-          </button>
-        ))}
-        {companies.length > 2 && (
-          <button type="button" className="company-chip all" onClick={() => onChange(allSelected ? [value[0]] : companies.map((c) => c.id))}>
-            {allSelected ? 'Clear' : 'All companies'}
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}
 
 /** Checkbox dropdown: nothing ticked means "all". */
 export function MultiPick({

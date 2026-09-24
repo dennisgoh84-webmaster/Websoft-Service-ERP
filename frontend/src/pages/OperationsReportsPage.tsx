@@ -25,7 +25,7 @@ import {
   type SetupListItem,
   type StaffUser,
 } from '../lib/api'
-import { PeriodRange } from '../components/ReportFilters'
+import { MultiPick, PeriodRange } from '../components/ReportFilters'
 import { formatMoney as money, formatDate } from '../lib/format'
 
 // NEW FEATURE (not a Python->PHP conversion -- see
@@ -116,7 +116,7 @@ export default function OperationsReportsPage() {
 
   // Shared-shape filters -- only the ones relevant to the selected
   // report type are actually sent (see the fetch effect below).
-  const [customerId, setCustomerId] = useState('')
+  const [customerIds, setCustomerIds] = useState<string[]>([])
   const [staffId, setStaffId] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -153,7 +153,7 @@ export default function OperationsReportsPage() {
   }, [])
 
   function resetFilters() {
-    setCustomerId('')
+    setCustomerIds([])
     setStaffId('')
     setStartDate('')
     setEndDate('')
@@ -177,7 +177,7 @@ export default function OperationsReportsPage() {
         .reportContracts({
           status: contractStatus || undefined,
           contract_kind: contractKind || undefined,
-          customer_id: customerId || undefined,
+          customer_ids: customerIds.join(',') || undefined,
           expiring_within_days: expiringWithinDays ? Number(expiringWithinDays) : undefined,
           start_date: startDate || undefined,
           end_date: endDate || undefined,
@@ -188,7 +188,7 @@ export default function OperationsReportsPage() {
       api
         .reportJobOrders({
           status: jobOrderStatus || undefined,
-          customer_id: customerId || undefined,
+          customer_ids: customerIds.join(',') || undefined,
           assigned_to_user_id: staffId || undefined,
           overdue_only: overdueOnly || undefined,
           start_date: startDate || undefined,
@@ -201,7 +201,7 @@ export default function OperationsReportsPage() {
         .reportServiceRecords({
           status: srStatus || undefined,
           outcome: srOutcome || undefined,
-          customer_id: customerId || undefined,
+          customer_ids: customerIds.join(',') || undefined,
           employee_user_id: staffId || undefined,
           start_date: startDate || undefined,
           end_date: endDate || undefined,
@@ -211,7 +211,7 @@ export default function OperationsReportsPage() {
     } else if (reportType === 'customer-product-usage') {
       api
         .reportCompanyIndividualProductUsage({
-          customer_id: customerId || undefined,
+          customer_ids: customerIds.join(',') || undefined,
           product_id: productId || undefined,
           industry_code: industryCode || undefined,
         })
@@ -230,7 +230,7 @@ export default function OperationsReportsPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    reportType, customerId, staffId, startDate, endDate, contractStatus, contractKind,
+    reportType, customerIds, staffId, startDate, endDate, contractStatus, contractKind,
     expiringWithinDays, jobOrderStatus, overdueOnly, srStatus, srOutcome, productId, industryCode,
     contractExpiryFrom, contractExpiryTo,
   ])
@@ -241,11 +241,15 @@ export default function OperationsReportsPage() {
 
   async function onExport(format: string) {
     setError(null)
+    if (format === 'pdf') {
+      window.print()
+      return
+    }
     if (reportType === 'contracts') {
       const filters = {
         status: contractStatus || undefined,
         contract_kind: contractKind || undefined,
-        customer_id: customerId || undefined,
+        customer_ids: customerIds.join(',') || undefined,
         expiring_within_days: expiringWithinDays ? Number(expiringWithinDays) : undefined,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
@@ -255,7 +259,7 @@ export default function OperationsReportsPage() {
     } else if (reportType === 'job-orders') {
       const filters = {
         status: jobOrderStatus || undefined,
-        customer_id: customerId || undefined,
+        customer_ids: customerIds.join(',') || undefined,
         assigned_to_user_id: staffId || undefined,
         overdue_only: overdueOnly || undefined,
         start_date: startDate || undefined,
@@ -267,7 +271,7 @@ export default function OperationsReportsPage() {
       const filters = {
         status: srStatus || undefined,
         outcome: srOutcome || undefined,
-        customer_id: customerId || undefined,
+        customer_ids: customerIds.join(',') || undefined,
         employee_user_id: staffId || undefined,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
@@ -277,7 +281,7 @@ export default function OperationsReportsPage() {
       downloadBlob(blob, `service-records-report.${format === 'csv' ? 'csv' : 'xlsx'}`)
     } else if (reportType === 'customer-product-usage') {
       const filters = {
-        customer_id: customerId || undefined,
+        customer_ids: customerIds.join(',') || undefined,
         product_id: productId || undefined,
         industry_code: industryCode || undefined,
       }
@@ -304,7 +308,7 @@ export default function OperationsReportsPage() {
 
   return (
     <div>
-      <h1>Operations Reports</h1>
+      <h1 className="no-print">Operations Reports</h1>
       {!reportType ? (
         <>
           <p className="muted">
@@ -315,24 +319,33 @@ export default function OperationsReportsPage() {
         </>
       ) : (
         <>
-      <ReportHeader sections={SECTIONS} current={reportType} onBack={() => openReport(null)} />
+      <ReportHeader
+        sections={SECTIONS}
+        current={reportType}
+        onBack={() => openReport(null)}
+        printSummary={[
+          ...(reportType === 'contract-expiry-listing' || reportType === 'contract-renewal-due-listing'
+            ? []
+            : [`Company / Individual: ${customerIds.length === 0 ? 'All' : customerIds.map((id) => customers.find((c) => c.id === id)?.name ?? id).join(', ')}`]),
+          ...(startDate || endDate ? [`Period: ${startDate ? formatDate(startDate) : '…'} to ${endDate ? formatDate(endDate) : '…'}`] : []),
+          ...(reportType === 'contract-expiry-listing' && (contractExpiryFrom || contractExpiryTo)
+            ? [`Expiry: ${contractExpiryFrom ? formatDate(contractExpiryFrom) : '…'} to ${contractExpiryTo ? formatDate(contractExpiryTo) : '…'}`]
+            : []),
+        ]}
+      />
       {error && <div className="error-banner">{error}</div>}
 
       <div className="card">
         <div className="filter-bar">
 
           {reportType !== 'contract-expiry-listing' && reportType !== 'contract-renewal-due-listing' && (
-            <div className="form-row" style={{ margin: 0 }}>
-              <label>Company / Individual</label>
-              <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-                <option value="">All</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <MultiPick
+              label="Company / Individual"
+              allLabel="All companies / individuals"
+              options={customers.map((c) => ({ id: c.id, name: c.name }))}
+              value={customerIds}
+              onChange={setCustomerIds}
+            />
           )}
 
           {reportType === 'contract-expiry-listing' && (
@@ -500,6 +513,7 @@ export default function OperationsReportsPage() {
             formats={[
               { value: 'csv', label: 'CSV' },
               { value: 'excel', label: 'Excel' },
+              { value: 'pdf', label: 'PDF (Print)' },
             ]}
             onExport={onExport}
             onError={setError}

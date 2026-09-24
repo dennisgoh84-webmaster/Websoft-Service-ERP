@@ -103,13 +103,27 @@ class OperationsReportController extends Controller
     }
 
     /** @return Collection<int, Contract> */
+    /**
+     * One or several Company / Individual ids: `customer_ids` (comma-
+     * separated, 2026-09-24) or the original single `customer_id`.
+     *
+     * @return array<int, string>|null
+     */
+    private function customerIds(Request $request): ?array
+    {
+        $raw = $request->query('customer_ids', $request->query('customer_id'));
+        $ids = array_values(array_filter(array_map('trim', explode(',', (string) $raw)), fn ($v) => $v !== ''));
+
+        return $ids === [] ? null : $ids;
+    }
+
     private function filteredContracts(string $companyId, Request $request)
     {
         return ReportsService::contracts(
             $companyId,
             $request->query('status'),
             $request->query('contract_kind'),
-            $request->query('customer_id'),
+            $this->customerIds($request),
             $request->filled('expiring_within_days') ? (int) $request->query('expiring_within_days') : null,
             $this->date($request, 'start_date'),
             $this->date($request, 'end_date'),
@@ -199,7 +213,7 @@ class OperationsReportController extends Controller
         return ReportsService::jobOrders(
             $companyId,
             $request->query('status'),
-            $request->query('customer_id'),
+            $this->customerIds($request),
             $request->query('assigned_to_user_id'),
             $request->boolean('overdue_only'),
             $this->date($request, 'start_date'),
@@ -304,7 +318,7 @@ class OperationsReportController extends Controller
             $companyId,
             $request->query('status'),
             $request->query('outcome'),
-            $request->query('customer_id'),
+            $this->customerIds($request),
             $request->query('employee_user_id'),
             $this->date($request, 'start_date'),
             $this->date($request, 'end_date'),
@@ -396,7 +410,7 @@ class OperationsReportController extends Controller
             'end_date' => $r['end_date'] instanceof Carbon ? $r['end_date']->toDateString() : $r['end_date'],
         ], ReportsService::customerProductUsage(
             $companyId,
-            $request->query('customer_id'),
+            $this->customerIds($request),
             $request->query('product_id'),
             $request->query('industry_code'),
         ));

@@ -32,7 +32,7 @@ class ReportsService
         string $companyId,
         ?string $status = null,
         ?string $contractKind = null,
-        ?string $customerId = null,
+        string|array|null $customerId = null,
         ?int $expiringWithinDays = null,
         ?Carbon $startDate = null,
         ?Carbon $endDate = null,
@@ -44,8 +44,8 @@ class ReportsService
         if ($contractKind !== null) {
             $query->where('contract_kind', $contractKind);
         }
-        if ($customerId !== null) {
-            $query->where('customer_id', $customerId);
+        if ($customerId !== null && $customerId !== [] && $customerId !== '') {
+            $query->whereIn('customer_id', (array) $customerId);
         }
         // An overlap test, not a containment one: a contract counts if
         // any part of it falls inside the window.
@@ -78,7 +78,7 @@ class ReportsService
     public static function jobOrders(
         string $companyId,
         ?string $status = null,
-        ?string $customerId = null,
+        string|array|null $customerId = null,
         ?string $assignedToUserId = null,
         bool $overdueOnly = false,
         ?Carbon $startDate = null,
@@ -88,8 +88,8 @@ class ReportsService
         if ($status !== null) {
             $query->where('status', $status);
         }
-        if ($customerId !== null) {
-            $query->where('customer_id', $customerId);
+        if ($customerId !== null && $customerId !== [] && $customerId !== '') {
+            $query->whereIn('customer_id', (array) $customerId);
         }
         if ($assignedToUserId !== null) {
             $query->where('assigned_to_user_id', $assignedToUserId);
@@ -118,7 +118,7 @@ class ReportsService
         string $companyId,
         ?string $status = null,
         ?string $outcome = null,
-        ?string $customerId = null,
+        string|array|null $customerId = null,
         ?string $employeeUserId = null,
         ?Carbon $startDate = null,
         ?Carbon $endDate = null,
@@ -136,8 +136,8 @@ class ReportsService
         }
         // Filtered through the JOB ORDER's customer -- a Service Record
         // has no customer of its own.
-        if ($customerId !== null) {
-            $query->where('job_orders.customer_id', $customerId);
+        if ($customerId !== null && $customerId !== [] && $customerId !== '') {
+            $query->whereIn('job_orders.customer_id', (array) $customerId);
         }
         if ($employeeUserId !== null) {
             $query->where('service_records.employee_user_id', $employeeUserId);
@@ -166,7 +166,7 @@ class ReportsService
      */
     public static function customerProductUsage(
         string $companyId,
-        ?string $customerId = null,
+        string|array|null $customerId = null,
         ?string $productId = null,
         ?string $industryCode = null,
     ): array {
@@ -189,8 +189,8 @@ class ReportsService
                 'products.name as product_name',
             ]);
 
-        if ($customerId !== null) {
-            $query->where('company_individuals.id', $customerId);
+        if ($customerId !== null && $customerId !== [] && $customerId !== '') {
+            $query->whereIn('company_individuals.id', (array) $customerId);
         }
         if ($productId !== null) {
             $query->where('products.id', $productId);

@@ -702,6 +702,8 @@ export interface ContractReportFilters {
   status?: ContractStatus
   contract_kind?: ContractKind
   customer_id?: string
+  /** One or several, comma-separated (2026-09-24). */
+  customer_ids?: string
   expiring_within_days?: number
   start_date?: string
   end_date?: string
@@ -711,6 +713,8 @@ export interface ContractReportFilters {
 export interface JobOrderReportFilters {
   status?: JobOrderStatus
   customer_id?: string
+  /** One or several, comma-separated (2026-09-24). */
+  customer_ids?: string
   assigned_to_user_id?: string
   overdue_only?: boolean
   start_date?: string
@@ -722,6 +726,8 @@ export interface ServiceRecordReportFilters {
   status?: ServiceRecordStatus
   outcome?: ServiceRecordOutcome
   customer_id?: string
+  /** One or several, comma-separated (2026-09-24). */
+  customer_ids?: string
   employee_user_id?: string
   start_date?: string
   end_date?: string
@@ -733,6 +739,8 @@ export interface ServiceRecordReportFilters {
  * under a contract's Product Coverage. */
 export interface CompanyIndividualProductUsageFilters {
   customer_id?: string
+  /** One or several, comma-separated (2026-09-24). */
+  customer_ids?: string
   product_id?: string
   industry_code?: string
   [key: string]: string | number | boolean | undefined

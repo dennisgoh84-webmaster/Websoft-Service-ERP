@@ -7,6 +7,8 @@
 // (?report=...) so browser Back returns to the cards and a report can
 // be linked to directly.
 import { useSearchParams } from 'react-router-dom'
+import { useAuth } from '../lib/AuthContext'
+import { formatDateTime } from '../lib/format'
 
 export interface ReportDef<K extends string> {
   key: K
@@ -61,19 +63,37 @@ export function ReportLauncher<K extends string>({ sections, onOpen }: { section
   )
 }
 
-export function ReportHeader<K extends string>({ sections, current, onBack }: { sections: ReportSection<K>[]; current: K; onBack: () => void }) {
+export function ReportHeader<K extends string>({
+  sections,
+  current,
+  onBack,
+  printSummary = [],
+}: {
+  sections: ReportSection<K>[]
+  current: K
+  onBack: () => void
+  /** Filters in force, printed under the title on the PDF (Print) copy. */
+  printSummary?: string[]
+}) {
+  const { activeCompany } = useAuth()
   const section = sections.find((s) => s.reports.some((r) => r.key === current))
   const report = section?.reports.find((r) => r.key === current)
   if (!section || !report) return null
   return (
     <div className="report-header">
-      <p className="report-crumb">
+      <div className="print-only report-print-head">
+        <strong>{activeCompany?.name}</strong>
+        <h1>{report.title}</h1>
+        {printSummary.map((line) => <p key={line}>{line}</p>)}
+        <p className="muted">Printed {formatDateTime(new Date())}</p>
+      </div>
+      <p className="report-crumb no-print">
         <button type="button" className="report-back" onClick={onBack}>← All reports</button>
         <span> / {section.label} / </span>
         <strong>{report.title}</strong>
       </p>
-      <h2>{report.title}</h2>
-      <p className="muted">{report.details}</p>
+      <h2 className="no-print">{report.title}</h2>
+      <p className="muted no-print">{report.details}</p>
     </div>
   )
 }
