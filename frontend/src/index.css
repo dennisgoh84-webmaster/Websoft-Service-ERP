@@ -955,6 +955,16 @@ a.icon-button:hover {
   margin-top: 40px;
 }
 
+/* No browser header/footer on any printout (Dennis, 2026-09-25): with a
+   zero page margin Chrome / Edge have nowhere to draw their date, title,
+   URL and page-number strip, so it is off by default without anyone
+   unticking "Headers and footers". The white border comes from .main's
+   padding instead, repeated on every printed page by
+   box-decoration-break: clone. */
+@page {
+  margin: 0;
+}
+
 @media print {
   .sidebar,
   .main-topbar,
@@ -984,7 +994,9 @@ a.icon-button:hover {
     padding: 0;
   }
   /* Report print (PDF): white page, compact figure boxes. */
+  html,
   body,
+  .app-shell,
   .main,
   .card {
     background: #fff !important;
@@ -1007,7 +1019,9 @@ a.icon-button:hover {
     font-size: 11px;
   }
   .main {
-    padding: 0;
+    padding: 12mm 14mm !important;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
     max-width: none;
     /* Undo the on-screen single-viewport scroll box so a printed page
        isn't clipped to whatever was visible on screen. */
