@@ -151,6 +151,33 @@ class CrmProspectActivityTest extends TestCase
         $staffList->assertJsonFragment(['subject' => 'Staff activity']);
     }
 
+    public function test_mobile_crm_list_exists_and_is_scoped_like_the_desktop_one(): void
+    {
+        $company = Company::factory()->create();
+        $group = $this->setupGroupAuthority($company, 'edit');
+        $owner = User::factory()->for($company)->create([
+            'role' => User::ROLE_OWNER, 'full_name' => 'Dennis Owner', 'hashed_password' => PasswordPolicy::hash('demo1234'),
+        ]);
+        $ownerToken = $this->post('/api/auth/login', ['username' => $owner->email, 'password' => 'demo1234'])->json('access_token');
+        $staff = User::factory()->for($company)->create([
+            'role' => User::ROLE_SUPPORT_ENGINEER, 'hashed_password' => PasswordPolicy::hash('demo1234'),
+        ]);
+        UserCompanyAccess::create(['user_id' => $staff->id, 'company_id' => $company->id, 'group_id' => $group->id]);
+        $staffToken = $this->post('/api/auth/login', ['username' => $staff->email, 'password' => 'demo1234'])->json('access_token');
+        $customer = CompanyIndividual::factory()->for($company)->create();
+
+        // The desktop response names who created it (it used to be blank).
+        $this->postJson('/api/crm/activities', ['customer_id' => $customer->id, 'activity_type' => 'email', 'subject' => 'Owner activity'], $this->headers($ownerToken))
+            ->assertOk()->assertJson(['created_by_name' => 'Dennis Owner']);
+        $this->postJson('/api/crm/activities', ['customer_id' => $customer->id, 'activity_type' => 'call', 'subject' => 'Staff activity'], $this->headers($staffToken))
+            ->assertOk();
+
+        $this->getJson('/api/mobile/crm/activities', $this->headers($ownerToken))
+            ->assertOk()->assertJsonCount(2)->assertJsonFragment(['subject' => 'Owner activity', 'created_by_name' => 'Dennis Owner']);
+        $this->getJson('/api/mobile/crm/activities', $this->headers($staffToken))
+            ->assertOk()->assertJsonCount(1)->assertJsonFragment(['subject' => 'Staff activity']);
+    }
+
     public function test_staff_can_update_their_own_activities(): void
     {
         $company = Company::factory()->create();

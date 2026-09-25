@@ -47,9 +47,9 @@ class CrmController extends Controller
             'activity_date' => optional($activity->activity_date)->toJSON(),
             'status' => $activity->status,
             'created_by_user_id' => $activity->created_by_user_id,
-            'created_by_name' => $activity->createdBy?->name,
+            'created_by_name' => $activity->createdBy?->full_name,
             'last_edited_by_user_id' => $activity->last_edited_by_user_id,
-            'last_edited_by_name' => $activity->lastEditedBy?->name,
+            'last_edited_by_name' => $activity->lastEditedBy?->full_name,
             'created_at' => optional($activity->created_at)->toJSON(),
             'updated_at' => optional($activity->updated_at)->toJSON(),
         ];

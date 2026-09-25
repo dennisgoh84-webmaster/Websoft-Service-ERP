@@ -1003,7 +1003,7 @@ interface TabItem {
 }
 
 function getTabsForRole(role: string): TabItem[] {
-  if (role === 'sales_manager') {
+  if (role === 'sales_manager' || role === 'owner') {
     return [
       { id: 'crm', label: '📞 CRM', icon: '📞' },
       { id: 'quotations', label: '📄 Quotations', icon: '📄' },
