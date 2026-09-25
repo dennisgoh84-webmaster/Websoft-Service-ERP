@@ -88,7 +88,8 @@ const styles = {
   headerSub: { fontSize: 12, opacity: 0.85, margin: 0 } as CSSProperties,
   logoutBtn: {
     background: 'rgba(255,255,255,0.2)', border: 'none', color: WHITE,
-    fontSize: 13, padding: '6px 12px', borderRadius: 6, cursor: 'pointer',
+    fontSize: 13, padding: '10px 14px', borderRadius: 6, cursor: 'pointer',
+    whiteSpace: 'nowrap', flexShrink: 0,
   } as CSSProperties,
   content: { flex: 1 } as CSSProperties,
   card: {
@@ -104,7 +105,8 @@ const styles = {
   btnSecondary: { background: '#efe8e8', color: INK } as CSSProperties,
   input: {
     width: '100%', padding: '12px', border: `1px solid ${BORDER}`, borderRadius: 8,
-    fontSize: 15, boxSizing: 'border-box' as const, fontFamily: 'inherit',
+    // 16px minimum: below it iPhone Safari zooms the page on focus.
+    fontSize: 16, boxSizing: 'border-box' as const, fontFamily: 'inherit',
   } as CSSProperties,
   label: { display: 'block', fontSize: 13, fontWeight: 600, color: MUTED, marginBottom: 4 } as CSSProperties,
   errorBox: {
@@ -822,7 +824,7 @@ function PortalJobOrderDetailView({ id, onBack }: { id: string; onBack: () => vo
   return (
     <div>
       <div style={{ padding: '12px 16px 0' }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', color: MAROON, fontSize: 14, cursor: 'pointer', padding: 0 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', color: MAROON, fontSize: 14, cursor: 'pointer', padding: '10px 0' }}>
           &larr; Back to job orders
         </button>
       </div>

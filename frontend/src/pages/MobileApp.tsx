@@ -147,11 +147,11 @@ const styles = {
   headerTitle: { fontSize: 18, fontWeight: 700, margin: 0 } as React.CSSProperties,
   backBtn: {
     background: 'none', border: 'none', color: WHITE, fontSize: 16,
-    cursor: 'pointer', padding: '4px 8px',
+    cursor: 'pointer', padding: '10px 8px',
   } as React.CSSProperties,
   logoutBtn: {
     background: 'rgba(255,255,255,0.2)', border: 'none', color: WHITE,
-    fontSize: 13, padding: '6px 12px', borderRadius: 6, cursor: 'pointer',
+    fontSize: 13, padding: '10px 14px', borderRadius: 6, cursor: 'pointer',
   } as React.CSSProperties,
   card: {
     background: WHITE, borderRadius: 12, padding: 16, margin: '12px 16px',
@@ -168,7 +168,8 @@ const styles = {
   btnSuccess: { background: '#27ae60', color: WHITE } as React.CSSProperties,
   input: {
     width: '100%', padding: '12px', border: '1px solid #ddd', borderRadius: 8,
-    fontSize: 15, boxSizing: 'border-box' as const,
+    // 16px minimum: below it iPhone Safari zooms the page on focus.
+    fontSize: 16, boxSizing: 'border-box' as const,
   } as React.CSSProperties,
   label: { display: 'block', fontSize: 13, fontWeight: 600, color: '#555', marginBottom: 4 } as React.CSSProperties,
   badge: {
@@ -1038,7 +1039,7 @@ function TabBar({ tabs, active, onChange }: { tabs: TabItem[]; active: string; o
             borderBottom: active === tab.id ? '3px solid #fff' : 'none',
           }}
         >
-          {tab.icon} {tab.label}
+          {tab.label}
         </button>
       ))}
       {/* Back to the full ERP, remembered on this phone (2026-09-25). */}
