@@ -620,11 +620,12 @@ shipped and when.
   follow-up outside this repo:** Central Command checks
   `alembic_version` to version a client database; it must read
   Laravel's `migrations` table now (docs/central-command-schema-contract.md).
-- [ ] **Smaller things noticed, not done:** the SMTP transport has no
-  connect timeout, so "Send test email" against an unreachable host
-  spins until PHP's socket default (60s) rather than failing fast; the
-  Outlook Add-in half of Incidents is still scaffold-only, needing a
-  real Microsoft 365 tenant + HTTPS host.
+- [ ] **Smaller things noticed, not done:** the Outlook Add-in half of
+  Incidents is still scaffold-only, needing a real Microsoft 365 tenant
+  + HTTPS host. (~~The SMTP transport has no connect timeout~~ -- already
+  fixed 2026-09-15: `Mailer` bounds the connect to 15 seconds for the
+  duration of a send; this line had not been ticked. Confirmed
+  2026-09-25.)
 - [x] **Promo video is a `<video src>` URL only (no upload), which the
   Announcements screen didn't say.** First marked settled 2026-09-16
   by pointing to guidance added in the separate websoft-central-command
