@@ -26,6 +26,15 @@ if ! grep -qE '^UPGRADE_AGENT_TOKEN=.+' .env; then
     printf '\n# Shared secret between the backend and deploy/upgrade-agent.sh (generated).\nUPGRADE_AGENT_TOKEN=%s\n' "$TOKEN" >> .env
   fi
   echo "    generated UPGRADE_AGENT_TOKEN in .env"
+  # The backend reads the token from its environment when it starts, so a
+  # backend that is already running must be recreated to pick it up --
+  # otherwise the agent's check-ins are refused until its next restart.
+  # --no-deps: recreate just the backend, not the services it depends on.
+  if docker compose ps --status running --services 2>/dev/null | grep -qx backend-php; then
+    docker compose up -d --no-deps backend-php >/dev/null 2>&1 \
+      && echo "    restarted backend-php so it has the token" \
+      || warn "could not restart backend-php -- run: docker compose up -d"
+  fi
 fi
 
 chmod +x deploy/upgrade-agent.sh deploy/upgrade.sh
