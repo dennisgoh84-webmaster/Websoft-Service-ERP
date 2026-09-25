@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use Carbon\Carbon;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
@@ -28,6 +30,15 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
  * now go through `tableToCsv`/`tableToExcel` below, which is what
  * docs/ui-guidelines.md section 2 asked for all along ("never write a
  * CSV/XLSX writer by hand").
+ *
+ * DATES (Dennis, 2026-09-25: DD/MM/YYYY in CSV and Excel too): every
+ * value that IS a date -- a DateTime, or a string that is exactly
+ * YYYY-MM-DD or an ISO date-time -- is written as DD/MM/YYYY, and a
+ * moment in time as DD/MM/YYYY HH:MM in the app's timezone. In Excel it
+ * is a real date cell formatted dd/mm/yyyy, so it still sorts and
+ * filters as a date. Only the whole value is matched: "INV-2026-09-25"
+ * or a note that mentions a date are left alone. This deliberately
+ * departs from the Python exports' ISO dates.
  */
 class Exports
 {
@@ -139,11 +150,17 @@ class Exports
 
         $r = 2;
         foreach ($rows as $row) {
-            $sheet->fromArray(
-                array_map(static fn (string $f) => self::scalar($row[$f] ?? ''), $fieldnames),
-                null,
-                'A'.$r
-            );
+            foreach ($fieldnames as $i => $f) {
+                $coord = Coordinate::stringFromColumnIndex($i + 1).$r;
+                $date = self::asDate($row[$f] ?? '');
+                if ($date !== null) {
+                    $sheet->setCellValue($coord, ExcelDate::PHPToExcel($date['at']));
+                    $sheet->getStyle($coord)->getNumberFormat()
+                        ->setFormatCode($date['time'] ? 'dd/mm/yyyy hh:mm' : 'dd/mm/yyyy');
+                } else {
+                    $sheet->setCellValue($coord, self::scalar($row[$f] ?? ''));
+                }
+            }
             $r++;
         }
 
@@ -176,7 +193,46 @@ class Exports
         if (is_bool($value)) {
             return $value ? 'True' : 'False';
         }
+        $date = self::asDate($value);
+        if ($date !== null) {
+            return $date['at']->format($date['time'] ? 'd/m/Y H:i' : 'd/m/Y');
+        }
 
         return $value === null ? '' : (string) $value;
+    }
+
+    /**
+     * The value as a date, if it is one: a DateTime, "YYYY-MM-DD", or an
+     * ISO date-time ("YYYY-MM-DD HH:MM[:SS]", "...T...Z", "...+08:00").
+     * A plain date stays that calendar day; a moment in time is shown in
+     * the app's timezone (Asia/Singapore on the servers).
+     *
+     * @return array{at: \DateTimeInterface, time: bool}|null
+     */
+    private static function asDate(mixed $value): ?array
+    {
+        if ($value instanceof \DateTimeInterface) {
+            // A date column (Eloquent 'date' cast) is midnight in its own zone.
+            if ($value->format('H:i:s') === '00:00:00') {
+                return ['at' => $value, 'time' => false];
+            }
+
+            return ['at' => Carbon::instance($value)->timezone(config('app.timezone')), 'time' => true];
+        }
+        if (! is_string($value)) {
+            return null;
+        }
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $value, $m) === 1 && checkdate((int) $m[2], (int) $m[3], (int) $m[1])) {
+            return ['at' => Carbon::createFromDate((int) $m[1], (int) $m[2], (int) $m[3])->startOfDay(), 'time' => false];
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/', $value) === 1) {
+            try {
+                return ['at' => Carbon::parse($value, config('app.timezone'))->timezone(config('app.timezone')), 'time' => true];
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        return null;
     }
 }

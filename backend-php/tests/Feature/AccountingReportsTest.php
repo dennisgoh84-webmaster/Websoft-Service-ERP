@@ -318,7 +318,9 @@ class AccountingReportsTest extends TestCase
             ->assertOk()->getContent();
 
         $this->assertStringContainsString('invoice_number,issued_date,customer_name', $body);
-        $this->assertStringContainsString(now()->toDateString(), $body);
+        // DD/MM/YYYY and the date alone -- no time, no ISO form (2026-09-25).
+        $this->assertMatchesRegularExpression('#,'.preg_quote(now()->format('d/m/Y'), '#').',#', $body);
+        $this->assertStringNotContainsString(now()->toDateString(), $body);
         $this->assertStringNotContainsString('T00:', $body);
     }
 

@@ -352,7 +352,9 @@ class ListExportTest extends TestCase
         $this->assertStringContainsString($invoice->invoice_number, $body);
         $this->assertStringContainsString('Acme Pte Ltd', $body);
         $this->assertStringContainsString('1000.00,90.00,1090.00,1000.00', $body);
-        $this->assertStringContainsString(now()->toDateString(), $body);
+        // DD/MM/YYYY and the date alone -- no time, no ISO form (2026-09-25).
+        $this->assertMatchesRegularExpression('#'.preg_quote(now()->format('d/m/Y'), '#').'(,|\r\n)#', $body);
+        $this->assertStringNotContainsString(now()->toDateString(), $body);
         $this->assertStringNotContainsString('T00:', $body);
         $this->assertXlsxContains('/api/invoices/export.xlsx', 'Acme Pte Ltd');
     }
