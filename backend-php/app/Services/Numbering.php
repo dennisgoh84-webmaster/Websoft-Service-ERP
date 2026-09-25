@@ -37,6 +37,8 @@ class Numbering
         'commission_payout' => 'CP',
         // Data Migration batch (docs/data-migration.md).
         'migration_batch' => 'MIG',
+        // Prospect / Leads.
+        'prospect' => 'PRS',
     ];
 
     /** Allocate the next number for this company/kind/year. */

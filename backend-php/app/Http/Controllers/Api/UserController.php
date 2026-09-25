@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use InvalidArgumentException;
 
 /**
@@ -183,7 +184,7 @@ class UserController extends Controller
             'email' => 'required|email',
             'password' => 'required|string',
             'full_name' => 'required|string',
-            'role' => 'required|in:owner,service_lead,sales_manager,support_engineer,finance',
+            'role' => ['required', Rule::in(User::ROLES)],
             'group_id' => 'sometimes|nullable|uuid',
             'phone' => ['sometimes', 'nullable', 'regex:/^\+[1-9]\d{7,14}$/'],
         ]);
@@ -370,7 +371,7 @@ class UserController extends Controller
         $fields = $request->validate([
             'full_name' => 'sometimes|string',
             'email' => 'sometimes|email',
-            'role' => 'sometimes|in:owner,service_lead,sales_manager,support_engineer,finance',
+            'role' => ['sometimes', Rule::in(User::ROLES)],
             'photo' => 'sometimes|nullable|string',
             'group_id' => 'sometimes|nullable|uuid',
             'force_password_change_on_login' => 'sometimes|boolean',

@@ -37,6 +37,27 @@ class User extends Model
 
     public const ROLE_FINANCE = 'finance';
 
+    // Sales roles (Dennis, 2026-09-26: "sales staff roles... sales
+    // supervisor and manager"). Sales Manager is the existing role above.
+    public const ROLE_SALES_SUPERVISOR = 'sales_supervisor';
+
+    public const ROLE_SALES_STAFF = 'sales_staff';
+
+    public const ROLES = [
+        self::ROLE_OWNER, self::ROLE_SERVICE_LEAD, self::ROLE_SALES_MANAGER, self::ROLE_SALES_SUPERVISOR,
+        self::ROLE_SALES_STAFF, self::ROLE_SUPPORT_ENGINEER, self::ROLE_FINANCE,
+    ];
+
+    /**
+     * Pragmatic default (docs/open-business-decisions.md #45): no team
+     * structure exists, so a Sales Supervisor sees every prospect like
+     * the Sales Manager; everyone else sees their own.
+     */
+    public function seesAllProspects(): bool
+    {
+        return in_array($this->role, [self::ROLE_OWNER, self::ROLE_SALES_MANAGER, self::ROLE_SALES_SUPERVISOR], true);
+    }
+
     public $timestamps = false;
 
     protected $fillable = [

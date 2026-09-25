@@ -5,34 +5,48 @@ namespace App\Http\Controllers\Api;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
+use App\Models\Prospect;
 use App\Models\ProspectActivity;
 use App\Models\User;
 use App\Services\Audit;
 use App\Services\Authority;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
-class CrmController extends Controller
+/**
+ * Prospect Activities -- calls, emails, meetings and so on, each logged
+ * against a Prospect (mostly by the salesperson on the Mobile App). A
+ * user sees the activities on prospects they can see, plus any they
+ * logged themselves.
+ */
+class ProspectActivityController extends Controller
 {
-    private const MODULE = 'crm';
+    private const MODULE = 'prospects';
 
-    private function prospectActivityOrFail(string $companyId, string $activityId): ProspectActivity
+    private const TYPES = 'call,email,meeting,note,follow_up,proposal,demo,negotiation';
+
+    private const STATUSES = 'planned,completed,pending,cancelled';
+
+    private function visibleTo(User $user): Builder
     {
-        $activity = ProspectActivity::find($activityId);
-        if (! $activity || $activity->company_id !== $companyId) {
+        $query = ProspectActivity::where('company_id', $user->company_id);
+        if (! $user->seesAllProspects()) {
+            $mine = Prospect::visibleTo($user)->select('id');
+            $query->where(fn (Builder $q) => $q->where('created_by_user_id', $user->id)->orWhereIn('prospect_id', $mine));
+        }
+
+        return $query;
+    }
+
+    private function activityOrFail(User $user, string $activityId): ProspectActivity
+    {
+        $activity = $this->visibleTo($user)->find($activityId);
+        if (! $activity) {
             throw new ApiException(404, 'Prospect activity not found');
         }
 
         return $activity;
-    }
-
-    private function canViewActivity(User $user, ProspectActivity $activity): bool
-    {
-        // Sales Manager can view all, Sales Staff can only view their own.
-        if ($user->role === User::ROLE_OWNER || $user->role === User::ROLE_SALES_MANAGER) {
-            return true;
-        }
-
-        return $activity->created_by_user_id === $user->id;
     }
 
     private function present(ProspectActivity $activity): array
@@ -40,7 +54,11 @@ class CrmController extends Controller
         return [
             'id' => $activity->id,
             'company_id' => $activity->company_id,
+            'prospect_id' => $activity->prospect_id,
+            'prospect_number' => $activity->prospect?->prospect_number,
+            'prospect_title' => $activity->prospect?->title,
             'customer_id' => $activity->customer_id,
+            'customer_name' => $activity->customer?->name,
             'activity_type' => $activity->activity_type,
             'subject' => $activity->subject,
             'description' => $activity->description,
@@ -60,27 +78,11 @@ class CrmController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $query = ProspectActivity::where('company_id', $user->company_id);
-
-        if ($request->filled('customer_id')) {
-            $query->where('customer_id', $request->query('customer_id'));
-        }
-
-        if ($request->filled('activity_type')) {
-            $query->where('activity_type', $request->query('activity_type'));
-        }
-
-        if ($request->filled('status')) {
-            $query->where('status', $request->query('status'));
-        }
-
-        if ($request->filled('created_by_user_id')) {
-            $query->where('created_by_user_id', $request->query('created_by_user_id'));
-        }
-
-        // Apply role-based filtering: Sales Staff can only see their own activities
-        if ($user->role !== User::ROLE_OWNER && $user->role !== User::ROLE_SALES_MANAGER) {
-            $query->where('created_by_user_id', $user->id);
+        $query = $this->visibleTo($user)->with(['prospect', 'customer', 'createdBy', 'lastEditedBy']);
+        foreach (['prospect_id', 'customer_id', 'activity_type', 'status', 'created_by_user_id'] as $field) {
+            if ($request->filled($field)) {
+                $query->where($field, $request->query($field));
+            }
         }
 
         return $query->orderByDesc('activity_date')->get()->map(fn ($a) => $this->present($a))->values();
@@ -91,13 +93,7 @@ class CrmController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $activity = $this->prospectActivityOrFail($user->company_id, $activityId);
-
-        if (! $this->canViewActivity($user, $activity)) {
-            throw new ApiException(403, 'Unauthorized');
-        }
-
-        return response()->json($this->present($activity));
+        return response()->json($this->present($this->activityOrFail($user, $activityId)));
     }
 
     public function store(Request $request)
@@ -106,20 +102,28 @@ class CrmController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'edit');
 
         $data = $request->validate([
-            'customer_id' => 'required|uuid',
-            'activity_type' => 'required|in:call,email,meeting,note,follow_up,proposal,demo,negotiation',
+            'prospect_id' => 'required|uuid',
+            'activity_type' => 'required|in:'.self::TYPES,
             'subject' => 'required|string|min:1|max:255',
             'description' => 'sometimes|nullable|string',
             'activity_date' => 'sometimes|nullable|date_format:Y-m-d H:i:s',
-            'status' => 'sometimes|in:planned,completed,pending,cancelled',
+            'status' => 'sometimes|in:'.self::STATUSES,
         ]);
+
+        $prospect = Prospect::find($data['prospect_id']);
+        if (! $prospect || ! $prospect->isVisibleTo($user)) {
+            throw new ApiException(404, 'Prospect not found');
+        }
 
         $activity = ProspectActivity::create([
             'company_id' => $user->company_id,
-            'customer_id' => $data['customer_id'],
+            'prospect_id' => $prospect->id,
+            'customer_id' => $prospect->customer_id,
             'activity_type' => $data['activity_type'],
             'subject' => $data['subject'],
             'description' => $data['description'] ?? null,
+            // activity_date has no time zone and is read back in the app's
+            // (Singapore) time, so it takes the app clock, not UTC.
             'activity_date' => $data['activity_date'] ?? now(),
             'status' => $data['status'] ?? ProspectActivity::STATUS_COMPLETED,
             'created_by_user_id' => $user->id,
@@ -133,9 +137,9 @@ class CrmController extends Controller
             actorUserId: $user->id,
             companyId: $user->company_id,
             newValue: [
+                'prospect_id' => $prospect->id,
                 'activity_type' => $activity->activity_type,
                 'subject' => $activity->subject,
-                'customer_id' => $activity->customer_id,
             ],
         );
 
@@ -146,38 +150,30 @@ class CrmController extends Controller
     {
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'edit');
-
-        $activity = $this->prospectActivityOrFail($user->company_id, $activityId);
-
-        if (! $this->canViewActivity($user, $activity)) {
-            throw new ApiException(403, 'Unauthorized');
-        }
+        $activity = $this->activityOrFail($user, $activityId);
 
         $data = $request->validate([
-            'activity_type' => 'sometimes|in:call,email,meeting,note,follow_up,proposal,demo,negotiation',
+            'activity_type' => 'sometimes|in:'.self::TYPES,
             'subject' => 'sometimes|string|min:1|max:255',
             'description' => 'sometimes|nullable|string',
             'activity_date' => 'sometimes|nullable|date_format:Y-m-d H:i:s',
-            'status' => 'sometimes|in:planned,completed,pending,cancelled',
+            'status' => 'sometimes|in:'.self::STATUSES,
         ]);
 
-        $changes = [];
+        $oldData = [];
+        $newData = [];
         foreach (['activity_type', 'subject', 'description', 'activity_date', 'status'] as $field) {
             if (isset($data[$field]) && $data[$field] !== $activity->{$field}) {
-                $changes[$field] = [$activity->{$field}, $data[$field]];
+                $oldData[$field] = $activity->{$field};
+                $newData[$field] = $data[$field];
             }
         }
 
-        if (! empty($changes)) {
-            $oldData = [];
-            $newData = [];
-            foreach ($changes as $field => [$oldVal, $newVal]) {
-                $oldData[$field] = $oldVal;
-                $newData[$field] = $newVal;
-            }
-
-            $activity->update(array_merge($data, ['last_edited_by_user_id' => $user->id]));
-
+        if ($newData !== []) {
+            $activity->fill($data);
+            $activity->last_edited_by_user_id = $user->id;
+            $activity->updated_at = Carbon::now('UTC');
+            $activity->save();
             Audit::record(
                 entityType: 'prospect_activity',
                 entityId: $activity->id,
@@ -196,12 +192,7 @@ class CrmController extends Controller
     {
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'edit');
-
-        $activity = $this->prospectActivityOrFail($user->company_id, $activityId);
-
-        if (! $this->canViewActivity($user, $activity)) {
-            throw new ApiException(403, 'Unauthorized');
-        }
+        $activity = $this->activityOrFail($user, $activityId);
 
         Audit::record(
             entityType: 'prospect_activity',
@@ -210,8 +201,8 @@ class CrmController extends Controller
             actorUserId: $user->id,
             companyId: $user->company_id,
             oldValue: [
+                'prospect_id' => $activity->prospect_id,
                 'subject' => $activity->subject,
-                'customer_id' => $activity->customer_id,
                 'activity_type' => $activity->activity_type,
             ],
         );

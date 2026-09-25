@@ -9,6 +9,7 @@ import {
   downloadBlob,
   type CompanyIndividual,
   type Product,
+  type Prospect,
   type Quotation,
   type QuotationStatus,
   type ReferenceCode,
@@ -89,7 +90,10 @@ export default function QuotationsPage() {
   const [docPanelId, setDocPanelId] = useState<string | null>(null)
 
   // New quotation form
-  const [customerId, setCustomerId] = useState('')
+  // Arriving from a prospect's "New quotation" button prefills both.
+  const [customerId, setCustomerId] = useState(searchParams.get('customer_id') ?? '')
+  const [prospectId, setProspectId] = useState(searchParams.get('prospect_id') ?? '')
+  const [customerProspects, setCustomerProspects] = useState<Prospect[]>([])
   const [quotationDate, setQuotationDate] = useState(todayIso())
   const [validUntil, setValidUntil] = useState('')
   const [notes, setNotes] = useState('')
@@ -147,6 +151,12 @@ export default function QuotationsPage() {
     0,
   )
 
+  useEffect(() => {
+    if (!customerId) return
+    // A user without the Prospect / Leads module simply gets no picker.
+    api.listProspects({ customer_id: customerId }).then(setCustomerProspects).catch(() => setCustomerProspects([]))
+  }, [customerId])
+
   async function onCreate(e: FormEvent) {
     e.preventDefault()
     setError(null)
@@ -155,6 +165,7 @@ export default function QuotationsPage() {
     try {
       const q = await api.createQuotation({
         customer_id: customerId,
+        prospect_id: prospectId || null,
         quotation_date: quotationDate,
         valid_until: validUntil || undefined,
         notes: notes || undefined,
@@ -172,6 +183,7 @@ export default function QuotationsPage() {
       })
       setMessage(`${q.quotation_number} created (${money(q.total_amount_sgd)} incl. GST).`)
       setCustomerId('')
+      setProspectId('')
       setValidUntil('')
       setNotes('')
       setLines([emptyLine()])
@@ -327,7 +339,14 @@ export default function QuotationsPage() {
         <form onSubmit={onCreate}>
           <div className="form-row">
             <label>Company / Individual</label>
-            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
+            <select
+              value={customerId}
+              onChange={(e) => {
+                setCustomerId(e.target.value)
+                setProspectId('')
+              }}
+              required
+            >
               <option value="">Select...</option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -336,6 +355,20 @@ export default function QuotationsPage() {
               ))}
             </select>
           </div>
+          {customerId && customerProspects.length > 0 && (
+            <div className="form-row">
+              <label>Prospect (optional)</label>
+              <select value={prospectId} onChange={(e) => setProspectId(e.target.value)}>
+                <option value="">None</option>
+                {customerProspects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.prospect_number} — {p.title}
+                    {p.status !== 'open' ? ` (${p.status})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="form-row">
             <label>Date</label>
             <DateInput value={quotationDate} onChange={(e) => setQuotationDate(e.target.value)} required />
@@ -541,7 +574,16 @@ export default function QuotationsPage() {
                       {q.lines.map((l) => `${l.description} (${l.quantity}${l.unit_of_measure ? ' ' + l.unit_of_measure : ''})`).join(', ')}
                     </div>
                   </td>
-                  <td>{customerName(q.customer_id)}</td>
+                  <td>
+                    {customerName(q.customer_id)}
+                    {q.prospect_id && (
+                      <div className="muted">
+                        <Link to={`/prospects/${q.prospect_id}`}>
+                          {q.prospect_number} — {q.prospect_title}
+                        </Link>
+                      </div>
+                    )}
+                  </td>
                   <td>{formatDate(q.quotation_date)}</td>
                   <td>{q.valid_until ?? <span className="muted">-</span>}</td>
                   <td>{money(q.total_amount_sgd)}</td>

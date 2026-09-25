@@ -59,6 +59,7 @@ class MigrationRollback
         'quotations' => 'Quotations', 'contracts' => 'Contracts', 'job_orders' => 'Job Orders',
         'service_records' => 'Service Records', 'contacts' => 'Contact persons', 'branches' => 'Branches',
         'company_individual_relationships' => 'Relationships', 'prospect_activities' => 'Prospect activities',
+        'prospects' => 'Prospects',
         'incidents' => 'Incidents', 'portal_users' => 'Customer Portal logins', 'invoice_lines' => 'invoice lines',
         'excess_usage_records' => 'Excess Usage records', 'commission_payouts' => 'Commission Payouts',
         'contract_shared_customers' => 'contract hour-sharing', 'job_order_products' => 'Job Order products',

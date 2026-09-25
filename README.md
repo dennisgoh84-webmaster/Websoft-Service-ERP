@@ -44,10 +44,11 @@ Receivable · Accounts Payable · Purchasing · Finance / Accounting
 Return / Issue Notes + Stock Adjustment · Stock Operation Reports ·
 Operations Reports · Accounting Reports · Commission (report, rate,
 payouts) · Software Tasks · Event Logs · Bank Book · Ops Dashboard ·
-Reporting / Management Dashboard
+Reporting / Management Dashboard · Prospect / Leads (with Prospect
+Activities logged on the Mobile App) · AI Assistant · Data Migration
+(ODOO / ZSOFT)
 
-**Not started** — CRM · Projects · Hardware Management · Integrations
-(incl. Odoo migration) · AI Assistant
+**Not started** — Projects · Hardware Management
 
 Every module is independently switchable per company through **Module
 Control**, and access within a module is **VIEW / EDIT / FULL** per

@@ -10,7 +10,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
+use App\Models\Contract;
+use App\Models\Invoice;
 use App\Models\Product;
+use App\Models\Prospect;
 use App\Models\Quotation;
 use App\Models\QuotationLine;
 use App\Models\User;
@@ -67,6 +70,9 @@ class QuotationController extends Controller
             'id' => $quotation->id,
             'quotation_number' => $quotation->quotation_number,
             'customer_id' => $quotation->customer_id,
+            'prospect_id' => $quotation->prospect_id,
+            'prospect_number' => $quotation->prospect?->prospect_number,
+            'prospect_title' => $quotation->prospect?->title,
             'quotation_date' => optional($quotation->quotation_date)->toDateString(),
             'valid_until' => optional($quotation->valid_until)->toDateString(),
             'status' => $quotation->status,
@@ -119,6 +125,9 @@ class QuotationController extends Controller
         }
         if ($request->filled('status')) {
             $query->where('status', $request->query('status'));
+        }
+        if ($request->filled('prospect_id')) {
+            $query->where('prospect_id', $request->query('prospect_id'));
         }
 
         return $query->orderByDesc('quotation_date')->orderByDesc('quotation_number')->get();
@@ -184,6 +193,7 @@ class QuotationController extends Controller
 
         $data = $request->validate([
             'customer_id' => 'required|uuid',
+            'prospect_id' => 'sometimes|nullable|uuid',
             'quotation_date' => 'required|date',
             'valid_until' => 'sometimes|nullable|date',
             'notes' => 'sometimes|nullable|string',
@@ -206,12 +216,14 @@ class QuotationController extends Controller
         if (empty($lines)) {
             throw new ApiException(422, 'A quotation needs at least one line.');
         }
+        $prospect = empty($data['prospect_id']) ? null : $this->prospectFor($user->company_id, $data['prospect_id'], $data['customer_id']);
 
-        $quotation = DB::transaction(function () use ($user, $data, $customer, $lines) {
+        $quotation = DB::transaction(function () use ($user, $data, $customer, $lines, $prospect) {
             $quotation = Quotation::create([
                 'company_id' => $user->company_id,
                 'quotation_number' => Numbering::next($user->company_id, 'quotation'),
                 'customer_id' => $data['customer_id'],
+                'prospect_id' => $prospect?->id,
                 'quotation_date' => $data['quotation_date'],
                 'valid_until' => $data['valid_until'] ?? null,
                 'notes' => $data['notes'] ?? null,
@@ -333,6 +345,49 @@ class QuotationController extends Controller
         }
 
         return response()->json($this->present($revision->fresh('lines')));
+    }
+
+    /**
+     * Put a quotation under a prospect, move it to another, or take it
+     * off (prospect_id null) -- for quotations raised before the
+     * prospect existed. Invoices already issued from the contracts it
+     * became move with it, so the prospect's billed and paid amounts
+     * stay whole.
+     */
+    public function linkProspect(Request $request, string $quotationId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+        $quotation = $this->quotationOrFail($user->company_id, $quotationId);
+        $data = $request->validate(['prospect_id' => 'present|nullable|uuid']);
+        $prospect = $data['prospect_id'] === null ? null : $this->prospectFor($user->company_id, $data['prospect_id'], $quotation->customer_id);
+
+        DB::transaction(function () use ($quotation, $prospect, $user) {
+            $old = $quotation->prospect_id;
+            $quotation->prospect_id = $prospect?->id;
+            $quotation->save();
+            $contractIds = Contract::where('quotation_id', $quotation->id)->pluck('id');
+            Invoice::whereIn('contract_id', $contractIds)->update(['prospect_id' => $prospect?->id]);
+            Audit::record('quotation', $quotation->id, 'prospect_linked', $user->id,
+                details: "{$quotation->quotation_number} -> ".($prospect?->prospect_number ?? '(no prospect)'),
+                oldValue: ['prospect_id' => $old], newValue: ['prospect_id' => $prospect?->id]);
+        });
+
+        return response()->json($this->present($quotation->fresh(['lines'])));
+    }
+
+    /** A prospect of this company, for the same Company / Individual as the quotation. */
+    private function prospectFor(string $companyId, string $prospectId, string $customerId): Prospect
+    {
+        $prospect = Prospect::find($prospectId);
+        if (! $prospect || $prospect->company_id !== $companyId) {
+            throw new ApiException(404, 'Prospect not found');
+        }
+        if ($prospect->customer_id !== $customerId) {
+            throw new ApiException(422, 'That prospect belongs to a different Company / Individual.');
+        }
+
+        return $prospect;
     }
 
     public function reject(Request $request, string $quotationId)

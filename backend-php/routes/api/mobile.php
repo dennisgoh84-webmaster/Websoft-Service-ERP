@@ -4,15 +4,10 @@
 // Literal paths precede wildcard ones, as everywhere else.
 
 use App\Http\Controllers\Api\MobileController;
-use App\Http\Controllers\Api\MobileCrmController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.jwt')->prefix('mobile')->group(function () {
     Route::get('/my-open-timein', [MobileController::class, 'myOpenTimeIn']);
-
-    // The Mobile App's CRM tab list. Opening, editing and deleting an
-    // activity go through the desktop /crm/activities routes.
-    Route::get('/crm/activities', [MobileCrmController::class, 'index']);
 
     Route::get('/job-orders', [MobileController::class, 'myJobOrders']);
     Route::get('/job-orders/{jobOrderId}', [MobileController::class, 'jobOrderDetail']);

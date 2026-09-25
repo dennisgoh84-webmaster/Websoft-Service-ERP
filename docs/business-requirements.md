@@ -779,6 +779,66 @@ conversion" note on this set of rules). Decision record:
   `pending_approval`; "Pending Confirmation by Client" = count of
   `sent`. Each tile opens the Quotations list filtered to that status.
 
+### SALES-009 — Prospect / Leads — CONFIRMED and built (2026-09-26)
+
+Dennis, 2026-09-26: "It should start with a Prospect/Leads Module
+linking to Company/Individual, then each prospect will have their own
+prospect activities… logged by the salesman on the go using mobile…
+each prospect will then link to multiple Quotations… If Quotation is
+confirmed, then Invoice generated will also be tied back to this
+Prospect… estimated value, Quoted Amount, Billed Amount, Paid Amount /
+Outstanding." And: "There should not be any CRM from here."
+
+- A **Prospect** is one sales opportunity for one Company / Individual
+  (a company can have several over time). Numbered `PRS-YYYY-NNNN`
+  (format editable under Document Control). Its Company / Individual
+  cannot change once raised -- its quotations and invoices belong to it.
+- **Prospect Activities** (call, email, meeting, note, follow-up,
+  proposal, demo, negotiation) are logged against a prospect, not
+  directly against the Company / Individual. The Mobile App's
+  Prospects tab lets the salesperson open a prospect and log one on the
+  spot; logged on the go, it is stamped with the current time.
+- A prospect can carry **several quotations**. A quotation is put
+  under a prospect when it is raised (the prospect must be for the same
+  Company / Individual), keeps it through revisions, and an earlier
+  quotation can be linked afterwards.
+- **Invoices are tied back to the prospect**: an invoice raised from a
+  contract that one of its quotations became (contract activation, an
+  excess-usage decision, or by hand against the contract) records the
+  prospect. Linking an earlier quotation brings its already-issued
+  invoices with it.
+- The prospect reports **Estimated value** (entered by the
+  salesperson), **Quoted** (its quotations sent to or accepted by the
+  customer), **Billed** (its invoices' totals), **Paid**, and
+  **Outstanding** (written-off invoices count as nothing outstanding).
+  Quoted, billed, paid and outstanding include GST.
+- The Main Menu starts with a **Sales** section: Prospect / Leads, then
+  Prospect Activities. The module is switched per company and granted
+  per group under Module Control / Group Authority as **Prospect /
+  Leads** (`prospects`), which replaced the old `crm` key -- every
+  company's on/off setting and every group's access level carried over.
+- Pragmatic defaults taken where no rule was given -- statuses, who
+  sees what, what counts as "quoted" -- are listed in
+  [open-business-decisions.md #46](open-business-decisions.md#46-prospect--leads-defaults-taken-raised-and-built-2026-09-26).
+
+### SALES-010 — Sales roles — CONFIRMED and built (2026-09-26)
+
+Dennis, 2026-09-26: "Definitely need sales staff roles… sales
+supervisor and manager."
+
+- Roles now: Owner, Service Lead, **Sales Manager**, **Sales
+  Supervisor** (new), **Sales Staff** (new), Support Engineer, Finance.
+  Set on Staff Master. As before, role drives the named-responsibility
+  rules and Group Authority drives module access.
+- Sales Staff see and work on their own prospects (the ones they are
+  the salesperson on, or raised) and the activities on them; the owner,
+  Sales Manager and Sales Supervisor see every prospect and may assign
+  one to any salesperson.
+- Every sales role (and the owner) gets the Mobile App's Prospects,
+  Quotations and Jobs tabs.
+- Quotation approval (BILL-006) stays with the Sales Manager and the
+  owner; the Sales Supervisor does not approve quotations.
+
 ## Conceptual Business Entities
 
 This section lists the major business entities Websoft Service ERP Solution is expected

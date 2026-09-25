@@ -11,6 +11,9 @@ class ProspectActivity extends Model
 {
     use HasFactory, HasUuidPrimaryKey;
 
+    // As on Prospect: the database fills created_at/updated_at in UTC.
+    public $timestamps = false;
+
     public const ACTIVITY_TYPE_CALL = 'call';
 
     public const ACTIVITY_TYPE_EMAIL = 'email';
@@ -45,6 +48,7 @@ class ProspectActivity extends Model
         'status',
         'created_by_user_id',
         'last_edited_by_user_id',
+        'prospect_id',
     ];
 
     protected $casts = [
@@ -56,6 +60,11 @@ class ProspectActivity extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function prospect(): BelongsTo
+    {
+        return $this->belongsTo(Prospect::class);
     }
 
     public function customer(): BelongsTo

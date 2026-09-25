@@ -7,7 +7,7 @@ import { formatDate } from '../lib/format'
  * A Company / Individual's invoices, newest first, with the ones brought
  * in from ODOO / ZSOFT by Data Migration marked "Migrated" (history only,
  * no General Ledger posting). Shown on the Company / Individual record
- * and on the Prospect (CRM) screens for the same party (Dennis,
+ * and on the Prospect screens for the same party (Dennis,
  * 2026-09-25: past invoices "attached to company / individual and
  * Prospect Module"). Hidden for anyone without Billing access.
  */

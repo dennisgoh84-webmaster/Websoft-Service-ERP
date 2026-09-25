@@ -77,6 +77,14 @@ export default function Layout() {
     })
   }
 
+  // Prospect / Leads, then the activities logged against them (Dennis,
+  // 2026-09-26: "Main menu should start from Prospect/Leads then follow
+  // by the Prospect Activity").
+  const salesItems: NavItem[] = [
+    { key: 'prospects', path: '/prospects', label: 'Prospect / Leads', visible: can('prospects') },
+    { key: 'prospect-activities', path: '/prospect-activities', label: 'Prospect Activities', visible: can('prospects') },
+  ]
+
   const operationsItems: NavItem[] = [
     { key: 'support-monitoring', path: '/support-monitoring', label: 'Support Monitoring', visible: can('reporting') },
     { key: 'company-individuals', path: '/company-individuals', label: 'Company / Individual', visible: can('company_individual_management') },
@@ -222,6 +230,14 @@ export default function Layout() {
           </NavLink>
           {can('reporting') && <NavLink to="/sales-dashboard">Sales Dashboard</NavLink>}
           {can('ops_dashboard') && <NavLink to="/ops-dashboard">My Ops Dashboard</NavLink>}
+
+          <NavSection
+            sectionKey="sales"
+            title="Sales"
+            items={salesItems}
+            collapsed={!!collapsed.sales}
+            onToggle={() => toggleSection('sales')}
+          />
 
           <NavSection
             sectionKey="operations"

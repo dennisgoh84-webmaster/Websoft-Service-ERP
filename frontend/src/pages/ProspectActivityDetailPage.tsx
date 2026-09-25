@@ -1,50 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import InvoiceHistoryPanel from '../components/InvoiceHistoryPanel'
-import { api, type CompanyIndividual } from '../lib/api'
+import { ACTIVITY_STATUSES, ACTIVITY_TYPES, api, type ProspectActivity } from '../lib/api'
 import { formatDate, formatDateTime } from '../lib/format'
 import DateInput from '../components/DateInput'
 
-interface ProspectActivity {
-  id: string
-  company_id: string
-  customer_id: string
-  activity_type: string
-  subject: string
-  description: string | null
-  activity_date: string | null
-  status: string
-  created_by_user_id: string
-  created_by_name: string | null
-  last_edited_by_user_id: string | null
-  last_edited_by_name: string | null
-  created_at: string
-  updated_at: string
-}
-
-const ACTIVITY_TYPES = [
-  { value: 'call', label: 'Call' },
-  { value: 'email', label: 'Email' },
-  { value: 'meeting', label: 'Meeting' },
-  { value: 'note', label: 'Note' },
-  { value: 'follow_up', label: 'Follow-up' },
-  { value: 'proposal', label: 'Proposal' },
-  { value: 'demo', label: 'Demo' },
-  { value: 'negotiation', label: 'Negotiation' },
-]
-
-const ACTIVITY_STATUSES = [
-  { value: 'planned', label: 'Planned' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'cancelled', label: 'Cancelled' },
-]
-
-export default function CrmProspectActivityDetailPage() {
+export default function ProspectActivityDetailPage() {
   const { activityId } = useParams<{ activityId: string }>()
   const navigate = useNavigate()
   const [activity, setActivity] = useState<ProspectActivity | null>(null)
-  const [customer, setCustomer] = useState<CompanyIndividual | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -58,7 +22,7 @@ export default function CrmProspectActivityDetailPage() {
   useEffect(() => {
     if (!activityId) return
     api
-      .request<ProspectActivity>('GET', `/crm/activities/${activityId}`)
+      .getProspectActivity(activityId)
       .then((a) => {
         setActivity(a)
         setActivityType(a.activity_type)
@@ -66,9 +30,7 @@ export default function CrmProspectActivityDetailPage() {
         setDescription(a.description || '')
         setActivityDate(a.activity_date ? a.activity_date.split('T')[0] : '')
         setStatus(a.status)
-        return a.customer_id
       })
-      .then((customerId) => api.getCompanyIndividual(customerId).then(setCustomer))
       .catch((e) => setError(e.message))
   }, [activityId])
 
@@ -77,16 +39,16 @@ export default function CrmProspectActivityDetailPage() {
     if (!activity || !activityId) return
     setError(null)
     try {
-      await api.request('PATCH', `/crm/activities/${activityId}`, undefined, {
+      await api.updateProspectActivity(activityId, {
         activity_type: activityType,
         subject,
-        description: description || undefined,
-        activity_date: activityDate ? `${activityDate} 00:00:00` : undefined,
+        description: description || null,
+        activity_date: activityDate ? `${activityDate} 00:00:00` : null,
         status,
       })
       setIsEditing(false)
       // Reload the activity to get the updated data
-      const updated = await api.request<ProspectActivity>('GET', `/crm/activities/${activityId}`)
+      const updated = await api.getProspectActivity(activityId)
       setActivity(updated)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update activity')
@@ -98,8 +60,8 @@ export default function CrmProspectActivityDetailPage() {
     if (!window.confirm('Are you sure you want to delete this activity?')) return
     setError(null)
     try {
-      await api.request('DELETE', `/crm/activities/${activityId}`)
-      navigate('/crm/activities')
+      await api.deleteProspectActivity(activityId)
+      navigate(activity?.prospect_id ? `/prospects/${activity.prospect_id}` : '/prospect-activities')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete activity')
     }
@@ -137,9 +99,21 @@ export default function CrmProspectActivityDetailPage() {
       <div className="card">
         <div className="details-grid">
           <div>
+            <p className="label">Prospect</p>
+            <p>
+              {activity.prospect_id ? (
+                <Link to={`/prospects/${activity.prospect_id}`}>
+                  {activity.prospect_number} — {activity.prospect_title}
+                </Link>
+              ) : (
+                'None'
+              )}
+            </p>
+          </div>
+          <div>
             <p className="label">Company / Individual</p>
             <p>
-              <Link to={`/company-individuals/${customer?.id}`}>{customer?.name}</Link>
+              <Link to={`/company-individuals/${activity.customer_id}`}>{activity.customer_name}</Link>
             </p>
           </div>
           <div>
@@ -232,10 +206,10 @@ export default function CrmProspectActivityDetailPage() {
         )}
       </div>
 
-      {customer && <InvoiceHistoryPanel customerId={customer.id} title={`Invoice history: ${customer.name}`} />}
+      <InvoiceHistoryPanel customerId={activity.customer_id} title={`Invoice history: ${activity.customer_name ?? ''}`} />
 
       <div style={{ marginTop: 20 }}>
-        <Link to="/crm/activities">← Back to Prospect Activities</Link>
+        <Link to="/prospect-activities">← Back to Prospect Activities</Link>
       </div>
     </div>
   )

@@ -23,6 +23,7 @@ Route::middleware('auth.jwt')->prefix('quotations')->group(function () {
     Route::post('/{quotation}/revise', [QuotationController::class, 'revise']);
     Route::post('/{quotation}/accept', [QuotationController::class, 'accept']);
     Route::post('/{quotation}/reject', [QuotationController::class, 'reject']);
+    Route::post('/{quotation}/prospect', [QuotationController::class, 'linkProspect']);
     Route::get('/{quotation}/export.docx', [QuotationController::class, 'exportDocx']);
     Route::post('/{quotation}/email', [QuotationController::class, 'email']);
 });

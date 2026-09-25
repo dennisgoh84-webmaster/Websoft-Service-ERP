@@ -295,6 +295,33 @@ shipped and when.
 
 ## Confirmed scope, not yet built
 
+- [x] **Prospect / Leads + Sales Supervisor / Sales Staff roles** --
+  built 2026-09-26 (SALES-009 / SALES-010 in business-requirements.md).
+  Replaces the "CRM" activities. Defaults awaiting Dennis's
+  confirmation: [open-business-decisions.md #46](open-business-decisions.md#46-prospect--leads-defaults-taken-raised-and-built-2026-09-26)
+  (Open/Won/Lost, the Supervisor sees everything, what counts as
+  "quoted").
+- [ ] **17 models store timestamps eight hours ahead** -- found
+  2026-09-26 while building Prospect / Leads. With
+  `APP_TIMEZONE=Asia/Singapore` and a UTC database session, a model
+  that lets Eloquent write `created_at`/`updated_at` stores the
+  Singapore clock in a UTC column. Most models already set
+  `$timestamps = false` and rely on the `useCurrent()` default; these
+  do not: CommissionPayout, CommissionSettings, GoodsIssueNote,
+  GoodsReceiveNote, GoodsReturnNote, GoodsTransferNote, InvoiceLine,
+  OpsTask, StockAdjustment, StockBrand, StockCategory, StockGroup,
+  StockItem, StockLevel, StockModel, StockUsage, Warehouse. Fix as
+  Prospect / ProspectActivity were (a column without a database
+  default gets one); whether to correct existing rows is Dennis's call.
+- [ ] **Module Control tidy-up** -- keys with nothing behind them,
+  found 2026-09-26: `purchasing` is marked built but gates nothing
+  (Purchase Orders are under `accounts_payable`); `goods_issue_note`
+  gates an API with no screen and no menu entry; `inventory`,
+  `projects`, `hardware_management`, `commission_management` and
+  `integrations` are unbuilt placeholders (commission features run
+  under `accounting_reports`; `integrations` is superseded by
+  `data_migration`). Which to remove, keep or rename is Dennis's call.
+
 - [x] **Sales module enhancements (Job Implementation Template,
   multi-Product Job Orders, Contract hour-sharing, Contract filters,
   Contract Operation Report, Contract–Quotation reference, Sales

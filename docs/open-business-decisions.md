@@ -2168,3 +2168,44 @@ prompted this change.
    whatever that slot had uploaded locally, the same way saving a URL
    from the client's own admin screen already superseded an upload.
 
+
+## 46. Prospect / Leads: defaults taken (raised and built 2026-09-26)
+
+Dennis described the Prospect / Leads module and the sales roles
+(business-requirements.md SALES-009 / SALES-010) but not every rule
+underneath them. These defaults were taken so it could be built;
+each is one small change if Dennis wants it otherwise.
+
+46.1. **Prospect statuses: Open / Won / Lost.** No pipeline stages
+   (e.g. new → qualified → proposal) were given, so a prospect stays
+   Open until the salesperson marks it Won or Lost. Marking it Lost
+   needs a reason. It does **not** turn Won by itself when a quotation
+   is accepted. *Open: does Dennis want pipeline stages, and should
+   accepting a quotation mark the prospect Won?*
+
+46.2. **Sales Supervisor sees what the Sales Manager sees.** There is
+   no team structure recording which salespeople a supervisor looks
+   after, so the Supervisor sees every prospect and activity, like the
+   Manager, and can assign prospects. The Supervisor does **not**
+   approve quotations (BILL-006 names the Sales Manager). *Open: should
+   a Supervisor see only their own team, and should they approve?*
+
+46.3. **Who sees a prospect.** Sales Staff — and any other role
+   outside owner / Sales Manager / Sales Supervisor — see the prospects
+   they are the salesperson on or raised, and the activities on those,
+   plus any activity they logged themselves.
+
+46.4. **"Quoted" = quotations sent to or accepted by the customer.**
+   Drafts and ones still in internal approval are not yet quoted; a
+   quotation sent back for revision is superseded by its revision
+   (which counts once sent); rejected and expired ones no longer stand.
+
+46.5. **A renewal quotation is not put under the old prospect.** A
+   quotation raised to renew a contract starts with no prospect; it can
+   be linked to one by hand. A revision does keep its prospect.
+
+46.6. **Activities logged before prospects existed** (the old "CRM"
+   activities, which hung off the Company / Individual) were each moved
+   under one new Open prospect per Company / Individual, titled
+   "<name> (activities logged before Prospect / Leads)", so none
+   dropped out of the new screens.

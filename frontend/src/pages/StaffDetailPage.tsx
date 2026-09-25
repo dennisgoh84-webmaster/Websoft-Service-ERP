@@ -1,11 +1,11 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import CompanyAccessCard from '../components/CompanyAccessCard'
-import { api, type AuditLogEntry, type StaffUser, type UserRole } from '../lib/api'
+import { api, type AuditLogEntry, type StaffUser, type UserRole, ROLE_LABELS } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import { formatDate, formatDateTime } from '../lib/format'
 
-const ROLES: UserRole[] = ['owner', 'service_lead', 'sales_manager', 'support_engineer', 'finance']
+const ROLES = Object.keys(ROLE_LABELS) as UserRole[]
 const MAX_PHOTO_BYTES = 300 * 1024
 
 const ACTION_LABELS: Record<string, string> = {
@@ -219,7 +219,7 @@ export default function StaffDetailPage() {
             <select value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
               {ROLES.map((r) => (
                 <option key={r} value={r}>
-                  {r}
+                  {ROLE_LABELS[r]}
                 </option>
               ))}
             </select>

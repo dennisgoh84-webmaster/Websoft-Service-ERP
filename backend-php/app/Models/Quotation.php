@@ -57,6 +57,7 @@ class Quotation extends Model
         'submitted_at', 'submitted_by_user_id', 'approved_at', 'approved_by_user_id', 'sent_at', 'returned_reason',
         'renews_contract_id',
         'to_revise_at', 'revision_reason', 'revised_from_quotation_id',
+        'prospect_id',
     ];
 
     // Mirrors the DB column defaults (see the migration) so a freshly
@@ -88,6 +89,11 @@ class Quotation extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function prospect(): BelongsTo
+    {
+        return $this->belongsTo(Prospect::class);
     }
 
     public function customer(): BelongsTo

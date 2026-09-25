@@ -27,7 +27,10 @@ These are the initial candidate business areas for the ERP. None of these
 have detailed requirements yet — they are listed here only to scope the
 eventual project.
 
-- CRM
+- Prospect / Leads — each prospect's activities logged on the Mobile
+  App, its quotations, and the invoices they led to; built 2026-09-26
+  (see [docs/business-requirements.md](docs/business-requirements.md)
+  SALES-009 / SALES-010). Replaced the earlier "CRM" activities.
 - Sales
 - Customer Management
 - Service Contracts
@@ -546,6 +549,28 @@ row written for the refused call; unset (the default) is unlimited,
 as before. See
 [docs/open-business-decisions.md #44](docs/open-business-decisions.md#44-ai-assistant-monthly-token-spending-cap-raised-and-built-2026-09-16).
 
+**Prospect / Leads landed 2026-09-26** (SALES-009 / SALES-010 in
+docs/business-requirements.md), replacing the "CRM" activities, which
+had hung off the Company / Individual directly. A prospect is one sales
+opportunity for a Company / Individual (`PRS-` numbers); activities are
+logged against it -- mostly from the Mobile App's new Prospects tab --
+it carries several quotations, and an invoice raised from a contract
+one of them became records the prospect (`Invoice::booted()`), so each
+prospect reports estimated / quoted / billed / paid / outstanding. The
+Main Menu opens with a Sales section (Prospect / Leads, Prospect
+Activities); Module Control's `crm` key became `prospects`, carrying
+every company's and group's setting across. Two new roles, Sales
+Supervisor and Sales Staff: staff see their own prospects, the owner /
+Sales Manager / Supervisor all of them. Defaults taken where no rule
+was given (Open/Won/Lost, the Supervisor's reach, what counts as
+"quoted") are in docs/open-business-decisions.md #46. Two timestamp
+traps were closed on the way: `prospect_activities.activity_date` has
+no time zone and is read in Singapore time, so it takes `now()`, while
+the new models set `$timestamps = false` like most here, since
+Eloquent's own timestamps write the Singapore clock into UTC columns
+(eight hours ahead) -- the remaining models that still do are a known
+follow-up.
+
 **Data Migration landed 2026-09-25**
 ([docs/data-migration.md](docs/data-migration.md)): Maintenance → Data
 Migration, gated on the new `data_migration` module (VIEW looks, FULL
@@ -561,7 +586,7 @@ Link / Create new; staff who have left become inactive users; a
 module's import is locked until its Field Gap list is signed off; and
 roll back removes a batch only while none of its records has been
 touched, keeping the batch, a snapshot and the Event Log. ZSOFT past
-invoices show on the Company / Individual and the Prospect (CRM)
+invoices show on the Company / Individual and the Prospect
 screens.
 
 No other business area has application code yet. **Further commission

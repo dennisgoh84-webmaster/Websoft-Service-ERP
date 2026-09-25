@@ -171,6 +171,7 @@ class QuotationService
                 'created_by_user_id' => $actorUserId,
                 'renews_contract_id' => $original->renews_contract_id,
                 'revised_from_quotation_id' => $original->id,
+                'prospect_id' => $original->prospect_id,
             ]);
             foreach ($original->lines as $line) {
                 QuotationLine::create([

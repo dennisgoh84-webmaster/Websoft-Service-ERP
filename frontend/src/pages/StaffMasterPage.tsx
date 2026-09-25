@@ -2,10 +2,10 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
 import StaffAvatar from '../components/StaffAvatar'
-import { api, downloadBlob, type Group, type StaffUser, type UserRole } from '../lib/api'
+import { api, downloadBlob, type Group, type StaffUser, type UserRole, ROLE_LABELS } from '../lib/api'
 import { formatDate } from '../lib/format'
 
-const ROLES: UserRole[] = ['owner', 'service_lead', 'sales_manager', 'support_engineer', 'finance']
+const ROLES = Object.keys(ROLE_LABELS) as UserRole[]
 
 export default function StaffMasterPage() {
   const [staff, setStaff] = useState<StaffUser[]>([])
@@ -115,7 +115,7 @@ export default function StaffMasterPage() {
             <select value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
               {ROLES.map((r) => (
                 <option key={r} value={r}>
-                  {r}
+                  {ROLE_LABELS[r]}
                 </option>
               ))}
             </select>
@@ -176,7 +176,7 @@ export default function StaffMasterPage() {
                   </Link>
                 </td>
                 <td>{u.email}</td>
-                <td>{u.role}</td>
+                <td>{ROLE_LABELS[u.role] ?? u.role}</td>
                 <td>{groupName(u.group_id)}</td>
                 <td>{formatDate(u.created_at)}</td>
                 <td>

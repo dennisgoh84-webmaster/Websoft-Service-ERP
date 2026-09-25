@@ -71,6 +71,7 @@ class Invoice extends Model
         // Data Migration (docs/data-migration.md) -- zero/null on every
         // invoice raised in this system.
         'pre_migration_paid_sgd', 'migrated_at',
+        'prospect_id',
     ];
 
     protected $casts = [
@@ -90,6 +91,26 @@ class Invoice extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * An invoice raised from a contract that a prospect's quotation
+     * became is tied back to that prospect (Dennis, 2026-09-26), however
+     * it was issued -- contract activation, an excess-usage decision, or
+     * by hand against the contract.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (Invoice $invoice) {
+            if ($invoice->prospect_id === null && $invoice->contract_id !== null) {
+                $invoice->prospect_id = Contract::find($invoice->contract_id)?->quotation?->prospect_id;
+            }
+        });
+    }
+
+    public function prospect(): BelongsTo
+    {
+        return $this->belongsTo(Prospect::class);
     }
 
     public function customer(): BelongsTo

@@ -167,7 +167,30 @@ export async function resetPasswordWithOtp(
 }
 
 // ---- Types (mirroring backend Pydantic schemas) ----
-export type UserRole = 'owner' | 'service_lead' | 'sales_manager' | 'support_engineer' | 'finance'
+export type UserRole =
+  | 'owner'
+  | 'service_lead'
+  | 'sales_manager'
+  | 'sales_supervisor'
+  | 'sales_staff'
+  | 'support_engineer'
+  | 'finance'
+
+/** Display names for roles -- Staff Master, and wherever a role is shown. */
+export const ROLE_LABELS: Record<UserRole, string> = {
+  owner: 'Owner',
+  service_lead: 'Service Lead',
+  sales_manager: 'Sales Manager',
+  sales_supervisor: 'Sales Supervisor',
+  sales_staff: 'Sales Staff',
+  support_engineer: 'Support Engineer',
+  finance: 'Finance',
+}
+
+/** Owner, Sales Manager and Sales Supervisor see every prospect; everyone else their own. */
+export function seesAllProspects(role: string | undefined): boolean {
+  return role === 'owner' || role === 'sales_manager' || role === 'sales_supervisor'
+}
 
 export interface CurrentUser {
   id: string
@@ -1816,10 +1839,142 @@ export interface QuotationLine {
   cost_sgd: number | null
 }
 
+// ---- Prospect / Leads ----
+export type ProspectStatus = 'open' | 'won' | 'lost'
+
+/** What a prospect reports about itself (all SGD, GST-inclusive except the salesperson's own estimate). */
+export interface ProspectAmounts {
+  estimated_value_sgd: number | null
+  quoted_amount_sgd: number
+  billed_amount_sgd: number
+  paid_amount_sgd: number
+  outstanding_amount_sgd: number
+}
+
+export interface Prospect extends ProspectAmounts {
+  id: string
+  prospect_number: string
+  title: string
+  customer_id: string
+  customer_name: string | null
+  source: string | null
+  status: ProspectStatus
+  expected_close_date: string | null
+  salesperson_user_id: string | null
+  salesperson_name: string | null
+  notes: string | null
+  lost_reason: string | null
+  created_by_name: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ProspectDetail extends Prospect {
+  activities: {
+    id: string
+    activity_type: string
+    subject: string
+    description: string | null
+    activity_date: string | null
+    status: string
+    created_by_name: string | null
+  }[]
+  quotations: {
+    id: string
+    quotation_number: string
+    quotation_date: string | null
+    status: QuotationStatus
+    total_amount_sgd: number
+    counts_as_quoted: boolean
+  }[]
+  invoices: {
+    id: string
+    invoice_number: string
+    status: string
+    issued_at: string | null
+    due_date: string | null
+    total_amount_sgd: number
+    amount_paid_sgd: number
+    outstanding_sgd: number
+  }[]
+}
+
+export interface ProspectActivity {
+  id: string
+  company_id: string
+  prospect_id: string | null
+  prospect_number: string | null
+  prospect_title: string | null
+  customer_id: string
+  customer_name: string | null
+  activity_type: string
+  subject: string
+  description: string | null
+  activity_date: string | null
+  status: string
+  created_by_user_id: string
+  created_by_name: string | null
+  last_edited_by_user_id: string | null
+  last_edited_by_name: string | null
+  created_at: string
+  updated_at: string
+}
+
+export const PROSPECT_STATUSES: { value: ProspectStatus; label: string }[] = [
+  { value: 'open', label: 'Open' },
+  { value: 'won', label: 'Won' },
+  { value: 'lost', label: 'Lost' },
+]
+
+/** Badge style per prospect status (the classes in index.css). */
+export const PROSPECT_BADGE: Record<ProspectStatus, string> = { open: 'draft', won: 'active', lost: 'exceeded' }
+
+export const ACTIVITY_TYPES = [
+  { value: 'call', label: 'Call' },
+  { value: 'email', label: 'Email' },
+  { value: 'meeting', label: 'Meeting' },
+  { value: 'note', label: 'Note' },
+  { value: 'follow_up', label: 'Follow-up' },
+  { value: 'proposal', label: 'Proposal' },
+  { value: 'demo', label: 'Demo' },
+  { value: 'negotiation', label: 'Negotiation' },
+]
+
+export const ACTIVITY_STATUSES = [
+  { value: 'planned', label: 'Planned' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'cancelled', label: 'Cancelled' },
+]
+
+export type ProspectPayload = {
+  customer_id?: string
+  title?: string
+  source?: string | null
+  status?: ProspectStatus
+  estimated_value_sgd?: number | null
+  expected_close_date?: string | null
+  salesperson_user_id?: string | null
+  notes?: string | null
+  lost_reason?: string | null
+}
+
+export type ProspectActivityPayload = {
+  prospect_id?: string
+  activity_type?: string
+  subject?: string
+  description?: string | null
+  activity_date?: string | null
+  status?: string
+}
+
 export interface Quotation {
   id: string
   quotation_number: string
   customer_id: string
+  prospect_id: string | null
+  prospect_number: string | null
+  prospect_title: string | null
   quotation_date: string
   valid_until: string | null
   status: QuotationStatus
@@ -3358,6 +3513,7 @@ export const api = {
   emailQuotation: (id: string) => request<{ sent: boolean; to: string }>(`/quotations/${id}/email`, { method: 'POST' }),
   createQuotation: (payload: {
     customer_id: string
+    prospect_id?: string | null
     quotation_date: string
     valid_until?: string
     notes?: string
@@ -3371,6 +3527,31 @@ export const api = {
       cost_sgd?: number | null
     }[]
   }) => request<Quotation>('/quotations', { method: 'POST', body: JSON.stringify(payload) }),
+  /** Put a quotation under a prospect (or off one, with null); its invoices move with it. */
+  linkQuotationProspect: (id: string, prospectId: string | null) =>
+    request<Quotation>(`/quotations/${id}/prospect`, { method: 'POST', body: JSON.stringify({ prospect_id: prospectId }) }),
+
+  // Prospect / Leads
+  listProspects: (filters: { status?: string; customer_id?: string; salesperson_user_id?: string; q?: string } = {}) =>
+    request<Prospect[]>(`/prospects${qs(filters)}`),
+  exportProspectsCsv: (filters: { status?: string; customer_id?: string; salesperson_user_id?: string; q?: string } = {}) =>
+    requestBlob(`/prospects/export.csv${qs(filters)}`),
+  exportProspectsExcel: (filters: { status?: string; customer_id?: string; salesperson_user_id?: string; q?: string } = {}) =>
+    requestBlob(`/prospects/export.xlsx${qs(filters)}`),
+  getProspect: (id: string) => request<ProspectDetail>(`/prospects/${id}`),
+  createProspect: (payload: ProspectPayload) =>
+    request<Prospect>('/prospects', { method: 'POST', body: JSON.stringify(payload) }),
+  updateProspect: (id: string, payload: ProspectPayload) =>
+    request<Prospect>(`/prospects/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  listProspectActivities: (filters: { prospect_id?: string; customer_id?: string; activity_type?: string; status?: string; created_by_user_id?: string } = {}) =>
+    request<ProspectActivity[]>(`/prospect-activities${qs(filters)}`),
+  getProspectActivity: (id: string) => request<ProspectActivity>(`/prospect-activities/${id}`),
+  createProspectActivity: (payload: ProspectActivityPayload) =>
+    request<ProspectActivity>('/prospect-activities', { method: 'POST', body: JSON.stringify(payload) }),
+  updateProspectActivity: (id: string, payload: ProspectActivityPayload) =>
+    request<ProspectActivity>(`/prospect-activities/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteProspectActivity: (id: string) => request<void>(`/prospect-activities/${id}`, { method: 'DELETE' }),
+
   submitQuotation: (id: string) => request<Quotation>(`/quotations/${id}/submit`, { method: 'POST' }),
   approveQuotation: (id: string) => request<Quotation>(`/quotations/${id}/approve`, { method: 'POST' }),
   sendBackQuotation: (id: string, reason: string) =>

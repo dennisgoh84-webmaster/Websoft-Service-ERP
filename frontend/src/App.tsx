@@ -28,8 +28,10 @@ import ContractDetailPage from './pages/ContractDetailPage'
 import ContractsPage from './pages/ContractsPage'
 import CompanyIndividualDetailPage from './pages/CompanyIndividualDetailPage'
 import CompanyIndividualsPage from './pages/CompanyIndividualsPage'
-import CrmProspectActivitiesPage from './pages/CrmProspectActivitiesPage'
-import CrmProspectActivityDetailPage from './pages/CrmProspectActivityDetailPage'
+import ProspectActivitiesPage from './pages/ProspectActivitiesPage'
+import ProspectActivityDetailPage from './pages/ProspectActivityDetailPage'
+import ProspectDetailPage from './pages/ProspectDetailPage'
+import ProspectsPage from './pages/ProspectsPage'
 import DashboardPage from './pages/DashboardPage'
 import SalesDashboardPage from './pages/SalesDashboardPage'
 import EventLogsPage from './pages/EventLogsPage'
@@ -146,8 +148,10 @@ function AppRoutes() {
         <Route path="/ops-dashboard" element={<OpsDashboardPage />} />
         <Route path="/company-individuals" element={<CompanyIndividualsPage />} />
         <Route path="/company-individuals/:id" element={<CompanyIndividualDetailPage />} />
-        <Route path="/crm/activities" element={<CrmProspectActivitiesPage />} />
-        <Route path="/crm/activities/:activityId" element={<CrmProspectActivityDetailPage />} />
+        <Route path="/prospects" element={<ProspectsPage />} />
+        <Route path="/prospects/:id" element={<ProspectDetailPage />} />
+        <Route path="/prospect-activities" element={<ProspectActivitiesPage />} />
+        <Route path="/prospect-activities/:activityId" element={<ProspectActivityDetailPage />} />
         <Route path="/contracts" element={<ContractsPage />} />
         <Route path="/contracts/:id" element={<ContractDetailPage />} />
         <Route path="/incidents" element={<IncidentsPage />} />

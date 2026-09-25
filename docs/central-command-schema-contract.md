@@ -170,7 +170,7 @@ per company.
 
 | Column | Type | Purpose |
 |---|---|---|
-| `key` | `varchar(50)` PK | Module identifier (e.g. `crm`, `billing`) |
+| `key` | `varchar(50)` PK | Module identifier (e.g. `prospects`, `billing`). `crm` was renamed `prospects` on 2026-09-26, keeping each company's enabled flag and each group's access; a Central Command record still naming `crm` must be updated to `prospects`. |
 | `name` | `varchar(100)` | Human-readable name |
 | `description` | `text` nullable | What the module does |
 | `is_built` | `boolean` default false | Whether application code for this module exists |

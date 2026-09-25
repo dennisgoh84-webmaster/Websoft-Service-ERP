@@ -17,7 +17,7 @@ at a time, into the **Internal Company** you choose.
 | Where the data comes from | Each system's own **Excel/CSV exports**. The tool never connects to ODOO or ZSOFT. |
 | Document numbers | Imported documents **keep their old number** (`INV/2025/00001`, `ZI-2019-0001`, `SUB/2025/0001`). This system's own counters carry on for new documents. A record the old system never numbered (an ODOO timesheet) takes this system's next number. |
 | General Ledger | **No ledger data comes from either system.** The new financial year starts from management-accounts opening balances, keyed in as one **Journal Voucher** here. Migrated invoices and receipts are **history only** and post nothing. |
-| ZSOFT past invoices | History with no ledger posting. Each one sits under its Company / Individual, so it shows on that record and on the **Prospect (CRM)** screens for the same party. |
+| ZSOFT past invoices | History with no ledger posting. Each one sits under its Company / Individual, so it shows on that record and on the **Prospect** screens for the same party. |
 | Duplicates | Same **UEN or GST registration no.** as an existing Company / Individual → **linked** automatically. **Name only** → you choose **Link** or **Create new** in the preview. An existing record is never merged into or overwritten. |
 | Roll back | **Remove if untouched.** A batch's records are removed only if none has been changed or used since the import. Otherwise nothing is removed and the blockers are listed. The batch, a copy of every removed record and the Event Log entry stay forever. |
 | Staff who have left | Created as **inactive users**, who can never sign in, so their history keeps a name. |
