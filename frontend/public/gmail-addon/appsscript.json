@@ -1,0 +1,21 @@
+{
+  "timeZone": "Asia/Singapore",
+  "runtimeVersion": "V8",
+  "exceptionLogging": "STACKDRIVER",
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/gmail.addons.execute",
+    "https://www.googleapis.com/auth/gmail.addons.current.message.readonly",
+    "https://www.googleapis.com/auth/script.external_request"
+  ],
+  "urlFetchWhitelist": ["{{BASE_URL}}/"],
+  "addOns": {
+    "common": {
+      "name": "Websoft Incidents",
+      "logoUrl": "{{BASE_URL}}/outlook-addin/assets/icon-80.png",
+      "homepageTrigger": { "runFunction": "onHomepage" }
+    },
+    "gmail": {
+      "contextualTriggers": [{ "unconditional": {}, "onTriggerFunction": "onGmailMessageOpen" }]
+    }
+  }
+}

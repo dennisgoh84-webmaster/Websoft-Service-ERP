@@ -408,6 +408,74 @@ class AuthController extends Controller
         ];
     }
 
+    // ---- Gmail add-on connect code -- see docs/outlook-addin.md ----
+    // A Gmail add-on panel has no password field, so the add-on never
+    // asks for a password: the user, already signed in to the web app
+    // (sign-in code and PDPA declaration included), asks for a short
+    // one-time code here and types it into the add-on, which trades it
+    // for an ordinary access token. Stored in login_otps like every
+    // other one-time code, under its own purpose.
+
+    private const ADDIN_CODE_EXPIRE_MINUTES = 10;
+
+    /** 8 characters without 0/O/1/I, so it can be read off a screen. */
+    private const ADDIN_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+    public function addinConnectCode(Request $request)
+    {
+        $user = Authenticate::user($request);
+
+        // Only the latest code works: asking again cancels the old one.
+        $now = Carbon::now('UTC');
+        LoginOtp::where('user_id', $user->id)->where('purpose', 'addin_connect')->whereNull('consumed_at')
+            ->update(['consumed_at' => $now]);
+
+        $code = '';
+        for ($i = 0; $i < 8; $i++) {
+            $code .= self::ADDIN_CODE_ALPHABET[random_int(0, strlen(self::ADDIN_CODE_ALPHABET) - 1)];
+        }
+        $expiresAt = $now->copy()->addMinutes(self::ADDIN_CODE_EXPIRE_MINUTES);
+        LoginOtp::create([
+            'user_id' => $user->id,
+            'code_hash' => self::hashOtp($code),
+            'purpose' => 'addin_connect',
+            'channel' => 'screen',
+            'expires_at' => $expiresAt,
+        ]);
+        Audit::record('user', $user->id, 'addin_connect_code_issued', $user->id);
+
+        return response()->json([
+            'code' => substr($code, 0, 4).'-'.substr($code, 4),
+            'expires_at' => $expiresAt->toIso8601String(),
+            'expires_in_minutes' => self::ADDIN_CODE_EXPIRE_MINUTES,
+        ]);
+    }
+
+    /** Unauthenticated (it is the sign-in) and rate-limited in routes/api/auth.php. */
+    public function addinConnect(Request $request)
+    {
+        $data = $request->validate(['code' => 'required|string|max:20']);
+        $code = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $data['code']));
+
+        $otp = strlen($code) === 8
+            ? LoginOtp::where('purpose', 'addin_connect')->where('code_hash', self::hashOtp($code))->whereNull('consumed_at')->first()
+            : null;
+        $now = Carbon::now('UTC');
+        if (! $otp || $otp->expires_at->lt($now)) {
+            throw new ApiException(401, 'That code is wrong or has expired. Get a new one from Websoft and try again.');
+        }
+        $otp->consumed_at = $now;
+        $otp->save();
+
+        $user = User::find($otp->user_id);
+        if (! $user || ! $user->is_active) {
+            throw new ApiException(401, 'Account not found or inactive.');
+        }
+        Audit::record('user', $user->id, 'signed_in_via_addin', $user->id, details: 'Gmail add-on, with a connect code');
+
+        return response()->json($this->grantAccess($user));
+    }
+
     private static function hashOtp(string $code): string
     {
         return hash('sha256', $code);

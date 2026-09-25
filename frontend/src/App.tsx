@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Layout from './components/Layout'
 import AiDataConsentGate from './components/AiDataConsentGate'
 import { AuthProvider, useAuth } from './lib/AuthContext'
@@ -33,7 +33,8 @@ import CrmProspectActivityDetailPage from './pages/CrmProspectActivityDetailPage
 import DashboardPage from './pages/DashboardPage'
 import SalesDashboardPage from './pages/SalesDashboardPage'
 import EventLogsPage from './pages/EventLogsPage'
-import OutlookAddinPage from './pages/OutlookAddinPage'
+import ConnectAddinPage from './pages/ConnectAddinPage'
+import EmailAddinsPage from './pages/EmailAddinsPage'
 import DataMigrationBatchLogPage from './pages/DataMigrationBatchLogPage'
 import DataMigrationDashboardPage from './pages/DataMigrationDashboardPage'
 import DataMigrationImportPage from './pages/DataMigrationImportPage'
@@ -86,8 +87,11 @@ import YearEndClosingPage from './pages/YearEndClosingPage'
 
 function RequireAuth({ children }: { children: ReactElement }) {
   const { user, loading, refresh } = useAuth()
+  const location = useLocation()
   if (loading) return <p style={{ padding: 24 }}>Loading...</p>
-  if (!user) return <Navigate to="/login" replace />
+  // Remembers where the user was going (e.g. /connect-addin, opened
+  // from the Gmail add-on), so signing in lands back there.
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />
   // PDPA self-declaration for the AI Assistant (2026-09-15): blocks
   // every screen until acknowledged, once, per user -- see
   // AiDataConsentGate.tsx.
@@ -117,6 +121,17 @@ function AppRoutes() {
           "pages" (home/contracts/job orders/incidents) without further
           sub-routes here, the same way MobileApp does above. */}
       <Route path="/portal/*" element={<PortalApp />} />
+      {/* Gmail add-on connect code: a page of its own, outside the
+          desktop layout and the mobile redirect, since it is opened from
+          the add-on's "Get a code" link on any device. */}
+      <Route
+        path="/connect-addin"
+        element={
+          <RequireAuth>
+            <ConnectAddinPage />
+          </RequireAuth>
+        }
+      />
       <Route
         element={
           <MobileRedirect>
@@ -185,7 +200,8 @@ function AppRoutes() {
         <Route path="/approval-authorities" element={<ApprovalAuthoritiesPage />} />
         <Route path="/approval-center" element={<ApprovalCenterPage />} />
         <Route path="/event-logs" element={<EventLogsPage />} />
-        <Route path="/maintenance/outlook-addin" element={<OutlookAddinPage />} />
+        <Route path="/maintenance/email-addins" element={<EmailAddinsPage />} />
+        <Route path="/maintenance/outlook-addin" element={<Navigate to="/maintenance/email-addins" replace />} />
         <Route path="/data-migration" element={<DataMigrationDashboardPage />} />
         <Route path="/data-migration/modules" element={<DataMigrationModulesPage />} />
         <Route path="/data-migration/import" element={<DataMigrationImportPage />} />

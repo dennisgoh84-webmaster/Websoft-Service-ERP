@@ -620,12 +620,16 @@ shipped and when.
   follow-up outside this repo:** Central Command checks
   `alembic_version` to version a client database; it must read
   Laravel's `migrations` table now (docs/central-command-schema-contract.md).
-- [ ] **Outlook Add-in: built and tested 2026-09-25, waiting only on
-  going live** -- served by the app at `/outlook-addin/`, a Maintenance →
-  Outlook Add-in page that downloads the manifest filled in with the
-  server's address, and sign-in with the one-time code. Still needs the
-  server on HTTPS and a Microsoft 365 administrator to upload the
-  manifest ([outlook-addin.md](outlook-addin.md)). (~~The SMTP transport has no connect timeout~~ -- already
+- [ ] **Outlook Add-in and Gmail add-on: built and tested 2026-09-25,
+  waiting only on going live** -- served by the app at `/outlook-addin/`
+  and `/gmail-addon/`, a Maintenance → Email Add-ins page that downloads
+  each one's files filled in with the server's address; Outlook signs in
+  with the usual login and sign-in code, Gmail with a one-time connect
+  code from `/connect-addin`. Dennis chooses which to use first. Still
+  needs the server on HTTPS, then a Microsoft 365 administrator to
+  upload the Outlook manifest or the Apps Script project installed in
+  the helpdesk Google account ([outlook-addin.md](outlook-addin.md)).
+  The Helpdesk mailbox is set up and sending (a Gmail App Password). (~~The SMTP transport has no connect timeout~~ -- already
   fixed 2026-09-15: `Mailer` bounds the connect to 15 seconds for the
   duration of a send; this line had not been ticked. Confirmed
   2026-09-25.)

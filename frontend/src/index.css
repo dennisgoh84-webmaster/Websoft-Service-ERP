@@ -1616,3 +1616,23 @@ button.date-input-calendar {
 .report-filter-grid .input-with-button .date-input {
   flex: 1;
 }
+
+/* Gmail add-on connect code (ConnectAddinPage) */
+.connect-addin {
+  max-width: 480px;
+  margin: 48px auto;
+  padding: 0 16px;
+}
+.connect-addin-code {
+  text-align: center;
+  margin: 16px 0;
+}
+.connect-addin-code code {
+  display: inline-block;
+  font-size: 32px;
+  letter-spacing: 0.15em;
+  padding: 12px 20px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}

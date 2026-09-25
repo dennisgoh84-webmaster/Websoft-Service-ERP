@@ -2293,6 +2293,9 @@ async function requestWithBody<T>(path: string, options: RequestInit = {}): Prom
 export const api = {
   me: () => request<CurrentUser>('/auth/me'),
   acknowledgeAiDataConsent: () => request<{ ai_data_consent_at: string; ai_data_consent_required: boolean }>('/auth/ai-consent', { method: 'POST', body: JSON.stringify({ accepted: true }) }),
+  /** A one-time code the Gmail add-on trades for a sign-in (docs/outlook-addin.md). */
+  addinConnectCode: () =>
+    request<{ code: string; expires_at: string; expires_in_minutes: number }>('/auth/addin-connect-code', { method: 'POST' }),
   listUsers: () => request<CurrentUser[]>('/users'),
 
   // Company Setup / multi-company

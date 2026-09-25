@@ -1,4 +1,4 @@
-# Websoft Incidents: Outlook Add-in
+# Websoft Incidents: Outlook Add-in and Gmail add-on
 
 A task-pane add-in that puts two buttons on an open email: **Log as
 Incident** and **Convert to Job Order**. Both call this app's own
@@ -11,6 +11,11 @@ are in `docs/open-business-decisions.md` #36:
   to a plain Incident and the add-in says why.
 - The sender is acknowledged from the Helpdesk mailbox.
 
+There is a **Gmail twin** (below), built 2026-09-25 so the helpdesk can
+use whichever mail client its inbox is read in. Both are set up from
+**Maintenance → Email Add-ins** (`/maintenance/email-addins`; the old
+`/maintenance/outlook-addin` address redirects there).
+
 ## Status (2026-09-25)
 
 **Built and tested, apart from the final step: loading it into a real
@@ -21,7 +26,7 @@ Microsoft 365 account to upload the manifest to.
   (`frontend/public/outlook-addin/`, copied into the build). It is on
   the same address as the API, so no separate hosting and no cross-site
   setup is needed.
-- **Maintenance → Outlook Add-in** (Core / Administration):
+- **Maintenance → Email Add-ins** (Core / Administration):
   - shows whether this server is on HTTPS and whether the add-in files
     are present;
   - downloads the manifest **already filled in with this server's
@@ -52,7 +57,7 @@ Microsoft 365 account to upload the manifest to.
 
 1. Put the server on HTTPS (DEPLOY.md section 4: a domain with a
    certificate, or a tunnel). Outlook refuses plain-HTTP add-ins.
-2. Open **Maintenance → Outlook Add-in** *from that HTTPS address* and
+2. Open **Maintenance → Email Add-ins** *from that HTTPS address* and
    click **Download manifest**.
 3. Load the manifest into Outlook:
    - **Whole company:** a Microsoft 365 administrator uploads it under
@@ -90,5 +95,62 @@ Staff need **Edit** access to Helpdesk / Service Operations
   Add-in must do.
 - `frontend/public/outlook-addin/assets/icon-{16,32,80}.png`: plain
   maroon placeholder icons. Replace them with real artwork if wanted.
-- `frontend/src/pages/OutlookAddinPage.tsx`: Maintenance → Outlook
-  Add-in.
+- `frontend/src/pages/EmailAddinsPage.tsx`: Maintenance → Email
+  Add-ins (Outlook and Gmail).
+
+## Gmail add-on
+
+A Google Workspace add-on written in Google Apps Script: a **Websoft
+Incidents** panel on the right of Gmail with the same two buttons,
+calling the same two endpoints, so the rules above apply unchanged.
+
+- **Sign-in is a one-time connect code, never a password.** A Gmail
+  add-on panel has no password box (a password would show on screen
+  as it is typed), and a password should not pass through Google's
+  servers anyway. The panel's **Get a code** link opens
+  `/connect-addin` in the Websoft web app. That is a page of its own
+  outside the desktop layout, so it works from a phone too. Sign-in
+  there is the normal one, including the sign-in code and the PDPA
+  declaration, and it returns to the page afterwards. The user clicks
+  **Get a code** and types the 8-character code into the panel.
+  - `POST /api/auth/addin-connect-code` (signed in) issues the code.
+    It is kept in `login_otps` as a SHA-256 hash under purpose
+    `addin_connect`, lasts 10 minutes, and works once. Asking again
+    cancels the previous code.
+  - `POST /api/auth/addin-connect` (rate-limited to 10 a minute)
+    trades the code for an ordinary access token.
+  - Both are recorded in Event Logs (`addin_connect_code_issued`,
+    `signed_in_via_addin`). Tested in `tests/Feature/AddinConnectTest.php`.
+- The token is kept in the script's per-user properties until the
+  Websoft session ends (`JWT_ACCESS_TOKEN_EXPIRE_MINUTES`, 8 hours by
+  default). After that, the next click asks for a new code.
+- **HTTPS is needed here too.** Google only lets an add-on fetch
+  addresses listed in `urlFetchWhitelist`, and those must be https://.
+  Unlike Outlook, the calls come from Google's servers rather than
+  the user's browser, so the server must be reachable from the
+  internet.
+- **Installing:** Maintenance → Email Add-ins downloads `Code.gs` and
+  `appsscript.json`, filled in with the server's address. Paste both
+  into a new project at script.google.com, then install it.
+  - **Test deployment:** Deploy → Test deployments → Install puts it
+    in that one Google account. This is the only route for a personal
+    @gmail.com account.
+  - **Whole Google Workspace company:** a Workspace administrator
+    publishes it privately through the Google Workspace Marketplace SDK.
+- **Tested:** the real `Code.gs` was run in Node against the running
+  backend over HTTPS. Google's own services (`CardService`,
+  `UrlFetchApp`, `GmailApp`, `PropertiesService`) were stand-ins
+  covering:
+  - connect, including a wrong code and a reused code;
+  - Log as Incident;
+  - Convert to Job Order, both created and falling back to a plain
+    Incident;
+  - an ended session;
+  - an email whose sender and subject contain `&` and `<`.
+
+  **Not tested:** Gmail itself, and Google's consent screen, which only
+  exist inside a Google account.
+
+Files: `frontend/public/gmail-addon/Code.gs` and `appsscript.json`
+(templates: `{{BASE_URL}}` is filled in on download), and
+`frontend/src/pages/ConnectAddinPage.tsx`.

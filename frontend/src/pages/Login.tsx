@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import PromoVideoPanel from '../components/PromoVideoPanel'
 import { api, changePassword, forgotPassword, resetPasswordWithOtp, sendOtp, verifyOtp } from '../lib/api'
@@ -17,6 +17,9 @@ type Step = 'credentials' | 'otp_channel' | 'otp' | 'change_password' | 'forgot_
 export default function Login() {
   const { login, completeLogin } = useAuth()
   const navigate = useNavigate()
+  // Where RequireAuth sent the user from; only ever a path on this site.
+  const from = (useLocation().state as { from?: string } | null)?.from
+  const returnTo = from && from.startsWith('/') && !from.startsWith('//') && !from.startsWith('/login') ? from : '/'
   const [step, setStep] = useState<Step>('credentials')
 
   // Empty in every built bundle: a prefilled password shipped pre-typed
@@ -66,7 +69,7 @@ export default function Login() {
   async function advance(result: LoginResult) {
     if (result.status === 'ok' && result.access_token) {
       await completeLogin(result.access_token)
-      navigate('/')
+      navigate(returnTo)
     } else if (result.status === 'otp_required' && result.otp_token) {
       setOtpToken(result.otp_token)
       setOtpCode('')
