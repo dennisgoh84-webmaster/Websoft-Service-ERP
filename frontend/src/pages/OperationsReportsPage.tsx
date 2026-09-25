@@ -25,7 +25,7 @@ import {
   type SetupListItem,
   type StaffUser,
 } from '../lib/api'
-import { MultiPick, PeriodRange } from '../components/ReportFilters'
+import { FilterGrid, MultiPick, PeriodRange } from '../components/ReportFilters'
 import { formatMoney as money, formatDate } from '../lib/format'
 
 // NEW FEATURE (not a Python->PHP conversion -- see
@@ -336,12 +336,12 @@ export default function OperationsReportsPage() {
       {error && <div className="error-banner">{error}</div>}
 
       <div className="card">
-        <div className="filter-bar">
+        <FilterGrid>
 
           {reportType !== 'contract-expiry-listing' && reportType !== 'contract-renewal-due-listing' && (
             <MultiPick
               label="Company / Individual"
-              allLabel="All companies / individuals"
+              allLabel="All"
               options={customers.map((c) => ({ id: c.id, name: c.name }))}
               value={customerIds}
               onChange={setCustomerIds}
@@ -350,11 +350,11 @@ export default function OperationsReportsPage() {
 
           {reportType === 'contract-expiry-listing' && (
             <>
-              <div className="form-row" style={{ margin: 0 }}>
+              <div className="form-row">
                 <label>Expiry from</label>
                 <input type="date" value={contractExpiryFrom} onChange={(e) => setContractExpiryFrom(e.target.value)} />
               </div>
-              <div className="form-row" style={{ margin: 0 }}>
+              <div className="form-row">
                 <label>Expiry to</label>
                 <input type="date" value={contractExpiryTo} onChange={(e) => setContractExpiryTo(e.target.value)} />
               </div>
@@ -362,7 +362,7 @@ export default function OperationsReportsPage() {
           )}
 
           {reportType === 'contract-renewal-due-listing' && (
-            <p className="muted" style={{ margin: 0 }}>
+            <p className="muted span-all" style={{ margin: 0 }}>
               Contracts within SRV-014's 30-day pre-expiry window (same window the contract detail
               page uses).
             </p>
@@ -370,7 +370,7 @@ export default function OperationsReportsPage() {
 
           {reportType === 'contracts' && (
             <>
-              <div className="form-row" style={{ margin: 0 }}>
+              <div className="form-row">
                 <label>Status</label>
                 <select value={contractStatus} onChange={(e) => setContractStatus(e.target.value as ContractStatus | '')}>
                   <option value="">All</option>
@@ -381,7 +381,7 @@ export default function OperationsReportsPage() {
                   <option value="renewed">Renewed</option>
                 </select>
               </div>
-              <div className="form-row" style={{ margin: 0 }}>
+              <div className="form-row">
                 <label>Kind</label>
                 <select value={contractKind} onChange={(e) => setContractKind(e.target.value as ContractKind | '')}>
                   <option value="">All</option>
@@ -389,12 +389,11 @@ export default function OperationsReportsPage() {
                   <option value="annual">Annual</option>
                 </select>
               </div>
-              <div className="form-row" style={{ margin: 0 }}>
+              <div className="form-row">
                 <label>Expiring within (days)</label>
                 <input
                   type="number"
                   min={0}
-                  style={{ width: 90 }}
                   value={expiringWithinDays}
                   onChange={(e) => setExpiringWithinDays(e.target.value)}
                   placeholder="Any"
@@ -405,7 +404,7 @@ export default function OperationsReportsPage() {
 
           {reportType === 'job-orders' && (
             <>
-              <div className="form-row" style={{ margin: 0 }}>
+              <div className="form-row">
                 <label>Status</label>
                 <select value={jobOrderStatus} onChange={(e) => setJobOrderStatus(e.target.value as JobOrderStatus | '')}>
                   <option value="">All</option>
@@ -415,7 +414,7 @@ export default function OperationsReportsPage() {
                   <option value="void">Void</option>
                 </select>
               </div>
-              <div className="form-row" style={{ margin: 0 }}>
+              <div className="form-row">
                 <label>Assigned to</label>
                 <select value={staffId} onChange={(e) => setStaffId(e.target.value)}>
                   <option value="">All</option>
@@ -426,9 +425,9 @@ export default function OperationsReportsPage() {
                   ))}
                 </select>
               </div>
-              <div className="form-row" style={{ margin: 0 }}>
-                <label>&nbsp;</label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div className="form-row">
+                <label>Overdue</label>
+                <label className="check-field">
                   <input type="checkbox" checked={overdueOnly} onChange={(e) => setOverdueOnly(e.target.checked)} />
                   Overdue only
                 </label>
@@ -438,7 +437,7 @@ export default function OperationsReportsPage() {
 
           {reportType === 'service-records' && (
             <>
-              <div className="form-row" style={{ margin: 0 }}>
+              <div className="form-row">
                 <label>Status</label>
                 <select value={srStatus} onChange={(e) => setSrStatus(e.target.value as ServiceRecordStatus | '')}>
                   <option value="">All</option>
@@ -446,7 +445,7 @@ export default function OperationsReportsPage() {
                   <option value="approved">Approved</option>
                 </select>
               </div>
-              <div className="form-row" style={{ margin: 0 }}>
+              <div className="form-row">
                 <label>Outcome</label>
                 <select value={srOutcome} onChange={(e) => setSrOutcome(e.target.value as ServiceRecordOutcome | '')}>
                   <option value="">All</option>
@@ -458,7 +457,7 @@ export default function OperationsReportsPage() {
                   <option value="non_billable">Non-billable (job order classified non-billable)</option>
                 </select>
               </div>
-              <div className="form-row" style={{ margin: 0 }}>
+              <div className="form-row">
                 <label>Staff</label>
                 <select value={staffId} onChange={(e) => setStaffId(e.target.value)}>
                   <option value="">All</option>
@@ -474,7 +473,7 @@ export default function OperationsReportsPage() {
 
           {reportType === 'customer-product-usage' && (
             <>
-              <div className="form-row" style={{ margin: 0 }}>
+              <div className="form-row">
                 <label>Product</label>
                 <select value={productId} onChange={(e) => setProductId(e.target.value)}>
                   <option value="">All</option>
@@ -485,7 +484,7 @@ export default function OperationsReportsPage() {
                   ))}
                 </select>
               </div>
-              <div className="form-row" style={{ margin: 0 }}>
+              <div className="form-row">
                 <label>Industry</label>
                 <select value={industryCode} onChange={(e) => setIndustryCode(e.target.value)}>
                   <option value="">All</option>
@@ -505,20 +504,21 @@ export default function OperationsReportsPage() {
             <PeriodRange from={startDate} to={endDate} onChange={(f, t) => { setStartDate(f); setEndDate(t) }} />
           )}
 
-          <button type="button" className="secondary" onClick={resetFilters}>
-            Reset filters
-          </button>
-
-          <ExportControl
-            formats={[
-              { value: 'csv', label: 'CSV' },
-              { value: 'excel', label: 'Excel' },
-              { value: 'pdf', label: 'PDF (Print)' },
-            ]}
-            onExport={onExport}
-            onError={setError}
-          />
-        </div>
+          <div className="report-filter-actions">
+            <button type="button" className="secondary" onClick={resetFilters}>
+              Reset filters
+            </button>
+            <ExportControl
+              formats={[
+                { value: 'csv', label: 'CSV' },
+                { value: 'excel', label: 'Excel' },
+                { value: 'pdf', label: 'PDF' },
+              ]}
+              onExport={onExport}
+              onError={setError}
+            />
+          </div>
+        </FilterGrid>
 
         <div className="report-table-wrap" style={{ overflowX: 'auto' }}>
           {reportType === 'contracts' && (

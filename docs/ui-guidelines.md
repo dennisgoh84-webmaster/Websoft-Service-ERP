@@ -42,7 +42,7 @@ does it.
 
 ## 2. Export (CSV / Excel) -- for every list/report screen
 
-Report screens (Accounting, Operations, Stock) also offer **PDF (Print)**
+Report screens (Accounting, Operations, Stock) also offer **PDF** in the format list
 (2026-09-24): `window.print()`, with the print stylesheet hiding the
 filters and `ReportHeader` printing the company, report title, the
 filters in force and the print time -- the same browser print route the

@@ -67,7 +67,7 @@ export default function StockReportsPage() {
           <ReportHeader sections={SECTIONS} current={reportType} onBack={() => openReport(null)} />
           {error && <div className="error-banner">{error}</div>}
           <div className="report-filter-actions" style={{ marginBottom: 10 }}>
-            <ExportControl formats={[{ value: 'pdf', label: 'PDF (Print)' }]} onExport={async () => window.print()} onError={setError} />
+            <ExportControl formats={[{ value: 'pdf', label: 'PDF' }]} onExport={async () => window.print()} onError={setError} />
           </div>
           <div className="card">
             {reportType === 'valuation' && <ValuationTab onError={setError} />}

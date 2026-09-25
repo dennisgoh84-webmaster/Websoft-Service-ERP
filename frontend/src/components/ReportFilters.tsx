@@ -3,17 +3,94 @@
 // date selection from and to"). Two different "companies": Internal
 // Companies are the user's own companies (the top-right switcher's list);
 // Company / Individual is the customer-or-supplier file.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { api, type AccountingPeriod, type Company } from '../lib/api'
 import { formatDate } from '../lib/format'
 import { isoToMonth, monthEndISO, monthStartISO } from '../lib/period'
+import { useAuth } from '../lib/AuthContext'
 
-/** One or several of the user's own (internal) companies; at least one always stays selected. */
+/**
+ * The filter area on a report screen: an even column grid, so every line
+ * runs to the same right edge and the fields line up under each other.
+ * When the filters wrap, the last line is pushed right so it ends under
+ * the first line's right end (Dennis, 2026-09-25); the Export control is
+ * always the last cell. Items marked "span-all" take a whole line.
+ */
+export function FilterGrid({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const align = () => {
+      const items = Array.from(el.children).filter((c) => !c.classList.contains('span-all')) as HTMLElement[]
+      items.forEach((i) => {
+        i.style.gridColumnStart = ''
+        i.style.gridColumnEnd = ''
+      })
+      const style = getComputedStyle(el)
+      const cols = style.gridTemplateColumns.split(' ').filter(Boolean).length
+      if (cols < 2 || items.length === 0) return
+      const colGap = parseFloat(style.columnGap) || 0
+      const colW = (el.clientWidth - colGap * (cols - 1)) / cols
+      // A cell whose controls sit side by side (Export + format, As at +
+      // Today) takes as many columns as it needs rather than overflowing.
+      const width = (i: HTMLElement) => {
+        const row = i.matches('.report-filter-actions') ? i : i.querySelector<HTMLElement>('.input-with-button')
+        if (!row) return 1
+        const kids = Array.from(row.children) as HTMLElement[]
+        const need = kids.reduce((w, k) => w + k.getBoundingClientRect().width, 0) + (parseFloat(getComputedStyle(row).columnGap) || 0) * (kids.length - 1)
+        return Math.min(cols, Math.max(1, Math.ceil((need + colGap) / (colW + colGap) - 0.01)))
+      }
+      const widths = items.map(width)
+      widths.forEach((w, idx) => {
+        if (w > 1) items[idx].style.gridColumnEnd = `span ${w}`
+      })
+      // Lay the cells out the way the grid will, to find the last line.
+      let lines = 1
+      let used = 0
+      let lineStart = 0
+      widths.forEach((w, idx) => {
+        if (used + w > cols) {
+          lines += 1
+          used = 0
+          lineStart = idx
+        }
+        used += w
+      })
+      if (lines > 1 && used < cols) {
+        items[lineStart].style.gridColumnStart = String(cols - used + 1)
+      } else if (lines === 1) {
+        const last = items.length - 1
+        if (items[last].classList.contains('report-filter-actions')) items[last].style.gridColumnStart = String(cols - widths[last] + 1)
+      }
+    }
+    align()
+    const ro = new ResizeObserver(align)
+    ro.observe(el)
+    return () => ro.disconnect()
+  })
+  return (
+    <div ref={ref} className="report-filter-grid">
+      {children}
+    </div>
+  )
+}
+
+/**
+ * One or several of the user's own (internal) companies; at least one
+ * always stays selected. The company you are signed in to is listed first
+ * and is the default.
+ */
 export function InternalCompaniesPicker({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
+  const { user } = useAuth()
+  const activeId = user?.company_id
   const [companies, setCompanies] = useState<Company[]>([])
   useEffect(() => {
-    api.listMyCompanies().then(setCompanies).catch(() => setCompanies([]))
-  }, [])
+    api
+      .listMyCompanies()
+      .then((cs) => setCompanies([...cs].sort((a, b) => Number(b.id === activeId) - Number(a.id === activeId))))
+      .catch(() => setCompanies([]))
+  }, [activeId])
 
   const toggle = (id: string) => {
     const next = value.includes(id) ? value.filter((x) => x !== id) : [...value, id]
@@ -22,7 +99,7 @@ export function InternalCompaniesPicker({ value, onChange }: { value: string[]; 
   const allSelected = companies.length > 0 && companies.every((c) => value.includes(c.id))
 
   return (
-    <div className="form-row report-companies">
+    <div className="form-row report-companies span-all">
       <label>Internal Companies{companies.length > 1 ? ' (tick one or more)' : ''}</label>
       <div className="company-chips">
         {companies.map((c) => (
@@ -38,7 +115,7 @@ export function InternalCompaniesPicker({ value, onChange }: { value: string[]; 
           </button>
         ))}
         {companies.length > 2 && (
-          <button type="button" className="company-chip all" onClick={() => onChange(allSelected ? [value[0]] : companies.map((c) => c.id))}>
+          <button type="button" className="company-chip all" onClick={() => onChange(allSelected ? [companies[0].id] : companies.map((c) => c.id))}>
             {allSelected ? 'Clear' : 'All internal companies'}
           </button>
         )}
@@ -203,9 +280,11 @@ export function AsAtPicker({ value, onChange }: { value: string; onChange: (asAt
       </div>
       <div className="form-row">
         <label>As at</label>
-        <input type="date" value={value} onChange={(e) => onChange(e.target.value)} />
+        <div className="input-with-button">
+          <input type="date" value={value} onChange={(e) => onChange(e.target.value)} />
+          <button type="button" className="secondary" onClick={() => onChange('')}>Today</button>
+        </div>
       </div>
-      <button type="button" className="secondary" onClick={() => onChange('')}>Today</button>
     </>
   )
 }

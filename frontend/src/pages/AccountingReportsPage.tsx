@@ -16,7 +16,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
 import { ReportHeader, ReportLauncher, useSelectedReport, type ReportSection } from '../components/ReportLauncher'
-import { AsAtPicker, InternalCompaniesPicker, MultiPick, PeriodRange } from '../components/ReportFilters'
+import { AsAtPicker, FilterGrid, InternalCompaniesPicker, MultiPick, PeriodRange } from '../components/ReportFilters'
 import { useAuth } from '../lib/AuthContext'
 import {
   api,
@@ -230,6 +230,12 @@ export default function AccountingReportsPage() {
   if (reportType && USES_AS_AT.includes(reportType)) printSummary.push(`As at: ${resolvedAsAt ? formatDate(resolvedAsAt) : 'today'}`)
   if (reportType && USES_RANGE.includes(reportType)) printSummary.push(`Period: ${formatDate(periodStart)} to ${formatDate(periodEnd)}`)
 
+  // Every report opens on the first internal company -- the one you are
+  // signed in to (Dennis, 2026-09-25: "always default the first one").
+  useEffect(() => {
+    if (user?.company_id) setCompanyIds([user.company_id])
+  }, [reportType, user?.company_id])
+
   // Company / Individual and salesperson choices follow the ticked internal
   // companies; stale picks are dropped.
   const companyKey = companyIds.join(',')
@@ -332,12 +338,12 @@ export default function AccountingReportsPage() {
       {error && <div className="error-banner">{error}</div>}
 
       <div className="card">
-        <div className="report-filter-grid">
+        <FilterGrid>
           {USES_COMPANIES.includes(reportType) && <InternalCompaniesPicker value={companyIds} onChange={setCompanyIds} />}
           {(reportType === 'ar-aging' || reportType === 'ap-aging' || reportType === 'sales-gp') && (
             <MultiPick
               label="Company / Individual"
-              allLabel="All companies / individuals"
+              allLabel="All"
               options={options.company_individuals}
               value={partyIds}
               onChange={setPartyIds}
@@ -346,7 +352,7 @@ export default function AccountingReportsPage() {
           {reportType === 'commission' && (
             <MultiPick
               label="Salesperson"
-              allLabel="All salespeople"
+              allLabel="All"
               options={[...options.sales_staff, { id: 'unassigned', name: 'Unassigned (no salesperson on the contract)' }]}
               value={staffIds}
               onChange={setStaffIds}
@@ -362,14 +368,14 @@ export default function AccountingReportsPage() {
                 formats={[
                   { value: 'csv', label: 'CSV' },
                   { value: 'excel', label: 'Excel' },
-                  { value: 'pdf', label: 'PDF (Print)' },
+                  { value: 'pdf', label: 'PDF' },
                 ]}
                 onExport={onExport}
                 onError={setError}
               />
             </div>
           )}
-        </div>
+        </FilterGrid>
 
         {reportType === 'ar-aging' && arAging && (
           <>
