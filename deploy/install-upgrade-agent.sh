@@ -11,7 +11,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 UNIT="websoft-upgrade-agent"
-RUN_USER="$(id -un)"
+# Under `sudo` the timer must still run as the person who owns this
+# checkout, not root -- files a root agent writes (logs, git objects,
+# backups) would otherwise block that person's own upgrades later.
+RUN_USER="${SUDO_USER:-$(id -un)}"
 
 say()  { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[33m    %s\033[0m\n' "$*"; }
@@ -26,6 +29,8 @@ if ! grep -qE '^UPGRADE_AGENT_TOKEN=.+' .env; then
     printf '\n# Shared secret between the backend and deploy/upgrade-agent.sh (generated).\nUPGRADE_AGENT_TOKEN=%s\n' "$TOKEN" >> .env
   fi
   echo "    generated UPGRADE_AGENT_TOKEN in .env"
+  # sed -i under sudo leaves .env owned by root; hand it back.
+  [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ] && chown "$SUDO_USER": .env
   # The backend reads the token from its environment when it starts, so a
   # backend that is already running must be recreated to pick it up --
   # otherwise the agent's check-ins are refused until its next restart.
