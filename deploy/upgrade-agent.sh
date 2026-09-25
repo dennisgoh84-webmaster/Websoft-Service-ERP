@@ -34,8 +34,22 @@ TOKEN="${UPGRADE_AGENT_TOKEN:-}"
 API="${UPGRADE_AGENT_API:-http://127.0.0.1:${HTTP_PORT:-80}/api/system/upgrade-agent}"
 UPGRADE_CMD="${UPGRADE_AGENT_UPGRADE_CMD:-$ROOT/deploy/upgrade.sh}"
 LOG_DIR="$ROOT/backups/upgrade-logs"
-mkdir -p "$LOG_DIR"
 AGENT_LOG="$LOG_DIR/agent.log"
+
+# Fail LOUDLY (stderr goes to the systemd journal, and a non-zero exit
+# marks the unit failed) when this tick cannot work -- otherwise it exits
+# silently every minute and the screen only says "has not reported in".
+# The usual cause is files left owned by root by an earlier sudo run.
+ME="$(id -un)"
+fail() { echo "upgrade agent: $*" >&2; exit 1; }
+[ "$(id -u)" -ne 0 ] || fail "refusing to run as root -- files it wrote would be root-owned and block $ROOT's owner. Run it as that user (sudo deploy/install-upgrade-agent.sh sets the timer up that way)."
+mkdir -p "$LOG_DIR" 2>/dev/null && [ -w "$LOG_DIR" ] \
+  || fail "cannot write $LOG_DIR as $ME. Fix: sudo chown -R $ME: $ROOT"
+for f in "$AGENT_LOG" "$LOG_DIR/.agent.lock"; do
+  [ ! -e "$f" ] || [ -w "$f" ] || fail "cannot write $f as $ME. Fix: sudo chown -R $ME: $ROOT"
+done
+OTHER=$(find "$ROOT/.git" ! -user "$ME" -print -quit 2>/dev/null)
+[ -z "$OTHER" ] || fail "$OTHER is not owned by $ME, so git fetch and upgrades will fail. Fix: sudo chown -R $ME: $ROOT"
 
 # One tick at a time: an upgrade takes minutes, and the timer keeps firing.
 exec 9>"$LOG_DIR/.agent.lock"
@@ -85,6 +99,7 @@ PY
 
 if ! RESP=$(api heartbeat "$HEARTBEAT" 2>>"$AGENT_LOG"); then
   log "heartbeat failed (backend down or token rejected)"
+  echo "upgrade agent: heartbeat to $API failed (backend down or token rejected) -- see $AGENT_LOG" >&2
   exit 0
 fi
 
