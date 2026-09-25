@@ -397,9 +397,13 @@ shipped and when.
   Product Catalog page. Full Stock Master link-up deferred until
   the separate Websoft Stock Distribution ERP project is ready.
   → [planned-work.md #5](planned-work.md#5-product-is-stock-flag--stock-master-item-selection----pending-websoft-stock-distribution-erp-raised-2026-09-12)
-- [ ] **Odoo migration program** -- Contacts/Subscriptions/Timesheets/
-  Quotations/Invoices/Receipts/Chart of Accounts. 6 open questions on
-  access method, field mapping, cutover sequencing.
+- [x] **Odoo migration program** -- Contacts/Subscriptions/Timesheets/
+  Quotations/Invoices/Receipts/Chart of Accounts, plus an opening-balance
+  journal. **Import tooling built 2026-09-25** (`php artisan odoo:import`,
+  dry run by default, all-or-nothing commit, re-runnable) --
+  [odoo-migration.md](odoo-migration.md). Still open: which history is
+  "important" and the phasing order (open-business-decisions #10), and
+  the actual cut-over run against Webmaster's Odoo exports.
   → [planned-work.md #6](planned-work.md#6-odoo-migration-program----contacts-subscriptions-timesheets-sales-quotationsinvoicesreceipts-chart-of-accounts-raised-2026-09-12)
 - [x] **WhatsApp OTP** as a second login factor -- was blocked on
   provisioning a WhatsApp Business API account (Twilio/Meta); email OTP

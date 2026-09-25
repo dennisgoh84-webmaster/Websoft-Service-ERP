@@ -125,6 +125,7 @@ explaining the reason first (see Development Rules below).
 - [docs/backlog.md](docs/backlog.md) — short, checkable summary of everything pending, linking into the detail docs above
 - [docs/walkthrough/index.html](docs/walkthrough/index.html) — a 46-step guided walkthrough of every built module (Operations → Stock → Accounts → Maintenance), with screenshots captured from the running application. Regenerate the screenshots by running the app and re-capturing; they are not auto-built.
 - [docs/ui-guidelines.md](docs/ui-guidelines.md) — screen label conventions and the Export (CSV/Excel) / Print (PDF/Word) pattern every screen follows
+- [docs/odoo-migration.md](docs/odoo-migration.md) — the Odoo data migration tool (`php artisan odoo:import`): decisions, field mapping per record type, run order, how to run it
 - [docs/php-conversion-plan.md](docs/php-conversion-plan.md) — the backend Python→PHP language conversion (complete; Python retired 2026-09-15): reason, approach, stack, findings
 - [DEV_SETUP.md](DEV_SETUP.md) — how to run the application locally
 
@@ -543,6 +544,17 @@ test all refuse before any provider call, with no `ai_interactions`
 row written for the refused call; unset (the default) is unlimited,
 as before. See
 [docs/open-business-decisions.md #44](docs/open-business-decisions.md#44-ai-assistant-monthly-token-spending-cap-raised-and-built-2026-09-16).
+
+**Odoo data migration tooling landed 2026-09-25**
+([docs/odoo-migration.md](docs/odoo-migration.md)): `php artisan
+odoo:import <entity> <file> --company=<code> [--commit]` imports Odoo's
+own CSV/Excel exports -- Chart of Accounts, an opening-balance Trial
+Balance, Contacts, Subscriptions, Quotations, Invoices, Receipts and
+Timesheets -- dry run by default, all-or-nothing on commit, re-runnable
+through a permanent `odoo_record_map`. Decided with Dennis: imported
+documents keep their Odoo numbers, and invoices/receipts are history
+only -- they post nothing, the General Ledger arriving instead as one
+opening-balance journal voucher at cut-over.
 
 No other business area has application code yet. **Further commission
 business rules beyond what is built (the report, its rate and

@@ -36,13 +36,18 @@ class Payment extends Model
     protected $fillable = [
         'company_id', 'customer_id', 'voucher_number', 'payment_date', 'amount_sgd',
         'method', 'reference', 'notes', 'bank_account_id', 'recorded_by_user_id',
+        // Odoo migration (docs/odoo-migration.md) -- zero/null on every
+        // receipt recorded in this system.
+        'pre_migration_allocated_sgd', 'odoo_imported_at',
     ];
 
-    protected $attributes = ['method' => self::METHOD_BANK_TRANSFER];
+    protected $attributes = ['method' => self::METHOD_BANK_TRANSFER, 'pre_migration_allocated_sgd' => '0.00'];
 
     protected $casts = [
         'payment_date' => 'date',
         'amount_sgd' => 'decimal:2',
+        'pre_migration_allocated_sgd' => 'decimal:2',
+        'odoo_imported_at' => 'datetime',
         'created_at' => 'datetime',
     ];
 
@@ -61,9 +66,17 @@ class Payment extends Model
         return $this->hasMany(PaymentAllocation::class);
     }
 
+    /**
+     * Allocations made here, plus -- on a receipt migrated from Odoo --
+     * what Odoo had already reconciled it against before cut-over,
+     * which has no PaymentAllocation rows behind it.
+     */
     public function allocatedSgd(): Money
     {
-        return $this->allocations->reduce(fn (Money $carry, PaymentAllocation $a) => $carry->plus(Money::of($a->amount_sgd)), Money::of(0));
+        return $this->allocations->reduce(
+            fn (Money $carry, PaymentAllocation $a) => $carry->plus(Money::of($a->amount_sgd)),
+            Money::of($this->pre_migration_allocated_sgd ?? 0),
+        );
     }
 
     public function unallocatedSgd(): Money
