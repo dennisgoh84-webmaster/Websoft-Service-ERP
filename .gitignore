@@ -12,3 +12,7 @@ demo/
 frontend/test-results/
 dist/
 backups/
+
+# Server-specific Compose additions (e.g. publishing Postgres to Central
+# Command on another server). Never committed.
+docker-compose.override.yml
