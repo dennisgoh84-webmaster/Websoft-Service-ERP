@@ -8,6 +8,7 @@ import {
   type CurrentUser,
 } from '../lib/api'
 import { formatDate } from '../lib/format'
+import DateInput from '../components/DateInput'
 
 const STATUS_BADGES: Record<CommissionPayoutStatus, string> = {
   draft: 'muted',
@@ -350,8 +351,7 @@ export default function CommissionPayoutsPage() {
                       <>
                         {payingId === p.id ? (
                           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                            <input
-                              type="date"
+                            <DateInput
                               value={payDate}
                               onChange={(e) => setPayDate(e.target.value)}
                               style={{ fontSize: 12, width: 130 }}

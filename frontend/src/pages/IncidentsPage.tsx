@@ -17,7 +17,7 @@ import {
   type IncidentStatus,
   type IncidentTriage,
 } from '../lib/api'
-import { formatDate } from '../lib/format'
+import { formatDate, todayIso } from '../lib/format'
 
 const STATUS_BADGE: Record<IncidentStatus, string> = {
   open: 'draft',
@@ -488,7 +488,7 @@ export default function IncidentsPage() {
                               disabled={!inc.customer_id || working}
                               onClick={() =>
                                 withPanel(
-                                  () => api.convertIncidentToQuotation(inc.id, new Date().toISOString().slice(0, 10)),
+                                  () => api.convertIncidentToQuotation(inc.id, todayIso()),
                                   `${inc.incident_number} converted to a draft Quotation.`,
                                 )
                               }

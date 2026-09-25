@@ -8,6 +8,7 @@ import { api, type AccountingPeriod, type Company } from '../lib/api'
 import { formatDate } from '../lib/format'
 import { isoToMonth, monthEndISO, monthStartISO } from '../lib/period'
 import { useAuth } from '../lib/AuthContext'
+import DateInput from './DateInput'
 
 /**
  * The filter area on a report screen: an even column grid, so every line
@@ -246,11 +247,11 @@ export function PeriodRange({ from, to, onChange }: { from: string; to: string; 
       </div>
       <div className="form-row">
         <label>Date from</label>
-        <input type="date" value={from} max={to || undefined} onChange={(e) => onChange(e.target.value, to)} />
+        <DateInput value={from} max={to || undefined} onChange={(e) => onChange(e.target.value, to)} />
       </div>
       <div className="form-row">
         <label>Date to</label>
-        <input type="date" value={to} min={from || undefined} onChange={(e) => onChange(from, e.target.value)} />
+        <DateInput value={to} min={from || undefined} onChange={(e) => onChange(from, e.target.value)} />
       </div>
     </>
   )
@@ -286,7 +287,7 @@ export function AsAtPicker({ value, onChange }: { value: string; onChange: (asAt
       <div className="form-row">
         <label>As at</label>
         <div className="input-with-button">
-          <input type="date" value={value} onChange={(e) => onChange(e.target.value)} />
+          <DateInput value={value} onChange={(e) => onChange(e.target.value)} />
           <button type="button" className="secondary" onClick={() => onChange('')}>Today</button>
         </div>
       </div>

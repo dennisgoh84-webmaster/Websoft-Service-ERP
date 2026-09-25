@@ -651,8 +651,8 @@ export default function InvoicesPage() {
               {statement.lines.map((l) => (
                 <tr key={l.invoice_id}>
                   <td>{l.invoice_number}</td>
-                  <td>{l.issued_on}</td>
-                  <td>{l.due_date ?? <span className="muted">-</span>}</td>
+                  <td>{formatDate(l.issued_on)}</td>
+                  <td>{l.due_date ? formatDate(l.due_date) : <span className="muted">-</span>}</td>
                   <td>{money(l.total_amount_sgd)}</td>
                   <td>{money(l.amount_paid_sgd)}</td>
                   <td>
@@ -790,7 +790,7 @@ export default function InvoicesPage() {
                 </td>
                 <td>{money(inv.outstanding_sgd)}</td>
                 <td style={{ whiteSpace: 'nowrap' }}>
-                  {inv.due_date ?? <span className="muted">no terms set</span>}
+                  {inv.due_date ? formatDate(inv.due_date) : <span className="muted">no terms set</span>}
                 </td>
                 <td>
                   <span className={`badge ${STATUS_BADGE[inv.status] ?? 'draft'}`}>

@@ -4,7 +4,8 @@ import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type Account, type JournalEntry, type TrialBalance } from '../lib/api'
-import { formatMoney as money, formatDate } from '../lib/format'
+import { formatMoney as money, formatDate, todayIso } from '../lib/format'
+import DateInput from '../components/DateInput'
 
 interface DraftLine {
   accountId: string
@@ -24,7 +25,7 @@ export default function GeneralLedgerPage() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
-  const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10))
+  const [entryDate, setEntryDate] = useState(todayIso())
   const [narration, setNarration] = useState('')
   const [lines, setLines] = useState<DraftLine[]>([emptyLine(), emptyLine()])
   const [saving, setSaving] = useState(false)
@@ -216,7 +217,7 @@ export default function GeneralLedgerPage() {
         <form onSubmit={(e) => submitVoucher(e, false)}>
           <div className="form-row">
             <label>Date</label>
-            <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} required />
+            <DateInput value={entryDate} onChange={(e) => setEntryDate(e.target.value)} required />
           </div>
           <div className="form-row">
             <label>Narration</label>

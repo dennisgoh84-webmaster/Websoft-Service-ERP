@@ -9,6 +9,8 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api, downloadBlob, type CurrentUser, type OpsDashboard, type OpsTaskStatus } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
+import DateInput from '../components/DateInput'
+import { formatDate } from '../lib/format'
 
 const STATUS_LABELS: Record<OpsTaskStatus, string> = {
   not_started: 'Not started',
@@ -359,8 +361,7 @@ export default function OpsDashboardPage() {
                         </select>
                       </td>
                       <td>
-                        <input
-                          type="date"
+                        <DateInput
                           value={t.follow_up_date ?? ''}
                           onChange={(e) =>
                             e.target.value
@@ -435,7 +436,7 @@ export default function OpsDashboardPage() {
                     <Link to={`/job-orders/${jo.id}`}>{jo.subject}</Link>
                   </td>
                   <td>{jo.status}</td>
-                  <td>{jo.due_date ?? <span className="muted">-</span>}</td>
+                  <td>{jo.due_date ? formatDate(jo.due_date) : <span className="muted">-</span>}</td>
                 </tr>
               ))}
             </tbody>

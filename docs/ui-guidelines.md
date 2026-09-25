@@ -40,6 +40,29 @@ does it.
   code (SGD), not a `$` sign, except inside a printed form's line-item
   table where `($)` in the column header is enough.
 
+### Dates (standardised 2026-09-25)
+
+Every date reads and is typed **DD/MM/YYYY**, whatever the viewer's
+browser locale or time zone (Dennis's standing rule).
+
+- **Showing a date:** always `formatDate()` / `formatDateTime()` from
+  `lib/format.ts`, never a raw `YYYY-MM-DD` and never
+  `toLocaleDateString()`. Timestamps are shown in **Singapore time**
+  (the company's time zone), so a date saved as midnight Singapore time
+  never reads as the day before in a browser set to another zone.
+- **Entering a date:** always `<DateInput>` (`components/DateInput.tsx`),
+  never `<input type="date">`, whose format follows the browser's locale
+  (often MM/DD/YYYY). It is a drop-in: `value` is the ISO date and
+  `onChange` gets `{ target: { value } }`. It accepts a typed
+  DD/MM/YYYY, rejects an impossible date such as 31/02, honours
+  `min`/`max`/`required` through the browser's own form validation, and
+  has a calendar button for picking.
+- **"Today" as a default:** `todayIso()` from `lib/format.ts` (today in
+  Singapore), not `new Date().toISOString()` (today in UTC, which is
+  still yesterday before 8am Singapore time).
+- Month-only pickers (report periods) stay `<input type="month">`: they
+  show a month and year, with no day to mix up.
+
 ## 2. Export (CSV / Excel) -- for every list/report screen
 
 Report screens (Accounting, Operations, Stock) also offer **PDF** in the format list

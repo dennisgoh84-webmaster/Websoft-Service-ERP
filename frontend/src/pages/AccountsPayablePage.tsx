@@ -4,7 +4,7 @@ import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type Account, type APAgingReport, type CompanyIndividual, type PurchaseOrder, type SupplierInvoice } from '../lib/api'
-import { formatMoney as money, formatDate } from '../lib/format'
+import { formatMoney as money, formatDate, todayIso } from '../lib/format'
 
 const BILL_BADGE: Record<string, string> = {
   awaiting_match: 'draft',
@@ -74,7 +74,7 @@ export default function AccountsPayablePage() {
         supplier_id: billSupplier,
         purchase_order_id: billPo || null,
         supplier_invoice_no: billRef || undefined,
-        invoice_date: new Date().toISOString().slice(0, 10),
+        invoice_date: todayIso(),
         description: billDesc,
         amount_sgd: parseFloat(billAmount),
         gst_amount_sgd: billGst === '' ? 0 : parseFloat(billGst),

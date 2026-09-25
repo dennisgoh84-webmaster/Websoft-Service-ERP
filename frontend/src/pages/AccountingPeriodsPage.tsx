@@ -16,6 +16,7 @@ import {
   type PeriodLock,
   type PeriodOperation,
 } from '../lib/api'
+import { formatDate } from '../lib/format'
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -183,8 +184,8 @@ export default function AccountingPeriodsPage() {
                       </button>
                     </td>
                     <td>{p.fiscal_year}</td>
-                    <td>{p.period_start}</td>
-                    <td>{p.period_end}</td>
+                    <td>{formatDate(p.period_start)}</td>
+                    <td>{formatDate(p.period_end)}</td>
                     <td>
                       <span
                         className={`badge ${summary === 'open' ? 'active' : summary === 'closed' ? 'expired' : ''}`}

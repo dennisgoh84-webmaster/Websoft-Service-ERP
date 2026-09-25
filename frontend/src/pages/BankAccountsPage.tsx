@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
 import { api, downloadBlob, type Account, type BankAccount } from '../lib/api'
 import { formatMoney } from '../lib/format'
+import DateInput from '../components/DateInput'
 
 export default function BankAccountsPage() {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([])
@@ -208,7 +209,7 @@ export default function BankAccountsPage() {
           </div>
           <div className="form-row">
             <label>Opening balance date</label>
-            <input type="date" value={openingBalanceDate} onChange={(e) => setOpeningBalanceDate(e.target.value)} />
+            <DateInput value={openingBalanceDate} onChange={(e) => setOpeningBalanceDate(e.target.value)} />
           </div>
           <button type="submit" disabled={creating}>
             {creating ? 'Adding...' : 'Add bank account'}

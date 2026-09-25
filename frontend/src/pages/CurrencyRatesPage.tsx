@@ -4,6 +4,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, type CurrencyRate } from '../lib/api'
 import { formatDate } from '../lib/format'
+import DateInput from '../components/DateInput'
 
 export default function CurrencyRatesPage() {
   const [rates, setRates] = useState<CurrencyRate[]>([])
@@ -130,7 +131,7 @@ export default function CurrencyRatesPage() {
           </div>
           <div className="form-row">
             <label>Effective date</label>
-            <input type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} required />
+            <DateInput value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} required />
           </div>
           <button type="submit" disabled={creating}>
             {creating ? 'Adding...' : 'Add rate'}

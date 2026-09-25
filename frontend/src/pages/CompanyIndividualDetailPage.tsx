@@ -16,6 +16,7 @@ import {
   type SetupListItem,
 } from '../lib/api'
 import { formatDate, formatDateTime } from '../lib/format'
+import DateInput from '../components/DateInput'
 
 const ACTION_LABELS: Record<string, string> = {
   created: 'Created',
@@ -1241,7 +1242,7 @@ export default function CompanyIndividualDetailPage() {
             )}
           </label>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <input type="date" value={dataExpiryDraft} onChange={(e) => setDataExpiryDraft(e.target.value)} style={{ width: 'auto' }} />
+            <DateInput value={dataExpiryDraft} onChange={(e) => setDataExpiryDraft(e.target.value)} style={{ width: 'auto' }} />
             <button type="submit" disabled={savingDataExpiry || dataExpiryDraft === (customer.data_expiry_date ?? '')}>
               {savingDataExpiry ? 'Saving...' : 'Save expiry date'}
             </button>

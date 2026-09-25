@@ -26,7 +26,8 @@ import {
 } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import { FilterGrid, InternalCompaniesPicker, MultiPick, PeriodRange } from '../components/ReportFilters'
-import { formatMoney as money, formatDate } from '../lib/format'
+import { formatMoney as money, formatDate, todayIso } from '../lib/format'
+import DateInput from '../components/DateInput'
 
 // NEW FEATURE (not a Python->PHP conversion -- see
 // docs/backlog.md / docs/planned-work.md): "Service Contract
@@ -381,11 +382,11 @@ export default function OperationsReportsPage() {
             <>
               <div className="form-row">
                 <label>Expiry from</label>
-                <input type="date" value={contractExpiryFrom} onChange={(e) => setContractExpiryFrom(e.target.value)} />
+                <DateInput value={contractExpiryFrom} onChange={(e) => setContractExpiryFrom(e.target.value)} />
               </div>
               <div className="form-row">
                 <label>Expiry to</label>
-                <input type="date" value={contractExpiryTo} onChange={(e) => setContractExpiryTo(e.target.value)} />
+                <DateInput value={contractExpiryTo} onChange={(e) => setContractExpiryTo(e.target.value)} />
               </div>
             </>
           )}
@@ -607,7 +608,7 @@ export default function OperationsReportsPage() {
               </thead>
               <tbody>
                 {jobOrders.map((o) => {
-                  const overdue = !!o.due_date && o.due_date < new Date().toISOString().slice(0, 10) && o.status !== 'closed' && o.status !== 'void'
+                  const overdue = !!o.due_date && o.due_date < todayIso() && o.status !== 'closed' && o.status !== 'void'
                   return (
                     <tr key={o.id}>
                       {multiCompany && <td>{o.company_name}</td>}

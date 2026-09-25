@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import InvoiceHistoryPanel from '../components/InvoiceHistoryPanel'
 import { api, type CompanyIndividual } from '../lib/api'
 import { formatDate, formatDateTime } from '../lib/format'
+import DateInput from '../components/DateInput'
 
 interface ProspectActivity {
   id: string
@@ -188,7 +189,7 @@ export default function CrmProspectActivityDetailPage() {
             </div>
             <div className="form-row">
               <label>Activity Date</label>
-              <input type="date" value={activityDate} onChange={(e) => setActivityDate(e.target.value)} />
+              <DateInput value={activityDate} onChange={(e) => setActivityDate(e.target.value)} />
             </div>
             <div className="form-row">
               <label>Status</label>

@@ -5,7 +5,8 @@ import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type BankAccount, type CompanyIndividual, type Invoice, type Payment } from '../lib/api'
-import { formatMoney as money, formatDate } from '../lib/format'
+import { formatMoney as money, formatDate, todayIso } from '../lib/format'
+import DateInput from '../components/DateInput'
 
 const METHODS = [
   { value: 'bank_transfer', label: 'Bank transfer' },
@@ -27,7 +28,7 @@ export default function ReceiptsPage() {
 
   // Record payment form
   const [customerId, setCustomerId] = useState('')
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10))
+  const [paymentDate, setPaymentDate] = useState(todayIso())
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState('bank_transfer')
   const [reference, setReference] = useState('')
@@ -198,8 +199,7 @@ export default function ReceiptsPage() {
           </div>
           <div className="form-row">
             <label>Payment date</label>
-            <input
-              type="date"
+            <DateInput
               value={paymentDate}
               onChange={(e) => setPaymentDate(e.target.value)}
               required

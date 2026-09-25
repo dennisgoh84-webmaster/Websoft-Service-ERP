@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
 import { formatDate } from '../../lib/format'
+import DateInput from '../../components/DateInput'
 
 const MAROON = '#800020'
 const LIGHT_BG = '#f8f7f5'
@@ -355,8 +356,7 @@ export default function MobileCrmActivityDetailPage({
             />
 
             <label style={styles.label}>Date</label>
-            <input
-              type="date"
+            <DateInput
               value={formData.activity_date}
               onChange={e => setFormData({ ...formData, activity_date: e.target.value })}
               style={styles.input}

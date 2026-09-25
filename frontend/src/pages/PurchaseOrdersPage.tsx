@@ -11,7 +11,7 @@ import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type CompanyIndividual, type PurchaseOrder } from '../lib/api'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, todayIso } from '../lib/format'
 
 const PO_BADGE: Record<string, string> = {
   draft: 'draft',
@@ -55,7 +55,7 @@ export default function PurchaseOrdersPage() {
     try {
       const po = await api.createPurchaseOrder({
         supplier_id: poSupplier,
-        order_date: new Date().toISOString().slice(0, 10),
+        order_date: todayIso(),
         description: poDesc,
         amount_sgd: parseFloat(poAmount),
       })

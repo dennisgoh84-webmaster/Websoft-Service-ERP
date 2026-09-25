@@ -14,7 +14,8 @@ import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ProjectSchedulePanel from '../components/ProjectSchedulePanel'
 import SignaturePanel from '../components/SignaturePanel'
 import { useAuth } from '../lib/AuthContext'
-import { formatDateTime, formatDate } from '../lib/format'
+import { formatDateTime, formatDate, todayIso } from '../lib/format'
+import DateInput from '../components/DateInput'
 
 /** SRV-020 labels. */
 const BILLING_LABELS: Record<JobOrderBillingClassification, string> = {
@@ -42,7 +43,7 @@ export default function JobOrderDetailPage() {
 
   const [assignee, setAssignee] = useState('')
   const [employee, setEmployee] = useState('')
-  const [workDate, setWorkDate] = useState(new Date().toISOString().slice(0, 10))
+  const [workDate, setWorkDate] = useState(todayIso())
   const [minutes, setMinutes] = useState('30')
   const [completionStatus, setCompletionStatus] = useState<ServiceRecordCompletion>('U')
   const [afterHours, setAfterHours] = useState(false)
@@ -368,7 +369,7 @@ export default function JobOrderDetailPage() {
             <form onSubmit={onSetDueDate} style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
               <div className="form-row" style={{ margin: 0 }}>
                 <label>Due date</label>
-                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                <DateInput value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
               </div>
               <button type="submit">Save</button>
             </form>
@@ -416,7 +417,7 @@ export default function JobOrderDetailPage() {
           </div>
           <div className="form-row">
             <label>Work date</label>
-            <input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
+            <DateInput value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
           </div>
           <div className="form-row">
             <label>Minutes worked</label>

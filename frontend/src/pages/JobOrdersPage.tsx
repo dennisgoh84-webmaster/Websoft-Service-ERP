@@ -2,7 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
 import { api, downloadBlob, type Contract, type CompanyIndividual, type JobOrder, type JobOrderBillingClassification, type JobOrderPriority, type JobOrderType, type Product } from '../lib/api'
-import { formatDate } from '../lib/format'
+import { formatDate, todayIso } from '../lib/format'
+import DateInput from '../components/DateInput'
 
 export default function JobOrdersPage() {
   const [jobOrders, setJobOrders] = useState<JobOrder[]>([])
@@ -198,7 +199,7 @@ export default function JobOrdersPage() {
           </div>
           <div className="form-row">
             <label>Due date (optional, as agreed with Support)</label>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            <DateInput value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </div>
           <div className="form-row">
             <label>
@@ -300,7 +301,7 @@ export default function JobOrdersPage() {
           <tbody>
             {jobOrders.map((t) => {
               const overdue =
-                !!t.due_date && t.due_date < new Date().toISOString().slice(0, 10) && t.status !== 'closed' && t.status !== 'void'
+                !!t.due_date && t.due_date < todayIso() && t.status !== 'closed' && t.status !== 'void'
               return (
                 <tr key={t.id}>
                   <td className="muted">{t.job_order_number}</td>

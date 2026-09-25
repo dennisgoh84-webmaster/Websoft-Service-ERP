@@ -19,6 +19,7 @@ import {
   type GLTransactions,
 } from '../lib/api'
 import { formatMoney as money, formatDate } from '../lib/format'
+import DateInput from '../components/DateInput'
 
 const VOUCHER_TYPE_LABELS: Record<string, string> = {
   journal: 'JV',
@@ -132,16 +133,14 @@ export default function GLTransactionsPage() {
           </div>
           <div className="form-row" style={{ margin: 0 }}>
             <label>From</label>
-            <input
-              type="date"
+            <DateInput
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
             />
           </div>
           <div className="form-row" style={{ margin: 0 }}>
             <label>To</label>
-            <input
-              type="date"
+            <DateInput
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
             />

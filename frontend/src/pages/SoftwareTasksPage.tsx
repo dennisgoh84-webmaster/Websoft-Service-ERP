@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import ExportControl from '../components/ExportControl'
 import { api, downloadBlob, type CurrentUser, type SoftwareTask } from '../lib/api'
+import DateInput from '../components/DateInput'
+import { formatDate } from '../lib/format'
 
 export default function SoftwareTasksPage() {
   const [tasks, setTasks] = useState<SoftwareTask[]>([])
@@ -110,7 +112,7 @@ export default function SoftwareTasksPage() {
           </div>
           <div className="form-row">
             <label>Target finish date (programming)</label>
-            <input type="date" value={finishDate} onChange={(e) => setFinishDate(e.target.value)} />
+            <DateInput value={finishDate} onChange={(e) => setFinishDate(e.target.value)} />
           </div>
           <div className="form-row">
             <label>Programming hours (manual)</label>
@@ -172,7 +174,7 @@ export default function SoftwareTasksPage() {
                   </td>
                   <td className="muted">{t.modules_affected ?? '-'}</td>
                   <td>{userName(t.assigned_programmer_id) ?? <span className="muted">-</span>}</td>
-                  <td>{t.programming_finish_date ?? <span className="muted">-</span>}</td>
+                  <td>{t.programming_finish_date ? formatDate(t.programming_finish_date) : <span className="muted">-</span>}</td>
                   <td>{t.programming_hours ?? <span className="muted">-</span>}</td>
                   <td>{userName(t.tester_user_id) ?? <span className="muted">-</span>}</td>
                   <td>

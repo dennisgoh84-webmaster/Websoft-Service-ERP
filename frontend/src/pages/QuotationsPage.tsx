@@ -13,8 +13,9 @@ import {
   type QuotationStatus,
   type ReferenceCode,
 } from '../lib/api'
-import { formatMoney as money, formatDate } from '../lib/format'
+import { formatMoney as money, formatDate, todayIso } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
+import DateInput from '../components/DateInput'
 
 // wa.me needs digits only (country code + number, no "+", spaces or dashes).
 function waNumber(phone: string): string {
@@ -89,7 +90,7 @@ export default function QuotationsPage() {
 
   // New quotation form
   const [customerId, setCustomerId] = useState('')
-  const [quotationDate, setQuotationDate] = useState(new Date().toISOString().slice(0, 10))
+  const [quotationDate, setQuotationDate] = useState(todayIso())
   const [validUntil, setValidUntil] = useState('')
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()])
@@ -337,11 +338,11 @@ export default function QuotationsPage() {
           </div>
           <div className="form-row">
             <label>Date</label>
-            <input type="date" value={quotationDate} onChange={(e) => setQuotationDate(e.target.value)} required />
+            <DateInput value={quotationDate} onChange={(e) => setQuotationDate(e.target.value)} required />
           </div>
           <div className="form-row">
             <label>Valid until</label>
-            <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+            <DateInput value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
           </div>
           <div className="form-row">
             <label>Notes</label>

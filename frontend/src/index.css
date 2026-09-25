@@ -1569,3 +1569,47 @@ label.multi-pick-item:hover {
     font-size: 16px; /* below 16px iOS Safari zooms the page on focus */
   }
 }
+
+/* Shared DD/MM/YYYY date box (components/DateInput.tsx, 2026-09-25). */
+.date-input {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  position: relative;
+  min-width: 0;
+}
+.date-input > input:first-child {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.date-input > input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+button.date-input-calendar {
+  flex-shrink: 0;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.date-input > input.date-input-native {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.report-filter-grid .date-input > input:first-child,
+.report-filter-grid .date-input > button {
+  height: 36px;
+  box-sizing: border-box;
+}
+.report-filter-grid .input-with-button .date-input {
+  flex: 1;
+}

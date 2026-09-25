@@ -2,7 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react'
 import InvoiceHistoryPanel from '../components/InvoiceHistoryPanel'
 import { Link } from 'react-router-dom'
 import { api, type CompanyIndividual, type CurrentUser } from '../lib/api'
-import { formatDate } from '../lib/format'
+import { formatDate, todayIso } from '../lib/format'
+import DateInput from '../components/DateInput'
 
 interface ProspectActivity {
   id: string
@@ -50,7 +51,7 @@ export default function CrmProspectActivitiesPage() {
   const [activityType, setActivityType] = useState('call')
   const [subject, setSubject] = useState('')
   const [description, setDescription] = useState('')
-  const [activityDate, setActivityDate] = useState(new Date().toISOString().split('T')[0])
+  const [activityDate, setActivityDate] = useState(todayIso())
   const [status, setStatus] = useState('completed')
 
   // Filters
@@ -105,7 +106,7 @@ export default function CrmProspectActivitiesPage() {
       setActivityType('call')
       setSubject('')
       setDescription('')
-      setActivityDate(new Date().toISOString().split('T')[0])
+      setActivityDate(todayIso())
       setStatus('completed')
       refresh()
     } catch (err) {
@@ -157,7 +158,7 @@ export default function CrmProspectActivitiesPage() {
           </div>
           <div className="form-row">
             <label>Activity Date</label>
-            <input type="date" value={activityDate} onChange={(e) => setActivityDate(e.target.value)} />
+            <DateInput value={activityDate} onChange={(e) => setActivityDate(e.target.value)} />
           </div>
           <div className="form-row">
             <label>Status</label>

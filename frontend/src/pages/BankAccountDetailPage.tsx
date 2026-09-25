@@ -5,7 +5,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api, type BankAccount, type BankLedger, type BankReconciliation } from '../lib/api'
-import { formatMoney, formatDate } from '../lib/format'
+import { formatMoney, formatDate, todayIso } from '../lib/format'
+import DateInput from '../components/DateInput'
 
 export default function BankAccountDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -15,7 +16,7 @@ export default function BankAccountDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
 
-  const [txnDate, setTxnDate] = useState(new Date().toISOString().slice(0, 10))
+  const [txnDate, setTxnDate] = useState(todayIso())
   const [txnDescription, setTxnDescription] = useState('')
   const [txnReference, setTxnReference] = useState('')
   const [txnType, setTxnType] = useState<'debit' | 'credit'>('debit')
@@ -23,7 +24,7 @@ export default function BankAccountDetailPage() {
   const [posting, setPosting] = useState(false)
 
   const [showReconcile, setShowReconcile] = useState(false)
-  const [statementDate, setStatementDate] = useState(new Date().toISOString().slice(0, 10))
+  const [statementDate, setStatementDate] = useState(todayIso())
   const [statementBalance, setStatementBalance] = useState('')
   const [reconcileNote, setReconcileNote] = useState('')
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
@@ -266,7 +267,7 @@ export default function BankAccountDetailPage() {
         <form onSubmit={onAddTransaction}>
           <div className="form-row">
             <label>Date</label>
-            <input type="date" value={txnDate} onChange={(e) => setTxnDate(e.target.value)} required />
+            <DateInput value={txnDate} onChange={(e) => setTxnDate(e.target.value)} required />
           </div>
           <div className="form-row">
             <label>Description</label>
@@ -318,7 +319,7 @@ export default function BankAccountDetailPage() {
           <form onSubmit={onSaveReconciliation} style={{ marginTop: 12 }}>
             <div className="form-row">
               <label>Statement date</label>
-              <input type="date" value={statementDate} onChange={(e) => setStatementDate(e.target.value)} required />
+              <DateInput value={statementDate} onChange={(e) => setStatementDate(e.target.value)} required />
             </div>
             <div className="form-row">
               <label>Statement balance (SGD)</label>

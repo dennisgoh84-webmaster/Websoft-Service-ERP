@@ -11,7 +11,8 @@ import {
   type StaffUser,
 } from '../lib/api'
 import { isoToMonth, monthEndISO, monthStartISO } from '../lib/period'
-import { formatMoney as money, formatDate } from '../lib/format'
+import { formatMoney as money, formatDate, todayIso } from '../lib/format'
+import DateInput from '../components/DateInput'
 
 const KIND_LABELS: Record<ContractKind, string> = {
   service_support: 'Service Support (deduct hrs)',
@@ -32,7 +33,7 @@ export default function ContractsPage() {
   const [hours, setHours] = useState('10')
   const [value, setValue] = useState('2400')
   const [hourlyRate, setHourlyRate] = useState('150')
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
+  const [startDate, setStartDate] = useState(todayIso())
   const [salesStaffId, setSalesStaffId] = useState('')
   const [productIds, setProductIds] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -193,7 +194,7 @@ export default function ContractsPage() {
           )}
           <div className="form-row">
             <label>Start date</label>
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            <DateInput value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </div>
           <div className="form-row">
             <label>Sales staff</label>
@@ -313,11 +314,11 @@ export default function ContractsPage() {
           </div>
           <div className="form-row" style={{ margin: 0 }}>
             <label>Expiry from</label>
-            <input type="date" value={filterExpiryFrom} onChange={(e) => setFilterExpiryFrom(e.target.value)} />
+            <DateInput value={filterExpiryFrom} onChange={(e) => setFilterExpiryFrom(e.target.value)} />
           </div>
           <div className="form-row" style={{ margin: 0 }}>
             <label>Expiry to</label>
-            <input type="date" value={filterExpiryTo} onChange={(e) => setFilterExpiryTo(e.target.value)} />
+            <DateInput value={filterExpiryTo} onChange={(e) => setFilterExpiryTo(e.target.value)} />
           </div>
           <button type="button" className="secondary" onClick={resetFilters}>
             Reset filters

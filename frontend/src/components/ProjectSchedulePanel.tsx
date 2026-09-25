@@ -15,6 +15,8 @@ import {
   type ProjectMilestone,
 } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
+import DateInput from './DateInput'
+import { formatDate, todayIso } from '../lib/format'
 
 const MILESTONE_TYPE_LABELS: Record<MilestoneType, string> = {
   installation: 'Installation',
@@ -246,8 +248,7 @@ export default function ProjectSchedulePanel({ jobOrderId, milestones, users, ed
                       </td>
                       <td>
                         {isEditing ? (
-                          <input
-                            type="date"
+                          <DateInput
                             value={editForm.planned_start}
                             onChange={(e) => setEditForm({ ...editForm, planned_start: e.target.value })}
                             style={{ width: 130 }}
@@ -258,8 +259,7 @@ export default function ProjectSchedulePanel({ jobOrderId, milestones, users, ed
                       </td>
                       <td>
                         {isEditing ? (
-                          <input
-                            type="date"
+                          <DateInput
                             value={editForm.planned_end}
                             onChange={(e) => setEditForm({ ...editForm, planned_end: e.target.value })}
                             style={{ width: 130 }}
@@ -270,8 +270,7 @@ export default function ProjectSchedulePanel({ jobOrderId, milestones, users, ed
                       </td>
                       <td>
                         {isEditing ? (
-                          <input
-                            type="date"
+                          <DateInput
                             value={editForm.actual_start}
                             onChange={(e) => setEditForm({ ...editForm, actual_start: e.target.value })}
                             style={{ width: 130 }}
@@ -282,8 +281,7 @@ export default function ProjectSchedulePanel({ jobOrderId, milestones, users, ed
                       </td>
                       <td>
                         {isEditing ? (
-                          <input
-                            type="date"
+                          <DateInput
                             value={editForm.actual_end}
                             onChange={(e) => setEditForm({ ...editForm, actual_end: e.target.value })}
                             style={{ width: 130 }}
@@ -436,7 +434,7 @@ export default function ProjectSchedulePanel({ jobOrderId, milestones, users, ed
                       >
                         {/* Today marker */}
                         {(() => {
-                          const today = new Date().toISOString().slice(0, 10)
+                          const today = todayIso()
                           if (today >= ganttMinDate && today <= ganttMaxDate) {
                             const pos = ((daysBetween(ganttMinDate, today)) / totalDays) * 100
                             return (
@@ -471,7 +469,7 @@ export default function ProjectSchedulePanel({ jobOrderId, milestones, users, ed
                                 opacity: 0.6,
                                 ...pos,
                               }}
-                              title={`Planned: ${m.planned_start} → ${m.planned_end}`}
+                              title={`Planned: ${formatDate(m.planned_start)} → ${formatDate(m.planned_end)}`}
                             />
                           )
                         })()}
@@ -490,7 +488,7 @@ export default function ProjectSchedulePanel({ jobOrderId, milestones, users, ed
                                 background: STATUS_COLORS[m.status],
                                 ...pos,
                               }}
-                              title={`Actual: ${m.actual_start} → ${m.actual_end ?? 'ongoing'}`}
+                              title={`Actual: ${formatDate(m.actual_start)} → ${m.actual_end ? formatDate(m.actual_end) : 'ongoing'}`}
                             />
                           )
                         })()}

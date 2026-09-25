@@ -5,7 +5,7 @@ import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type BankAccount, type CompanyIndividual, type SupplierInvoice, type SupplierPayment } from '../lib/api'
-import { formatMoney as money } from '../lib/format'
+import { formatMoney as money, todayIso } from '../lib/format'
 
 export default function PaymentVoucherPage() {
   const [suppliers, setSuppliers] = useState<CompanyIndividual[]>([])
@@ -48,7 +48,7 @@ export default function PaymentVoucherPage() {
     try {
       await api.recordSupplierPayment({
         supplier_id: paySupplier,
-        payment_date: new Date().toISOString().slice(0, 10),
+        payment_date: todayIso(),
         amount_sgd: parseFloat(payAmount),
         bank_account_id: bankAccountId,
         reference: payRef || undefined,

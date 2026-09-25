@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import DateInput from '../components/DateInput'
 import ExportControl from '../components/ExportControl'
 import { FilterGrid, InternalCompaniesPicker } from '../components/ReportFilters'
-import { BatchStatusBadge, DmyDateInput, MIGRATION_MODULES, MigrationTabs, SourceTag, SOURCES, moduleLabel } from '../components/DataMigration'
+import { BatchStatusBadge, MIGRATION_MODULES, MigrationTabs, SourceTag, SOURCES, moduleLabel } from '../components/DataMigration'
 import { useAuth } from '../lib/AuthContext'
 import { ApiError, api, downloadBlob, type MigrationBatch, type MigrationBatchFilters, type MigrationRollbackResult } from '../lib/api'
 import { formatDateTime } from '../lib/format'
@@ -139,8 +140,14 @@ export default function DataMigrationBatchLogPage() {
               <option value="rolled_back">Rolled back</option>
             </select>
           </div>
-          <DmyDateInput id="log-from" label="Date from" value={dateFrom} onChange={setDateFrom} />
-          <DmyDateInput id="log-to" label="Date to" value={dateTo} onChange={setDateTo} />
+          <div className="form-row">
+            <label htmlFor="log-from">Date from</label>
+            <DateInput id="log-from" value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} />
+          </div>
+          <div className="form-row">
+            <label htmlFor="log-to">Date to</label>
+            <DateInput id="log-to" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} />
+          </div>
           <div className="report-filter-actions">
             <ExportControl
               formats={[
