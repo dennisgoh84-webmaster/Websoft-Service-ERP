@@ -14,6 +14,8 @@ use App\Http\Controllers\Api\OperationsReportController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.jwt')->prefix('reports/operations')->group(function () {
+    Route::get('/filter-options', [OperationsReportController::class, 'filterOptions']);
+
     Route::get('/contracts', [OperationsReportController::class, 'contracts']);
     Route::get('/contracts/export.csv', [OperationsReportController::class, 'contractsCsv']);
     Route::get('/contracts/export.xlsx', [OperationsReportController::class, 'contractsExcel']);

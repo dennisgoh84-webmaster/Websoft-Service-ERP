@@ -2,12 +2,11 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Exceptions\ApiException;
+use App\Http\Controllers\Api\Concerns\ScopesReportCompanies;
 use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\CommissionSettings;
-use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\GroupModuleAuthority;
 use App\Models\User;
@@ -63,6 +62,7 @@ use Illuminate\Support\Carbon;
  */
 class ReportController extends Controller
 {
+    use ScopesReportCompanies;
     use SendsExports;
 
     private const MODULE = 'accounting_reports';
@@ -107,25 +107,7 @@ class ReportController extends Controller
     /** @return array<string, string> company id => "C001 Name", in the order requested */
     private function companyScope(Request $request, User $user): array
     {
-        $requested = $this->idList($request, 'company_ids');
-        $ids = $requested === [] ? [$user->company_id] : $requested;
-        $accessible = CompanyController::accessibleCompanyIds($user);
-        foreach ($ids as $id) {
-            if (! in_array($id, $accessible, true)) {
-                throw new ApiException(403, 'You do not have access to one of the selected companies.');
-            }
-            if ($user->role !== User::ROLE_OWNER && ! Authority::isModuleEnabled($id, self::MODULE)) {
-                throw new ApiException(403, 'Accounting Reports is not enabled for one of the selected companies.');
-            }
-        }
-        $companies = Company::whereIn('id', $ids)->get()->keyBy('id');
-        $scope = [];
-        foreach ($ids as $id) {
-            $c = $companies->get($id);
-            $scope[$id] = $c ? trim("{$c->code} {$c->name}") : $id;
-        }
-
-        return $scope;
+        return $this->reportCompanyScope($request, $user, self::MODULE, 'Accounting Reports');
     }
 
     /** @return array<int, string> */

@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\ScopesReportCompanies;
 use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\Contract;
 use App\Models\GroupModuleAuthority;
 use App\Models\JobOrder;
+use App\Models\Product;
 use App\Models\ServiceRecord;
 use App\Models\User;
 use App\Services\Audit;
@@ -28,6 +30,10 @@ use Illuminate\Support\Collection;
  * given the reports without being given the ability to change anything
  * they report on.
  *
+ * Every report can cover one or several of the viewer's own companies
+ * (`company_ids`, 2026-09-25); rows then carry company_id / company_name
+ * and the exports gain an Internal Company column.
+ *
  * EVERY EXPORT IS AUDITED with the report name, format and row count,
  * matching Python's `_audit_export`. Reading a whole module's data in
  * one file is worth recording even though reading a single record is
@@ -35,6 +41,7 @@ use Illuminate\Support\Collection;
  */
 class OperationsReportController extends Controller
 {
+    use ScopesReportCompanies;
     use SendsExports;
 
     private const MODULE = 'operations_reports';
@@ -77,32 +84,35 @@ class OperationsReportController extends Controller
     public function contracts(Request $request)
     {
         $user = $this->viewer($request);
+        $scope = $this->scope($request, $user);
+        $names = ReportsService::customerNames(array_keys($scope));
 
         return response()->json(
-            $this->filteredContracts($user->company_id, $request)
-                ->map(fn (Contract $c) => $this->presentContract($c))->all()
+            $this->filteredContracts(array_keys($scope), $request)
+                ->map(fn (Contract $c) => $this->presentContract($c, $scope, $names))->all()
         );
     }
 
     public function contractsCsv(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->contractRows($user->company_id, $request);
+        $scope = $this->scope($request, $user);
+        $rows = $this->contractRows($scope, $request);
         $this->auditExport($user, 'Operations Report: Contracts', 'csv', count($rows));
 
-        return $this->csvResponse(self::CONTRACT_FIELDS, $rows, 'contracts-report.csv');
+        return $this->csvResponse($this->withScopeColumn(self::CONTRACT_FIELDS, $scope), $rows, 'contracts-report.csv');
     }
 
     public function contractsExcel(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->contractRows($user->company_id, $request);
+        $scope = $this->scope($request, $user);
+        $rows = $this->contractRows($scope, $request);
         $this->auditExport($user, 'Operations Report: Contracts', 'excel', count($rows));
 
-        return $this->xlsxResponse(self::CONTRACT_FIELDS, $rows, 'Contracts', 'contracts-report.xlsx');
+        return $this->xlsxResponse($this->withScopeColumn(self::CONTRACT_FIELDS, $scope), $rows, 'Contracts', 'contracts-report.xlsx');
     }
 
-    /** @return Collection<int, Contract> */
     /**
      * One or several Company / Individual ids: `customer_ids` (comma-
      * separated, 2026-09-24) or the original single `customer_id`.
@@ -117,10 +127,14 @@ class OperationsReportController extends Controller
         return $ids === [] ? null : $ids;
     }
 
-    private function filteredContracts(string $companyId, Request $request)
+    /**
+     * @param  array<int, string>  $companyIds
+     * @return Collection<int, Contract>
+     */
+    private function filteredContracts(array $companyIds, Request $request)
     {
         return ReportsService::contracts(
-            $companyId,
+            $companyIds,
             $request->query('status'),
             $request->query('contract_kind'),
             $this->customerIds($request),
@@ -137,12 +151,14 @@ class OperationsReportController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function presentContract(Contract $c): array
+    private function presentContract(Contract $c, array $scope, $names): array
     {
         return [
             'id' => $c->id,
+            ...$this->companyFields($c->company_id, $scope),
             'contract_number' => $c->contract_number,
             'customer_id' => $c->customer_id,
+            'customer_name' => $names[$c->customer_id] ?? '',
             'status' => $c->status,
             'contract_kind' => $c->contract_kind,
             'contracted_hours' => $c->contracted_minutes / 60,
@@ -158,11 +174,12 @@ class OperationsReportController extends Controller
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function contractRows(string $companyId, Request $request): array
+    private function contractRows(array $scope, Request $request): array
     {
-        $names = ReportsService::customerNames($companyId);
+        $names = ReportsService::customerNames(array_keys($scope));
 
-        return $this->filteredContracts($companyId, $request)->map(fn (Contract $c) => [
+        return $this->filteredContracts(array_keys($scope), $request)->map(fn (Contract $c) => [
+            'company_name' => $scope[$c->company_id] ?? '',
             'contract_number' => $c->contract_number,
             'customer_name' => $names[$c->customer_id] ?? '',
             'status' => $c->status,
@@ -182,36 +199,42 @@ class OperationsReportController extends Controller
     public function jobOrders(Request $request)
     {
         $user = $this->viewer($request);
+        $scope = $this->scope($request, $user);
+        $orders = $this->filteredJobOrders(array_keys($scope), $request);
+        $customers = ReportsService::customerNames(array_keys($scope));
+        $users = ReportsService::userNames($orders->pluck('assigned_to_user_id'));
 
-        return response()->json(
-            $this->filteredJobOrders($user->company_id, $request)
-                ->map(fn (JobOrder $o) => $this->presentJobOrder($o))->all()
-        );
+        return response()->json($orders->map(fn (JobOrder $o) => $this->presentJobOrder($o, $scope, $customers, $users))->all());
     }
 
     public function jobOrdersCsv(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->jobOrderRows($user->company_id, $request);
+        $scope = $this->scope($request, $user);
+        $rows = $this->jobOrderRows($scope, $request);
         $this->auditExport($user, 'Operations Report: Job Orders', 'csv', count($rows));
 
-        return $this->csvResponse(self::JOB_ORDER_FIELDS, $rows, 'job-orders-report.csv');
+        return $this->csvResponse($this->withScopeColumn(self::JOB_ORDER_FIELDS, $scope), $rows, 'job-orders-report.csv');
     }
 
     public function jobOrdersExcel(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->jobOrderRows($user->company_id, $request);
+        $scope = $this->scope($request, $user);
+        $rows = $this->jobOrderRows($scope, $request);
         $this->auditExport($user, 'Operations Report: Job Orders', 'excel', count($rows));
 
-        return $this->xlsxResponse(self::JOB_ORDER_FIELDS, $rows, 'Job Orders', 'job-orders-report.xlsx');
+        return $this->xlsxResponse($this->withScopeColumn(self::JOB_ORDER_FIELDS, $scope), $rows, 'Job Orders', 'job-orders-report.xlsx');
     }
 
-    /** @return Collection<int, JobOrder> */
-    private function filteredJobOrders(string $companyId, Request $request)
+    /**
+     * @param  array<int, string>  $companyIds
+     * @return Collection<int, JobOrder>
+     */
+    private function filteredJobOrders(array $companyIds, Request $request)
     {
         return ReportsService::jobOrders(
-            $companyId,
+            $companyIds,
             $request->query('status'),
             $this->customerIds($request),
             $request->query('assigned_to_user_id'),
@@ -229,12 +252,15 @@ class OperationsReportController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function presentJobOrder(JobOrder $o): array
+    private function presentJobOrder(JobOrder $o, array $scope, $customers, $users): array
     {
         return [
             'id' => $o->id,
+            ...$this->companyFields($o->company_id, $scope),
             'job_order_number' => $o->job_order_number,
             'customer_id' => $o->customer_id,
+            'customer_name' => $customers[$o->customer_id] ?? '',
+            'assigned_to_name' => $o->assigned_to_user_id === null ? null : ($users[$o->assigned_to_user_id] ?? null),
             'contract_id' => $o->contract_id,
             'subject' => $o->subject,
             'job_order_type' => $o->job_order_type,
@@ -253,14 +279,15 @@ class OperationsReportController extends Controller
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function jobOrderRows(string $companyId, Request $request): array
+    private function jobOrderRows(array $scope, Request $request): array
     {
-        $orders = $this->filteredJobOrders($companyId, $request);
-        $customers = ReportsService::customerNames($companyId);
+        $orders = $this->filteredJobOrders(array_keys($scope), $request);
+        $customers = ReportsService::customerNames(array_keys($scope));
         $users = ReportsService::userNames($orders->pluck('assigned_to_user_id'));
         $today = Carbon::today();
 
         return $orders->map(fn (JobOrder $o) => [
+            'company_name' => $scope[$o->company_id] ?? '',
             'job_order_number' => $o->job_order_number,
             'customer_name' => $customers[$o->customer_id] ?? '',
             'subject' => $o->subject,
@@ -286,36 +313,53 @@ class OperationsReportController extends Controller
     public function serviceRecords(Request $request)
     {
         $user = $this->viewer($request);
+        $scope = $this->scope($request, $user);
+        $records = $this->filteredServiceRecords(array_keys($scope), $request);
+        $users = ReportsService::userNames($records->pluck('employee_user_id'));
+        $customers = ReportsService::customerNames(array_keys($scope));
+        $jobOrderCustomers = JobOrder::whereIn('company_id', array_keys($scope))->pluck('customer_id', 'id');
 
-        return response()->json(
-            $this->filteredServiceRecords($user->company_id, $request)
-                ->map(fn (ServiceRecord $r) => $this->presentServiceRecord($r))->all()
-        );
+        return response()->json($records->map(function (ServiceRecord $r) use ($scope, $users, $customers, $jobOrderCustomers) {
+            $customerId = $jobOrderCustomers[$r->job_order_id] ?? null;
+
+            return [
+                ...$this->presentServiceRecord($r),
+                ...$this->companyFields($r->company_id, $scope),
+                'customer_id' => $customerId,
+                'customer_name' => $customerId === null ? '' : ($customers[$customerId] ?? ''),
+                'employee_name' => $users[$r->employee_user_id] ?? '',
+            ];
+        })->all());
     }
 
     public function serviceRecordsCsv(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->serviceRecordRows($user->company_id, $request);
+        $scope = $this->scope($request, $user);
+        $rows = $this->serviceRecordRows($scope, $request);
         $this->auditExport($user, 'Operations Report: Service Records', 'csv', count($rows));
 
-        return $this->csvResponse(self::SERVICE_RECORD_FIELDS, $rows, 'service-records-report.csv');
+        return $this->csvResponse($this->withScopeColumn(self::SERVICE_RECORD_FIELDS, $scope), $rows, 'service-records-report.csv');
     }
 
     public function serviceRecordsExcel(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->serviceRecordRows($user->company_id, $request);
+        $scope = $this->scope($request, $user);
+        $rows = $this->serviceRecordRows($scope, $request);
         $this->auditExport($user, 'Operations Report: Service Records', 'excel', count($rows));
 
-        return $this->xlsxResponse(self::SERVICE_RECORD_FIELDS, $rows, 'Service Records', 'service-records-report.xlsx');
+        return $this->xlsxResponse($this->withScopeColumn(self::SERVICE_RECORD_FIELDS, $scope), $rows, 'Service Records', 'service-records-report.xlsx');
     }
 
-    /** @return Collection<int, ServiceRecord> */
-    private function filteredServiceRecords(string $companyId, Request $request)
+    /**
+     * @param  array<int, string>  $companyIds
+     * @return Collection<int, ServiceRecord>
+     */
+    private function filteredServiceRecords(array $companyIds, Request $request)
     {
         return ReportsService::serviceRecords(
-            $companyId,
+            $companyIds,
             $request->query('status'),
             $request->query('outcome'),
             $this->customerIds($request),
@@ -354,15 +398,16 @@ class OperationsReportController extends Controller
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function serviceRecordRows(string $companyId, Request $request): array
+    private function serviceRecordRows(array $scope, Request $request): array
     {
-        $records = $this->filteredServiceRecords($companyId, $request);
+        $records = $this->filteredServiceRecords(array_keys($scope), $request);
         $users = ReportsService::userNames($records->pluck('employee_user_id'));
-        $customers = ReportsService::customerNames($companyId);
+        $customers = ReportsService::customerNames(array_keys($scope));
         // A Service Record reaches its customer through its Job Order.
-        $jobOrderCustomers = JobOrder::where('company_id', $companyId)->pluck('customer_id', 'id');
+        $jobOrderCustomers = JobOrder::whereIn('company_id', array_keys($scope))->pluck('customer_id', 'id');
 
         return $records->map(fn (ServiceRecord $r) => [
+            'company_name' => $scope[$r->company_id] ?? '',
             'service_record_number' => $r->service_record_number,
             'work_date' => optional($r->work_date)->toDateString(),
             'customer_name' => $customers[$jobOrderCustomers[$r->job_order_id] ?? ''] ?? '',
@@ -380,36 +425,39 @@ class OperationsReportController extends Controller
     {
         $user = $this->viewer($request);
 
-        return response()->json($this->usageRows($user->company_id, $request));
+        return response()->json($this->usageRows($this->scope($request, $user), $request));
     }
 
     public function customerProductUsageCsv(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->usageExportRows($user->company_id, $request);
+        $scope = $this->scope($request, $user);
+        $rows = $this->usageExportRows($scope, $request);
         $this->auditExport($user, self::USAGE_REPORT_NAME, 'csv', count($rows));
 
-        return $this->csvResponse(self::USAGE_FIELDS, $rows, 'customer-product-usage.csv');
+        return $this->csvResponse($this->withScopeColumn(self::USAGE_FIELDS, $scope), $rows, 'customer-product-usage.csv');
     }
 
     public function customerProductUsageExcel(Request $request)
     {
         $user = $this->viewer($request);
-        $rows = $this->usageExportRows($user->company_id, $request);
+        $scope = $this->scope($request, $user);
+        $rows = $this->usageExportRows($scope, $request);
         $this->auditExport($user, self::USAGE_REPORT_NAME, 'excel', count($rows));
 
-        return $this->xlsxResponse(self::USAGE_FIELDS, $rows, 'Company Individual Product Usage', 'customer-product-usage.xlsx');
+        return $this->xlsxResponse($this->withScopeColumn(self::USAGE_FIELDS, $scope), $rows, 'Company Individual Product Usage', 'customer-product-usage.xlsx');
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function usageRows(string $companyId, Request $request): array
+    private function usageRows(array $scope, Request $request): array
     {
         return array_map(fn (array $r) => [
             ...$r,
+            'company_name' => $scope[$r['company_id']] ?? '',
             'start_date' => $r['start_date'] instanceof Carbon ? $r['start_date']->toDateString() : $r['start_date'],
             'end_date' => $r['end_date'] instanceof Carbon ? $r['end_date']->toDateString() : $r['end_date'],
         ], ReportsService::customerProductUsage(
-            $companyId,
+            array_keys($scope),
             $this->customerIds($request),
             $request->query('product_id'),
             $request->query('industry_code'),
@@ -417,9 +465,10 @@ class OperationsReportController extends Controller
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function usageExportRows(string $companyId, Request $request): array
+    private function usageExportRows(array $scope, Request $request): array
     {
         return array_map(fn (array $r) => [
+            'company_name' => $r['company_name'],
             'customer_name' => $r['customer_name'],
             'industry_name' => $r['industry_name'],
             'product_name' => $r['product_name'],
@@ -428,10 +477,44 @@ class OperationsReportController extends Controller
             'contract_status' => $r['contract_status'],
             'start_date' => $r['start_date'],
             'end_date' => $r['end_date'],
-        ], $this->usageRows($companyId, $request));
+        ], $this->usageRows($scope, $request));
+    }
+
+    // ── Filter choices ──────────────────────────────────────────────
+
+    /**
+     * Company / Individual, staff and product choices across the ticked
+     * internal companies (labelled with the company code when there are
+     * several).
+     */
+    public function filterOptions(Request $request)
+    {
+        $user = $this->viewer($request);
+        $scope = $this->scope($request, $user);
+        $ids = array_keys($scope);
+
+        return response()->json([
+            'company_individuals' => $this->scopedCompanyIndividuals($scope),
+            'staff' => User::whereIn('company_id', $ids)->where('is_active', true)->orderBy('full_name')->get(['id', 'full_name', 'company_id'])
+                ->map(fn ($u) => ['id' => $u->id, 'name' => $this->scopedLabel($scope, $u->full_name, $u->company_id)])->values(),
+            'products' => Product::whereIn('company_id', $ids)->orderBy('name')->get(['id', 'name', 'company_id'])
+                ->map(fn ($p) => ['id' => $p->id, 'name' => $this->scopedLabel($scope, $p->name, $p->company_id)])->values(),
+        ]);
     }
 
     // ── Shared ──────────────────────────────────────────────────────
+
+    /** @return array<string, string> */
+    private function scope(Request $request, User $user): array
+    {
+        return $this->reportCompanyScope($request, $user, self::MODULE, 'Operations Reports');
+    }
+
+    /** @return array{company_id: string, company_name: string} */
+    private function companyFields(string $companyId, array $scope): array
+    {
+        return ['company_id' => $companyId, 'company_name' => $scope[$companyId] ?? ''];
+    }
 
     private function viewer(Request $request): User
     {

@@ -148,4 +148,27 @@ class ContractReportTest extends TestCase
 
         $response->assertOk()->assertJsonCount(0);
     }
+
+    public function test_expiry_listing_can_cover_several_of_the_users_companies(): void
+    {
+        $companyA = Company::factory()->create(['code' => 'C001', 'name' => 'Alpha']);
+        $companyB = Company::factory()->create(['code' => 'C002', 'name' => 'Beta']);
+        $token = $this->ownerToken($companyA);
+        foreach ([$companyA, $companyB] as $company) {
+            Contract::factory()->for($company)->create([
+                'customer_id' => CompanyIndividual::factory()->for($company)->create()->id,
+                'end_date' => now()->addDays(10)->toDateString(),
+            ]);
+        }
+        $range = 'expiry_from='.now()->toDateString().'&expiry_to='.now()->addDays(30)->toDateString();
+
+        $this->getJson("/api/reports/operations/contracts/expiry-listing?{$range}", $this->headers($token))->assertOk()->assertJsonCount(1);
+        $both = $this->getJson("/api/reports/operations/contracts/expiry-listing?{$range}&company_ids={$companyA->id},{$companyB->id}", $this->headers($token))
+            ->assertOk()->assertJsonCount(2);
+        $this->assertEqualsCanonicalizing(['C001 Alpha', 'C002 Beta'], array_column($both->json(), 'company_name'));
+
+        $csv = $this->get("/api/reports/operations/contracts/expiry-listing/export.csv?{$range}&company_ids={$companyA->id},{$companyB->id}", $this->headers($token))
+            ->assertOk()->getContent();
+        $this->assertStringContainsString('Internal Company', strtok($csv, "\n"));
+    }
 }

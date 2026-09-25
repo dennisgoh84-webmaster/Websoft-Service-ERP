@@ -29,7 +29,7 @@ class ReportsService
 {
     /** @return Collection<int, Contract> */
     public static function contracts(
-        string $companyId,
+        string|array $companyId,
         ?string $status = null,
         ?string $contractKind = null,
         string|array|null $customerId = null,
@@ -37,7 +37,7 @@ class ReportsService
         ?Carbon $startDate = null,
         ?Carbon $endDate = null,
     ): Collection {
-        $query = Contract::where('company_id', $companyId);
+        $query = Contract::whereIn('company_id', (array) $companyId);
         if ($status !== null) {
             $query->where('status', $status);
         }
@@ -76,7 +76,7 @@ class ReportsService
 
     /** @return Collection<int, JobOrder> */
     public static function jobOrders(
-        string $companyId,
+        string|array $companyId,
         ?string $status = null,
         string|array|null $customerId = null,
         ?string $assignedToUserId = null,
@@ -84,7 +84,7 @@ class ReportsService
         ?Carbon $startDate = null,
         ?Carbon $endDate = null,
     ): Collection {
-        $query = JobOrder::where('company_id', $companyId);
+        $query = JobOrder::whereIn('company_id', (array) $companyId);
         if ($status !== null) {
             $query->where('status', $status);
         }
@@ -115,7 +115,7 @@ class ReportsService
 
     /** @return Collection<int, ServiceRecord> */
     public static function serviceRecords(
-        string $companyId,
+        string|array $companyId,
         ?string $status = null,
         ?string $outcome = null,
         string|array|null $customerId = null,
@@ -125,7 +125,7 @@ class ReportsService
     ): Collection {
         $query = ServiceRecord::query()
             ->join('job_orders', 'job_orders.id', '=', 'service_records.job_order_id')
-            ->where('service_records.company_id', $companyId)
+            ->whereIn('service_records.company_id', (array) $companyId)
             ->select('service_records.*');
 
         if ($status !== null) {
@@ -165,7 +165,7 @@ class ReportsService
      * @return array<int, array<string, mixed>>
      */
     public static function customerProductUsage(
-        string $companyId,
+        string|array $companyId,
         string|array|null $customerId = null,
         ?string $productId = null,
         ?string $industryCode = null,
@@ -174,8 +174,9 @@ class ReportsService
             ->join('contract_products', 'contract_products.contract_id', '=', 'contracts.id')
             ->join('company_individuals', 'contracts.customer_id', '=', 'company_individuals.id')
             ->join('products', 'contract_products.product_id', '=', 'products.id')
-            ->where('contracts.company_id', $companyId)
+            ->whereIn('contracts.company_id', (array) $companyId)
             ->select([
+                'contracts.company_id',
                 'contracts.id as contract_id',
                 'contracts.contract_number',
                 'contracts.contract_kind',
@@ -205,6 +206,7 @@ class ReportsService
             ->pluck('name', 'code');
 
         return $rows->map(fn ($r) => [
+            'company_id' => $r->company_id,
             'customer_id' => $r->customer_id,
             'customer_name' => $r->customer_name,
             'industry_code' => $r->industry_code,
@@ -221,9 +223,9 @@ class ReportsService
     }
 
     /** @return Collection<string, string> */
-    public static function customerNames(string $companyId)
+    public static function customerNames(string|array $companyId)
     {
-        return CompanyIndividual::where('company_id', $companyId)->pluck('name', 'id');
+        return CompanyIndividual::whereIn('company_id', (array) $companyId)->pluck('name', 'id');
     }
 
     // ---- Accounting Reports --------------------------------------
@@ -471,8 +473,8 @@ class ReportsService
     }
 
     /** @return Collection<string, string> */
-    public static function productNames(string $companyId)
+    public static function productNames(string|array $companyId)
     {
-        return Product::where('company_id', $companyId)->pluck('name', 'id');
+        return Product::whereIn('company_id', (array) $companyId)->pluck('name', 'id');
     }
 }

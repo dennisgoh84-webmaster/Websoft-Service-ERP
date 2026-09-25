@@ -301,4 +301,43 @@ class StockReportTest extends TestCase
 
         $this->getJson('/api/stock/reports/valuation', $this->headers($token))->assertStatus(403);
     }
+
+    public function test_stock_reports_can_cover_several_of_the_users_companies(): void
+    {
+        $companyA = Company::factory()->create(['code' => 'C001', 'name' => 'Alpha']);
+        $companyB = Company::factory()->create(['code' => 'C002', 'name' => 'Beta']);
+        $token = $this->ownerToken($companyA);
+        foreach ([[$companyA, 'A-1', '10.00'], [$companyB, 'B-1', '20.00']] as [$company, $code, $cost]) {
+            $item = StockItem::factory()->for($company)->create(['code' => $code, 'reorder_level' => 50]);
+            $this->receive($company, $item, Warehouse::factory()->for($company)->create(['code' => "WH-{$code}"]), 5, $cost);
+        }
+        $both = "company_ids={$companyA->id},{$companyB->id}";
+
+        // Nothing sent = the signed-in company only.
+        $this->getJson('/api/stock/reports/valuation', $this->headers($token))->assertOk()->assertJsonCount(1, 'items');
+
+        $valuation = $this->getJson("/api/stock/reports/valuation?{$both}", $this->headers($token))->assertOk()->assertJsonCount(2, 'items');
+        $this->assertEquals(150, $valuation->json('total_value'));
+        $this->assertSame(['C001 Alpha', 'C002 Beta'], array_column($valuation->json('items'), 'company_name'));
+
+        $reorder = $this->getJson("/api/stock/reports/reorder?{$both}", $this->headers($token))->assertOk()->assertJsonCount(2);
+        $this->assertSame(['A-1', 'B-1'], array_column($reorder->json(), 'item_code'));
+
+        $movements = $this->getJson("/api/stock/movements?{$both}", $this->headers($token))->assertOk()->assertJsonCount(2);
+        $this->assertEqualsCanonicalizing(['A-1', 'B-1'], array_column($movements->json(), 'item_code'));
+
+        $options = $this->getJson("/api/stock/reports/filter-options?{$both}", $this->headers($token))->assertOk();
+        $this->assertCount(2, $options->json('items'));
+        $this->assertStringEndsWith('(C002)', $options->json('warehouses.1.name'));
+    }
+
+    public function test_stock_reports_refuse_a_company_the_user_cannot_switch_to(): void
+    {
+        $company = Company::factory()->create();
+        $other = Company::factory()->create();
+        $token = $this->staffToken($company, ['stock_operation_reports' => GroupModuleAuthority::VIEW]);
+
+        $this->getJson("/api/stock/reports/valuation?company_ids={$company->id}", $this->headers($token))->assertOk();
+        $this->getJson("/api/stock/reports/valuation?company_ids={$other->id}", $this->headers($token))->assertStatus(403);
+    }
 }

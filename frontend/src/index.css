@@ -1157,12 +1157,21 @@ button.report-back:hover {
 .report-filter-grid .form-row > input:not([type='checkbox']),
 .report-filter-grid .form-row > select,
 .report-filter-grid button.multi-pick-toggle,
-.report-filter-grid label.check-field,
 .report-filter-grid .input-with-button > *,
 .report-filter-actions button,
 .report-filter-actions select {
   height: 36px;
   box-sizing: border-box;
+}
+.report-companies-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+button.report-reset {
+  padding: 4px 12px;
+  font-size: 13px;
 }
 .report-filter-grid .span-all {
   grid-column: 1 / -1;
@@ -1180,27 +1189,12 @@ button.report-back:hover {
   flex: 1;
   min-width: 140px;
 }
-.report-filter-grid label.check-field {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 14px;
-  cursor: pointer;
-}
-.report-filter-grid label.check-field input {
-  margin: 0;
-}
+/* Export sits straight after the last filter (Dennis, 2026-09-25). */
 .report-filter-actions {
   display: flex;
   gap: 8px;
   align-items: flex-end;
-  justify-content: flex-end;
-  margin-left: auto;
+  justify-content: flex-start;
 }
 .company-chips {
   display: flex;

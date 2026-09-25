@@ -474,10 +474,10 @@ class ContractService
      *
      * @return Collection<int, Contract>
      */
-    public static function dueForRenewal(string $companyId, ?string $asOf = null)
+    public static function dueForRenewal(string|array $companyId, ?string $asOf = null)
     {
         return Contract::with('products.product')
-            ->where('company_id', $companyId)
+            ->whereIn('company_id', (array) $companyId)
             ->whereIn('status', [Contract::STATUS_ACTIVE, Contract::STATUS_EXCEEDED])
             ->get()
             ->filter(fn (Contract $c) => self::needsPreExpiryCheck($c, $asOf))
@@ -499,7 +499,7 @@ class ContractService
      *
      * @return Collection<int, Contract>
      */
-    public static function expiryListing(string $companyId, ?string $from = null, ?string $to = null)
+    public static function expiryListing(string|array $companyId, ?string $from = null, ?string $to = null)
     {
         if ($from === null && $to === null) {
             $from = Carbon::today()->toDateString();
@@ -507,7 +507,7 @@ class ContractService
         }
 
         return Contract::with('products.product')
-            ->where('company_id', $companyId)
+            ->whereIn('company_id', (array) $companyId)
             ->where(function ($q) use ($from, $to) {
                 $q->where('status', Contract::STATUS_EXPIRED);
                 $q->orWhere(function ($q2) use ($from, $to) {

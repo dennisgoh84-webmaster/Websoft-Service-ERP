@@ -425,4 +425,69 @@ class OperationsReportTest extends TestCase
         $this->getJson('/api/reports/operations/customer-product-usage', $this->headers($token))
             ->assertOk()->assertJsonCount(0);
     }
+
+    // ── Internal Companies (2026-09-25) ─────────────────────────────
+
+    public function test_operations_reports_can_cover_several_of_the_users_companies(): void
+    {
+        $companyA = Company::factory()->create(['code' => 'C001', 'name' => 'Alpha']);
+        $companyB = Company::factory()->create(['code' => 'C002', 'name' => 'Beta']);
+        $token = $this->ownerToken($companyA);
+        $acme = CompanyIndividual::factory()->for($companyA)->create(['name' => 'Acme']);
+        $bolt = CompanyIndividual::factory()->for($companyB)->create(['name' => 'Bolt']);
+        Contract::factory()->for($companyA)->create(['customer_id' => $acme->id]);
+        Contract::factory()->for($companyB)->create(['customer_id' => $bolt->id]);
+        JobOrder::factory()->for($companyA)->create(['customer_id' => $acme->id]);
+        JobOrder::factory()->for($companyB)->create(['customer_id' => $bolt->id]);
+
+        // Nothing sent = the signed-in company only.
+        $this->getJson('/api/reports/operations/contracts', $this->headers($token))->assertOk()->assertJsonCount(1);
+
+        $both = "company_ids={$companyA->id},{$companyB->id}";
+        $contracts = $this->getJson("/api/reports/operations/contracts?{$both}", $this->headers($token))->assertOk()->assertJsonCount(2);
+        $this->assertEqualsCanonicalizing(['C001 Alpha', 'C002 Beta'], array_column($contracts->json(), 'company_name'));
+        $this->assertEqualsCanonicalizing(['Acme', 'Bolt'], array_column($contracts->json(), 'customer_name'));
+
+        $orders = $this->getJson("/api/reports/operations/job-orders?{$both}", $this->headers($token))->assertOk()->assertJsonCount(2);
+        $this->assertEqualsCanonicalizing(['Acme', 'Bolt'], array_column($orders->json(), 'customer_name'));
+
+        $csv = $this->get("/api/reports/operations/contracts/export.csv?{$both}", $this->headers($token))->assertOk()->getContent();
+        $this->assertStringStartsWith('company_name,contract_number,', $csv);
+        $single = $this->get('/api/reports/operations/contracts/export.csv', $this->headers($token))->assertOk()->getContent();
+        $this->assertStringStartsWith('contract_number,', $single);
+    }
+
+    public function test_operations_filter_options_span_the_selected_companies(): void
+    {
+        $companyA = Company::factory()->create(['code' => 'C001']);
+        $companyB = Company::factory()->create(['code' => 'C002']);
+        $token = $this->ownerToken($companyA);
+        CompanyIndividual::factory()->for($companyA)->create(['name' => 'Acme']);
+        CompanyIndividual::factory()->for($companyB)->create(['name' => 'Bolt']);
+
+        $both = $this->getJson("/api/reports/operations/filter-options?company_ids={$companyA->id},{$companyB->id}", $this->headers($token))->assertOk();
+        $this->assertSame(['Acme (C001)', 'Bolt (C002)'], array_column($both->json('company_individuals'), 'name'));
+        $one = $this->getJson('/api/reports/operations/filter-options', $this->headers($token))->assertOk();
+        $this->assertSame(['Acme'], array_column($one->json('company_individuals'), 'name'));
+    }
+
+    public function test_operations_reports_refuse_a_company_the_user_cannot_switch_to(): void
+    {
+        $company = Company::factory()->create();
+        $other = Company::factory()->create();
+        ModuleCatalog::firstOrCreate(['key' => 'operations_reports'], ['name' => 'Operations Reports', 'is_built' => true]);
+        CompanyModule::updateOrCreate(['company_id' => $company->id, 'module_key' => 'operations_reports'], ['enabled' => true]);
+        $group = Group::factory()->for($company)->create();
+        GroupModuleAuthority::create(['group_id' => $group->id, 'module_key' => 'operations_reports', 'access_level' => GroupModuleAuthority::VIEW]);
+        $user = User::factory()->for($company)->create([
+            'role' => User::ROLE_SUPPORT_ENGINEER,
+            'hashed_password' => PasswordPolicy::hash('demo1234'),
+        ]);
+        UserCompanyAccess::create(['user_id' => $user->id, 'company_id' => $company->id, 'group_id' => $group->id]);
+        $token = $this->post('/api/auth/login', ['username' => $user->email, 'password' => 'demo1234'])->json('access_token');
+
+        $this->getJson("/api/reports/operations/job-orders?company_ids={$company->id}", $this->headers($token))->assertOk();
+        $this->getJson("/api/reports/operations/job-orders?company_ids={$company->id},{$other->id}", $this->headers($token))->assertStatus(403);
+        $this->getJson("/api/reports/operations/contracts/expiry-listing?company_ids={$other->id}", $this->headers($token))->assertStatus(403);
+    }
 }

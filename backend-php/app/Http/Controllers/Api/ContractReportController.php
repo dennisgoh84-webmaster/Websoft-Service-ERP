@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\ScopesReportCompanies;
 use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\CompanyIndividual;
 use App\Models\Contract;
+use App\Models\User;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\ContractService;
@@ -32,9 +34,13 @@ use Illuminate\Http\Request;
  * Job Orders / Service Records)") -- the same module the existing
  * frontend's OperationsReportsPage.tsx already names in its own header
  * comment for this report family.
+ *
+ * Both take `company_ids` (one or several internal companies,
+ * 2026-09-25) like the other Operations Reports.
  */
 class ContractReportController extends Controller
 {
+    use ScopesReportCompanies;
     use SendsExports;
 
     private const MODULE = 'operations_reports';
@@ -45,10 +51,12 @@ class ContractReportController extends Controller
         'Contract Value (SGD)', 'Start Date', 'End Date', 'Quotation Reference',
     ];
 
-    private function present(Contract $contract, array $customerNames): array
+    private function present(Contract $contract, array $customerNames, array $scope): array
     {
         return [
             'id' => $contract->id,
+            'company_id' => $contract->company_id,
+            'company_name' => $scope[$contract->company_id] ?? '',
             'contract_number' => $contract->contract_number,
             'customer_id' => $contract->customer_id,
             'customer_name' => $customerNames[$contract->customer_id] ?? '(unknown)',
@@ -64,10 +72,17 @@ class ContractReportController extends Controller
         ];
     }
 
+    /** Export headers, with an Internal Company column first when the report spans several. */
+    private function exportHeaders(array $scope): array
+    {
+        return count($scope) > 1 ? ['Internal Company', ...self::EXPORT_HEADERS] : self::EXPORT_HEADERS;
+    }
+
     /** @return array<int, array<int, string|int|float|null>> */
-    private function exportRows($contracts, array $customerNames): array
+    private function exportRows($contracts, array $customerNames, array $scope): array
     {
         return $contracts->map(fn (Contract $c) => [
+            ...(count($scope) > 1 ? [$scope[$c->company_id] ?? ''] : []),
             $c->contract_number,
             $customerNames[$c->customer_id] ?? '(unknown)',
             $c->status,
@@ -82,9 +97,15 @@ class ContractReportController extends Controller
         ])->values()->all();
     }
 
-    private function customerNames(string $companyId): array
+    private function customerNames(array $scope): array
     {
-        return CompanyIndividual::where('company_id', $companyId)->pluck('name', 'id')->all();
+        return CompanyIndividual::whereIn('company_id', array_keys($scope))->pluck('name', 'id')->all();
+    }
+
+    /** @return array<string, string> */
+    private function scope(Request $request, User $user): array
+    {
+        return $this->reportCompanyScope($request, $user, self::MODULE, 'Operations Reports');
     }
 
     public function expiryListing(Request $request)
@@ -92,14 +113,15 @@ class ContractReportController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
+        $scope = $this->scope($request, $user);
         $contracts = ContractService::expiryListing(
-            $user->company_id,
+            array_keys($scope),
             $request->query('expiry_from'),
             $request->query('expiry_to'),
         );
-        $customerNames = $this->customerNames($user->company_id);
+        $customerNames = $this->customerNames($scope);
 
-        return $contracts->map(fn ($c) => $this->present($c, $customerNames))->values();
+        return $contracts->map(fn ($c) => $this->present($c, $customerNames, $scope))->values();
     }
 
     public function exportExpiryListingCsv(Request $request)
@@ -107,10 +129,11 @@ class ContractReportController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $contracts = ContractService::expiryListing($user->company_id, $request->query('expiry_from'), $request->query('expiry_to'));
+        $scope = $this->scope($request, $user);
+        $contracts = ContractService::expiryListing(array_keys($scope), $request->query('expiry_from'), $request->query('expiry_to'));
         Audit::recordReportGenerated($user->id, 'contract_expiry_listing', details: 'CSV export');
 
-        return $this->csvTableResponse(self::EXPORT_HEADERS, $this->exportRows($contracts, $this->customerNames($user->company_id)), 'contract-expiry-listing.csv');
+        return $this->csvTableResponse($this->exportHeaders($scope), $this->exportRows($contracts, $this->customerNames($scope), $scope), 'contract-expiry-listing.csv');
     }
 
     public function exportExpiryListingExcel(Request $request)
@@ -118,10 +141,11 @@ class ContractReportController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $contracts = ContractService::expiryListing($user->company_id, $request->query('expiry_from'), $request->query('expiry_to'));
+        $scope = $this->scope($request, $user);
+        $contracts = ContractService::expiryListing(array_keys($scope), $request->query('expiry_from'), $request->query('expiry_to'));
         Audit::recordReportGenerated($user->id, 'contract_expiry_listing', details: 'Excel export');
 
-        return $this->xlsxTableResponse(self::EXPORT_HEADERS, $this->exportRows($contracts, $this->customerNames($user->company_id)), 'Contract Expiry', 'contract-expiry-listing.xlsx');
+        return $this->xlsxTableResponse($this->exportHeaders($scope), $this->exportRows($contracts, $this->customerNames($scope), $scope), 'Contract Expiry', 'contract-expiry-listing.xlsx');
     }
 
     public function renewalDueListing(Request $request)
@@ -129,10 +153,11 @@ class ContractReportController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $contracts = ContractService::dueForRenewal($user->company_id, $request->query('as_of'));
-        $customerNames = $this->customerNames($user->company_id);
+        $scope = $this->scope($request, $user);
+        $contracts = ContractService::dueForRenewal(array_keys($scope), $request->query('as_of'));
+        $customerNames = $this->customerNames($scope);
 
-        return $contracts->map(fn ($c) => $this->present($c, $customerNames))->values();
+        return $contracts->map(fn ($c) => $this->present($c, $customerNames, $scope))->values();
     }
 
     public function exportRenewalDueListingCsv(Request $request)
@@ -140,10 +165,11 @@ class ContractReportController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $contracts = ContractService::dueForRenewal($user->company_id, $request->query('as_of'));
+        $scope = $this->scope($request, $user);
+        $contracts = ContractService::dueForRenewal(array_keys($scope), $request->query('as_of'));
         Audit::recordReportGenerated($user->id, 'contract_renewal_due_listing', details: 'CSV export');
 
-        return $this->csvTableResponse(self::EXPORT_HEADERS, $this->exportRows($contracts, $this->customerNames($user->company_id)), 'contract-renewal-due-listing.csv');
+        return $this->csvTableResponse($this->exportHeaders($scope), $this->exportRows($contracts, $this->customerNames($scope), $scope), 'contract-renewal-due-listing.csv');
     }
 
     public function exportRenewalDueListingExcel(Request $request)
@@ -151,9 +177,10 @@ class ContractReportController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        $contracts = ContractService::dueForRenewal($user->company_id, $request->query('as_of'));
+        $scope = $this->scope($request, $user);
+        $contracts = ContractService::dueForRenewal(array_keys($scope), $request->query('as_of'));
         Audit::recordReportGenerated($user->id, 'contract_renewal_due_listing', details: 'Excel export');
 
-        return $this->xlsxTableResponse(self::EXPORT_HEADERS, $this->exportRows($contracts, $this->customerNames($user->company_id)), 'Contract Renewal Due', 'contract-renewal-due-listing.xlsx');
+        return $this->xlsxTableResponse($this->exportHeaders($scope), $this->exportRows($contracts, $this->customerNames($scope), $scope), 'Contract Renewal Due', 'contract-renewal-due-listing.xlsx');
     }
 }

@@ -699,6 +699,8 @@ export interface JobOrder {
 
 // ---- Operations/Accounting Reports filters ----
 export interface ContractReportFilters {
+  /** Internal Companies, comma-separated (2026-09-25); none = the signed-in company. */
+  company_ids?: string
   status?: ContractStatus
   contract_kind?: ContractKind
   customer_id?: string
@@ -711,6 +713,8 @@ export interface ContractReportFilters {
 }
 
 export interface JobOrderReportFilters {
+  /** Internal Companies, comma-separated (2026-09-25); none = the signed-in company. */
+  company_ids?: string
   status?: JobOrderStatus
   customer_id?: string
   /** One or several, comma-separated (2026-09-24). */
@@ -723,6 +727,8 @@ export interface JobOrderReportFilters {
 }
 
 export interface ServiceRecordReportFilters {
+  /** Internal Companies, comma-separated (2026-09-25); none = the signed-in company. */
+  company_ids?: string
   status?: ServiceRecordStatus
   outcome?: ServiceRecordOutcome
   customer_id?: string
@@ -738,6 +744,8 @@ export interface ServiceRecordReportFilters {
  * visibility only, one row per (customer, product) currently covered
  * under a contract's Product Coverage. */
 export interface CompanyIndividualProductUsageFilters {
+  /** Internal Companies, comma-separated (2026-09-25); none = the signed-in company. */
+  company_ids?: string
   customer_id?: string
   /** One or several, comma-separated (2026-09-24). */
   customer_ids?: string
@@ -747,6 +755,8 @@ export interface CompanyIndividualProductUsageFilters {
 }
 
 export interface CompanyIndividualProductUsageRow {
+  company_id?: string
+  company_name?: string
   customer_id: string
   customer_name: string
   industry_code: string | null
@@ -1983,6 +1993,8 @@ export interface StockLevelRow {
 }
 export interface StockMovementRow {
   id: string; stock_item_id: string; warehouse_id: string
+  company_id?: string; company_name?: string
+  item_code?: string | null; item_name?: string | null; warehouse_code?: string | null
   movement_type: string; quantity: number
   unit_cost: number; total_cost: number
   reference_type: string | null; reference_id: string | null
@@ -2050,10 +2062,11 @@ export interface AdjustmentCreatePayload {
   lines: { stock_item_id: string; quantity_change: number; notes?: string }[]
 }
 export interface StockValuationReport {
-  items: { item_code: string; item_name: string; warehouse_code: string; warehouse_name: string; quantity: number; avg_cost: number; total_value: number }[]
+  items: { company_id?: string; company_name?: string; item_code: string; item_name: string; warehouse_code: string; warehouse_name: string; quantity: number; avg_cost: number; total_value: number }[]
   total_value: number
 }
 export interface ReorderItem {
+  company_id?: string; company_name?: string
   item_code: string; item_name: string; unit_of_measure: string
   reorder_level: number; current_stock: number; shortfall: number
 }
@@ -2074,6 +2087,25 @@ export type AccountingReportFilters = {
 export interface ReportFilterOption {
   id: string
   name: string
+}
+
+/** Which internal company a report row belongs to (2026-09-25). */
+export interface ReportCompanyTag {
+  company_id?: string
+  company_name?: string
+}
+export type ContractReportRow = Contract & ReportCompanyTag & { customer_name?: string }
+export type JobOrderReportRow = JobOrder & ReportCompanyTag & { customer_name?: string; assigned_to_name?: string | null }
+export type ServiceRecordReportRow = ServiceRecord & ReportCompanyTag & { customer_id?: string | null; customer_name?: string; employee_name?: string }
+
+export interface OperationsFilterOptions {
+  company_individuals: ReportFilterOption[]
+  staff: ReportFilterOption[]
+  products: ReportFilterOption[]
+}
+export interface StockFilterOptions {
+  warehouses: ReportFilterOption[]
+  items: ReportFilterOption[]
 }
 
 export interface ReportFilterOptions {
@@ -2556,18 +2588,18 @@ export const api = {
     request<JobOrderImplementationTask>(`/job-orders/${jobOrderId}/implementation-tasks/${taskId}/reopen`, { method: 'POST' }),
 
   // ---- Contract Operation Report (Expiry / Renewal Due Listings) ----
-  reportContractExpiryListing: (filters: { expiry_from?: string; expiry_to?: string } = {}) =>
-    request<Contract[]>(`/reports/operations/contracts/expiry-listing${qs(filters)}`),
-  exportContractExpiryListingCsv: (filters: { expiry_from?: string; expiry_to?: string } = {}) =>
+  reportContractExpiryListing: (filters: { expiry_from?: string; expiry_to?: string; company_ids?: string } = {}) =>
+    request<ContractReportRow[]>(`/reports/operations/contracts/expiry-listing${qs(filters)}`),
+  exportContractExpiryListingCsv: (filters: { expiry_from?: string; expiry_to?: string; company_ids?: string } = {}) =>
     requestBlob(`/reports/operations/contracts/expiry-listing/export.csv${qs(filters)}`),
-  exportContractExpiryListingExcel: (filters: { expiry_from?: string; expiry_to?: string } = {}) =>
+  exportContractExpiryListingExcel: (filters: { expiry_from?: string; expiry_to?: string; company_ids?: string } = {}) =>
     requestBlob(`/reports/operations/contracts/expiry-listing/export.xlsx${qs(filters)}`),
 
-  reportContractRenewalDueListing: (filters: { as_of?: string } = {}) =>
-    request<Contract[]>(`/reports/operations/contracts/renewal-due-listing${qs(filters)}`),
-  exportContractRenewalDueListingCsv: (filters: { as_of?: string } = {}) =>
+  reportContractRenewalDueListing: (filters: { as_of?: string; company_ids?: string } = {}) =>
+    request<ContractReportRow[]>(`/reports/operations/contracts/renewal-due-listing${qs(filters)}`),
+  exportContractRenewalDueListingCsv: (filters: { as_of?: string; company_ids?: string } = {}) =>
     requestBlob(`/reports/operations/contracts/renewal-due-listing/export.csv${qs(filters)}`),
-  exportContractRenewalDueListingExcel: (filters: { as_of?: string } = {}) =>
+  exportContractRenewalDueListingExcel: (filters: { as_of?: string; company_ids?: string } = {}) =>
     requestBlob(`/reports/operations/contracts/renewal-due-listing/export.xlsx${qs(filters)}`),
 
   // ---- Sales Dashboard ----
@@ -3175,21 +3207,23 @@ export const api = {
 
   // ---- Operations Reports ----
   reportContracts: (filters: ContractReportFilters = {}) =>
-    request<Contract[]>(`/reports/operations/contracts${qs(filters)}`),
+    request<ContractReportRow[]>(`/reports/operations/contracts${qs(filters)}`),
   exportContractsReportCsv: (filters: ContractReportFilters = {}) =>
     requestBlob(`/reports/operations/contracts/export.csv${qs(filters)}`),
   exportContractsReportExcel: (filters: ContractReportFilters = {}) =>
     requestBlob(`/reports/operations/contracts/export.xlsx${qs(filters)}`),
 
   reportJobOrders: (filters: JobOrderReportFilters = {}) =>
-    request<JobOrder[]>(`/reports/operations/job-orders${qs(filters)}`),
+    request<JobOrderReportRow[]>(`/reports/operations/job-orders${qs(filters)}`),
   exportJobOrdersReportCsv: (filters: JobOrderReportFilters = {}) =>
     requestBlob(`/reports/operations/job-orders/export.csv${qs(filters)}`),
   exportJobOrdersReportExcel: (filters: JobOrderReportFilters = {}) =>
     requestBlob(`/reports/operations/job-orders/export.xlsx${qs(filters)}`),
 
   reportServiceRecords: (filters: ServiceRecordReportFilters = {}) =>
-    request<ServiceRecord[]>(`/reports/operations/service-records${qs(filters)}`),
+    request<ServiceRecordReportRow[]>(`/reports/operations/service-records${qs(filters)}`),
+  operationsFilterOptions: (company_ids: string) =>
+    request<OperationsFilterOptions>(`/reports/operations/filter-options${qs({ company_ids })}`),
   exportServiceRecordsReportCsv: (filters: ServiceRecordReportFilters = {}) =>
     requestBlob(`/reports/operations/service-records/export.csv${qs(filters)}`),
   exportServiceRecordsReportExcel: (filters: ServiceRecordReportFilters = {}) =>
@@ -3598,7 +3632,7 @@ export const api = {
 
   listStockLevels: (warehouseId?: string) =>
     request<StockLevelRow[]>(`/stock/levels${qs({ warehouse_id: warehouseId })}`),
-  listStockMovements: (filters?: { stock_item_id?: string; warehouse_id?: string; limit?: number }) =>
+  listStockMovements: (filters?: { stock_item_id?: string; warehouse_id?: string; limit?: number; company_ids?: string }) =>
     request<StockMovementRow[]>(`/stock/movements${qs(filters ?? {})}`),
 
   listGRNs: () => request<GRNRow[]>('/stock/grn'),
@@ -3623,9 +3657,11 @@ export const api = {
   approveAdjustment: (id: string) => request<AdjustmentRow>(`/stock/adjustments/${id}/approve`, { method: 'POST' }),
   rejectAdjustment: (id: string) => request<AdjustmentRow>(`/stock/adjustments/${id}/reject`, { method: 'POST' }),
 
-  stockValuationReport: (warehouseId?: string) =>
-    request<StockValuationReport>(`/stock/reports/valuation${qs({ warehouse_id: warehouseId })}`),
-  reorderReport: () => request<ReorderItem[]>('/stock/reports/reorder'),
+  stockValuationReport: (warehouseId?: string, company_ids?: string) =>
+    request<StockValuationReport>(`/stock/reports/valuation${qs({ warehouse_id: warehouseId, company_ids })}`),
+  reorderReport: (company_ids?: string) => request<ReorderItem[]>(`/stock/reports/reorder${qs({ company_ids })}`),
+  stockReportFilterOptions: (company_ids: string) =>
+    request<StockFilterOptions>(`/stock/reports/filter-options${qs({ company_ids })}`),
 
   // Generic request helper for dynamic API calls
   request: <T,>(method: string, path: string, params?: Record<string, string>, body?: unknown): Promise<T> => {

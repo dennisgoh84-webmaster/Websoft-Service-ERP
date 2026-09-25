@@ -12,9 +12,10 @@ import { useAuth } from '../lib/AuthContext'
 /**
  * The filter area on a report screen: an even column grid, so every line
  * runs to the same right edge and the fields line up under each other.
- * When the filters wrap, the last line is pushed right so it ends under
- * the first line's right end (Dennis, 2026-09-25); the Export control is
- * always the last cell. Items marked "span-all" take a whole line.
+ * When the filters wrap, the later lines are pushed right so they end
+ * under the first line's right end (Dennis, 2026-09-25); the Export
+ * control is always the last cell, straight after the last filter.
+ * Items marked "span-all" take a whole line.
  */
 export function FilterGrid({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -45,24 +46,16 @@ export function FilterGrid({ children }: { children: ReactNode }) {
       widths.forEach((w, idx) => {
         if (w > 1) items[idx].style.gridColumnEnd = `span ${w}`
       })
-      // Lay the cells out the way the grid will, to find the last line.
-      let lines = 1
+      // The first line fills from the left; the rest are packed so each
+      // later line ends at the right edge, i.e. any spare cells go at the
+      // start of the second line.
       let used = 0
-      let lineStart = 0
-      widths.forEach((w, idx) => {
-        if (used + w > cols) {
-          lines += 1
-          used = 0
-          lineStart = idx
-        }
-        used += w
-      })
-      if (lines > 1 && used < cols) {
-        items[lineStart].style.gridColumnStart = String(cols - used + 1)
-      } else if (lines === 1) {
-        const last = items.length - 1
-        if (items[last].classList.contains('report-filter-actions')) items[last].style.gridColumnStart = String(cols - widths[last] + 1)
-      }
+      let first = 0
+      while (first < items.length && used + widths[first] <= cols) used += widths[first++]
+      if (first === items.length) return
+      const rest = widths.slice(first).reduce((a, w) => a + w, 0)
+      const slack = (cols - (rest % cols)) % cols
+      if (slack > 0 && widths[first] <= cols - slack) items[first].style.gridColumnStart = String(slack + 1)
     }
     align()
     const ro = new ResizeObserver(align)
@@ -81,7 +74,16 @@ export function FilterGrid({ children }: { children: ReactNode }) {
  * always stays selected. The company you are signed in to is listed first
  * and is the default.
  */
-export function InternalCompaniesPicker({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
+export function InternalCompaniesPicker({
+  value,
+  onChange,
+  action,
+}: {
+  value: string[]
+  onChange: (ids: string[]) => void
+  /** Shown at the right of the heading, e.g. a Reset filters button. */
+  action?: ReactNode
+}) {
   const { user } = useAuth()
   const activeId = user?.company_id
   const [companies, setCompanies] = useState<Company[]>([])
@@ -100,7 +102,10 @@ export function InternalCompaniesPicker({ value, onChange }: { value: string[]; 
 
   return (
     <div className="form-row report-companies span-all">
-      <label>Internal Companies{companies.length > 1 ? ' (tick one or more)' : ''}</label>
+      <div className="report-companies-head">
+        <label>Internal Companies{companies.length > 1 ? ' (tick one or more)' : ''}</label>
+        {action}
+      </div>
       <div className="company-chips">
         {companies.map((c) => (
           <button

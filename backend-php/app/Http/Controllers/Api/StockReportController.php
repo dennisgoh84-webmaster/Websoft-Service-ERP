@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\ScopesReportCompanies;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\StockItem;
 use App\Models\StockLevel;
 use App\Models\StockMovement;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Services\Authority;
 use App\Support\Money;
 use Illuminate\Http\Request;
@@ -29,9 +31,15 @@ use Illuminate\Http\Request;
  * NOT converted (same gap as every other module): CSV/Excel export --
  * the Python router has none for stock either, so nothing is missing
  * relative to `backend/`.
+ *
+ * Every report takes `company_ids` -- one or several of the viewer's
+ * own companies (2026-09-25); none = the signed-in company, which is
+ * what the Stock Item Detail screen's movement list relies on.
  */
 class StockReportController extends Controller
 {
+    use ScopesReportCompanies;
+
     private const MODULE = 'stock_operation_reports';
 
     /** Same default page size as the Python route's `limit: int = 200`. */
@@ -44,8 +52,9 @@ class StockReportController extends Controller
     public function movements(Request $request)
     {
         $user = $this->viewer($request);
+        $scope = $this->scope($request, $user);
 
-        $query = StockMovement::where('company_id', $user->company_id);
+        $query = StockMovement::whereIn('company_id', array_keys($scope));
         if ($request->filled('stock_item_id')) {
             $query->where('stock_item_id', $request->query('stock_item_id'));
         }
@@ -54,9 +63,18 @@ class StockReportController extends Controller
         }
         $limit = (int) $request->query('limit', (string) self::DEFAULT_MOVEMENT_LIMIT);
 
-        return $query->orderByDesc('created_at')->limit($limit)->get()
+        $movements = $query->orderByDesc('created_at')->limit($limit)->get();
+        $items = StockItem::whereIn('id', $movements->pluck('stock_item_id')->unique())->get(['id', 'code', 'name'])->keyBy('id');
+        $warehouses = Warehouse::whereIn('id', $movements->pluck('warehouse_id')->unique())->get(['id', 'code', 'name'])->keyBy('id');
+
+        return $movements
             ->map(fn (StockMovement $m) => [
                 'id' => $m->id,
+                'company_id' => $m->company_id,
+                'company_name' => $scope[$m->company_id] ?? '',
+                'item_code' => $items->get($m->stock_item_id)?->code,
+                'item_name' => $items->get($m->stock_item_id)?->name,
+                'warehouse_code' => $warehouses->get($m->warehouse_id)?->code,
                 'stock_item_id' => $m->stock_item_id,
                 'warehouse_id' => $m->warehouse_id,
                 'movement_type' => $m->movement_type,
@@ -84,14 +102,16 @@ class StockReportController extends Controller
     public function valuation(Request $request)
     {
         $user = $this->viewer($request);
+        $scope = $this->scope($request, $user);
 
         $query = StockLevel::query()
             ->join('stock_items', 'stock_levels.stock_item_id', '=', 'stock_items.id')
             ->join('warehouses', 'stock_levels.warehouse_id', '=', 'warehouses.id')
-            ->where('stock_levels.company_id', $user->company_id)
+            ->whereIn('stock_levels.company_id', array_keys($scope))
             // Only positive holdings are valued, same as Python.
             ->where('stock_levels.quantity', '>', 0)
             ->select(
+                'stock_levels.company_id',
                 'stock_items.code as item_code',
                 'stock_items.name as item_name',
                 'warehouses.code as warehouse_code',
@@ -109,6 +129,9 @@ class StockReportController extends Controller
         }
 
         $rows = $query->orderBy('stock_items.code')->orderBy('warehouses.code')->get();
+        // Across several companies, keep each company's stock together.
+        $order = array_flip(array_keys($scope));
+        $rows = $rows->sortBy(fn ($r) => $order[$r->company_id] ?? 0)->values();
 
         $totalValue = Money::of(0);
         $items = [];
@@ -116,6 +139,8 @@ class StockReportController extends Controller
             $value = Money::of((int) $row->quantity)->multipliedByMoney(Money::of($row->avg_cost));
             $totalValue = $totalValue->plus($value);
             $items[] = [
+                'company_id' => $row->company_id,
+                'company_name' => $scope[$row->company_id] ?? '',
                 'item_code' => $row->item_code,
                 'item_name' => $row->item_name,
                 'warehouse_code' => $row->warehouse_code,
@@ -141,18 +166,24 @@ class StockReportController extends Controller
     public function reorder(Request $request)
     {
         $user = $this->viewer($request);
+        $scope = $this->scope($request, $user);
+        $order = array_flip(array_keys($scope));
 
-        $items = StockItem::where('company_id', $user->company_id)
+        $items = StockItem::whereIn('company_id', array_keys($scope))
             ->where('is_active', true)
             ->where('reorder_level', '>', 0)
             ->orderBy('code')
-            ->get();
+            ->get()
+            ->sortBy(fn (StockItem $i) => $order[$i->company_id] ?? 0)
+            ->values();
 
         $result = [];
         foreach ($items as $item) {
             $currentStock = (int) StockLevel::where('stock_item_id', $item->id)->sum('quantity');
             if ($currentStock <= $item->reorder_level) {
                 $result[] = [
+                    'company_id' => $item->company_id,
+                    'company_name' => $scope[$item->company_id] ?? '',
                     'item_code' => $item->code,
                     'item_name' => $item->name,
                     'unit_of_measure' => $item->unit_of_measure,
@@ -164,6 +195,29 @@ class StockReportController extends Controller
         }
 
         return response()->json($result);
+    }
+
+    /**
+     * Warehouse and item choices across the ticked internal companies
+     * (labelled with the company code when there are several).
+     */
+    public function filterOptions(Request $request)
+    {
+        $user = $this->viewer($request);
+        $scope = $this->scope($request, $user);
+        $ids = array_keys($scope);
+        $label = fn ($r) => ['id' => $r->id, 'name' => $this->scopedLabel($scope, "{$r->code} – {$r->name}", $r->company_id)];
+
+        return response()->json([
+            'warehouses' => Warehouse::whereIn('company_id', $ids)->orderBy('code')->get(['id', 'code', 'name', 'company_id'])->map($label)->values(),
+            'items' => StockItem::whereIn('company_id', $ids)->orderBy('code')->get(['id', 'code', 'name', 'company_id'])->map($label)->values(),
+        ]);
+    }
+
+    /** @return array<string, string> */
+    private function scope(Request $request, User $user): array
+    {
+        return $this->reportCompanyScope($request, $user, self::MODULE, 'Stock Operation Reports');
     }
 
     private function viewer(Request $request): User

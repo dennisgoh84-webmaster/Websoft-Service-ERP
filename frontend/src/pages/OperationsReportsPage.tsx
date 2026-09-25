@@ -11,21 +11,21 @@ import { ReportHeader, ReportLauncher, useSelectedReport, type ReportSection } f
 import {
   api,
   downloadBlob,
-  type Contract,
+  type Company,
   type ContractKind,
+  type ContractReportRow,
   type ContractStatus,
-  type CompanyIndividual,
   type CompanyIndividualProductUsageRow,
-  type JobOrder,
+  type JobOrderReportRow,
   type JobOrderStatus,
-  type Product,
-  type ServiceRecord,
+  type OperationsFilterOptions,
   type ServiceRecordOutcome,
+  type ServiceRecordReportRow,
   type ServiceRecordStatus,
   type SetupListItem,
-  type StaffUser,
 } from '../lib/api'
-import { FilterGrid, MultiPick, PeriodRange } from '../components/ReportFilters'
+import { useAuth } from '../lib/AuthContext'
+import { FilterGrid, InternalCompaniesPicker, MultiPick, PeriodRange } from '../components/ReportFilters'
 import { formatMoney as money, formatDate } from '../lib/format'
 
 // NEW FEATURE (not a Python->PHP conversion -- see
@@ -51,21 +51,21 @@ const SECTIONS: ReportSection<ReportType>[] = [
         summary: 'All service contracts, filtered however you need.',
         details:
           'Every service contract with its company / individual, kind, status, contracted / consumed / remaining amount, value, and start and end dates. Narrow it by status or kind, or use "Expiring within (days)" to find contracts ending soon.',
-        filters: ['Company / Individual', 'Status', 'Kind', 'Expiring within', 'Month from – to', 'Dates'],
+        filters: ['Internal Companies', 'Company / Individual', 'Status', 'Kind', 'Expiring within', 'Month from – to', 'Dates'],
       },
       {
         key: 'contract-expiry-listing',
         title: 'Contract Expiry Listing',
         summary: 'Contracts that end between two dates.',
         details: 'Every contract whose end date falls between the two dates you choose -- use it to plan renewals for a coming month or quarter.',
-        filters: ['Expiry from', 'Expiry to'],
+        filters: ['Internal Companies', 'Expiry from', 'Expiry to'],
       },
       {
         key: 'contract-renewal-due-listing',
         title: 'Contract due for Renewal Listing',
         summary: 'Contracts already inside their 30-day renewal window.',
         details: 'Contracts ending within the next 30 days -- the same window that flags a contract for renewal on its own page. Nothing to set: it always shows what needs action now.',
-        filters: [],
+        filters: ['Internal Companies'],
       },
     ],
   },
@@ -76,15 +76,15 @@ const SECTIONS: ReportSection<ReportType>[] = [
         key: 'job-orders',
         title: 'Job Orders',
         summary: 'Job orders by status, assignee and date.',
-        details: 'Every job order with its subject, priority, status, assignee and due date. Tick "Overdue only" to see just the jobs that are past due and still open.',
-        filters: ['Company / Individual', 'Status', 'Assigned to', 'Overdue only', 'Month from – to', 'Dates'],
+        details: 'Every job order with its subject, priority, status, assignee and due date. Set "Overdue" to "Overdue only" to see just the jobs that are past due and still open.',
+        filters: ['Internal Companies', 'Company / Individual', 'Status', 'Assigned to', 'Overdue', 'Month from – to', 'Dates'],
       },
       {
         key: 'service-records',
         title: 'Service Records',
         summary: 'Work done on site, by status, outcome and staff.',
         details: 'Every service record with its work date, employee, hours, status, outcome and whether it was late -- use it to review what was done for a company / individual or by a technician over a period.',
-        filters: ['Company / Individual', 'Status', 'Outcome', 'Staff', 'Month from – to', 'Dates'],
+        filters: ['Internal Companies', 'Company / Individual', 'Status', 'Outcome', 'Staff', 'Month from – to', 'Dates'],
       },
     ],
   },
@@ -96,7 +96,7 @@ const SECTIONS: ReportSection<ReportType>[] = [
         title: 'Company / Individual Product Usage',
         summary: 'Which companies / individuals use which products.',
         details: 'Each company / individual with the products they use, filterable by product and by industry -- useful for upgrade campaigns and support planning.',
-        filters: ['Company / Individual', 'Product', 'Industry'],
+        filters: ['Internal Companies', 'Company / Individual', 'Product', 'Industry'],
       },
     ],
   },
@@ -106,11 +106,13 @@ export default function OperationsReportsPage() {
   const [reportType, openReport] = useSelectedReport(SECTIONS)
   const [contractExpiryFrom, setContractExpiryFrom] = useState('')
   const [contractExpiryTo, setContractExpiryTo] = useState('')
-  const [expiryListingRows, setExpiryListingRows] = useState<Contract[]>([])
-  const [renewalDueRows, setRenewalDueRows] = useState<Contract[]>([])
-  const [customers, setCustomers] = useState<CompanyIndividual[]>([])
-  const [staff, setStaff] = useState<StaffUser[]>([])
-  const [products, setProducts] = useState<Product[]>([])
+  const [expiryListingRows, setExpiryListingRows] = useState<ContractReportRow[]>([])
+  const [renewalDueRows, setRenewalDueRows] = useState<ContractReportRow[]>([])
+  const { user } = useAuth()
+  // Internal Companies (2026-09-25): every report opens on the signed-in company.
+  const [companyIds, setCompanyIds] = useState<string[]>(user?.company_id ? [user.company_id] : [])
+  const [myCompanies, setMyCompanies] = useState<Company[]>([])
+  const [options, setOptions] = useState<OperationsFilterOptions>({ company_individuals: [], staff: [], products: [] })
   const [industries, setIndustries] = useState<SetupListItem[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -134,25 +136,37 @@ export default function OperationsReportsPage() {
   const [productId, setProductId] = useState('')
   const [industryCode, setIndustryCode] = useState('')
 
-  const [contracts, setContracts] = useState<Contract[]>([])
-  const [jobOrders, setJobOrders] = useState<JobOrder[]>([])
-  const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([])
+  const [contracts, setContracts] = useState<ContractReportRow[]>([])
+  const [jobOrders, setJobOrders] = useState<JobOrderReportRow[]>([])
+  const [serviceRecords, setServiceRecords] = useState<ServiceRecordReportRow[]>([])
   const [productUsage, setProductUsage] = useState<CompanyIndividualProductUsageRow[]>([])
 
-  // All job orders, unfiltered -- used only to resolve a service record's
-  // customer via its job order (Service Records has no customer_id of
-  // its own), independent of whichever report is currently selected.
-  const [allJobOrders, setAllJobOrders] = useState<JobOrder[]>([])
+  const companyKey = companyIds.join(',')
+  const multiCompany = companyIds.length > 1
 
   useEffect(() => {
-    api.listCompanyIndividuals().then(setCustomers).catch(() => setCustomers([]))
-    api.listStaff().then(setStaff).catch(() => setStaff([]))
-    api.listJobOrders().then(setAllJobOrders).catch(() => setAllJobOrders([]))
-    api.listCatalog().then(setProducts).catch(() => setProducts([]))
+    api.listMyCompanies().then(setMyCompanies).catch(() => setMyCompanies([]))
     api.listSetupItems({ list_type: 'industry' }).then(setIndustries).catch(() => setIndustries([]))
   }, [])
 
+  useEffect(() => {
+    if (user?.company_id) setCompanyIds([user.company_id])
+  }, [reportType, user?.company_id])
+
+  // Company / Individual, staff and product choices follow the ticked
+  // internal companies; picks that no longer apply are dropped.
+  useEffect(() => {
+    if (!companyKey) return
+    api.operationsFilterOptions(companyKey).then((o) => {
+      setOptions(o)
+      setCustomerIds((ids) => ids.filter((id) => o.company_individuals.some((c) => c.id === id)))
+      setStaffId((id) => (o.staff.some((x) => x.id === id) ? id : ''))
+      setProductId((id) => (o.products.some((x) => x.id === id) ? id : ''))
+    }).catch(() => setOptions({ company_individuals: [], staff: [], products: [] }))
+  }, [companyKey])
+
   function resetFilters() {
+    if (user?.company_id) setCompanyIds([user.company_id])
     setCustomerIds([])
     setStaffId('')
     setStartDate('')
@@ -177,7 +191,8 @@ export default function OperationsReportsPage() {
         .reportContracts({
           status: contractStatus || undefined,
           contract_kind: contractKind || undefined,
-          customer_ids: customerIds.join(',') || undefined,
+          company_ids: companyKey || undefined,
+        customer_ids: customerIds.join(',') || undefined,
           expiring_within_days: expiringWithinDays ? Number(expiringWithinDays) : undefined,
           start_date: startDate || undefined,
           end_date: endDate || undefined,
@@ -188,7 +203,8 @@ export default function OperationsReportsPage() {
       api
         .reportJobOrders({
           status: jobOrderStatus || undefined,
-          customer_ids: customerIds.join(',') || undefined,
+          company_ids: companyKey || undefined,
+        customer_ids: customerIds.join(',') || undefined,
           assigned_to_user_id: staffId || undefined,
           overdue_only: overdueOnly || undefined,
           start_date: startDate || undefined,
@@ -201,7 +217,8 @@ export default function OperationsReportsPage() {
         .reportServiceRecords({
           status: srStatus || undefined,
           outcome: srOutcome || undefined,
-          customer_ids: customerIds.join(',') || undefined,
+          company_ids: companyKey || undefined,
+        customer_ids: customerIds.join(',') || undefined,
           employee_user_id: staffId || undefined,
           start_date: startDate || undefined,
           end_date: endDate || undefined,
@@ -211,7 +228,8 @@ export default function OperationsReportsPage() {
     } else if (reportType === 'customer-product-usage') {
       api
         .reportCompanyIndividualProductUsage({
-          customer_ids: customerIds.join(',') || undefined,
+          company_ids: companyKey || undefined,
+        customer_ids: customerIds.join(',') || undefined,
           product_id: productId || undefined,
           industry_code: industryCode || undefined,
         })
@@ -219,25 +237,22 @@ export default function OperationsReportsPage() {
         .catch((e) => setError(e.message))
     } else if (reportType === 'contract-expiry-listing') {
       api
-        .reportContractExpiryListing({ expiry_from: contractExpiryFrom || undefined, expiry_to: contractExpiryTo || undefined })
+        .reportContractExpiryListing({ company_ids: companyKey || undefined, expiry_from: contractExpiryFrom || undefined, expiry_to: contractExpiryTo || undefined })
         .then(setExpiryListingRows)
         .catch((e) => setError(e.message))
     } else if (reportType === 'contract-renewal-due-listing') {
       api
-        .reportContractRenewalDueListing()
+        .reportContractRenewalDueListing({ company_ids: companyKey || undefined })
         .then(setRenewalDueRows)
         .catch((e) => setError(e.message))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    reportType, customerIds, staffId, startDate, endDate, contractStatus, contractKind,
+    reportType, companyKey, customerIds, staffId, startDate, endDate, contractStatus, contractKind,
     expiringWithinDays, jobOrderStatus, overdueOnly, srStatus, srOutcome, productId, industryCode,
     contractExpiryFrom, contractExpiryTo,
   ])
 
-  const customerName = (id: string) => customers.find((c) => c.id === id)?.name ?? id.slice(0, 8)
-  const staffName = (id: string | null) => (id ? staff.find((s) => s.id === id)?.full_name ?? id.slice(0, 8) : '-')
-  const jobOrderById = new Map(allJobOrders.map((o) => [o.id, o]))
 
   async function onExport(format: string) {
     setError(null)
@@ -249,6 +264,7 @@ export default function OperationsReportsPage() {
       const filters = {
         status: contractStatus || undefined,
         contract_kind: contractKind || undefined,
+        company_ids: companyKey || undefined,
         customer_ids: customerIds.join(',') || undefined,
         expiring_within_days: expiringWithinDays ? Number(expiringWithinDays) : undefined,
         start_date: startDate || undefined,
@@ -259,6 +275,7 @@ export default function OperationsReportsPage() {
     } else if (reportType === 'job-orders') {
       const filters = {
         status: jobOrderStatus || undefined,
+        company_ids: companyKey || undefined,
         customer_ids: customerIds.join(',') || undefined,
         assigned_to_user_id: staffId || undefined,
         overdue_only: overdueOnly || undefined,
@@ -271,6 +288,7 @@ export default function OperationsReportsPage() {
       const filters = {
         status: srStatus || undefined,
         outcome: srOutcome || undefined,
+        company_ids: companyKey || undefined,
         customer_ids: customerIds.join(',') || undefined,
         employee_user_id: staffId || undefined,
         start_date: startDate || undefined,
@@ -281,6 +299,7 @@ export default function OperationsReportsPage() {
       downloadBlob(blob, `service-records-report.${format === 'csv' ? 'csv' : 'xlsx'}`)
     } else if (reportType === 'customer-product-usage') {
       const filters = {
+        company_ids: companyKey || undefined,
         customer_ids: customerIds.join(',') || undefined,
         product_id: productId || undefined,
         industry_code: industryCode || undefined,
@@ -291,7 +310,7 @@ export default function OperationsReportsPage() {
           : await api.exportCompanyIndividualProductUsageExcel(filters)
       downloadBlob(blob, `customer-product-usage.${format === 'csv' ? 'csv' : 'xlsx'}`)
     } else if (reportType === 'contract-expiry-listing') {
-      const filters = { expiry_from: contractExpiryFrom || undefined, expiry_to: contractExpiryTo || undefined }
+      const filters = { company_ids: companyKey || undefined, expiry_from: contractExpiryFrom || undefined, expiry_to: contractExpiryTo || undefined }
       const blob =
         format === 'csv'
           ? await api.exportContractExpiryListingCsv(filters)
@@ -300,8 +319,8 @@ export default function OperationsReportsPage() {
     } else if (reportType === 'contract-renewal-due-listing') {
       const blob =
         format === 'csv'
-          ? await api.exportContractRenewalDueListingCsv()
-          : await api.exportContractRenewalDueListingExcel()
+          ? await api.exportContractRenewalDueListingCsv({ company_ids: companyKey || undefined })
+          : await api.exportContractRenewalDueListingExcel({ company_ids: companyKey || undefined })
       downloadBlob(blob, `contract-renewal-due-listing.${format === 'csv' ? 'csv' : 'xlsx'}`)
     }
   }
@@ -324,9 +343,10 @@ export default function OperationsReportsPage() {
         current={reportType}
         onBack={() => openReport(null)}
         printSummary={[
+          ...(multiCompany ? [`Internal Companies: ${companyIds.map((id) => myCompanies.find((c) => c.id === id)?.name ?? id).join(', ')}`] : []),
           ...(reportType === 'contract-expiry-listing' || reportType === 'contract-renewal-due-listing'
             ? []
-            : [`Company / Individual: ${customerIds.length === 0 ? 'All' : customerIds.map((id) => customers.find((c) => c.id === id)?.name ?? id).join(', ')}`]),
+            : [`Company / Individual: ${customerIds.length === 0 ? 'All' : customerIds.map((id) => options.company_individuals.find((c) => c.id === id)?.name ?? id).join(', ')}`]),
           ...(startDate || endDate ? [`Period: ${startDate ? formatDate(startDate) : '…'} to ${endDate ? formatDate(endDate) : '…'}`] : []),
           ...(reportType === 'contract-expiry-listing' && (contractExpiryFrom || contractExpiryTo)
             ? [`Expiry: ${contractExpiryFrom ? formatDate(contractExpiryFrom) : '…'} to ${contractExpiryTo ? formatDate(contractExpiryTo) : '…'}`]
@@ -337,12 +357,21 @@ export default function OperationsReportsPage() {
 
       <div className="card">
         <FilterGrid>
+          <InternalCompaniesPicker
+            value={companyIds}
+            onChange={setCompanyIds}
+            action={
+              <button type="button" className="secondary report-reset" onClick={resetFilters}>
+                Reset filters
+              </button>
+            }
+          />
 
           {reportType !== 'contract-expiry-listing' && reportType !== 'contract-renewal-due-listing' && (
             <MultiPick
               label="Company / Individual"
               allLabel="All"
-              options={customers.map((c) => ({ id: c.id, name: c.name }))}
+              options={options.company_individuals}
               value={customerIds}
               onChange={setCustomerIds}
             />
@@ -418,19 +447,19 @@ export default function OperationsReportsPage() {
                 <label>Assigned to</label>
                 <select value={staffId} onChange={(e) => setStaffId(e.target.value)}>
                   <option value="">All</option>
-                  {staff.map((s) => (
+                  {options.staff.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.full_name}
+                      {s.name}
                     </option>
                   ))}
                 </select>
               </div>
               <div className="form-row">
                 <label>Overdue</label>
-                <label className="check-field">
-                  <input type="checkbox" checked={overdueOnly} onChange={(e) => setOverdueOnly(e.target.checked)} />
-                  Overdue only
-                </label>
+                <select value={overdueOnly ? 'overdue' : ''} onChange={(e) => setOverdueOnly(e.target.value === 'overdue')}>
+                  <option value="">All</option>
+                  <option value="overdue">Overdue only</option>
+                </select>
               </div>
             </>
           )}
@@ -461,9 +490,9 @@ export default function OperationsReportsPage() {
                 <label>Staff</label>
                 <select value={staffId} onChange={(e) => setStaffId(e.target.value)}>
                   <option value="">All</option>
-                  {staff.map((s) => (
+                  {options.staff.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.full_name}
+                      {s.name}
                     </option>
                   ))}
                 </select>
@@ -477,7 +506,7 @@ export default function OperationsReportsPage() {
                 <label>Product</label>
                 <select value={productId} onChange={(e) => setProductId(e.target.value)}>
                   <option value="">All</option>
-                  {products.map((p) => (
+                  {options.products.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
                     </option>
@@ -505,9 +534,6 @@ export default function OperationsReportsPage() {
           )}
 
           <div className="report-filter-actions">
-            <button type="button" className="secondary" onClick={resetFilters}>
-              Reset filters
-            </button>
             <ExportControl
               formats={[
                 { value: 'csv', label: 'CSV' },
@@ -525,6 +551,7 @@ export default function OperationsReportsPage() {
             <table>
               <thead>
                 <tr>
+                  {multiCompany && <th>Internal Company</th>}
                   <th>Company / Individual</th>
                   <th>Status</th>
                   <th>Kind</th>
@@ -539,7 +566,8 @@ export default function OperationsReportsPage() {
               <tbody>
                 {contracts.map((c) => (
                   <tr key={c.id}>
-                    <td>{customerName(c.customer_id)}</td>
+                    {multiCompany && <td>{c.company_name}</td>}
+                    <td>{c.customer_name}</td>
                     <td>
                       <span className={`badge ${c.status}`}>{c.status}</span>
                     </td>
@@ -554,7 +582,7 @@ export default function OperationsReportsPage() {
                 ))}
                 {contracts.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="muted">
+                    <td colSpan={multiCompany ? 10 : 9} className="muted">
                       No contracts match these filters.
                     </td>
                   </tr>
@@ -567,6 +595,7 @@ export default function OperationsReportsPage() {
             <table>
               <thead>
                 <tr>
+                  {multiCompany && <th>Internal Company</th>}
                   <th>Company / Individual</th>
                   <th>Subject</th>
                   <th>Priority</th>
@@ -581,7 +610,8 @@ export default function OperationsReportsPage() {
                   const overdue = !!o.due_date && o.due_date < new Date().toISOString().slice(0, 10) && o.status !== 'closed' && o.status !== 'void'
                   return (
                     <tr key={o.id}>
-                      <td>{customerName(o.customer_id)}</td>
+                      {multiCompany && <td>{o.company_name}</td>}
+                      <td>{o.customer_name}</td>
                       <td>{o.subject}</td>
                       <td>{o.priority}</td>
                       <td>
@@ -589,9 +619,9 @@ export default function OperationsReportsPage() {
                           {o.status}
                         </span>
                       </td>
-                      <td>{staffName(o.assigned_to_user_id)}</td>
+                      <td>{o.assigned_to_name ?? '-'}</td>
                       <td>
-                        {o.due_date ?? <span className="muted">-</span>}
+                        {o.due_date ? formatDate(o.due_date) : <span className="muted">-</span>}
                         {overdue && (
                           <span className="badge exceeded" style={{ marginLeft: 6 }}>
                             overdue
@@ -604,7 +634,7 @@ export default function OperationsReportsPage() {
                 })}
                 {jobOrders.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="muted">
+                    <td colSpan={multiCompany ? 8 : 7} className="muted">
                       No job orders match these filters.
                     </td>
                   </tr>
@@ -617,6 +647,7 @@ export default function OperationsReportsPage() {
             <table>
               <thead>
                 <tr>
+                  {multiCompany && <th>Internal Company</th>}
                   <th>Work date</th>
                   <th>Company / Individual</th>
                   <th>Employee</th>
@@ -629,9 +660,10 @@ export default function OperationsReportsPage() {
               <tbody>
                 {serviceRecords.map((r) => (
                   <tr key={r.id}>
+                    {multiCompany && <td>{r.company_name}</td>}
                     <td>{formatDate(r.work_date)}</td>
-                    <td>{customerName(jobOrderById.get(r.job_order_id)?.customer_id ?? '')}</td>
-                    <td>{staffName(r.employee_user_id)}</td>
+                    <td>{r.customer_name}</td>
+                    <td>{r.employee_name}</td>
                     <td>{(r.rounded_minutes / 60).toFixed(2)}</td>
                     <td>{r.status}</td>
                     <td>{r.outcome.replace(/_/g, ' ')}</td>
@@ -640,7 +672,7 @@ export default function OperationsReportsPage() {
                 ))}
                 {serviceRecords.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="muted">
+                    <td colSpan={multiCompany ? 8 : 7} className="muted">
                       No service records match these filters.
                     </td>
                   </tr>
@@ -653,6 +685,7 @@ export default function OperationsReportsPage() {
             <table>
               <thead>
                 <tr>
+                  {multiCompany && <th>Internal Company</th>}
                   <th>Company / Individual</th>
                   <th>Industry</th>
                   <th>Product</th>
@@ -665,6 +698,7 @@ export default function OperationsReportsPage() {
               <tbody>
                 {productUsage.map((row) => (
                   <tr key={`${row.contract_id}-${row.product_id}`}>
+                    {multiCompany && <td>{row.company_name}</td>}
                     <td>{row.customer_name}</td>
                     <td className="muted">{row.industry_name || '-'}</td>
                     <td>{row.product_name}</td>
@@ -682,8 +716,8 @@ export default function OperationsReportsPage() {
                 ))}
                 {productUsage.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="muted">
-                      No customers currently covered for these filters.
+                    <td colSpan={multiCompany ? 8 : 7} className="muted">
+                      No companies / individuals currently covered for these filters.
                     </td>
                   </tr>
                 )}
@@ -695,6 +729,7 @@ export default function OperationsReportsPage() {
             <table>
               <thead>
                 <tr>
+                  {multiCompany && <th>Internal Company</th>}
                   <th>Number</th>
                   <th>Company / Individual</th>
                   <th>Status</th>
@@ -706,8 +741,9 @@ export default function OperationsReportsPage() {
               <tbody>
                 {expiryListingRows.map((c) => (
                   <tr key={c.id}>
+                    {multiCompany && <td>{c.company_name}</td>}
                     <td className="muted">{c.contract_number}</td>
-                    <td>{customerName(c.customer_id)}</td>
+                    <td>{c.customer_name}</td>
                     <td>
                       <span className={`badge ${c.status}`}>{c.status}</span>
                     </td>
@@ -718,7 +754,7 @@ export default function OperationsReportsPage() {
                 ))}
                 {expiryListingRows.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="muted">
+                    <td colSpan={multiCompany ? 7 : 6} className="muted">
                       No contracts match these filters.
                     </td>
                   </tr>
@@ -731,6 +767,7 @@ export default function OperationsReportsPage() {
             <table>
               <thead>
                 <tr>
+                  {multiCompany && <th>Internal Company</th>}
                   <th>Number</th>
                   <th>Company / Individual</th>
                   <th>Status</th>
@@ -741,9 +778,10 @@ export default function OperationsReportsPage() {
               <tbody>
                 {renewalDueRows.map((c) => (
                   <tr key={c.id}>
+                    {multiCompany && <td>{c.company_name}</td>}
                     <td className="muted">{c.contract_number}</td>
                     <td>
-                      <Link to={`/contracts/${c.id}`}>{customerName(c.customer_id)}</Link>
+                      <Link to={`/contracts/${c.id}`}>{c.customer_name}</Link>
                     </td>
                     <td>
                       <span className={`badge ${c.status}`}>{c.status}</span>
@@ -754,7 +792,7 @@ export default function OperationsReportsPage() {
                 ))}
                 {renewalDueRows.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="muted">
+                    <td colSpan={multiCompany ? 6 : 5} className="muted">
                       No contracts within the SRV-014 30-day pre-expiry window.
                     </td>
                   </tr>

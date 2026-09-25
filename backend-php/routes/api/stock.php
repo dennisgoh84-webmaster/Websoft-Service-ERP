@@ -106,4 +106,5 @@ Route::middleware('auth.jwt')->prefix('stock')->group(function () {
     Route::get('/movements', [StockReportController::class, 'movements']);
     Route::get('/reports/valuation', [StockReportController::class, 'valuation']);
     Route::get('/reports/reorder', [StockReportController::class, 'reorder']);
+    Route::get('/reports/filter-options', [StockReportController::class, 'filterOptions']);
 });
