@@ -72,7 +72,7 @@ class UpgradeAgentController extends Controller
             // rows as UTC, and an app-side now() in Asia/Singapore was
             // 8 hours off next to requested_at.
             UpgradeRequest::where('status', UpgradeRequest::STATUS_RUNNING)
-                ->whereRaw("started_at < now() - make_interval(mins => ?)", [UpgradeRequest::STALE_RUNNING_MINUTES])
+                ->whereRaw('started_at < now() - make_interval(mins => ?)', [UpgradeRequest::STALE_RUNNING_MINUTES])
                 ->update([
                     'status' => UpgradeRequest::STATUS_FAILED,
                     'finished_at' => DB::raw('now()'),
@@ -139,6 +139,29 @@ class UpgradeAgentController extends Controller
         return response()->json(['status' => $status]);
     }
 
+    /**
+     * Live progress while an upgrade runs (2026-09-25): the agent sends the
+     * log so far every few seconds, so Central Command's Client Upgrades
+     * screen shows the current step and output as it happens instead of a
+     * static "running". Only a RUNNING request is touched; the final
+     * report replaces the log with the complete one.
+     */
+    public function progress(Request $request)
+    {
+        $this->requireAgentToken($request);
+
+        $data = $request->validate([
+            'id' => 'required|uuid',
+            'log' => 'nullable|string|max:200000',
+        ]);
+
+        $updated = UpgradeRequest::whereKey($data['id'])
+            ->where('status', UpgradeRequest::STATUS_RUNNING)
+            ->update(['log' => $data['log'] ?? null]);
+
+        return response()->json(['updated' => $updated > 0]);
+    }
+
     /** Read-only, for this install's own administrators. */
     public function status(Request $request)
     {
@@ -152,7 +175,7 @@ class UpgradeAgentController extends Controller
         return response()->json([
             'agent' => $state,
             'agent_online' => $state !== null && (bool) DB::selectOne(
-                "select last_heartbeat_at > now() - make_interval(mins => ?) as online from upgrade_agent_state where id = 1",
+                'select last_heartbeat_at > now() - make_interval(mins => ?) as online from upgrade_agent_state where id = 1',
                 [UpgradeAgentState::AGENT_OFFLINE_AFTER_MINUTES]
             )?->online,
             'active' => $active,

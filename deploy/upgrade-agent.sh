@@ -116,10 +116,32 @@ stamp() { date '+%d/%m/%Y %H:%M:%S'; }
   echo "== running: $UPGRADE_CMD $REQ_TARGET"
 } >"$UPGRADE_LOG"
 
-if "$UPGRADE_CMD" "$REQ_TARGET" >>"$UPGRADE_LOG" 2>&1; then
+# Run the upgrade in the background and send the log so far every few
+# seconds, so the upgrade screen shows the live step and output
+# (2026-09-25). A failed progress post (the backend restarting mid-
+# upgrade) is simply skipped; the final report below carries the whole log.
+progress() {
+  REQ_ID="$REQ_ID" LOGFILE="$UPGRADE_LOG" python3 - <<'PY' | curl -sS -m 5 -o /dev/null -X POST "$API/progress" \
+      -H "X-Upgrade-Agent-Token: $TOKEN" -H 'Content-Type: application/json' --data-binary @- 2>/dev/null || true
+import json, os
+with open(os.environ["LOGFILE"], "r", errors="replace") as f:
+    text = f.read()
+if len(text) > 60000:
+    text = "[... earlier output trimmed ...]\n" + text[-60000:]
+print(json.dumps({"id": os.environ["REQ_ID"], "log": text}))
+PY
+}
+"$UPGRADE_CMD" "$REQ_TARGET" >>"$UPGRADE_LOG" 2>&1 &
+UPGRADE_PID=$!
+while kill -0 "$UPGRADE_PID" 2>/dev/null; do
+  progress
+  for _ in 1 2 3 4 5; do kill -0 "$UPGRADE_PID" 2>/dev/null || break; sleep 1; done
+done
+wait "$UPGRADE_PID"
+RC=$?
+if [ "$RC" -eq 0 ]; then
   OK=true; ERR=""
 else
-  RC=$?
   OK=false; ERR="$(basename "$UPGRADE_CMD") exited with status $RC -- see the log"
 fi
 TO_SHA=$(git rev-parse HEAD)
