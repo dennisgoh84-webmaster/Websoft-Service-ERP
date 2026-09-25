@@ -79,7 +79,7 @@ class QuotationService
     {
         self::requireStatus($quotation, [Quotation::STATUS_DRAFT], 'submitted for approval');
         $quotation->status = Quotation::STATUS_PENDING_APPROVAL;
-        $quotation->submitted_at = Carbon::now('UTC');
+        $quotation->submitted_at = Carbon::now();
         $quotation->submitted_by_user_id = $actorUserId;
         $quotation->returned_reason = null;
         Audit::record('quotation', $quotation->id, 'submitted_for_approval', $actorUserId);
@@ -99,7 +99,7 @@ class QuotationService
         }
         self::requireStatus($quotation, [Quotation::STATUS_PENDING_APPROVAL], 'approved');
         $quotation->status = Quotation::STATUS_APPROVED;
-        $quotation->approved_at = Carbon::now('UTC');
+        $quotation->approved_at = Carbon::now();
         $quotation->approved_by_user_id = $approver->id;
         Audit::record('quotation', $quotation->id, 'approved', $approver->id);
     }
@@ -125,7 +125,7 @@ class QuotationService
     {
         self::requireStatus($quotation, [Quotation::STATUS_APPROVED], 'sent');
         $quotation->status = Quotation::STATUS_SENT;
-        $quotation->sent_at = Carbon::now('UTC');
+        $quotation->sent_at = Carbon::now();
         Audit::record('quotation', $quotation->id, 'sent', $actorUserId);
     }
 
@@ -137,7 +137,7 @@ class QuotationService
     {
         self::requireStatus($quotation, [Quotation::STATUS_SENT], 'marked to revise');
         $quotation->status = Quotation::STATUS_TO_REVISE;
-        $quotation->to_revise_at = Carbon::now('UTC');
+        $quotation->to_revise_at = Carbon::now();
         $quotation->revision_reason = trim($reason);
         Audit::record('quotation', $quotation->id, 'to_revise', $actorUserId, reason: $reason);
     }

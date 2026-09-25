@@ -45,15 +45,13 @@ class DatabaseSeeder extends Seeder
         'company_individual_management' => ['Customer Management', true, true],
         'service_contracts' => ['Service Contracts', true, true],
         'service_operations' => ['Helpdesk / Service Operations (Job Orders)', true, true],
-        'projects' => ['Projects', false, false],
         'service_records' => ['Service Records', true, true],
         'billing' => ['Billing', true, true],
         'accounts_receivable' => ['Accounts Receivable', true, true],
         'accounts_payable' => ['Accounts Payable', true, true],
-        'purchasing' => ['Purchasing', true, true],
         'inventory' => ['Inventory', false, false],
-        'hardware_management' => ['Hardware Management', false, false],
-        'commission_management' => ['Commission Management', false, false], // deferred
+        // Commission report, rate and Payouts (moved from accounting_reports 2026-09-26).
+        'commission_management' => ['Commission Management', true, true],
         'finance_accounting' => ['Finance / Accounting', true, true],
         'reporting' => ['Reporting / Management Dashboard', true, true],
         'software_development' => ['Software Development (Software Tasks)', true, true],

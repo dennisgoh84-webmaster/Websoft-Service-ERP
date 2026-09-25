@@ -156,7 +156,7 @@ class MobileTest extends TestCase
         // Backdate the time-in by 20 minutes so the elapsed time is
         // deterministic rather than however fast the test runs.
         $record = ServiceRecord::findOrFail($started['id']);
-        $record->forceFill(['time_in' => Carbon::now('UTC')->subMinutes(20)])->save();
+        $record->forceFill(['time_in' => Carbon::now()->subMinutes(20)])->save();
 
         $body = $this->postJson("/api/mobile/service-records/{$record->id}/time-out", [
             'completion_status' => 'C', 'is_after_hours' => true, 'work_description' => '  Replaced the PSU  ',
@@ -202,7 +202,7 @@ class MobileTest extends TestCase
         $jo = $this->jobOrder(['assigned_to_user_id' => $other->id]);
         $record = ServiceRecord::factory()->create([
             'company_id' => $this->company->id, 'job_order_id' => $jo->id,
-            'employee_user_id' => $other->id, 'time_in' => Carbon::now('UTC'), 'time_out' => null,
+            'employee_user_id' => $other->id, 'time_in' => Carbon::now(), 'time_out' => null,
         ]);
 
         $this->postJson("/api/mobile/service-records/{$record->id}/time-out", [], $this->headers())
@@ -289,7 +289,7 @@ class MobileTest extends TestCase
         // from the unrefreshed model came back as the UTC clock labelled
         // +08:00 -- eight hours in the past.
         $jo = $this->jobOrder();
-        $now = Carbon::now('UTC')->getTimestamp();
+        $now = Carbon::now()->getTimestamp();
 
         $started = $this->postJson("/api/mobile/job-orders/{$jo->id}/time-in", [], $this->headers())->assertOk()->json();
         $this->assertEqualsWithDelta($now, Carbon::parse($started['time_in'])->getTimestamp(), 60);
@@ -370,7 +370,7 @@ class MobileTest extends TestCase
         ServiceRecordSignoff::create([
             'company_id' => $this->company->id, 'service_record_id' => $started['id'],
             'signer_name' => 'Mr Lim', 'signature_data_uri' => 'data:,',
-            'signed_by_user_id' => $this->engineer->id, 'signed_at' => Carbon::now('UTC'),
+            'signed_by_user_id' => $this->engineer->id, 'signed_at' => Carbon::now(),
         ]);
         $detail = $this->getJson("/api/mobile/job-orders/{$jo->id}", $this->headers())->assertOk()->json();
         $this->assertTrue($detail['service_records'][0]['has_signoff']);

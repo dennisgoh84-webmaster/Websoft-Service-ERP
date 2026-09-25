@@ -17,6 +17,7 @@ import {
   type IncidentStatus,
   type IncidentTriage,
 } from '../lib/api'
+import { useAuth } from '../lib/AuthContext'
 import { formatDate, todayIso } from '../lib/format'
 
 const STATUS_BADGE: Record<IncidentStatus, string> = {
@@ -33,6 +34,7 @@ const STATUS_LABEL: Record<IncidentStatus, string> = {
 }
 
 export default function IncidentsPage() {
+  const { moduleAccess } = useAuth()
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [customers, setCustomers] = useState<CompanyIndividual[]>([])
   const [contracts, setContracts] = useState<Contract[]>([])
@@ -66,7 +68,9 @@ export default function IncidentsPage() {
   const [triage, setTriage] = useState<IncidentTriage | null>(null)
   const [triageLoading, setTriageLoading] = useState(false)
   const [triageError, setTriageError] = useState<string | null>(null)
-  const [aiAvailable, setAiAvailable] = useState(true)
+  // Module Control decides: no `ai_assistant`, no AI card at all.
+  const [aiRefused, setAiRefused] = useState(false)
+  const aiAvailable = moduleAccess.ai_assistant === true && !aiRefused
 
   function refresh() {
     api.listIncidents(statusFilter ? { status: statusFilter } : {}).then(setIncidents).catch((e) => setError(e.message))
@@ -125,7 +129,7 @@ export default function IncidentsPage() {
         .getIncidentTriage(incident.id)
         .then(setTriage)
         .catch((e: Error) => {
-          if (/not enabled|403|access/i.test(e.message)) setAiAvailable(false)
+          if (/not enabled|403|access/i.test(e.message)) setAiRefused(true)
         })
     }
   }

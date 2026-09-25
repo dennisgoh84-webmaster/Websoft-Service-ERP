@@ -137,7 +137,7 @@ const SECTIONS: ReportSection<ReportType>[] = [
         title: 'Commission',
         summary: 'Commission earned per salesperson.',
         details:
-          'Commission per salesperson per month, worked out only on the part of each invoice that a receipt has actually settled -- so unpaid invoices earn nothing yet. The commission rate itself is set on this report.',
+          'Commission per salesperson per month, worked out only on the part of each invoice that a receipt has actually settled -- so unpaid invoices earn nothing yet. The commission rate itself is set on this report. Part of Commission Management.',
         filters: ['Internal Companies', 'Salesperson', 'Month from – to', 'Dates'],
       },
     ],
@@ -179,8 +179,13 @@ const USES_AS_AT: ReportType[] = ['ar-aging', 'ap-aging', 'trial-balance']
 const USES_RANGE: ReportType[] = ['gst-return', 'sales-gp', 'commission']
 
 export default function AccountingReportsPage() {
-  const [reportType, openReport] = useSelectedReport(SECTIONS)
-  const { user } = useAuth()
+  const { user, moduleAccess } = useAuth()
+  // Commission (its report and its rate) belongs to Commission
+  // Management: with that module off the tile is not offered at all.
+  const sections = moduleAccess.commission_management
+    ? SECTIONS
+    : SECTIONS.map((s) => ({ ...s, reports: s.reports.filter((r) => r.key !== 'commission') }))
+  const [reportType, openReport] = useSelectedReport(sections)
   const [companyIds, setCompanyIds] = useState<string[]>(user?.company_id ? [user.company_id] : [])
   // One Company / Individual pick list for AR, AP and Sales GP alike.
   const [partyIds, setPartyIds] = useState<string[]>([])
@@ -330,11 +335,11 @@ export default function AccountingReportsPage() {
             Choose a report. Each one shows what it covers and which filters it takes. Every export is
             recorded in Event Logs.
           </p>
-          <ReportLauncher sections={SECTIONS} onOpen={openReport} />
+          <ReportLauncher sections={sections} onOpen={openReport} />
         </>
       ) : (
         <>
-      <ReportHeader sections={SECTIONS} current={reportType} onBack={() => openReport(null)} printSummary={printSummary} />
+      <ReportHeader sections={sections} current={reportType} onBack={() => openReport(null)} printSummary={printSummary} />
       {error && <div className="error-banner">{error}</div>}
 
       <div className="card">

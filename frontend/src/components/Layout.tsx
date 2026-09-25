@@ -136,7 +136,7 @@ export default function Layout() {
     { key: 'accounting-periods', path: '/accounting-periods', label: 'GST and Account Period', visible: can('finance_accounting') },
     { key: 'year-end-closing', path: '/year-end-closing', label: 'Year-End Closing', visible: can('finance_accounting') },
     { key: 'accounting-reports', path: '/accounting-reports', label: 'Accounting Reports', visible: can('accounting_reports') },
-    { key: 'commission-payouts', path: '/commission-payouts', label: 'Commission Payouts', visible: can('accounting_reports') },
+    { key: 'commission-payouts', path: '/commission-payouts', label: 'Commission Payouts', visible: can('commission_management') },
   ]
 
   const stockItems: NavItem[] = [
@@ -144,6 +144,7 @@ export default function Layout() {
     { key: 'grn', path: '/grn', label: 'Goods Receive', visible: can('goods_receive_note') },
     { key: 'gtn', path: '/gtn', label: 'Goods Transfer', visible: can('goods_transfer_note') },
     { key: 'grtn', path: '/grtn', label: 'Goods Return', visible: can('goods_return_note') },
+    { key: 'gin', path: '/gin', label: 'Goods Issue', visible: can('goods_issue_note') },
     { key: 'stock-adjustment', path: '/stock-adjustment', label: 'Stock Adjustment', visible: can('stock_adjustment') },
     { key: 'stock-reports', path: '/stock-reports', label: 'Stock Reports', visible: can('stock_operation_reports') },
   ]
@@ -157,14 +158,20 @@ export default function Layout() {
       visible: can('core_administration'),
     },
     { key: 'system-email', path: '/system-email', label: 'System Email', visible: can('core_administration') },
-    { key: 'ai-assistant', path: '/ai-assistant', label: 'AI Assistant', visible: can('core_administration') },
+    // Settings for the AI Assistant add-on: only once Module Control has
+    // `ai_assistant` switched on for this company (the owner included --
+    // it is a licence, not a permission).
+    {
+      key: 'ai-assistant',
+      path: '/ai-assistant',
+      label: 'AI Assistant',
+      visible: can('core_administration') && can('ai_assistant'),
+    },
     {
       key: 'bank-portal-testing',
       path: '/bank-portal-testing',
       label: 'Bank Portal Testing',
-      // Unlike AI Assistant's settings link (always reachable so an
-      // owner can configure it before enabling), this one is gated on
-      // its own module key exactly like a normal module: no staff
+      // Gated on its own module key exactly like a normal module: no staff
       // account sees it until Dennis switches `bank_portal_testing` on
       // for their company (the owner role still bypasses, same as
       // every other module). See BankPortalTestingPage.tsx.

@@ -103,7 +103,7 @@ class ProspectActivityTest extends TestCase
         $this->getJson('/api/prospect-activities', $staffH)->assertOk()->assertJsonCount(1)->assertJsonFragment(['subject' => 'Staff activity']);
     }
 
-    public function test_staff_can_update_and_delete_their_own_activities_but_not_others(): void
+    public function test_staff_can_update_and_void_their_own_activities_but_not_others(): void
     {
         [$owner, $ownerH] = $this->login(User::ROLE_OWNER);
         [$staff, $staffH] = $this->login(User::ROLE_SALES_STAFF);
@@ -114,9 +114,29 @@ class ProspectActivityTest extends TestCase
             ->assertOk()->assertJson(['subject' => 'Updated meeting notes']);
         $this->patchJson("/api/prospect-activities/{$theirs}", ['subject' => 'Hacked!'], $staffH)->assertStatus(404);
 
-        $this->deleteJson("/api/prospect-activities/{$mine}", [], $staffH)->assertNoContent();
-        $this->getJson('/api/prospect-activities', $staffH)->assertOk()->assertJsonCount(0);
-        $this->assertDatabaseHas('audit_log_entries', ['entity_type' => 'prospect_activity', 'entity_id' => $mine, 'action' => 'deleted']);
+        $this->postJson("/api/prospect-activities/{$theirs}/void", ['reason' => 'x'], $staffH)->assertStatus(404);
+        $this->postJson("/api/prospect-activities/{$mine}/void", ['reason' => 'Logged against the wrong prospect'], $staffH)
+            ->assertOk()->assertJson(['status' => 'void', 'void_reason' => 'Logged against the wrong prospect', 'voided_by_name' => $staff->full_name]);
+        $this->assertDatabaseHas('audit_log_entries', ['entity_type' => 'prospect_activity', 'entity_id' => $mine, 'action' => 'voided']);
+    }
+
+    public function test_an_activity_is_never_deleted_only_voided_and_a_void_one_is_frozen(): void
+    {
+        [$owner, $h] = $this->login(User::ROLE_OWNER);
+        $id = $this->log($h, $this->prospectFor($owner), 'call', 'Wrong number')->json('id');
+
+        // No delete route at all.
+        $this->deleteJson("/api/prospect-activities/{$id}", [], $h)->assertStatus(405);
+        // VOID is only reached through the Void action, and it needs a reason.
+        $this->patchJson("/api/prospect-activities/{$id}", ['status' => 'void'], $h)->assertStatus(422);
+        $this->postJson("/api/prospect-activities/{$id}/void", [], $h)->assertStatus(422);
+        $this->postJson("/api/prospect-activities/{$id}/void", ['reason' => 'Duplicate'], $h)->assertOk();
+
+        // Still there, still listed -- as VOID -- and no longer editable.
+        $this->assertDatabaseHas('prospect_activities', ['id' => $id, 'status' => 'void', 'void_reason' => 'Duplicate']);
+        $this->getJson('/api/prospect-activities?status=void', $h)->assertOk()->assertJsonCount(1);
+        $this->patchJson("/api/prospect-activities/{$id}", ['subject' => 'Changed'], $h)->assertStatus(409);
+        $this->postJson("/api/prospect-activities/{$id}/void", ['reason' => 'Again'], $h)->assertStatus(409);
     }
 
     public function test_activity_types_are_validated(): void

@@ -17,9 +17,9 @@ use Illuminate\Support\Facades\DB;
  * (docs/open-business-decisions.md 6.3 approval, 6.4 clawback, 6.5
  * payout).
  *
- * Gated on `accounting_reports`, the same key Python uses and the one
- * frontend/src/components/Layout.tsx already tests for this screen --
- * not a key of its own.
+ * Gated on `commission_management` since 2026-09-26 (Dennis: all
+ * commission configuration is controlled there); before that it was
+ * `accounting_reports`, the key Python used.
  *
  * The authority split is Python's: reading needs VIEW, submitting for
  * approval needs EDIT, and generating, approving, rejecting, paying or
@@ -30,7 +30,9 @@ use Illuminate\Support\Facades\DB;
  */
 class CommissionPayoutController extends Controller
 {
-    private const MODULE = 'accounting_reports';
+    // Commission Management owns every commission feature (Dennis,
+    // 2026-09-26); it was Accounting Reports' until then.
+    private const MODULE = 'commission_management';
 
     /** @return array<string, mixed> */
     private function present(CommissionPayout $p): array

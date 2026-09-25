@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import DateInput from '../components/DateInput'
 import InvoiceHistoryPanel from '../components/InvoiceHistoryPanel'
 import {
+  ACTIVITY_STATUS_LABELS,
   ACTIVITY_STATUSES,
   ACTIVITY_TYPES,
   api,
@@ -32,7 +33,7 @@ export default function ProspectDetailPage() {
   const [saved, setSaved] = useState(false)
 
   const [title, setTitle] = useState('')
-  const [status, setStatus] = useState<ProspectStatus>('open')
+  const [status, setStatus] = useState<ProspectStatus>('new')
   const [lostReason, setLostReason] = useState('')
   const [estimated, setEstimated] = useState('')
   const [expectedClose, setExpectedClose] = useState('')
@@ -277,7 +278,7 @@ export default function ProspectDetailPage() {
                     <Link to={`/prospect-activities/${a.id}`}>{a.subject}</Link>
                   </td>
                   <td>{ACTIVITY_TYPES.find((t) => t.value === a.activity_type)?.label ?? a.activity_type}</td>
-                  <td>{ACTIVITY_STATUSES.find((s) => s.value === a.status)?.label ?? a.status}</td>
+                  <td>{ACTIVITY_STATUS_LABELS.find((s) => s.value === a.status)?.label ?? a.status}</td>
                   <td>{a.created_by_name}</td>
                 </tr>
               ))}

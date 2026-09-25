@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { ACTIVITY_STATUSES, ACTIVITY_TYPES, api, seesAllProspects, type Prospect, type ProspectDetail } from '../../lib/api'
+import { ACTIVITY_STATUSES, ACTIVITY_TYPES, api, PROSPECT_STATUSES, seesAllProspects, type Prospect, type ProspectDetail } from '../../lib/api'
 import { formatDate, formatMoney } from '../../lib/format'
 import { ACTIVITY_ICON, mobileStyles as styles, statusColors } from './mobileStyles'
 
@@ -12,7 +12,7 @@ export function MobileProspectsList({ role, onSelect }: { role: string; onSelect
 
   useEffect(() => {
     api
-      .listProspects(openOnly ? { status: 'open' } : {})
+      .listProspects(openOnly ? { status: 'active' } : {})
       .then(setProspects)
       .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Failed to load'))
       .finally(() => setLoading(false))
@@ -34,7 +34,7 @@ export function MobileProspectsList({ role, onSelect }: { role: string; onSelect
       </div>
       <div style={{ padding: '12px 16px 0' }}>
         <button style={chip(openOnly)} onClick={() => setOpenOnly(true)}>
-          Open
+          In pipeline
         </button>
         <button style={chip(!openOnly)} onClick={() => setOpenOnly(false)}>
           All
@@ -61,7 +61,7 @@ export function MobileProspectsList({ role, onSelect }: { role: string; onSelect
                     {p.expected_close_date && <> · Close {formatDate(p.expected_close_date)}</>}
                   </div>
                 </div>
-                <span style={{ ...styles.badge, background: colors.bg, color: colors.text }}>{p.status}</span>
+                <span style={{ ...styles.badge, background: colors.bg, color: colors.text }}>{PROSPECT_STATUSES.find((x) => x.value === p.status)?.label ?? p.status}</span>
               </div>
             </div>
           )
@@ -145,7 +145,7 @@ export function MobileProspectDetail({
             <div style={{ fontWeight: 700, fontSize: 17, color: '#222' }}>{p.title}</div>
             <div style={{ fontSize: 14, color: '#666', marginTop: 2 }}>{p.customer_name}</div>
           </div>
-          <span style={{ ...styles.badge, background: colors.bg, color: colors.text }}>{p.status}</span>
+          <span style={{ ...styles.badge, background: colors.bg, color: colors.text }}>{PROSPECT_STATUSES.find((x) => x.value === p.status)?.label ?? p.status}</span>
         </div>
         <div style={{ marginTop: 12, fontSize: 14 }}>
           {amounts.map(([label, value]) => (
@@ -199,7 +199,7 @@ export function MobileProspectDetail({
                   {formatDate(a.activity_date)} · {a.created_by_name}
                 </div>
               </div>
-              <span style={{ ...styles.badge, background: c.bg, color: c.text }}>{a.status}</span>
+              <span style={{ ...styles.badge, background: c.bg, color: c.text }}>{a.status === 'void' ? 'VOID' : a.status}</span>
             </div>
           </div>
         )

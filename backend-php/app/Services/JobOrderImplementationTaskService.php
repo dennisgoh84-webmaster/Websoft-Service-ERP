@@ -111,7 +111,7 @@ class JobOrderImplementationTaskService
     {
         $task->status = JobOrderImplementationTask::STATUS_COMPLETED;
         $task->completed_by_user_id = $user->id;
-        $task->completed_at = Carbon::now('UTC');
+        $task->completed_at = Carbon::now();
         $task->save();
     }
 

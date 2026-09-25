@@ -29,13 +29,15 @@ class ModuleController extends Controller
 
         $result = [];
         foreach ($modules as $m) {
+            $cm = $companyModules->get($m->key);
             if ($user->role === User::ROLE_OWNER) {
-                // Owner bypasses both checks -- nav visibility mirrors that.
-                $result[$m->key] = true;
+                // Owner bypasses both checks -- nav visibility mirrors that --
+                // except the AI Assistant, a licence rather than a permission,
+                // which the owner sees only while it is switched on.
+                $result[$m->key] = $m->key === AiAssistantController::MODULE ? (bool) ($cm && $cm->enabled) : true;
 
                 continue;
             }
-            $cm = $companyModules->get($m->key);
             $result[$m->key] = (bool) ($cm && $cm->enabled) && Authority::hasAccess($user, $m->key, GroupModuleAuthority::VIEW);
         }
 

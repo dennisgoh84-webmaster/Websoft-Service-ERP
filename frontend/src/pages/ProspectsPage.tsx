@@ -164,6 +164,7 @@ export default function ProspectsPage() {
             <label>Status</label>
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
               <option value="">All</option>
+              <option value="active">In pipeline (not won / lost)</option>
               {PROSPECT_STATUSES.map((s) => (
                 <option key={s.value} value={s.value}>
                   {s.label}

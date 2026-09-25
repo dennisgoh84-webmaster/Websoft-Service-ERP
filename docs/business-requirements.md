@@ -812,6 +812,15 @@ Outstanding." And: "There should not be any CRM from here."
   customer), **Billed** (its invoices' totals), **Paid**, and
   **Outstanding** (written-off invoices count as nothing outstanding).
   Quoted, billed, paid and outstanding include GST.
+- **Pipeline stages** (confirmed 2026-09-26, "Pipeline stages is
+  good"): New → Qualified → Proposal → Negotiation, closing as **Won**
+  or **Lost** (Lost needs a reason). The salesperson moves the prospect
+  along by hand.
+- **Activities are never deleted** (confirmed 2026-09-26: "should not
+  allow them to delete, only can change status to VOID"). A mistaken
+  activity is voided with a reason -- who voided it and when are kept,
+  and it is audited -- and stays on the prospect marked VOID; a VOID
+  activity can no longer be edited.
 - The Main Menu starts with a **Sales** section: Prospect / Leads, then
   Prospect Activities. The module is switched per company and granted
   per group under Module Control / Group Authority as **Prospect /

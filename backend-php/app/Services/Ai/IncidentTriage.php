@@ -68,7 +68,7 @@ class IncidentTriage
             'entity_type' => 'incident',
             'entity_id' => $incident->id,
             'model' => $settings->model ?: AiSetting::DEFAULT_MODEL,
-            'created_at' => Carbon::now('UTC'),
+            'created_at' => Carbon::now(),
         ]);
 
         try {

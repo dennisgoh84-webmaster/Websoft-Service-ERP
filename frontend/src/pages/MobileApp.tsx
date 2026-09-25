@@ -21,7 +21,7 @@ import { useAuth } from '../lib/AuthContext'
 import { getToken } from '../lib/api'
 import { getDeviceId } from '../lib/deviceId'
 import { setViewPreference } from '../lib/mobileDetect'
-import { formatDate } from '../lib/format'
+import { formatDate, formatTime } from '../lib/format'
 import MobileQuotationsPage from './Mobile/MobileQuotationsPage'
 import MobileProspectActivityDetailPage from './Mobile/MobileProspectActivityDetailPage'
 import { MobileProspectDetail, MobileProspectsList } from './Mobile/MobileProspects'
@@ -197,7 +197,7 @@ function fmtDate(iso: string): string {
 }
 
 function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit' })
+  return formatTime(iso)
 }
 
 function fmtDateTime(iso: string): string {

@@ -57,7 +57,7 @@ class AiBudget
     /** Same calendar-month boundary (Asia/Singapore) as the Usage tile on the settings screen -- the two must never disagree. */
     public static function tokensUsedThisMonth(): int
     {
-        $monthStart = Carbon::now('Asia/Singapore')->startOfMonth()->utc();
+        $monthStart = Carbon::now()->startOfMonth();
         $query = AiInteraction::where('created_at', '>=', $monthStart);
 
         return (int) ((clone $query)->sum('input_tokens') + (clone $query)->sum('output_tokens'));

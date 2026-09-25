@@ -54,7 +54,7 @@ class AiChat
             'entity_type' => $context['type'] ?? null,
             'entity_id' => isset($context['id']) && Str::isUuid((string) $context['id']) ? $context['id'] : null,
             'model' => $settings->model ?: AiSetting::DEFAULT_MODEL,
-            'created_at' => Carbon::now('UTC'),
+            'created_at' => Carbon::now(),
         ]);
 
         $system = self::systemPrompt($user, $settings, $context, $redact);

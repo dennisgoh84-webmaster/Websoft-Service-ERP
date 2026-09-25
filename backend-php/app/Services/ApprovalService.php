@@ -167,7 +167,7 @@ class ApprovalService
 
         if ($decisions->contains(fn (ApprovalDecision $d) => $d->decision === ApprovalDecision::REJECTED)) {
             $request->status = ApprovalRequest::STATUS_REJECTED;
-            $request->resolved_at = Carbon::now('UTC');
+            $request->resolved_at = Carbon::now();
             $request->save();
 
             return;
@@ -182,7 +182,7 @@ class ApprovalService
 
         if ($satisfied) {
             $request->status = ApprovalRequest::STATUS_APPROVED;
-            $request->resolved_at = Carbon::now('UTC');
+            $request->resolved_at = Carbon::now();
             $request->save();
         }
     }

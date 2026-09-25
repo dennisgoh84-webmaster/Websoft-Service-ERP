@@ -141,7 +141,7 @@ class MobileController extends Controller
         }
 
         $record = DB::transaction(function () use ($jo, $user) {
-            $now = Carbon::now('UTC');
+            $now = Carbon::now();
             $record = ServiceRecord::create([
                 'company_id' => $user->company_id,
                 'job_order_id' => $jo->id,
@@ -202,7 +202,7 @@ class MobileController extends Controller
         }
 
         DB::transaction(function () use ($record, $user, $data) {
-            $now = Carbon::now('UTC');
+            $now = Carbon::now();
             // Always at least a minute, and always rounded UP -- the
             // same ceil/round-up pair Python uses, so a 20-second call
             // still bills the contract's minimum increment.
@@ -432,7 +432,7 @@ class MobileController extends Controller
         }
 
         $signoff = DB::transaction(function () use ($record, $user, $data, $chopData) {
-            $now = Carbon::now('UTC');
+            $now = Carbon::now();
 
             // Watermarked with the SR number and timestamp, which is what
             // makes the confirmed no-reuse rule enforceable rather than

@@ -72,6 +72,34 @@ export function todayIso(): string {
   return `${p.year}-${p.month}-${p.day}`
 }
 
+/**
+ * A timestamp as the Singapore calendar date, YYYY-MM-DD -- to fill a
+ * date box from an API time. Never slice the ISO string: the API sends
+ * UTC, so anything before 08:00 in Singapore is still "yesterday" there.
+ */
+export function sgDateIso(value: string | Date | null | undefined): string {
+  if (value == null || value === '') return ''
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  const d = typeof value === 'string' ? new Date(value) : value
+  if (isNaN(d.getTime())) return ''
+  const p = sgParts(d)
+  return `${p.year}-${p.month}-${p.day}`
+}
+
+/** A timestamp's time of day in Singapore, HH:MM (24-hour). */
+export function formatTime(value: string | Date | null | undefined): string {
+  if (value == null || value === '') return '—'
+  const d = typeof value === 'string' ? new Date(value) : value
+  if (isNaN(d.getTime())) return '—'
+  const p = sgParts(d)
+  return `${p.hour}:${p.minute}`
+}
+
+/** A calendar date built from year / month (0-based) / day, as YYYY-MM-DD, without going through UTC. */
+export function ymdIso(year: number, monthIndex: number, day: number): string {
+  return `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
 // Typed-date helpers for components/DateInput.tsx.
 export function isoToDmy(iso: string | null | undefined): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')

@@ -148,7 +148,7 @@ class BankTransactionController extends Controller
         DB::transaction(function () use ($txn, $user, $data) {
             $txn->is_voided = true;
             $txn->void_reason = $data['reason'];
-            $txn->voided_at = Carbon::now('UTC');
+            $txn->voided_at = Carbon::now();
             $txn->save();
 
             Audit::record(
@@ -181,7 +181,7 @@ class BankTransactionController extends Controller
         DB::transaction(function () use ($txn, $user) {
             $was = $txn->is_reconciled;
             $txn->is_reconciled = ! $was;
-            $txn->reconciled_at = $txn->is_reconciled ? Carbon::now('UTC') : null;
+            $txn->reconciled_at = $txn->is_reconciled ? Carbon::now() : null;
             $txn->save();
 
             Audit::record(
@@ -242,7 +242,7 @@ class BankTransactionController extends Controller
                 }
                 if (! $txn->is_reconciled) {
                     $txn->is_reconciled = true;
-                    $txn->reconciled_at = Carbon::now('UTC');
+                    $txn->reconciled_at = Carbon::now();
                     $txn->save();
                 }
             }

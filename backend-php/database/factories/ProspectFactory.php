@@ -21,7 +21,7 @@ class ProspectFactory extends Factory
             'company_id' => fn (array $a) => CompanyIndividual::find($a['customer_id'])->company_id,
             'prospect_number' => fn (array $a) => Numbering::next($a['company_id'], 'prospect'),
             'title' => fake()->sentence(3),
-            'status' => Prospect::STATUS_OPEN,
+            'status' => Prospect::STATUS_NEW,
         ];
     }
 }

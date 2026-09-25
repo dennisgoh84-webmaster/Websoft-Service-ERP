@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import DateInput from '../../components/DateInput'
 import { ACTIVITY_STATUSES, ACTIVITY_TYPES, api, type ProspectActivity } from '../../lib/api'
-import { formatDate } from '../../lib/format'
+import { formatDate, sgDateIso } from '../../lib/format'
 import { ACTIVITY_ICON, mobileStyles as styles, statusColors } from './mobileStyles'
 
-/** One prospect activity on the Mobile App: view, edit, delete. */
+/** One prospect activity on the Mobile App: view, edit, void (never delete). */
 export default function MobileProspectActivityDetailPage({ activityId, onBack }: { activityId: string; onBack: () => void }) {
   const [activity, setActivity] = useState<ProspectActivity | null>(null)
   const [loading, setLoading] = useState(true)
@@ -19,7 +19,7 @@ export default function MobileProspectActivityDetailPage({ activityId, onBack }:
       activity_type: a.activity_type,
       subject: a.subject,
       description: a.description || '',
-      activity_date: a.activity_date?.split('T')[0] || '',
+      activity_date: sgDateIso(a.activity_date),
       status: a.status,
     })
   }
@@ -52,14 +52,17 @@ export default function MobileProspectActivityDetailPage({ activityId, onBack }:
     }
   }
 
-  async function handleDelete() {
-    if (!confirm('Delete this activity? This cannot be undone.')) return
+  // Activities are never deleted: a mistaken one is voided with a reason and stays on record.
+  async function handleVoid() {
+    const reason = prompt('Why is this activity being voided? It stays on record as VOID.')
+    if (!reason || !reason.trim()) return
     setSaving(true)
+    setError('')
     try {
-      await api.deleteProspectActivity(activityId)
-      onBack()
+      fill(await api.voidProspectActivity(activityId, reason.trim()))
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to delete')
+      setError(e instanceof Error ? e.message : 'Failed to void')
+    } finally {
       setSaving(false)
     }
   }
@@ -93,7 +96,9 @@ export default function MobileProspectActivityDetailPage({ activityId, onBack }:
               </div>
               <div style={{ fontSize: 13, color: '#888' }}>{activity.customer_name}</div>
             </div>
-            <span style={{ ...styles.badge, background: colors.bg, color: colors.text }}>{activity.status}</span>
+            <span style={{ ...styles.badge, background: colors.bg, color: colors.text }}>
+              {activity.status === 'void' ? 'VOID' : activity.status}
+            </span>
           </div>
 
           {activity.description && (
@@ -106,14 +111,23 @@ export default function MobileProspectActivityDetailPage({ activityId, onBack }:
             <div>Date: {formatDate(activity.activity_date)}</div>
             <div>Type: {ACTIVITY_TYPES.find((t) => t.value === activity.activity_type)?.label ?? activity.activity_type}</div>
             <div>Logged by: {activity.created_by_name}</div>
+            {activity.status === 'void' && (
+              <div>
+                Voided by {activity.voided_by_name ?? '—'}: {activity.void_reason}
+              </div>
+            )}
           </div>
 
-          <button onClick={() => setIsEditing(true)} style={{ ...styles.btn, ...styles.btnPrimary, marginTop: 16 }}>
-            ✎ Edit Activity
-          </button>
-          <button onClick={handleDelete} disabled={saving} style={{ ...styles.btn, ...styles.btnDanger, marginTop: 8 }}>
-            🗑 Delete
-          </button>
+          {activity.status !== 'void' && (
+            <>
+              <button onClick={() => setIsEditing(true)} style={{ ...styles.btn, ...styles.btnPrimary, marginTop: 16 }}>
+                ✎ Edit Activity
+              </button>
+              <button onClick={handleVoid} disabled={saving} style={{ ...styles.btn, ...styles.btnDanger, marginTop: 8 }}>
+                ⊘ Void
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div style={styles.card}>

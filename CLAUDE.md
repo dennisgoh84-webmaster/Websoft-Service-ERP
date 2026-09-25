@@ -35,22 +35,31 @@ eventual project.
 - Customer Management
 - Service Contracts
 - Helpdesk / Service Operations (Job Orders)
-- Projects
 - Service Records
 - Billing
 - Accounts Receivable
 - Accounts Payable
-- Purchasing
+- Purchasing — part of Accounts Payable (purchase orders, 2-way
+  matching); its separate Module Control key was removed 2026-09-26 as
+  redundant
 - Inventory
-- Hardware Management
 - Commission Management — the commission **report**, its rate setting
   and **Commission Payouts** (generate / approve / pay / clawback) are
-  built; further commission business rules remain deferred (see
+  built, and since 2026-09-26 all of it is switched and granted under
+  its own `commission_management` Module Control key; further
+  commission business rules remain deferred (see
   [docs/open-business-decisions.md](docs/open-business-decisions.md))
 - Management Reporting
 - AI Assistant — slices 1 (incident triage), 2 (multi-language staff
   chat) and 3 (Customer Helpdesk Portal chat) built 2026-09-15; see
-  [docs/planned-work.md #12](docs/planned-work.md)
+  [docs/planned-work.md #12](docs/planned-work.md). Switched per company
+  under Module Control (`ai_assistant`), the owner included: with it
+  off, no AI screen, panel or settings link appears anywhere
+
+Projects and Hardware Management were dropped from the scope on
+2026-09-26 at Dennis's request (their Module Control keys, which never
+had code, were removed). PROJECT-type contracts and their milestone
+schedule are part of Service Contracts and are unaffected.
 
 "Ticket"/"Timesheet" terminology has been renamed throughout to "Job
 Order"/"Service Record" respectively, at Dennis's request.
@@ -108,6 +117,20 @@ explaining the reason first (see Development Rules below).
 - Document major architectural decisions.
 - Do not change the approved architecture without explaining the reason first.
 - Never assume a business rule when requirements have not been provided.
+- **Times are Singapore time, end to end — check this before building
+  anything that stores or shows a date or time.** The app
+  (`APP_TIMEZONE`) and the PostgreSQL session (`config/database.php`
+  `timezone`, which follows `APP_TIMEZONE`) run in the same zone, so:
+  - Write the current moment with `now()` / `Carbon::now()`. Never
+    `Carbon::now('UTC')`, `now('UTC')` or `->utc()` — a guard test
+    (`TimeZoneRuleTest`) fails the suite on any of them in `app/`.
+  - New time columns are `timestampTz` (`timestamp with time zone`);
+    a date with no time of day is a `date` column.
+  - The frontend formats with `lib/format.ts` (`formatDate`,
+    `formatDateTime`), never raw `toLocaleString()` or string slicing.
+  Until 2026-09-26 the session ran in UTC while the app ran in
+  Singapore time, so every time the app wrote was stored eight hours
+  ahead; migration `2026_09_30_002500` corrected the stored rows.
 - The test suite gates `main`, in both directions. Run the full suite
   (`cd backend-php && php artisan test`) and `./vendor/bin/pint --test`
   before every push to `main`:

@@ -128,6 +128,6 @@ class ServiceRecord extends Model
     {
         $due = $this->approvalDueAt();
 
-        return $this->status === self::STATUS_SUBMITTED && $due !== null && Carbon::now('UTC')->greaterThan($due);
+        return $this->status === self::STATUS_SUBMITTED && $due !== null && Carbon::now()->greaterThan($due);
     }
 }

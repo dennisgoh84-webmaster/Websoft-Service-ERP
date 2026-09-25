@@ -492,7 +492,7 @@ class InventoryService
 
         $adjustment->status = StockAdjustment::STATUS_APPROVED;
         $adjustment->approved_by = $approverId;
-        $adjustment->approved_at = Carbon::now('UTC');
+        $adjustment->approved_at = Carbon::now();
 
         foreach ($adjustment->lines as $line) {
             if ($line->quantity_change > 0) {

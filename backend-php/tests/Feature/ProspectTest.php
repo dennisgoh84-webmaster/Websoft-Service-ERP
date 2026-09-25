@@ -67,7 +67,7 @@ class ProspectTest extends TestCase
         $p = $this->newProspect($h, ['estimated_value_sgd' => 18000, 'source' => 'Referral']);
         $this->assertStringStartsWith('PRS-', $p['prospect_number']);
         $this->assertSame($staff->id, $p['salesperson_user_id']);
-        $this->assertSame('open', $p['status']);
+        $this->assertSame('new', $p['status']);
         $this->assertEquals(18000, $p['estimated_value_sgd']);
 
         $this->postJson('/api/prospect-activities', ['prospect_id' => $p['id'], 'activity_type' => 'meeting', 'subject' => 'Site survey'], $h)
@@ -115,6 +115,23 @@ class ProspectTest extends TestCase
         [, $supH] = $this->login(User::ROLE_SALES_SUPERVISOR);
         $this->postJson('/api/prospects', ['customer_id' => $this->customer->id, 'title' => 'x', 'salesperson_user_id' => $other->id], $supH)
             ->assertOk()->assertJson(['salesperson_user_id' => $other->id]);
+    }
+
+    public function test_a_prospect_moves_through_the_pipeline_stages(): void
+    {
+        [, $h] = $this->login(User::ROLE_OWNER);
+        $id = $this->newProspect($h, ['title' => 'Pipeline'])['id'];
+        $closed = $this->newProspect($h, ['title' => 'Closed'])['id'];
+        $this->patchJson("/api/prospects/{$closed}", ['status' => 'won'], $h)->assertOk();
+
+        foreach (['qualified', 'proposal', 'negotiation'] as $stage) {
+            $this->patchJson("/api/prospects/{$id}", ['status' => $stage], $h)->assertOk()->assertJson(['status' => $stage]);
+        }
+        $this->patchJson("/api/prospects/{$id}", ['status' => 'open'], $h)->assertStatus(422);
+
+        // "In pipeline" is everything not yet Won or Lost.
+        $this->getJson('/api/prospects?status=active', $h)->assertOk()->assertJsonCount(1)->assertJsonPath('0.id', $id);
+        $this->getJson('/api/prospects?status=won', $h)->assertOk()->assertJsonCount(1)->assertJsonPath('0.id', $closed);
     }
 
     public function test_marking_lost_needs_a_reason_and_the_company_cannot_change(): void

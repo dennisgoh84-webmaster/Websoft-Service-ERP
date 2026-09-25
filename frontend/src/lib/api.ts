@@ -1840,7 +1840,7 @@ export interface QuotationLine {
 }
 
 // ---- Prospect / Leads ----
-export type ProspectStatus = 'open' | 'won' | 'lost'
+export type ProspectStatus = 'new' | 'qualified' | 'proposal' | 'negotiation' | 'won' | 'lost'
 
 /** What a prospect reports about itself (all SGD, GST-inclusive except the salesperson's own estimate). */
 export interface ProspectAmounts {
@@ -1916,18 +1916,35 @@ export interface ProspectActivity {
   created_by_name: string | null
   last_edited_by_user_id: string | null
   last_edited_by_name: string | null
+  void_reason: string | null
+  voided_at: string | null
+  voided_by_name: string | null
   created_at: string
   updated_at: string
 }
 
+/** The sales pipeline, in order (Dennis, 2026-09-26). Won and Lost close it; the salesperson moves a prospect along by hand. */
 export const PROSPECT_STATUSES: { value: ProspectStatus; label: string }[] = [
-  { value: 'open', label: 'Open' },
+  { value: 'new', label: 'New' },
+  { value: 'qualified', label: 'Qualified' },
+  { value: 'proposal', label: 'Proposal' },
+  { value: 'negotiation', label: 'Negotiation' },
   { value: 'won', label: 'Won' },
   { value: 'lost', label: 'Lost' },
 ]
 
+/** Still in the pipeline: anything not yet Won or Lost. */
+export const isProspectActive = (status: ProspectStatus) => status !== 'won' && status !== 'lost'
+
 /** Badge style per prospect status (the classes in index.css). */
-export const PROSPECT_BADGE: Record<ProspectStatus, string> = { open: 'draft', won: 'active', lost: 'exceeded' }
+export const PROSPECT_BADGE: Record<ProspectStatus, string> = {
+  new: 'draft',
+  qualified: 'status-not-started',
+  proposal: 'status-in-progress',
+  negotiation: 'status-watch',
+  won: 'active',
+  lost: 'exceeded',
+}
 
 export const ACTIVITY_TYPES = [
   { value: 'call', label: 'Call' },
@@ -1946,6 +1963,9 @@ export const ACTIVITY_STATUSES = [
   { value: 'pending', label: 'Pending' },
   { value: 'cancelled', label: 'Cancelled' },
 ]
+
+/** Every status an activity can show -- VOID is reached only through the Void action, never picked from a list. */
+export const ACTIVITY_STATUS_LABELS: { value: string; label: string }[] = [...ACTIVITY_STATUSES, { value: 'void', label: 'VOID' }]
 
 export type ProspectPayload = {
   customer_id?: string
@@ -2187,6 +2207,18 @@ export interface GTNCreatePayload {
   from_warehouse_id: string; to_warehouse_id: string
   transfer_date?: string; notes?: string
   lines: { stock_item_id: string; quantity: number; notes?: string }[]
+}
+export interface GINLineRow {
+  id: string; stock_item_id: string; quantity: number
+  /** Null until confirmed: stock leaves at the item's average cost, stamped on confirm. */
+  unit_cost: number | null; total_cost: number | null; notes: string | null
+}
+export interface GINRow {
+  id: string; gin_number: string; warehouse_id: string
+  customer_id: string | null; job_order_id: string | null; issue_date: string
+  reason: string | null; status: string
+  notes: string | null; lines: GINLineRow[]
+  created_at: string
 }
 export interface GRTNLineRow {
   id: string; stock_item_id: string; quantity: number
@@ -3550,7 +3582,8 @@ export const api = {
     request<ProspectActivity>('/prospect-activities', { method: 'POST', body: JSON.stringify(payload) }),
   updateProspectActivity: (id: string, payload: ProspectActivityPayload) =>
     request<ProspectActivity>(`/prospect-activities/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
-  deleteProspectActivity: (id: string) => request<void>(`/prospect-activities/${id}`, { method: 'DELETE' }),
+  voidProspectActivity: (id: string, reason: string) =>
+    request<ProspectActivity>(`/prospect-activities/${id}/void`, { method: 'POST', body: JSON.stringify({ reason }) }),
 
   submitQuotation: (id: string) => request<Quotation>(`/quotations/${id}/submit`, { method: 'POST' }),
   approveQuotation: (id: string) => request<Quotation>(`/quotations/${id}/approve`, { method: 'POST' }),
@@ -4005,6 +4038,17 @@ export const api = {
     request<GTNRow>('/stock/gtn', { method: 'POST', body: JSON.stringify(data) }),
   confirmGTN: (id: string) => request<GTNRow>(`/stock/gtn/${id}/confirm`, { method: 'POST' }),
 
+  listGINs: () => request<GINRow[]>('/stock/gin'),
+  createGIN: (data: {
+    warehouse_id: string
+    customer_id?: string
+    job_order_id?: string
+    issue_date?: string
+    reason?: string
+    notes?: string
+    lines: { stock_item_id: string; quantity: number; notes?: string }[]
+  }) => request<GINRow>('/stock/gin', { method: 'POST', body: JSON.stringify(data) }),
+  confirmGIN: (id: string) => request<GINRow>(`/stock/gin/${id}/confirm`, { method: 'POST' }),
   listGRTNs: () => request<GRTNRow[]>('/stock/grtn'),
   createGRTN: (data: GRTNCreatePayload) =>
     request<GRTNRow>('/stock/grtn', { method: 'POST', body: JSON.stringify(data) }),

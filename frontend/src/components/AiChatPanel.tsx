@@ -7,9 +7,12 @@
 //
 // The conversation lives in this component (the browser) and is sent
 // whole on every turn; the server keeps only the tokens/tools record.
-// A 403 on the persona probe means the company is not licensed for
-// the AI Assistant module: the panel renders nothing rather than nag.
+// Module Control decides whether it appears at all: with `ai_assistant`
+// switched off for the company (the owner included) the panel renders
+// nothing and never calls the server. A 403 on the persona probe is
+// treated the same way, rather than nag.
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useAuth } from '../lib/AuthContext'
 import { api, type AiChatContextType, type AiChatMessage, type AiPersona } from '../lib/api'
 
 type Props = {
@@ -40,14 +43,16 @@ export default function AiChatPanel({ context }: Props) {
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
+  const { moduleAccess } = useAuth()
+  const enabled = moduleAccess.ai_assistant === true
   useEffect(() => {
-    loadPersona().then(setPersona)
-  }, [])
+    if (enabled) loadPersona().then(setPersona)
+  }, [enabled])
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'nearest' })
   }, [turns, busy])
 
-  if (persona === undefined || persona === null) return null
+  if (!enabled || persona === undefined || persona === null) return null
 
   const name = persona.name
   const avatar = persona.avatar ?? DEFAULT_AVATAR

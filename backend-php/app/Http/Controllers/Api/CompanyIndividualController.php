@@ -207,7 +207,7 @@ class CompanyIndividualController extends Controller
 
         $oldGiven = $customer->pdpa_consent_given;
         $customer->pdpa_consent_given = $data['given'];
-        $customer->pdpa_consent_at = $data['given'] ? Carbon::now('UTC') : null;
+        $customer->pdpa_consent_at = $data['given'] ? Carbon::now() : null;
 
         // Dennis, 2026-09-15: the data expiry date defaults to FIVE
         // YEARS from the e-signed date. Only filled in when nothing has
@@ -279,7 +279,7 @@ class CompanyIndividualController extends Controller
 
         $customer = $this->customerOrFail($user, $customerId);
         $customer->is_archived = true;
-        $customer->archived_at = Carbon::now('UTC');
+        $customer->archived_at = Carbon::now();
         Audit::record(
             'customer', $customer->id, 'archived', $user->id,
             oldValue: ['is_archived' => false], newValue: ['is_archived' => true],
@@ -589,7 +589,7 @@ class CompanyIndividualController extends Controller
                 'invited_by_email' => false,
             ];
         }
-        $now = Carbon::now('UTC');
+        $now = Carbon::now();
 
         return [
             'enabled' => $portalUser->is_active,

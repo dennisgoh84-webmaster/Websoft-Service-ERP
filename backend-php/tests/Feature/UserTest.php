@@ -263,7 +263,7 @@ class UserTest extends TestCase
         UserPasswordHistory::create([
             'user_id' => $staff->id,
             'hashed_password' => PasswordPolicy::hash('originalpass1'),
-            'set_at' => Carbon::now('UTC')->subDay(),
+            'set_at' => Carbon::now()->subDay(),
         ]);
 
         $this->postJson("/api/users/{$staff->id}/reset-password", ['new_password' => 'originalpass1'], $this->headers($token))

@@ -543,6 +543,6 @@ class UserController extends Controller
 
     private function recordPasswordHistory(string $userId, string $hashedPassword): void
     {
-        UserPasswordHistory::create(['user_id' => $userId, 'hashed_password' => $hashedPassword, 'set_at' => Carbon::now('UTC')]);
+        UserPasswordHistory::create(['user_id' => $userId, 'hashed_password' => $hashedPassword, 'set_at' => Carbon::now()]);
     }
 }

@@ -69,7 +69,7 @@ class ServiceRecordRulesTest extends TestCase
 
         Carbon::setTestNow(Carbon::parse('2026-09-01 09:00:00', 'UTC'));
         $record = $this->submit($jobOrder, $employee)->fresh();
-        $this->assertSame('2026-09-08T09:00:00+00:00', $record->approvalDueAt()->toIso8601String());
+        $this->assertSame(Carbon::parse('2026-09-08 09:00:00', 'UTC')->getTimestamp(), $record->approvalDueAt()->getTimestamp());
         $this->assertFalse($record->isApprovalOverdue());
 
         Carbon::setTestNow(Carbon::parse('2026-09-08 08:00:00', 'UTC'));

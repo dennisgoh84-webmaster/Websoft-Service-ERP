@@ -16,7 +16,7 @@ import {
   type PeriodLock,
   type PeriodOperation,
 } from '../lib/api'
-import { formatDate } from '../lib/format'
+import { formatDate, ymdIso } from '../lib/format'
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -84,8 +84,8 @@ export default function AccountingPeriodsPage() {
     setError(null)
     setCreating(true)
     try {
-      const start = new Date(fiscalYear, month, 1).toISOString().slice(0, 10)
-      const end = new Date(fiscalYear, month, lastDayOfMonth(fiscalYear, month)).toISOString().slice(0, 10)
+      const start = ymdIso(fiscalYear, month, 1)
+      const end = ymdIso(fiscalYear, month, lastDayOfMonth(fiscalYear, month))
       await api.createAccountingPeriod({
         fiscal_year: fiscalYear,
         name: `${MONTH_NAMES[month]} ${fiscalYear}`,

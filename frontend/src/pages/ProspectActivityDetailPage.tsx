@@ -1,13 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import InvoiceHistoryPanel from '../components/InvoiceHistoryPanel'
-import { ACTIVITY_STATUSES, ACTIVITY_TYPES, api, type ProspectActivity } from '../lib/api'
-import { formatDate, formatDateTime } from '../lib/format'
+import { ACTIVITY_STATUS_LABELS, ACTIVITY_STATUSES, ACTIVITY_TYPES, api, type ProspectActivity } from '../lib/api'
+import { formatDate, formatDateTime, sgDateIso } from '../lib/format'
 import DateInput from '../components/DateInput'
 
 export default function ProspectActivityDetailPage() {
   const { activityId } = useParams<{ activityId: string }>()
-  const navigate = useNavigate()
   const [activity, setActivity] = useState<ProspectActivity | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -28,7 +27,7 @@ export default function ProspectActivityDetailPage() {
         setActivityType(a.activity_type)
         setSubject(a.subject)
         setDescription(a.description || '')
-        setActivityDate(a.activity_date ? a.activity_date.split('T')[0] : '')
+        setActivityDate(sgDateIso(a.activity_date))
         setStatus(a.status)
       })
       .catch((e) => setError(e.message))
@@ -55,17 +54,21 @@ export default function ProspectActivityDetailPage() {
     }
   }
 
-  async function onDelete() {
+  // Activities are never deleted (Dennis, 2026-09-26): a mistaken one
+  // is voided with a reason and stays on the record.
+  async function onVoid() {
     if (!activityId) return
-    if (!window.confirm('Are you sure you want to delete this activity?')) return
+    const reason = window.prompt('Why is this activity being voided? It stays on record as VOID.')
+    if (!reason || !reason.trim()) return
     setError(null)
     try {
-      await api.deleteProspectActivity(activityId)
-      navigate(activity?.prospect_id ? `/prospects/${activity.prospect_id}` : '/prospect-activities')
+      setActivity(await api.voidProspectActivity(activityId, reason.trim()))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete activity')
+      setError(err instanceof Error ? err.message : 'Failed to void activity')
     }
   }
+
+  const isVoid = activity?.status === 'void'
 
   if (!activity) {
     return <div>{error ? <p className="error-banner">{error}</p> : <p>Loading...</p>}</div>
@@ -76,11 +79,11 @@ export default function ProspectActivityDetailPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h1>{isEditing ? 'Edit' : 'Prospect Activity'}</h1>
         <div>
-          {!isEditing && (
+          {!isEditing && !isVoid && (
             <>
               <button onClick={() => setIsEditing(true)}>Edit</button>
-              <button onClick={onDelete} className="secondary" style={{ marginLeft: 10 }}>
-                Delete
+              <button onClick={onVoid} className="secondary" style={{ marginLeft: 10 }}>
+                Void
               </button>
             </>
           )}
@@ -187,7 +190,13 @@ export default function ProspectActivityDetailPage() {
               </div>
               <div>
                 <p className="label">Status</p>
-                <p>{ACTIVITY_STATUSES.find((s) => s.value === activity.status)?.label}</p>
+                <p>
+                  {isVoid ? (
+                    <span className="badge exceeded">VOID</span>
+                  ) : (
+                    ACTIVITY_STATUS_LABELS.find((s) => s.value === activity.status)?.label
+                  )}
+                </p>
               </div>
               <div>
                 <p className="label">Activity Date</p>
@@ -196,6 +205,21 @@ export default function ProspectActivityDetailPage() {
                 </p>
               </div>
             </div>
+            {isVoid && (
+              <div className="details-grid" style={{ marginTop: 20 }}>
+                <div>
+                  <p className="label">Void reason</p>
+                  <p>{activity.void_reason}</p>
+                </div>
+                <div>
+                  <p className="label">Voided by</p>
+                  <p>
+                    {activity.voided_by_name ?? '—'}
+                    {activity.voided_at ? `, ${formatDateTime(activity.voided_at)}` : ''}
+                  </p>
+                </div>
+              </div>
+            )}
             {activity.description && (
               <div style={{ marginTop: 20 }}>
                 <p className="label">Description</p>

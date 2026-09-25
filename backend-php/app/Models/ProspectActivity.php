@@ -11,7 +11,8 @@ class ProspectActivity extends Model
 {
     use HasFactory, HasUuidPrimaryKey;
 
-    // As on Prospect: the database fills created_at/updated_at in UTC.
+    // created_at comes from the database default; updated_at is set by
+    // the controller on edit (and has a database default for inserts).
     public $timestamps = false;
 
     public const ACTIVITY_TYPE_CALL = 'call';
@@ -38,6 +39,10 @@ class ProspectActivity extends Model
 
     public const STATUS_CANCELLED = 'cancelled';
 
+    // Set only by the Void action, never picked as an ordinary status:
+    // activities are voided, never deleted (Dennis, 2026-09-26).
+    public const STATUS_VOID = 'void';
+
     protected $fillable = [
         'company_id',
         'customer_id',
@@ -53,6 +58,7 @@ class ProspectActivity extends Model
 
     protected $casts = [
         'activity_date' => 'datetime',
+        'voided_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -80,5 +86,10 @@ class ProspectActivity extends Model
     public function lastEditedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'last_edited_by_user_id');
+    }
+
+    public function voidedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'voided_by_user_id');
     }
 }

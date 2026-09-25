@@ -39,16 +39,17 @@ by every portal endpoint and vice versa.
 Core / Administration · Customer Management · Sales (Quotations,
 Product/Service Catalog) · Service Contracts · Helpdesk / Service
 Operations (Job Orders) · Service Records · Billing · Accounts
-Receivable · Accounts Payable · Purchasing · Finance / Accounting
+Receivable · Accounts Payable (incl. Purchase Orders) · Finance / Accounting
 (GL, periods, year-end) · Stock Master + Goods Receive / Transfer /
 Return / Issue Notes + Stock Adjustment · Stock Operation Reports ·
-Operations Reports · Accounting Reports · Commission (report, rate,
-payouts) · Software Tasks · Event Logs · Bank Book · Ops Dashboard ·
+Operations Reports · Accounting Reports · Commission Management (report,
+rate, payouts) · Software Tasks · Event Logs · Bank Book · Ops Dashboard ·
 Reporting / Management Dashboard · Prospect / Leads (with Prospect
 Activities logged on the Mobile App) · AI Assistant · Data Migration
 (ODOO / ZSOFT)
 
-**Not started** — Projects · Hardware Management
+Projects and Hardware Management were dropped from the scope
+(2026-09-26).
 
 Every module is independently switchable per company through **Module
 Control**, and access within a module is **VIEW / EDIT / FULL** per

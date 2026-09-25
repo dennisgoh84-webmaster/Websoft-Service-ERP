@@ -495,14 +495,14 @@ class AccountingReportsTest extends TestCase
     public function test_reading_the_commission_rate_does_not_let_a_view_only_group_change_it(): void
     {
         $company = Company::factory()->create();
-        ModuleCatalog::firstOrCreate(['key' => 'accounting_reports'], ['name' => 'Accounting Reports', 'is_built' => true]);
+        ModuleCatalog::firstOrCreate(['key' => 'commission_management'], ['name' => 'Commission Management', 'is_built' => true]);
         CompanyModule::updateOrCreate(
-            ['company_id' => $company->id, 'module_key' => 'accounting_reports'],
+            ['company_id' => $company->id, 'module_key' => 'commission_management'],
             ['enabled' => true],
         );
         $group = Group::factory()->for($company)->create();
         GroupModuleAuthority::create([
-            'group_id' => $group->id, 'module_key' => 'accounting_reports',
+            'group_id' => $group->id, 'module_key' => 'commission_management',
             'access_level' => GroupModuleAuthority::VIEW,
         ]);
         $staff = User::factory()->for($company)->create([

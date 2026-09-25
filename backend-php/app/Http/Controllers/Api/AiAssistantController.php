@@ -26,12 +26,14 @@ use Illuminate\Support\Carbon;
 /**
  * AI Assistant (docs/planned-work.md #12, slice 1 built 2026-09-15).
  *
- * Settings and usage live under Core / Administration (Maintenance ->
- * AI Assistant). The features themselves are gated on the
- * `ai_assistant` module key, which Module Control treats as a paid
- * add-on (decision 12.4): unlike other modules the OWNER is gated too,
- * because the key is a licence, not a permission -- see
- * requireLicensed().
+ * Everything here is gated on the `ai_assistant` module key, which
+ * Module Control treats as a paid add-on (decision 12.4): unlike other
+ * modules the OWNER is gated too, because the key is a licence, not a
+ * permission -- see requireLicensed(). Settings and usage (Maintenance
+ * -> AI Assistant) additionally need Core / Administration; since
+ * 2026-09-26 they too are unreachable while the module is off
+ * (Dennis: the AI Assistant "has to be controlled also under the
+ * module control").
  */
 class AiAssistantController extends Controller
 {
@@ -48,7 +50,7 @@ class AiAssistantController extends Controller
     public function settings(Request $request)
     {
         $user = Authenticate::user($request);
-        Authority::requireModuleAccess($user, self::ADMIN_MODULE, 'view');
+        $this->requireAdmin($user, 'view');
 
         return response()->json($this->presentSettings());
     }
@@ -56,7 +58,7 @@ class AiAssistantController extends Controller
     public function updateSettings(Request $request)
     {
         $user = Authenticate::user($request);
-        Authority::requireModuleAccess($user, self::ADMIN_MODULE, 'full');
+        $this->requireAdmin($user, 'full');
 
         $fields = $request->validate([
             'api_key' => 'sometimes|nullable|string|max:500',
@@ -104,7 +106,7 @@ class AiAssistantController extends Controller
             }
             $row->{$field} = $new;
         }
-        $row->updated_at = Carbon::now('UTC');
+        $row->updated_at = Carbon::now();
         $row->save();
 
         Audit::record(
@@ -121,14 +123,14 @@ class AiAssistantController extends Controller
     public function testConnection(Request $request)
     {
         $user = Authenticate::user($request);
-        Authority::requireModuleAccess($user, self::ADMIN_MODULE, 'full');
+        $this->requireAdmin($user, 'full');
 
         $interaction = new AiInteraction([
             'company_id' => $user->company_id,
             'user_id' => $user->id,
             'feature' => AiInteraction::FEATURE_CONNECTION_TEST,
             'model' => AiSetting::current()->model ?: AiSetting::DEFAULT_MODEL,
-            'created_at' => Carbon::now('UTC'),
+            'created_at' => Carbon::now(),
         ]);
         try {
             AiBudget::assertWithinCap();
@@ -172,10 +174,10 @@ class AiAssistantController extends Controller
     public function usage(Request $request)
     {
         $user = Authenticate::user($request);
-        Authority::requireModuleAccess($user, self::ADMIN_MODULE, 'view');
+        $this->requireAdmin($user, 'view');
 
         $base = AiInteraction::where('company_id', $user->company_id);
-        $monthStart = Carbon::now('Asia/Singapore')->startOfMonth()->utc();
+        $monthStart = Carbon::now()->startOfMonth();
         $sum = fn ($q) => [
             'calls' => (clone $q)->count(),
             'ok' => (clone $q)->where('status', AiInteraction::STATUS_OK)->count(),
@@ -305,6 +307,14 @@ class AiAssistantController extends Controller
      * included, whom Authority::requireModuleAccess() otherwise lets
      * through a disabled module.
      */
+    private function requireAdmin(User $user, string $level): void
+    {
+        Authority::requireModuleAccess($user, self::ADMIN_MODULE, $level);
+        if (! Authority::isModuleEnabled($user->company_id, self::MODULE)) {
+            throw new ApiException(403, 'The AI Assistant module is not enabled for this company. Switch it on under Maintenance -> Module Control first.');
+        }
+    }
+
     private function requireLicensed(User $user): void
     {
         Authority::requireModuleAccess($user, self::MODULE, 'view');

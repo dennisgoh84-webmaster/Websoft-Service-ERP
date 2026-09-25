@@ -76,7 +76,13 @@ class ProspectController extends Controller
     private function filtered(User $user, Request $request): Collection
     {
         $query = Prospect::visibleTo($user)->with(['customer', 'salesperson', 'createdBy']);
-        foreach (['status', 'customer_id', 'salesperson_user_id'] as $field) {
+        // status=active: everything still in the pipeline (not Won / Lost).
+        if ($request->query('status') === 'active') {
+            $query->whereIn('status', Prospect::ACTIVE_STATUSES);
+        } elseif ($request->filled('status')) {
+            $query->where('status', $request->query('status'));
+        }
+        foreach (['customer_id', 'salesperson_user_id'] as $field) {
             if ($request->filled($field)) {
                 $query->where($field, $request->query($field));
             }
@@ -169,7 +175,7 @@ class ProspectController extends Controller
             throw new ApiException(404, 'Company / Individual not found');
         }
         $salespersonId = $this->salespersonFor($user, $data['salesperson_user_id'] ?? null);
-        $this->requireLostReason($data['status'] ?? Prospect::STATUS_OPEN, $data['lost_reason'] ?? null);
+        $this->requireLostReason($data['status'] ?? Prospect::STATUS_NEW, $data['lost_reason'] ?? null);
 
         $prospect = DB::transaction(function () use ($user, $data, $salespersonId) {
             $prospect = Prospect::create([
@@ -178,7 +184,7 @@ class ProspectController extends Controller
                 'customer_id' => $data['customer_id'],
                 'title' => $data['title'],
                 'source' => $data['source'] ?? null,
-                'status' => $data['status'] ?? Prospect::STATUS_OPEN,
+                'status' => $data['status'] ?? Prospect::STATUS_NEW,
                 'estimated_value_sgd' => $data['estimated_value_sgd'] ?? null,
                 'expected_close_date' => $data['expected_close_date'] ?? null,
                 'salesperson_user_id' => $salespersonId,
@@ -227,7 +233,7 @@ class ProspectController extends Controller
         }
         if ($new !== []) {
             $prospect->last_edited_by_user_id = $user->id;
-            $prospect->updated_at = Carbon::now('UTC');
+            $prospect->updated_at = Carbon::now();
             $prospect->save();
             Audit::record('prospect', $prospect->id, 'updated', $user->id, companyId: $user->company_id, oldValue: $old, newValue: $new);
         }

@@ -195,8 +195,18 @@ class AiAssistantTest extends TestCase
         $this->postJson("/api/ai/incidents/{$incident->id}/triage", [], $h)->assertStatus(403);
         $this->assertCount(0, AiClient::requests());
 
+        // Module Control decides everywhere (Dennis, 2026-09-26): with it
+        // off the owner's menu leaves it out and even its settings are shut.
+        $this->getJson('/api/modules/my-access', $h)->assertOk()->assertJsonPath('ai_assistant', false)->assertJsonPath('core_administration', true);
+        $this->getJson('/api/ai/settings', $h)->assertStatus(403);
+        $this->patchJson('/api/ai/settings', ['model' => 'claude-opus-5'], $h)->assertStatus(403);
+        $this->getJson('/api/ai/usage', $h)->assertStatus(403);
+        $this->postJson('/api/ai/settings/test', [], $h)->assertStatus(403);
+        $this->getJson('/api/ai/persona', $h)->assertStatus(403);
+
         // A staff member whose group lacks the module is refused before the licence check.
         CompanyModule::where('company_id', $company->id)->where('module_key', 'ai_assistant')->update(['enabled' => true]);
+        $this->getJson('/api/modules/my-access', $h)->assertOk()->assertJsonPath('ai_assistant', true);
         $group = Group::factory()->for($company)->create();
         GroupModuleAuthority::create(['group_id' => $group->id, 'module_key' => 'service_operations', 'access_level' => GroupModuleAuthority::FULL]);
         $staff = User::factory()->for($company)->create(['role' => User::ROLE_SUPPORT_ENGINEER, 'hashed_password' => PasswordPolicy::hash('demo1234')]);

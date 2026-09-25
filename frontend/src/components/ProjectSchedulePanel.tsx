@@ -16,7 +16,7 @@ import {
 } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import DateInput from './DateInput'
-import { formatDate, todayIso } from '../lib/format'
+import { formatDate, todayIso, ymdIso } from '../lib/format'
 
 const MILESTONE_TYPE_LABELS: Record<MilestoneType, string> = {
   installation: 'Installation',
@@ -151,9 +151,9 @@ export default function ProjectSchedulePanel({ jobOrderId, milestones, users, ed
     const endDate = new Date(ganttMaxDate)
     let current = new Date(startDate.getFullYear(), startDate.getMonth(), 1)
     while (current <= endDate) {
-      const monthStart = current.toISOString().slice(0, 10)
+      const monthStart = ymdIso(current.getFullYear(), current.getMonth(), 1)
       const nextMonth = new Date(current.getFullYear(), current.getMonth() + 1, 0)
-      const monthEnd = nextMonth.toISOString().slice(0, 10)
+      const monthEnd = ymdIso(nextMonth.getFullYear(), nextMonth.getMonth(), nextMonth.getDate())
       const effectiveStart = monthStart < ganttMinDate ? ganttMinDate : monthStart
       const effectiveEnd = monthEnd > ganttMaxDate ? ganttMaxDate : monthEnd
       const pos = barPosition(effectiveStart, effectiveEnd)

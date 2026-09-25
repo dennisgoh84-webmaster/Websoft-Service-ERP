@@ -113,7 +113,7 @@ class ContractService
         }
 
         $contract->status = Contract::STATUS_ACTIVE;
-        $contract->activated_at = Carbon::now('UTC');
+        $contract->activated_at = Carbon::now();
         $contract->save();
 
         Audit::record('contract', $contract->id, 'activated', $actorUserId);
@@ -284,7 +284,7 @@ class ContractService
 
         $old = $contract->quotation_reference;
         $contract->quotation_reference = trim($quotationReference);
-        $contract->quotation_reference_set_at = Carbon::now('UTC');
+        $contract->quotation_reference_set_at = Carbon::now();
         $contract->quotation_reference_set_by = $actorUserId;
         $contract->save();
 

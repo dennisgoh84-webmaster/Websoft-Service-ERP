@@ -363,7 +363,7 @@ export default function QuotationsPage() {
                 {customerProspects.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.prospect_number} — {p.title}
-                    {p.status !== 'open' ? ` (${p.status})` : ''}
+                    {p.status === 'won' || p.status === 'lost' ? ` (${p.status})` : ''}
                   </option>
                 ))}
               </select>

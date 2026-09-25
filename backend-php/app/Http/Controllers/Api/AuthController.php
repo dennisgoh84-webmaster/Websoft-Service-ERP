@@ -108,7 +108,7 @@ class AuthController extends Controller
             ->orderByDesc('created_at')
             ->first();
 
-        $now = Carbon::now('UTC');
+        $now = Carbon::now();
         if (! $otp || $otp->expires_at->lt($now)) {
             throw new ApiException(401, 'This code has expired -- please sign in again to get a new one.');
         }
@@ -168,7 +168,7 @@ class AuthController extends Controller
                 'user_id' => $user->id,
                 'code_hash' => self::hashOtp($code),
                 'purpose' => 'password_reset',
-                'expires_at' => Carbon::now('UTC')->addMinutes(self::OTP_EXPIRE_MINUTES),
+                'expires_at' => Carbon::now()->addMinutes(self::OTP_EXPIRE_MINUTES),
             ]);
             try {
                 Mailer::send(
@@ -209,7 +209,7 @@ class AuthController extends Controller
             ->orderByDesc('created_at')
             ->first();
 
-        $now = Carbon::now('UTC');
+        $now = Carbon::now();
         if (! $otp || $otp->expires_at->lt($now) || $otp->attempts >= self::OTP_MAX_ATTEMPTS) {
             $genericError();
         }
@@ -285,7 +285,7 @@ class AuthController extends Controller
             // and every subsequent read -- Staff Master included --
             // re-fetches from the database and is therefore correct;
             // only THIS response, right after the fact, was ever wrong.
-            $now = Carbon::now('UTC');
+            $now = Carbon::now();
             $user->ai_data_consent_at = $now;
             $user->save();
             Audit::record(
@@ -372,7 +372,7 @@ class AuthController extends Controller
             'code_hash' => self::hashOtp($code),
             'purpose' => 'login',
             'channel' => $channel,
-            'expires_at' => Carbon::now('UTC')->addMinutes(self::OTP_EXPIRE_MINUTES),
+            'expires_at' => Carbon::now()->addMinutes(self::OTP_EXPIRE_MINUTES),
         ]);
 
         try {
@@ -426,7 +426,7 @@ class AuthController extends Controller
         $user = Authenticate::user($request);
 
         // Only the latest code works: asking again cancels the old one.
-        $now = Carbon::now('UTC');
+        $now = Carbon::now();
         LoginOtp::where('user_id', $user->id)->where('purpose', 'addin_connect')->whereNull('consumed_at')
             ->update(['consumed_at' => $now]);
 
@@ -460,7 +460,7 @@ class AuthController extends Controller
         $otp = strlen($code) === 8
             ? LoginOtp::where('purpose', 'addin_connect')->where('code_hash', self::hashOtp($code))->whereNull('consumed_at')->first()
             : null;
-        $now = Carbon::now('UTC');
+        $now = Carbon::now();
         if (! $otp || $otp->expires_at->lt($now)) {
             throw new ApiException(401, 'That code is wrong or has expired. Get a new one from Websoft and try again.');
         }

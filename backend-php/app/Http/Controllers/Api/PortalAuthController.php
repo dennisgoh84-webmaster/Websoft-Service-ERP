@@ -83,7 +83,7 @@ class PortalAuthController extends Controller
             $genericError();
         }
 
-        $now = Carbon::now('UTC');
+        $now = Carbon::now();
         if ($portalUser->locked_until && $portalUser->locked_until->gt($now)) {
             throw new ApiException(401, sprintf(
                 'Too many incorrect attempts. This login is locked until %s (SGT server time).',
@@ -130,7 +130,7 @@ class PortalAuthController extends Controller
             ->orderByDesc('created_at')
             ->first();
 
-        $now = Carbon::now('UTC');
+        $now = Carbon::now();
         if (! $otp || $otp->expires_at->lt($now)) {
             throw new ApiException(401, 'This code has expired -- please sign in again to get a new one.');
         }
@@ -188,7 +188,7 @@ class PortalAuthController extends Controller
                 'portal_user_id' => $portalUser->id,
                 'code_hash' => self::hashOtp($code),
                 'purpose' => 'password_reset',
-                'expires_at' => Carbon::now('UTC')->addMinutes(self::OTP_EXPIRE_MINUTES),
+                'expires_at' => Carbon::now()->addMinutes(self::OTP_EXPIRE_MINUTES),
             ]);
             try {
                 Mailer::send(
@@ -227,7 +227,7 @@ class PortalAuthController extends Controller
             ->orderByDesc('created_at')
             ->first();
 
-        $now = Carbon::now('UTC');
+        $now = Carbon::now();
         if (! $otp || $otp->expires_at->lt($now) || $otp->attempts >= self::OTP_MAX_ATTEMPTS) {
             $genericError();
         }
@@ -286,7 +286,7 @@ class PortalAuthController extends Controller
                 'portal_user_id' => $portalUser->id,
                 'code_hash' => self::hashOtp($code),
                 'purpose' => 'login',
-                'expires_at' => Carbon::now('UTC')->addMinutes(self::OTP_EXPIRE_MINUTES),
+                'expires_at' => Carbon::now()->addMinutes(self::OTP_EXPIRE_MINUTES),
             ]);
             try {
                 Mailer::send(

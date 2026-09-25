@@ -89,8 +89,8 @@ return new class extends Migration
                     'status' => 'open',
                     'salesperson_user_id' => $first->created_by_user_id,
                     'created_by_user_id' => $first->created_by_user_id,
-                    'created_at' => $first->created_at ?? Carbon::now('UTC'),
-                    'updated_at' => Carbon::now('UTC'),
+                    'created_at' => $first->created_at ?? Carbon::now(),
+                    'updated_at' => Carbon::now(),
                 ]);
                 DB::table('prospect_activities')
                     ->where('company_id', $g->company_id)->where('customer_id', $g->customer_id)

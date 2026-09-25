@@ -71,7 +71,7 @@ class AiBudgetTest extends TestCase
     {
         [$company] = $this->licensedCompany();
         AiSetting::current()->fill(['monthly_token_cap' => 100])->save();
-        $lastMonth = Carbon::now('Asia/Singapore')->startOfMonth()->subDay()->utc();
+        $lastMonth = Carbon::now()->startOfMonth()->subDay();
         $this->recordUsage($company, 100, 100, $lastMonth);
 
         // Last month's usage does not count toward this month's cap.
@@ -162,7 +162,7 @@ class AiBudgetTest extends TestCase
             'status' => AiInteraction::STATUS_OK,
             'input_tokens' => $inputTokens,
             'output_tokens' => $outputTokens,
-            'created_at' => $createdAt ?? Carbon::now('UTC'),
+            'created_at' => $createdAt ?? Carbon::now(),
         ]);
     }
 

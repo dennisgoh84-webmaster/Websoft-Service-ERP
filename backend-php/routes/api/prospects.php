@@ -17,5 +17,6 @@ Route::middleware('auth.jwt')->group(function () {
     Route::get('/prospect-activities/{activityId}', [ProspectActivityController::class, 'show']);
     Route::post('/prospect-activities', [ProspectActivityController::class, 'store']);
     Route::patch('/prospect-activities/{activityId}', [ProspectActivityController::class, 'update']);
-    Route::delete('/prospect-activities/{activityId}', [ProspectActivityController::class, 'destroy']);
+    // Never deleted -- voided with a reason (Dennis, 2026-09-26).
+    Route::post('/prospect-activities/{activityId}/void', [ProspectActivityController::class, 'void']);
 });

@@ -2176,31 +2176,35 @@ Dennis described the Prospect / Leads module and the sales roles
 underneath them. These defaults were taken so it could be built;
 each is one small change if Dennis wants it otherwise.
 
-46.1. **Prospect statuses: Open / Won / Lost.** No pipeline stages
-   (e.g. new → qualified → proposal) were given, so a prospect stays
-   Open until the salesperson marks it Won or Lost. Marking it Lost
-   needs a reason. It does **not** turn Won by itself when a quotation
-   is accepted. *Open: does Dennis want pipeline stages, and should
-   accepting a quotation mark the prospect Won?*
+46.1. **Prospect statuses — settled 2026-09-26: pipeline stages.**
+   Dennis: "Pipeline stages is good." A prospect moves New →
+   Qualified → Proposal → Negotiation and closes as Won or Lost; the
+   salesperson moves it by hand, Lost needs a reason, and every prospect
+   that was "Open" under the earlier default started at New. It still
+   does **not** turn Won by itself when a quotation is accepted — that
+   half of the question was not answered. *Still open: should accepting
+   a quotation mark the prospect Won?*
 
-46.2. **Sales Supervisor sees what the Sales Manager sees.** There is
-   no team structure recording which salespeople a supervisor looks
-   after, so the Supervisor sees every prospect and activity, like the
-   Manager, and can assign prospects. The Supervisor does **not**
-   approve quotations (BILL-006 names the Sales Manager). *Open: should
-   a Supervisor see only their own team, and should they approve?*
+46.2. **Sales Supervisor sees what the Sales Manager sees — settled
+   2026-09-26 ("No need").** The Supervisor sees every prospect and
+   activity, like the Manager, and can assign prospects; no team
+   structure. The Supervisor does **not** approve quotations (BILL-006
+   names the Sales Manager).
 
 46.3. **Who sees a prospect.** Sales Staff — and any other role
    outside owner / Sales Manager / Sales Supervisor — see the prospects
    they are the salesperson on or raised, and the activities on those,
    plus any activity they logged themselves.
 
-46.4. **"Quoted" = quotations sent to or accepted by the customer.**
+46.4. **"Quoted" = quotations sent to the customer — confirmed
+   2026-09-26** ("Quoted means send to customer"; an accepted one was
+   sent first, so it counts too).
    Drafts and ones still in internal approval are not yet quoted; a
    quotation sent back for revision is superseded by its revision
    (which counts once sent); rejected and expired ones no longer stand.
 
-46.5. **A renewal quotation is not put under the old prospect.** A
+46.5. **A renewal quotation is not put under the old prospect —
+   confirmed 2026-09-26.** A
    quotation raised to renew a contract starts with no prospect; it can
    be linked to one by hand. A revision does keep its prospect.
 
@@ -2208,4 +2212,12 @@ each is one small change if Dennis wants it otherwise.
    activities, which hung off the Company / Individual) were each moved
    under one new Open prospect per Company / Individual, titled
    "<name> (activities logged before Prospect / Leads)", so none
-   dropped out of the new screens.
+   dropped out of the new screens. Nothing of the old CRM screens or
+   the `crm` module key remains.
+
+46.7. **Prospect activities are never deleted — confirmed 2026-09-26.**
+   Dennis: "should not allow them to delete, only can change status to
+   VOID." There is no delete, on the full site or the Mobile App; a
+   mistaken activity is voided with a reason (who and when are
+   recorded, and it is audited) and stays on the prospect as VOID. A
+   VOID activity can no longer be edited.

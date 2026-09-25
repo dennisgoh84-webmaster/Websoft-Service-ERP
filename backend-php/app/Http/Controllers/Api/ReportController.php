@@ -67,6 +67,11 @@ class ReportController extends Controller
 
     private const MODULE = 'accounting_reports';
 
+    // The commission report and its rate belong to Commission Management
+    // (Dennis, 2026-09-26: all commission configuration is controlled
+    // there), together with Commission Payouts.
+    private const COMMISSION_MODULE = 'commission_management';
+
     /** @var array<int, string> */
     private const TRIAL_BALANCE_FIELDS = ['code', 'name', 'account_type', 'debit_sgd', 'credit_sgd', 'balance_sgd'];
 
@@ -544,9 +549,23 @@ class ReportController extends Controller
 
     // ── Commission ──────────────────────────────────────────────────
 
+    private function commissionViewer(Request $request): User
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::COMMISSION_MODULE, GroupModuleAuthority::VIEW);
+
+        return $user;
+    }
+
+    /** @return array<string, string> */
+    private function commissionScope(Request $request, User $user): array
+    {
+        return $this->reportCompanyScope($request, $user, self::COMMISSION_MODULE, 'Commission Management');
+    }
+
     public function commissionSettings(Request $request)
     {
-        $user = $this->viewer($request);
+        $user = $this->commissionViewer($request);
 
         return response()->json([
             'rate_percent' => (float) ReportsService::commissionRatePercent($user->company_id),
@@ -556,7 +575,7 @@ class ReportController extends Controller
     public function updateCommissionSettings(Request $request)
     {
         $user = Authenticate::user($request);
-        Authority::requireModuleAccess($user, self::MODULE, GroupModuleAuthority::FULL);
+        Authority::requireModuleAccess($user, self::COMMISSION_MODULE, GroupModuleAuthority::FULL);
 
         $data = $request->validate(['rate_percent' => 'required|numeric|min:0|max:100']);
         $oldRate = (float) ReportsService::commissionRatePercent($user->company_id);
@@ -580,16 +599,16 @@ class ReportController extends Controller
 
     public function commission(Request $request)
     {
-        $user = $this->viewer($request);
+        $user = $this->commissionViewer($request);
         [$start, $end] = $this->period($request);
 
-        return response()->json($this->commissionReport($request, $user, $this->companyScope($request, $user), $start, $end));
+        return response()->json($this->commissionReport($request, $user, $this->commissionScope($request, $user), $start, $end));
     }
 
     public function commissionCsv(Request $request)
     {
-        $user = $this->viewer($request);
-        $scope = $this->companyScope($request, $user);
+        $user = $this->commissionViewer($request);
+        $scope = $this->commissionScope($request, $user);
         $rows = $this->commissionExportRows($request, $user, $scope);
         $this->auditExport($user, 'Accounting Report: Commission', 'csv', count($rows));
 
@@ -598,8 +617,8 @@ class ReportController extends Controller
 
     public function commissionExcel(Request $request)
     {
-        $user = $this->viewer($request);
-        $scope = $this->companyScope($request, $user);
+        $user = $this->commissionViewer($request);
+        $scope = $this->commissionScope($request, $user);
         $rows = $this->commissionExportRows($request, $user, $scope);
         $this->auditExport($user, 'Accounting Report: Commission', 'excel', count($rows));
 

@@ -93,6 +93,8 @@ export const ACTIVITY_ICON: Record<string, string> = {
 
 export function statusColors(status: string): { bg: string; text: string } {
   if (status === 'completed' || status === 'won') return { bg: '#eafaf1', text: '#27ae60' }
-  if (status === 'lost' || status === 'cancelled') return { bg: '#fdeaea', text: '#c0392b' }
+  if (status === 'lost' || status === 'cancelled' || status === 'void') return { bg: '#fdeaea', text: '#c0392b' }
+  if (status === 'new') return { bg: '#f0f0f0', text: '#555' }
+  if (status === 'qualified' || status === 'proposal' || status === 'negotiation') return { bg: '#eaf2fd', text: '#2f6fed' }
   return { bg: '#fef9e7', text: '#f39c12' }
 }

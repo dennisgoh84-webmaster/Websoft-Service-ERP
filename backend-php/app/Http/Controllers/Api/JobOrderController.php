@@ -510,7 +510,7 @@ class JobOrderController extends Controller
 
         $jobOrder->budget_overrun_approved = true;
         $jobOrder->budget_overrun_approved_by = $user->id;
-        $jobOrder->budget_overrun_approved_at = Carbon::now('UTC');
+        $jobOrder->budget_overrun_approved_at = Carbon::now();
         Audit::record('job_order', $jobOrder->id, 'budget_overrun_approved', $user->id, newValue: ['budget_overrun_approved' => true]);
         $jobOrder->save();
 

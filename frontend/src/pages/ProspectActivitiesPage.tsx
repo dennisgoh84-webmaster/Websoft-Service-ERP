@@ -2,9 +2,11 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import DateInput from '../components/DateInput'
 import {
+  ACTIVITY_STATUS_LABELS,
   ACTIVITY_STATUSES,
   ACTIVITY_TYPES,
   api,
+  isProspectActive,
   seesAllProspects,
   type CurrentUser,
   type Prospect,
@@ -76,7 +78,7 @@ export default function ProspectActivitiesPage() {
     }
   }
 
-  const openProspects = prospects.filter((p) => p.status === 'open')
+  const openProspects = prospects.filter((p) => isProspectActive(p.status))
 
   return (
     <div>
@@ -101,7 +103,7 @@ export default function ProspectActivitiesPage() {
             </select>
             {openProspects.length === 0 && (
               <p className="muted">
-                No open prospects yet -- <Link to="/prospects">create one under Prospect / Leads</Link> first.
+                No prospects in the pipeline yet -- <Link to="/prospects">create one under Prospect / Leads</Link> first.
               </p>
             )}
           </div>
@@ -171,7 +173,7 @@ export default function ProspectActivitiesPage() {
             <label>Status</label>
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
               <option value="">All</option>
-              {ACTIVITY_STATUSES.map((s) => (
+              {ACTIVITY_STATUS_LABELS.map((s) => (
                 <option key={s.value} value={s.value}>
                   {s.label}
                 </option>
@@ -231,7 +233,7 @@ export default function ProspectActivitiesPage() {
                     <Link to={`/prospect-activities/${a.id}`}>{a.subject}</Link>
                   </td>
                   <td>{ACTIVITY_TYPES.find((t) => t.value === a.activity_type)?.label ?? a.activity_type}</td>
-                  <td>{ACTIVITY_STATUSES.find((s) => s.value === a.status)?.label ?? a.status}</td>
+                  <td>{ACTIVITY_STATUS_LABELS.find((s) => s.value === a.status)?.label ?? a.status}</td>
                   <td>{a.created_by_name}</td>
                 </tr>
               ))}

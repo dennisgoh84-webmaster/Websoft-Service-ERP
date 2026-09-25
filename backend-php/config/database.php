@@ -95,6 +95,12 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => 'prefer',
+            // The database session runs in the app's time zone, so a time
+            // Laravel writes or binds (it sends them without an offset)
+            // means the same moment to PostgreSQL as it does to PHP.
+            // Before 2026-09-26 the session was UTC while the app ran in
+            // Asia/Singapore, which stored every now() eight hours ahead.
+            'timezone' => env('DB_TIMEZONE', env('APP_TIMEZONE', 'UTC')),
         ],
 
         'sqlsrv' => [

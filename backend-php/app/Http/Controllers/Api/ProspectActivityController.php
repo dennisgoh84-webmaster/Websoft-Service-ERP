@@ -19,6 +19,9 @@ use Illuminate\Support\Carbon;
  * against a Prospect (mostly by the salesperson on the Mobile App). A
  * user sees the activities on prospects they can see, plus any they
  * logged themselves.
+ *
+ * An activity is never deleted (Dennis, 2026-09-26): a mistaken one is
+ * voided with a reason and stays on record as VOID, no longer editable.
  */
 class ProspectActivityController extends Controller
 {
@@ -68,6 +71,9 @@ class ProspectActivityController extends Controller
             'created_by_name' => $activity->createdBy?->full_name,
             'last_edited_by_user_id' => $activity->last_edited_by_user_id,
             'last_edited_by_name' => $activity->lastEditedBy?->full_name,
+            'void_reason' => $activity->void_reason,
+            'voided_at' => optional($activity->voided_at)->toJSON(),
+            'voided_by_name' => $activity->voidedBy?->full_name,
             'created_at' => optional($activity->created_at)->toJSON(),
             'updated_at' => optional($activity->updated_at)->toJSON(),
         ];
@@ -122,8 +128,6 @@ class ProspectActivityController extends Controller
             'activity_type' => $data['activity_type'],
             'subject' => $data['subject'],
             'description' => $data['description'] ?? null,
-            // activity_date has no time zone and is read back in the app's
-            // (Singapore) time, so it takes the app clock, not UTC.
             'activity_date' => $data['activity_date'] ?? now(),
             'status' => $data['status'] ?? ProspectActivity::STATUS_COMPLETED,
             'created_by_user_id' => $user->id,
@@ -151,6 +155,7 @@ class ProspectActivityController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'edit');
         $activity = $this->activityOrFail($user, $activityId);
+        $this->refuseIfVoid($activity);
 
         $data = $request->validate([
             'activity_type' => 'sometimes|in:'.self::TYPES,
@@ -172,7 +177,7 @@ class ProspectActivityController extends Controller
         if ($newData !== []) {
             $activity->fill($data);
             $activity->last_edited_by_user_id = $user->id;
-            $activity->updated_at = Carbon::now('UTC');
+            $activity->updated_at = Carbon::now();
             $activity->save();
             Audit::record(
                 entityType: 'prospect_activity',
@@ -188,27 +193,46 @@ class ProspectActivityController extends Controller
         return response()->json($this->present($activity->fresh()));
     }
 
-    public function destroy(Request $request, string $activityId)
+    public function void(Request $request, string $activityId)
     {
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'edit');
         $activity = $this->activityOrFail($user, $activityId);
+        $this->refuseIfVoid($activity);
+
+        $data = $request->validate(['reason' => 'required|string|min:1|max:1000']);
+        $reason = trim($data['reason']);
+        if ($reason === '') {
+            throw new ApiException(422, 'A reason is required to void an activity.');
+        }
+
+        $oldStatus = $activity->status;
+        $activity->status = ProspectActivity::STATUS_VOID;
+        $activity->void_reason = $reason;
+        $activity->voided_at = Carbon::now();
+        $activity->voided_by_user_id = $user->id;
+        $activity->last_edited_by_user_id = $user->id;
+        $activity->updated_at = Carbon::now();
+        $activity->save();
 
         Audit::record(
             entityType: 'prospect_activity',
             entityId: $activity->id,
-            action: 'deleted',
+            action: 'voided',
             actorUserId: $user->id,
             companyId: $user->company_id,
-            oldValue: [
-                'prospect_id' => $activity->prospect_id,
-                'subject' => $activity->subject,
-                'activity_type' => $activity->activity_type,
-            ],
+            details: $reason,
+            oldValue: ['status' => $oldStatus],
+            newValue: ['status' => ProspectActivity::STATUS_VOID, 'void_reason' => $reason],
         );
 
-        $activity->delete();
+        return response()->json($this->present($activity->fresh()));
+    }
 
-        return response()->noContent();
+    private function refuseIfVoid(ProspectActivity $activity): void
+    {
+        if ($activity->status === ProspectActivity::STATUS_VOID) {
+            throw new ApiException(409, 'This activity is VOID and can no longer be changed.');
+        }
     }
 }

@@ -186,7 +186,7 @@ class SoftwareTaskController extends Controller
 
         DB::transaction(function () use ($task, $user, $tested, $action) {
             $task->is_tested = $tested;
-            $task->tested_at = $tested ? Carbon::now('UTC') : null;
+            $task->tested_at = $tested ? Carbon::now() : null;
             $task->save();
 
             Audit::record(

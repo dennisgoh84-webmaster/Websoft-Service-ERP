@@ -20,21 +20,32 @@ class Prospect extends Model
 {
     use HasFactory, HasUuidPrimaryKey;
 
-    // created_at/updated_at come from the database default (UTC), as on
-    // most models here; Eloquent would write the app's Singapore clock
-    // into a UTC column, eight hours ahead. updated_at is set on edit.
+    // created_at comes from the database default, as on most models
+    // here; updated_at is set by the controller on edit.
     public $timestamps = false;
 
-    // Pragmatic default (docs/open-business-decisions.md #45): no
-    // pipeline stages were given, so a prospect is open until the
-    // salesperson marks it won or lost.
-    public const STATUS_OPEN = 'open';
+    // The sales pipeline (Dennis, 2026-09-26: "Pipeline stages is
+    // good"), in order. The salesperson moves a prospect along by hand;
+    // Won and Lost close it.
+    public const STATUS_NEW = 'new';
+
+    public const STATUS_QUALIFIED = 'qualified';
+
+    public const STATUS_PROPOSAL = 'proposal';
+
+    public const STATUS_NEGOTIATION = 'negotiation';
 
     public const STATUS_WON = 'won';
 
     public const STATUS_LOST = 'lost';
 
-    public const STATUSES = [self::STATUS_OPEN, self::STATUS_WON, self::STATUS_LOST];
+    public const STATUSES = [
+        self::STATUS_NEW, self::STATUS_QUALIFIED, self::STATUS_PROPOSAL, self::STATUS_NEGOTIATION,
+        self::STATUS_WON, self::STATUS_LOST,
+    ];
+
+    /** Still in the pipeline: not yet Won or Lost. */
+    public const ACTIVE_STATUSES = [self::STATUS_NEW, self::STATUS_QUALIFIED, self::STATUS_PROPOSAL, self::STATUS_NEGOTIATION];
 
     /**
      * Quotations counted as "quoted": the ones actually put to the
@@ -51,7 +62,7 @@ class Prospect extends Model
     ];
 
     protected $attributes = [
-        'status' => self::STATUS_OPEN,
+        'status' => self::STATUS_NEW,
     ];
 
     protected $casts = [

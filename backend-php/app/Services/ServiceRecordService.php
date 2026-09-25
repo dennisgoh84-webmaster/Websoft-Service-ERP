@@ -86,7 +86,7 @@ class ServiceRecordService
             'outcome' => ServiceRecord::OUTCOME_PENDING,
             // Set here rather than left to the column's DB default so the
             // SRV-019 approval deadline runs off the application clock.
-            'submitted_at' => Carbon::now('UTC'),
+            'submitted_at' => Carbon::now(),
             'completion_status' => $completionStatus,
             'is_after_hours' => $isAfterHours,
             'work_description' => $workDescription,
@@ -126,7 +126,7 @@ class ServiceRecordService
 
         $oldStatus = $jobOrder->status;
         $jobOrder->status = JobOrder::STATUS_CLOSED;
-        $jobOrder->closed_at = Carbon::now('UTC');
+        $jobOrder->closed_at = Carbon::now();
         $jobOrder->save();
 
         Audit::record(
@@ -164,7 +164,7 @@ class ServiceRecordService
         }
 
         $record->status = ServiceRecord::STATUS_APPROVED;
-        $record->approved_at = Carbon::now('UTC');
+        $record->approved_at = Carbon::now();
         $record->approved_by_user_id = $approver->id;
         $record->deducted_minutes = $deductedMinutes;
 

@@ -9,6 +9,7 @@ use App\Models\UpgradeAgentState;
 use App\Models\UpgradeRequest;
 use App\Services\Authority;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -57,6 +58,15 @@ class UpgradeAgentController extends Controller
             'commits_behind' => 'nullable|integer|min:0',
             'agent_host' => 'nullable|string|max:200',
         ]);
+
+        // The agent sends git's commit time with its own offset; the
+        // datetime cast keeps only the wall clock, so bring it into the
+        // app's time zone first or it would be stored hours off.
+        foreach (['current_committed_at', 'remote_committed_at'] as $field) {
+            if (! empty($data[$field])) {
+                $data[$field] = Carbon::parse($data[$field])->setTimezone(config('app.timezone'));
+            }
+        }
 
         $next = DB::transaction(function () use ($data) {
             $state = UpgradeAgentState::singleton();

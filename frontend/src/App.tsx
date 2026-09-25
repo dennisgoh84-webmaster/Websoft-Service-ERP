@@ -74,6 +74,7 @@ import StaffMasterPage from './pages/StaffMasterPage'
 import SupportMonitoringPage from './pages/SupportMonitoringPage'
 import TaxTypesPage from './pages/TaxTypesPage'
 import GoodsReceiveNotePage from './pages/GoodsReceiveNotePage'
+import GoodsIssueNotePage from './pages/GoodsIssueNotePage'
 import GoodsReturnNotePage from './pages/GoodsReturnNotePage'
 import GoodsTransferNotePage from './pages/GoodsTransferNotePage'
 import StockAdjustmentPage from './pages/StockAdjustmentPage'
@@ -216,6 +217,7 @@ function AppRoutes() {
         <Route path="/grn" element={<GoodsReceiveNotePage />} />
         <Route path="/gtn" element={<GoodsTransferNotePage />} />
         <Route path="/grtn" element={<GoodsReturnNotePage />} />
+        <Route path="/gin" element={<GoodsIssueNotePage />} />
         <Route path="/stock-adjustment" element={<StockAdjustmentPage />} />
         <Route path="/stock-reports" element={<StockReportsPage />} />
         <Route path="/stock-categories" element={<StockCategoryPage />} />

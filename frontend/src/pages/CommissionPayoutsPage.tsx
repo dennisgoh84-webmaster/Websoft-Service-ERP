@@ -7,7 +7,7 @@ import {
   type CommissionPayoutStatus,
   type CurrentUser,
 } from '../lib/api'
-import { formatDate } from '../lib/format'
+import { formatDate, todayIso } from '../lib/format'
 import DateInput from '../components/DateInput'
 
 const STATUS_BADGES: Record<CommissionPayoutStatus, string> = {
@@ -51,7 +51,7 @@ export default function CommissionPayoutsPage() {
 
   // Pay form
   const [payingId, setPayingId] = useState<string | null>(null)
-  const [payDate, setPayDate] = useState(now.toISOString().slice(0, 10))
+  const [payDate, setPayDate] = useState(todayIso())
   const [payRef, setPayRef] = useState('')
 
   function refresh() {
