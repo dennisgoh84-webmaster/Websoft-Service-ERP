@@ -11,6 +11,7 @@ use App\Models\UserCompanyAccess;
 use App\Models\UserPasswordHistory;
 use App\Services\PasswordPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
@@ -262,7 +263,7 @@ class UserTest extends TestCase
         UserPasswordHistory::create([
             'user_id' => $staff->id,
             'hashed_password' => PasswordPolicy::hash('originalpass1'),
-            'set_at' => now(),
+            'set_at' => Carbon::now('UTC')->subDay(),
         ]);
 
         $this->postJson("/api/users/{$staff->id}/reset-password", ['new_password' => 'originalpass1'], $this->headers($token))
@@ -270,6 +271,7 @@ class UserTest extends TestCase
 
         $this->postJson("/api/users/{$staff->id}/reset-password", ['new_password' => 'freshpass123'], $this->headers($token))
             ->assertOk();
-        $this->assertDatabaseHas('user_password_history', ['user_id' => $staff->id]);
+        $latest = UserPasswordHistory::where('user_id', $staff->id)->orderByDesc('set_at')->first();
+        $this->assertEqualsWithDelta(time(), $latest->set_at->getTimestamp(), 60, 'set_at is stored as the real moment, not 8 hours off');
     }
 }

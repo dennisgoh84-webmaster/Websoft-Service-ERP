@@ -173,6 +173,10 @@ class MobileController extends Controller
             return $record;
         });
 
+        // Re-read, as timeOut() does: the in-memory time_in was written
+        // without an offset and would be re-parsed in the app timezone.
+        $record->refresh();
+
         return response()->json([
             'id' => $record->id,
             'service_record_number' => $record->service_record_number,
@@ -476,6 +480,8 @@ class MobileController extends Controller
 
             return $signoff;
         });
+
+        $signoff->refresh();
 
         return response()->json([
             'id' => $signoff->id,

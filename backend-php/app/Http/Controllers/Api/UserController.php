@@ -16,6 +16,7 @@ use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\PasswordPolicy;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -541,6 +542,6 @@ class UserController extends Controller
 
     private function recordPasswordHistory(string $userId, string $hashedPassword): void
     {
-        UserPasswordHistory::create(['user_id' => $userId, 'hashed_password' => $hashedPassword, 'set_at' => now()]);
+        UserPasswordHistory::create(['user_id' => $userId, 'hashed_password' => $hashedPassword, 'set_at' => Carbon::now('UTC')]);
     }
 }

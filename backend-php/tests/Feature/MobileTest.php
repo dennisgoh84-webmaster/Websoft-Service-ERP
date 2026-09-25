@@ -283,6 +283,25 @@ class MobileTest extends TestCase
         );
     }
 
+    public function test_time_in_and_signoff_responses_report_the_real_moment(): void
+    {
+        // With APP_TIMEZONE=Asia/Singapore, a just-written timestamp re-read
+        // from the unrefreshed model came back as the UTC clock labelled
+        // +08:00 -- eight hours in the past.
+        $jo = $this->jobOrder();
+        $now = Carbon::now('UTC')->getTimestamp();
+
+        $started = $this->postJson("/api/mobile/job-orders/{$jo->id}/time-in", [], $this->headers())->assertOk()->json();
+        $this->assertEqualsWithDelta($now, Carbon::parse($started['time_in'])->getTimestamp(), 60);
+
+        $body = $this->post("/api/mobile/service-records/{$started['id']}/signoff", [
+            'signer_name' => 'Mr Lim',
+            'signature_data_uri' => 'data:image/png;base64,iVBORw0KGgo=',
+            'chop_photo' => UploadedFile::fake()->createWithContent('chop.jpg', $this->jpeg(800, 600)),
+        ], $this->headers())->assertOk()->json();
+        $this->assertEqualsWithDelta($now, Carbon::parse($body['signed_at'])->getTimestamp(), 60);
+    }
+
     public function test_signoff_watermarks_the_chop_photo_and_is_accepted_once(): void
     {
         $jo = $this->jobOrder();
