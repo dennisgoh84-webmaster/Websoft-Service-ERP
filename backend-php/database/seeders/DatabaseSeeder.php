@@ -77,6 +77,9 @@ class DatabaseSeeder extends Seeder
         // OFF, same as ai_assistant: enable per company under Module
         // Control once there's something to test.
         'bank_portal_testing' => ['Bank Portal Testing', true, false],
+        // Built 2026-09-25 (docs/data-migration.md). Switch off under
+        // Module Control once the ODOO/ZSOFT cut-over is finished.
+        'data_migration' => ['Data Migration (ODOO / ZSOFT)', true, true],
     ];
 
     // A conventional Singapore SME chart of accounts, seeded as a

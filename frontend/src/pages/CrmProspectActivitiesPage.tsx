@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import InvoiceHistoryPanel from '../components/InvoiceHistoryPanel'
 import { Link } from 'react-router-dom'
 import { api, type CompanyIndividual, type CurrentUser } from '../lib/api'
 import { formatDate } from '../lib/format'
@@ -126,7 +127,7 @@ export default function CrmProspectActivitiesPage() {
         <h2>Add Prospect Activity</h2>
         <form onSubmit={onCreate}>
           <div className="form-row">
-            <label>Customer / Prospect</label>
+            <label>Company / Individual (prospect)</label>
             <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
               <option value="">-- Select --</option>
               {customers.map((c) => (
@@ -176,7 +177,7 @@ export default function CrmProspectActivitiesPage() {
       <div className="card">
         <div className="filter-bar">
           <div className="form-row" style={{ margin: 0 }}>
-            <label>Customer</label>
+            <label>Company / Individual</label>
             <select value={filterCustomer} onChange={(e) => setFilterCustomer(e.target.value)}>
               <option value="">All</option>
               {customers.map((c) => (
@@ -227,7 +228,7 @@ export default function CrmProspectActivitiesPage() {
           <thead>
             <tr>
               <th>Date</th>
-              <th>Customer</th>
+              <th>Company / Individual</th>
               <th>Subject</th>
               <th>Type</th>
               <th>Status</th>
@@ -257,6 +258,8 @@ export default function CrmProspectActivitiesPage() {
         </table>
         {activities.length === 0 && <p className="muted">No activities found</p>}
       </div>
+
+      {filterCustomer && <InvoiceHistoryPanel customerId={filterCustomer} title={`Invoice history: ${customerName(filterCustomer)}`} />}
     </div>
   )
 }

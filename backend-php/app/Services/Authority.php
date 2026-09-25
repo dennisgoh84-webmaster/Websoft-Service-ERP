@@ -87,4 +87,37 @@ class Authority
             throw new ApiException(403, "The '{$moduleKey}' module is not enabled for your company. Ask an owner/admin to enable it under Module Control.");
         }
     }
+
+    /**
+     * requireModuleAccess() for an Internal Company other than the one
+     * the user is signed in to (Data Migration imports into a chosen
+     * Internal Company): the user must be able to open that company,
+     * hold the level there through their Group in THAT company, and
+     * the module must be enabled for it. The owner bypasses the Group
+     * and Module Control checks, as everywhere.
+     */
+    public static function requireModuleAccessIn(User $user, string $companyId, string $moduleKey, string $minLevel): void
+    {
+        if ($companyId === $user->company_id) {
+            self::requireModuleAccess($user, $moduleKey, $minLevel);
+
+            return;
+        }
+        if ($user->role === User::ROLE_OWNER) {
+            return;
+        }
+        $groupId = self::getUserGroupId($user, $companyId);
+        if ($groupId === null) {
+            throw new ApiException(403, 'You do not have access to that Internal Company.');
+        }
+        $level = GroupModuleAuthority::query()
+            ->where('group_id', $groupId)->where('module_key', $moduleKey)
+            ->value('access_level') ?? GroupModuleAuthority::NONE;
+        if (GroupModuleAuthority::LEVEL_ORDER[$level] < GroupModuleAuthority::LEVEL_ORDER[$minLevel]) {
+            throw new ApiException(403, "Your group in that Internal Company does not have {$minLevel} access to the '{$moduleKey}' module.");
+        }
+        if (! self::isModuleEnabled($companyId, $moduleKey)) {
+            throw new ApiException(403, "The '{$moduleKey}' module is not enabled for that Internal Company. Enable it under Module Control.");
+        }
+    }
 }

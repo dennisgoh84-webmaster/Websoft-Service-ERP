@@ -33,6 +33,10 @@ import CrmProspectActivityDetailPage from './pages/CrmProspectActivityDetailPage
 import DashboardPage from './pages/DashboardPage'
 import SalesDashboardPage from './pages/SalesDashboardPage'
 import EventLogsPage from './pages/EventLogsPage'
+import DataMigrationBatchLogPage from './pages/DataMigrationBatchLogPage'
+import DataMigrationDashboardPage from './pages/DataMigrationDashboardPage'
+import DataMigrationImportPage from './pages/DataMigrationImportPage'
+import DataMigrationModulesPage from './pages/DataMigrationModulesPage'
 import ExcessReviewPage from './pages/ExcessReviewPage'
 import GroupsPage from './pages/GroupsPage'
 import InvoicePrintPage from './pages/InvoicePrintPage'
@@ -180,6 +184,10 @@ function AppRoutes() {
         <Route path="/approval-authorities" element={<ApprovalAuthoritiesPage />} />
         <Route path="/approval-center" element={<ApprovalCenterPage />} />
         <Route path="/event-logs" element={<EventLogsPage />} />
+        <Route path="/data-migration" element={<DataMigrationDashboardPage />} />
+        <Route path="/data-migration/modules" element={<DataMigrationModulesPage />} />
+        <Route path="/data-migration/import" element={<DataMigrationImportPage />} />
+        <Route path="/data-migration/batches" element={<DataMigrationBatchLogPage />} />
         <Route path="/warehouses" element={<WarehousesPage />} />
         <Route path="/stock-master" element={<StockMasterPage />} />
         <Route path="/stock-master/:id" element={<StockItemDetailPage />} />

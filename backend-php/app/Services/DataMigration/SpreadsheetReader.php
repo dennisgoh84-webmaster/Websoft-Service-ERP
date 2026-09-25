@@ -1,19 +1,31 @@
 <?php
 
-namespace App\Services\OdooMigration;
+namespace App\Services\DataMigration;
 
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 
 /**
- * Reads an Odoo export -- CSV (UTF-8, comma-separated, as Odoo writes
- * it) or Excel (.xlsx, Odoo's default) -- into OdooRows. The first row
- * is the header. Excel date cells come back as Y-m-d / Y-m-d H:i:s so
- * both formats reach the importers looking the same.
+ * Reads an export from the old system -- CSV (UTF-8, comma-separated)
+ * or Excel (.xlsx) -- into SourceRows. The first row is the column
+ * headings. Excel date cells come back as Y-m-d / Y-m-d H:i:s so both
+ * formats reach the importers looking the same.
  */
 class SpreadsheetReader
 {
-    /** @return array<int, OdooRow> */
+    /**
+     * The column headings exactly as spelt in the file, blanks dropped.
+     *
+     * @return array<int, string>
+     */
+    public static function headers(string $path): array
+    {
+        $matrix = self::matrix($path);
+
+        return array_values(array_filter(array_map(fn ($h) => trim((string) $h), $matrix[0] ?? []), fn ($h) => $h !== ''));
+    }
+
+    /** @return array<int, SourceRow> */
     public static function read(string $path): array
     {
         if (! is_file($path) || ! is_readable($path)) {
@@ -24,14 +36,14 @@ class SpreadsheetReader
         $matrix = match ($extension) {
             'csv' => self::csv($path),
             'xlsx', 'xls' => self::excel($path),
-            default => throw new \InvalidArgumentException('Expected a .csv or .xlsx Odoo export.'),
+            default => throw new \InvalidArgumentException('Expected a .csv or .xlsx export.'),
         };
 
         if ($matrix === []) {
             return [];
         }
 
-        $headers = array_map(fn ($h) => OdooRow::normaliseHeader((string) $h), array_shift($matrix));
+        $headers = array_map(fn ($h) => SourceRow::normaliseHeader((string) $h), array_shift($matrix));
         $rows = [];
         foreach ($matrix as $i => $cells) {
             $values = [];
@@ -41,13 +53,27 @@ class SpreadsheetReader
                 }
                 $values[$header] = (string) ($cells[$col] ?? '');
             }
-            $row = new OdooRow($i + 2, $values);
+            $row = new SourceRow($i + 2, $values);
             if (! $row->isBlank()) {
                 $rows[] = $row;
             }
         }
 
         return $rows;
+    }
+
+    /** @return array<int, array<int, string>> */
+    private static function matrix(string $path): array
+    {
+        if (! is_file($path) || ! is_readable($path)) {
+            throw new \InvalidArgumentException('Cannot read the uploaded file.');
+        }
+
+        return match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
+            'csv' => self::csv($path),
+            'xlsx', 'xls' => self::excel($path),
+            default => throw new \InvalidArgumentException('Upload an Excel (.xlsx) or CSV file.'),
+        };
     }
 
     /** @return array<int, array<int, string>> */

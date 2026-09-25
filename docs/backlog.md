@@ -399,9 +399,10 @@ shipped and when.
   → [planned-work.md #5](planned-work.md#5-product-is-stock-flag--stock-master-item-selection----pending-websoft-stock-distribution-erp-raised-2026-09-12)
 - [x] **Odoo migration program** -- Contacts/Subscriptions/Timesheets/
   Quotations/Invoices/Receipts/Chart of Accounts, plus an opening-balance
-  journal. **Import tooling built 2026-09-25** (`php artisan odoo:import`,
-  dry run by default, all-or-nothing commit, re-runnable) --
-  [odoo-migration.md](odoo-migration.md). Still open: which history is
+  journal. **Built 2026-09-25 as Maintenance → Data Migration** for ODOO
+  and ZSOFT (dashboard, per-module Field Gap / Import / Roll back, 4-step
+  import, batch log) -- [data-migration.md](data-migration.md). Next: the
+  Excel exports from both systems, to close each module's Field Gap list. Still open: which history is
   "important" and the phasing order (open-business-decisions #10), and
   the actual cut-over run against Webmaster's Odoo exports.
   → [planned-work.md #6](planned-work.md#6-odoo-migration-program----contacts-subscriptions-timesheets-sales-quotationsinvoicesreceipts-chart-of-accounts-raised-2026-09-12)

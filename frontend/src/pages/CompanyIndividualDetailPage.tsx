@@ -1,4 +1,5 @@
 import AiChatPanel from '../components/AiChatPanel'
+import InvoiceHistoryPanel from '../components/InvoiceHistoryPanel'
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -1287,6 +1288,8 @@ export default function CompanyIndividualDetailPage() {
           {customer.is_active ? 'Deactivate' : 'Reactivate'}
         </button>
       </div>
+
+      <InvoiceHistoryPanel customerId={customer.id} />
 
       <div className="card">
         <h2>Recent activity</h2>

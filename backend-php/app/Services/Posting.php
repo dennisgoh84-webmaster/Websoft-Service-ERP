@@ -395,11 +395,12 @@ class Posting
 
     public static function bankReceipt(Payment $payment, string $actorUserId): BankTransaction
     {
-        if ($payment->odoo_imported_at !== null) {
-            // Migrated history: Odoo already banked it, and the bank
-            // balance arrives through the opening-balance voucher --
-            // entering it again would count the money twice.
-            throw new PostingError("{$payment->voucher_number} was migrated from Odoo as history and is already reflected in the opening bank balance.");
+        if ($payment->migrated_at !== null) {
+            // Migrated history: the old system already banked it, and
+            // the bank balance arrives through the opening-balance
+            // journal voucher -- entering it again would count the
+            // money twice.
+            throw new PostingError("{$payment->voucher_number} was migrated from the old system as history and is already reflected in the opening bank balance.");
         }
         $customerName = $payment->customer?->name ?? '';
 

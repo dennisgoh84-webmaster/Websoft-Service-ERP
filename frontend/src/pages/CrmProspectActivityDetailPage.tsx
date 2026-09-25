@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import InvoiceHistoryPanel from '../components/InvoiceHistoryPanel'
 import { api, type CompanyIndividual } from '../lib/api'
 import { formatDate, formatDateTime } from '../lib/format'
 
@@ -135,7 +136,7 @@ export default function CrmProspectActivityDetailPage() {
       <div className="card">
         <div className="details-grid">
           <div>
-            <p className="label">Customer</p>
+            <p className="label">Company / Individual</p>
             <p>
               <Link to={`/company-individuals/${customer?.id}`}>{customer?.name}</Link>
             </p>
@@ -229,6 +230,8 @@ export default function CrmProspectActivityDetailPage() {
           </div>
         )}
       </div>
+
+      {customer && <InvoiceHistoryPanel customerId={customer.id} title={`Invoice history: ${customer.name}`} />}
 
       <div style={{ marginTop: 20 }}>
         <Link to="/crm/activities">← Back to Prospect Activities</Link>

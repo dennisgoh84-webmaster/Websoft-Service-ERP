@@ -1070,6 +1070,8 @@ export interface Invoice {
   due_date: string | null
   status: InvoiceStatus
   is_disputed: boolean
+  /** Brought in by Data Migration from ODOO or ZSOFT, as history. */
+  migrated?: boolean
   dispute_note: string | null
   issued_at: string
   // GL posting (ACC-001)
@@ -2112,6 +2114,180 @@ export interface ReportFilterOptions {
   /** Every Company / Individual -- one list, since a customer can also be a supplier. */
   company_individuals: ReportFilterOption[]
   sales_staff: ReportFilterOption[]
+}
+
+// ---- Data Migration (Maintenance -> Data Migration, docs/data-migration.md) ----
+
+export type MigrationSource = 'odoo' | 'zsoft'
+
+export type MigrationModuleStatus =
+  | 'not_started' | 'uploaded' | 'checking' | 'has_errors' | 'ready_to_import'
+  | 'importing' | 'partly_imported' | 'complete'
+
+export interface MigrationModule {
+  order: number
+  source: MigrationSource
+  source_label: string
+  entity: string
+  /** The module's name in the old system, e.g. "Contacts". */
+  their_name: string
+  /** The module's name here, e.g. "Company / Individual". */
+  label: string
+  posts_to_gl: boolean
+  total: number
+  imported: number
+  failed: number
+  in_progress: number
+  status: MigrationModuleStatus
+  last_activity_at: string | null
+  latest_batch_id: string | null
+  latest_batch_number: string | null
+  last_import_batch_id: string | null
+  last_import_batch_number: string | null
+  field_gap: { columns: number; undecided: number; gaps: number; signed_off: boolean; signed_off_at: string | null }
+}
+
+export interface MigrationOverview {
+  company: { id: string; code: string; name: string }
+  modules: MigrationModule[]
+  totals: {
+    modules: number
+    complete: number
+    importing: number
+    rows_with_errors: number
+    records_total: number
+    records_done: number
+    percent: number
+  }
+  as_at: string
+}
+
+export interface MigrationField {
+  key: string
+  label: string
+  required: boolean
+  hint: string | null
+}
+
+export type MigrationColumnState = 'mapped' | 'left_out' | 'field_gap' | 'undecided'
+
+export interface MigrationMappingInfo {
+  source: MigrationSource
+  entity: string
+  label: string
+  their_name: string
+  fields: MigrationField[]
+  columns: { header: string; field: string | null; field_label: string | null; state: MigrationColumnState }[]
+  undecided: number
+  gaps: number
+  missing_required: string[]
+  can_sign_off: boolean
+  signed_off: boolean
+  signed_off_at: string | null
+  signed_off_by: string | null
+}
+
+export type MigrationOutcome = 'created' | 'linked' | 'already_imported' | 'skipped' | 'failed' | 'needs_decision'
+
+export interface MigrationReportRow {
+  row: number
+  source_ref?: string
+  outcome: MigrationOutcome
+  message?: string
+  warnings?: string[]
+  candidates?: { id: string; name: string; detail: string }[]
+}
+
+export type MigrationBatchStatus = 'uploaded' | 'running' | 'dry_run' | 'failed' | 'succeeded' | 'rolled_back'
+
+export interface MigrationBatch {
+  id: string
+  batch_number: string
+  company_id: string
+  company_name: string | null
+  source: MigrationSource
+  source_label: string
+  entity: string
+  module_label: string
+  their_name: string | null
+  source_filename: string
+  status: MigrationBatchStatus
+  status_label: string
+  mode: 'dry_run' | 'commit' | null
+  rows_read: number
+  rows_created: number
+  rows_linked: number
+  rows_already_imported: number
+  rows_skipped: number
+  rows_failed: number
+  rows_needs_decision: number
+  progress_done: number
+  progress_total: number
+  error_message: string | null
+  started_by: string | null
+  started_at: string | null
+  finished_at: string | null
+  imported_at: string | null
+  rolled_back_at: string | null
+  rolled_back_by: string | null
+  rollback_reason: string | null
+  // Detail only
+  headers?: string[]
+  sample_row?: Record<string, string>
+  mapping?: Record<string, string | null>
+  decisions?: Record<string, string>
+  problems?: MigrationReportRow[]
+  problems_total?: number
+  sample_created?: MigrationReportRow[]
+  rollback_report?: { refused_at?: string; blockers?: { record: string; reason: string }[]; blocked_count?: number; removable_count?: number; removed_count?: number; linked_kept?: number } | null
+}
+
+export interface MigrationRollbackResult {
+  rolled_back: boolean
+  removed: number
+  blockers: { record: string; reason: string }[]
+  batch: MigrationBatch
+}
+
+export interface MigrationBatchFilters {
+  company_ids?: string
+  source?: string
+  entity?: string
+  status?: string
+  date_from?: string
+  date_to?: string
+}
+
+/** Detail of a non-2xx response: the backend's `detail` plus the parsed body. */
+export class ApiError extends Error {
+  status: number
+  body: unknown
+  constructor(message: string, status: number, body: unknown) {
+    super(message)
+    this.status = status
+    this.body = body
+  }
+}
+
+async function requestWithBody<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = getToken()
+  const headers: Record<string, string> = {
+    ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    'X-Device-Id': getDeviceId(),
+  }
+  const res = await fetch(`/api${path}`, { ...options, headers })
+  let body: unknown = null
+  try {
+    body = await res.json()
+  } catch {
+    /* no body */
+  }
+  if (!res.ok) {
+    const detail = (body as { detail?: string } | null)?.detail ?? res.statusText
+    throw new ApiError(detail, res.status, body)
+  }
+  return body as T
 }
 
 export const api = {
@@ -3676,4 +3852,51 @@ export const api = {
   // Helper to get current user info (mirrors /auth/me)
   getCurrentUser: () => request<CurrentUser>('/auth/me'),
 
+
+  // ---- Data Migration ----
+  getMigrationOverview: (companyId?: string) =>
+    request<MigrationOverview>(`/data-migration/overview${qs({ company_id: companyId })}`),
+  getMigrationMapping: (source: MigrationSource, entity: string, companyId?: string) =>
+    request<MigrationMappingInfo>(`/data-migration/modules/${source}/${entity}/mapping${qs({ company_id: companyId })}`),
+  updateMigrationMapping: (source: MigrationSource, entity: string, companyId: string, mapping: Record<string, string | null>) =>
+    request<MigrationMappingInfo>(`/data-migration/modules/${source}/${entity}/mapping`, {
+      method: 'PUT',
+      body: JSON.stringify({ company_id: companyId, mapping }),
+    }),
+  signOffMigrationMapping: (source: MigrationSource, entity: string, companyId: string) =>
+    request<MigrationMappingInfo>(`/data-migration/modules/${source}/${entity}/sign-off`, {
+      method: 'POST',
+      body: JSON.stringify({ company_id: companyId }),
+    }),
+  exportMigrationFieldGap: (source: MigrationSource, entity: string, companyId: string, format: 'csv' | 'xlsx') =>
+    requestBlob(`/data-migration/modules/${source}/${entity}/field-gap.${format}${qs({ company_id: companyId })}`),
+  uploadMigrationFile: (companyId: string, source: MigrationSource, entity: string, file: File) => {
+    const form = new FormData()
+    form.append('company_id', companyId)
+    form.append('source', source)
+    form.append('entity', entity)
+    form.append('file', file)
+    return requestWithBody<MigrationBatch>('/data-migration/batches', { method: 'POST', body: form })
+  },
+  listMigrationBatches: (filters: MigrationBatchFilters = {}) =>
+    request<MigrationBatch[]>(`/data-migration/batches${qs({ ...filters })}`),
+  exportMigrationBatches: (filters: MigrationBatchFilters, format: 'csv' | 'xlsx') =>
+    requestBlob(`/data-migration/batches/export.${format}${qs({ ...filters })}`),
+  getMigrationBatch: (id: string) => request<MigrationBatch>(`/data-migration/batches/${id}`),
+  getMigrationBatchProgress: (id: string) =>
+    request<Pick<MigrationBatch, 'id' | 'status' | 'mode' | 'progress_done' | 'progress_total'>>(`/data-migration/batches/${id}/progress`),
+  saveMigrationDecisions: (id: string, decisions: Record<string, string>) =>
+    request<MigrationBatch>(`/data-migration/batches/${id}/decisions`, { method: 'PUT', body: JSON.stringify({ decisions }) }),
+  dryRunMigrationBatch: (id: string) => request<MigrationBatch>(`/data-migration/batches/${id}/dry-run`, { method: 'POST' }),
+  importMigrationBatch: (id: string) => request<MigrationBatch>(`/data-migration/batches/${id}/import`, { method: 'POST' }),
+  /** 200 when rolled back; 409 (an ApiError whose body is the result) when something blocks it. */
+  rollbackMigrationBatch: (id: string, reason: string) =>
+    requestWithBody<MigrationRollbackResult>(`/data-migration/batches/${id}/rollback`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+  exportMigrationModules: (companyId: string, source: string, format: 'csv' | 'xlsx') =>
+    requestBlob(`/data-migration/modules/export.${format}${qs({ company_id: companyId, source })}`),
+  exportMigrationProblems: (id: string, format: 'csv' | 'xlsx') =>
+    requestBlob(`/data-migration/batches/${id}/problems.${format}`),
 }

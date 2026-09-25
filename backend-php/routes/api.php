@@ -58,6 +58,7 @@ require __DIR__.'/api/system_mail.php';
 require __DIR__.'/api/app.php';
 require __DIR__.'/api/crm.php';
 require __DIR__.'/api/ai.php';
+require __DIR__.'/api/data_migration.php';
 require __DIR__.'/api/mobile.php';
 require __DIR__.'/api/portal.php';
 

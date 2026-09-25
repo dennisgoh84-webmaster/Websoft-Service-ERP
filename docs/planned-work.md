@@ -255,13 +255,14 @@ migration) and its note that "important historical data will eventually
 be migrated" -- this item is the concrete migration-program request for
 that strategy, scoped to the record types above.
 
-**Import tooling built 2026-09-25** -- `php artisan odoo:import`, see
-[odoo-migration.md](odoo-migration.md) for the field mapping, how to
-run it, and Dennis's answers to questions 1, 4 and 5 below (Odoo's
-CSV/Excel exports; invoices/receipts are history only with the GL
-carried by one opening-balance voucher; imported documents keep their
-Odoo number). Questions 3 and 6 are answered by the tool's design (a
-permanent `odoo_record_map`; dependency order). The questions as
+**Built 2026-09-25 as Maintenance → Data Migration**, for ODOO and
+ZSOFT -- see [data-migration.md](data-migration.md) for the screens,
+the field mapping and Dennis's answers to questions 1, 4 and 5 below
+(each system's own Excel/CSV exports; invoices/receipts are history
+only and no ledger data is migrated at all -- the new financial year
+starts from an opening-balance Journal Voucher keyed in here; imported
+documents keep their old number). Questions 3 and 6 are answered by
+the design (a permanent `migration_record_map`; dependency order). The questions as
 originally recorded:
 
 1. **Access to Odoo data** -- direct DB access to Odoo's PostgreSQL

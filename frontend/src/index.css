@@ -1295,3 +1295,214 @@ label.multi-pick-item:hover {
   padding-top: 8px;
   margin-top: 6px;
 }
+
+/* ---- Data Migration (Maintenance -> Data Migration, 2026-09-25) ---- */
+.migration-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 16px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+.migration-tabs a {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+}
+.migration-tabs a.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+.source-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: #fff;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+.source-tag.odoo {
+  background: var(--accent);
+}
+.source-tag.zsoft {
+  background: var(--info-text);
+}
+.migration-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.migration-bar-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 260px) 1fr 190px;
+  gap: 12px;
+  align-items: center;
+}
+.migration-bar-row small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.migration-track {
+  height: 14px;
+  border-radius: 7px;
+  background: var(--border);
+  overflow: hidden;
+  display: flex;
+}
+.migration-track > div {
+  height: 100%;
+}
+.migration-track .done {
+  background: var(--ok-text);
+}
+.migration-track .failed {
+  background: var(--danger);
+}
+.migration-track .running {
+  background: repeating-linear-gradient(45deg, var(--info-text) 0 6px, var(--info-border) 6px 12px);
+  background-size: 24px 24px;
+  animation: migration-slide 1.2s linear infinite;
+}
+@keyframes migration-slide {
+  to {
+    background-position: 24px 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .migration-track .running {
+    animation: none;
+  }
+}
+.migration-bar-num {
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.migration-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.migration-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+.migration-steps {
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.migration-steps > div {
+  flex: 1 1 140px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.migration-steps > div + div {
+  border-left: none;
+}
+.migration-steps > div:first-child {
+  border-radius: 8px 0 0 8px;
+}
+.migration-steps > div:last-child {
+  border-radius: 0 8px 8px 0;
+}
+.migration-steps b {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--text);
+  font-size: 11px;
+}
+.migration-steps .done b {
+  background: var(--ok-text);
+  color: #fff;
+}
+.migration-steps .current {
+  color: var(--text);
+  font-weight: 600;
+  background: var(--info-bg);
+}
+.migration-steps .current b {
+  background: var(--accent);
+  color: #fff;
+}
+.field-mapping-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.row-attention td {
+  background: var(--warn-bg);
+}
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.muted.small {
+  font-size: 12px;
+}
+.migration-tabs ~ .card td .badge,
+.migration-tabs ~ .card td .source-tag {
+  white-space: nowrap;
+}
+.migration-drop {
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  padding: 22px;
+  text-align: center;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+.migration-drop.over {
+  border-color: var(--accent);
+  background: var(--info-bg);
+}
+.migration-confirm {
+  border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-top: 12px;
+}
+@media (max-width: 760px) {
+  .migration-bar-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .migration-bar-num {
+    text-align: left;
+  }
+}

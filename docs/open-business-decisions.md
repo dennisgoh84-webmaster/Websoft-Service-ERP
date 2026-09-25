@@ -539,7 +539,9 @@ areas) are finalized.
 **Update 2026-09-25:** the import tooling itself is built and its own
 questions decided (source = Odoo exports, invoices/receipts history
 only with an opening-balance voucher, Odoo numbers kept) -- see
-[odoo-migration.md](odoo-migration.md). 10.1 and 10.2 below remain
+[data-migration.md](data-migration.md); no ledger data is migrated at all
+(the new financial year starts from a management-accounts opening-balance
+Journal Voucher). 10.1 and 10.2 below remain
 open: the tool imports whatever subset is chosen, whenever.
 
 10.1. **Which historical Odoo data is "important" and must be migrated

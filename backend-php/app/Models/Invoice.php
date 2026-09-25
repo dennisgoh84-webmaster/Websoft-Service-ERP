@@ -68,9 +68,9 @@ class Invoice extends Model
         'invoice_number', 'invoice_type', 'description', 'amount_sgd', 'tax_code',
         'gst_rate', 'gst_amount_sgd', 'total_amount_sgd', 'cost_sgd', 'due_date',
         'status', 'amount_paid_sgd', 'is_disputed', 'dispute_note',
-        // Odoo migration (docs/odoo-migration.md) -- zero/null on every
+        // Data Migration (docs/data-migration.md) -- zero/null on every
         // invoice raised in this system.
-        'pre_migration_paid_sgd', 'odoo_imported_at',
+        'pre_migration_paid_sgd', 'migrated_at',
     ];
 
     protected $casts = [
@@ -81,7 +81,7 @@ class Invoice extends Model
         'cost_sgd' => 'decimal:2',
         'amount_paid_sgd' => 'decimal:2',
         'pre_migration_paid_sgd' => 'decimal:2',
-        'odoo_imported_at' => 'datetime',
+        'migrated_at' => 'datetime',
         'due_date' => 'date',
         'is_disputed' => 'boolean',
         'issued_at' => 'datetime',

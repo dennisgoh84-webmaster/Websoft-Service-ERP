@@ -73,6 +73,8 @@ class InvoiceController extends Controller
             'due_date' => optional($invoice->due_date)->toDateString(),
             'status' => $invoice->status,
             'is_disputed' => $invoice->is_disputed,
+            // Brought in by Data Migration as history (docs/data-migration.md).
+            'migrated' => $invoice->migrated_at !== null,
             'dispute_note' => $invoice->dispute_note,
             'issued_at' => optional($invoice->issued_at)->toIso8601String(),
             'gl_status' => $glEntry ? 'posted' : 'not_posted',

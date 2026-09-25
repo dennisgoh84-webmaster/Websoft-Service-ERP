@@ -35,6 +35,8 @@ class Numbering
         // as the document KIND instead of registering it here -- see
         // App\Services\CommissionService's class docblock.
         'commission_payout' => 'CP',
+        // Data Migration batch (docs/data-migration.md).
+        'migration_batch' => 'MIG',
     ];
 
     /** Allocate the next number for this company/kind/year. */

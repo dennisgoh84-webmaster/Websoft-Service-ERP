@@ -187,6 +187,8 @@ export default function Layout() {
     { key: 'stock-usages', path: '/stock-usages', label: 'Stock Usages', visible: can('stock_master') },
     { key: 'approval-authorities', path: '/approval-authorities', label: 'Approval Authority', visible: can('core_administration') },
     { key: 'event-logs', path: '/event-logs', label: 'Event Logs', visible: can('event_logs') },
+    // ODOO / ZSOFT data migration (2026-09-25, docs/data-migration.md).
+    { key: 'data-migration', path: '/data-migration', label: 'Data Migration', visible: can('data_migration') },
   ]
 
   return (

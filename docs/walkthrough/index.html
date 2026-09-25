@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="A 46-step guided test path through Websoft Service ERP - operations, stock, accounting and the maintenance tables.">
+<meta name="description" content="A 47-step guided test path through Websoft Service ERP - operations, stock, accounting and the maintenance tables.">
 <title>Websoft ERP Walkthrough</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap">
 <style>
@@ -438,7 +438,7 @@
     <dl class="facts">
       <div class="fact"><dt>Sign in</dt><dd class="mono">dennis@websoft.example / demo1234</dd></div>
       <div class="fact"><dt>Currency</dt><dd>SGD · GST 9%</dd></div>
-      <div class="fact"><dt>Stages</dt><dd>5 · 46 steps</dd></div>
+      <div class="fact"><dt>Stages</dt><dd>5 · 47 steps</dd></div>
       <div class="fact"><dt>Backend</dt><dd>PHP&nbsp;8.4 / Laravel&nbsp;11</dd></div>
     </dl>
   </div>
@@ -1393,7 +1393,38 @@
                 <div class="maint"><dt>Warehouses</dt><dd>Where stock is held. Needed before any receipt.</dd></div>
                 <div class="maint"><dt>Stock Categories, Groups, Brands / Models, Usages</dt><dd>The four classification tables behind a stock item.</dd></div>
                 <div class="maint"><dt>Event Logs</dt><dd>The read-only face of the audit trail. Exporting it is itself audited.</dd></div>
+                <div class="maint"><dt>Data Migration</dt><dd>ODOO / ZSOFT import: dashboard, modules, import, batch log with roll back. Next step.</dd></div>
               </dl>
+            </div>
+          </li>
+
+          <li class="step">
+            <input type="checkbox" class="step-check" id="s4-6b" aria-label="Step complete">
+            <div class="step-body">
+              <div class="step-title">Data Migration<span class="where">Maintenance › Data Migration</span></div>
+              <p>
+                Brings the old ODOO and ZSOFT data in, module by module, into
+                the Internal Company you choose: upload the Excel file, map its
+                columns, check a dry run, import. Duplicates are linked, not
+                created twice (same UEN or GST no. links automatically; a
+                name-only match waits for Link or Create new). Invoices and
+                receipts arrive as history and post nothing to the ledger.
+              </p>
+              <figure class="shot">
+                <img src="shots/data-migration-dashboard.png" alt="Data Migration dashboard with one progress bar per ODOO and ZSOFT module." loading="lazy" width="1440" height="900">
+                <figcaption><b>Dashboard.</b> One bar per module, with the records imported and any rows with errors.</figcaption>
+              </figure>
+              <figure class="shot">
+                <img src="shots/data-migration-preview.png" alt="Dry-run preview showing new, linked, possible duplicate and error counts." loading="lazy" width="1440" height="900">
+                <figcaption><b>Dry-run preview.</b> Exactly what the import would do, before anything is written.</figcaption>
+              </figure>
+              <p class="expect">
+                <b>Expect:</b> import stays locked until the module's Field Gap
+                list is signed off and the dry run is clean. A batch can be
+                rolled back while none of its records has been touched since;
+                otherwise the roll back lists what blocks it and removes
+                nothing. Every step is in Event Logs.
+              </p>
             </div>
           </li>
 

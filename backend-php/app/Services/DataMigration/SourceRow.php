@@ -1,14 +1,14 @@
 <?php
 
-namespace App\Services\OdooMigration;
+namespace App\Services\DataMigration;
 
 /**
- * One spreadsheet row, keyed by normalised header (lower case, single
- * spaces), so a column can be looked up by Odoo's technical field name
- * (an "import-compatible" export: `partner_id/id`) or by its label (a
- * plain export: "Customer") interchangeably.
+ * One spreadsheet row. Straight out of the file it is keyed by the
+ * normalised column heading; once the field mapping is applied
+ * (MigrationEngine) it is keyed by this system's field keys instead,
+ * which is what the importers read.
  */
-class OdooRow
+class SourceRow
 {
     /** @param  array<string, string>  $values */
     public function __construct(public int $number, public array $values) {}
@@ -20,11 +20,11 @@ class OdooRow
         return strtolower(trim(preg_replace('/\s+/', ' ', $header)));
     }
 
-    /** The first non-blank value among these column names, trimmed. */
-    public function get(string ...$columns): ?string
+    /** The first non-blank value among these keys, trimmed. */
+    public function get(string ...$keys): ?string
     {
-        foreach ($columns as $column) {
-            $value = $this->values[self::normaliseHeader($column)] ?? null;
+        foreach ($keys as $key) {
+            $value = $this->values[self::normaliseHeader($key)] ?? null;
             if ($value !== null && trim($value) !== '') {
                 return trim($value);
             }
@@ -33,10 +33,10 @@ class OdooRow
         return null;
     }
 
-    public function has(string ...$columns): bool
+    public function has(string ...$keys): bool
     {
-        foreach ($columns as $column) {
-            if (array_key_exists(self::normaliseHeader($column), $this->values)) {
+        foreach ($keys as $key) {
+            if (array_key_exists(self::normaliseHeader($key), $this->values)) {
                 return true;
             }
         }

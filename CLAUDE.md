@@ -123,9 +123,9 @@ explaining the reason first (see Development Rules below).
 - [docs/planned-work.md](docs/planned-work.md) — confirmed future work, described in enough detail to record, not yet designed or built
 - [docs/gl-posting-design.md](docs/gl-posting-design.md), [docs/customer-portal-design.md](docs/customer-portal-design.md) — designs for sub-ledger → GL posting + Bank step, and the Customer Helpdesk Portal, decided **and built** 2026-09-14
 - [docs/backlog.md](docs/backlog.md) — short, checkable summary of everything pending, linking into the detail docs above
-- [docs/walkthrough/index.html](docs/walkthrough/index.html) — a 46-step guided walkthrough of every built module (Operations → Stock → Accounts → Maintenance), with screenshots captured from the running application. Regenerate the screenshots by running the app and re-capturing; they are not auto-built.
+- [docs/walkthrough/index.html](docs/walkthrough/index.html) — a 47-step guided walkthrough of every built module (Operations → Stock → Accounts → Maintenance), with screenshots captured from the running application. Regenerate the screenshots by running the app and re-capturing; they are not auto-built.
 - [docs/ui-guidelines.md](docs/ui-guidelines.md) — screen label conventions and the Export (CSV/Excel) / Print (PDF/Word) pattern every screen follows
-- [docs/odoo-migration.md](docs/odoo-migration.md) — the Odoo data migration tool (`php artisan odoo:import`): decisions, field mapping per record type, run order, how to run it
+- [docs/data-migration.md](docs/data-migration.md) — Maintenance → Data Migration (ODOO / ZSOFT): decisions, the screens, modules in run order, Field Gap sign-off, roll back
 - [docs/php-conversion-plan.md](docs/php-conversion-plan.md) — the backend Python→PHP language conversion (complete; Python retired 2026-09-15): reason, approach, stack, findings
 - [DEV_SETUP.md](DEV_SETUP.md) — how to run the application locally
 
@@ -545,16 +545,23 @@ row written for the refused call; unset (the default) is unlimited,
 as before. See
 [docs/open-business-decisions.md #44](docs/open-business-decisions.md#44-ai-assistant-monthly-token-spending-cap-raised-and-built-2026-09-16).
 
-**Odoo data migration tooling landed 2026-09-25**
-([docs/odoo-migration.md](docs/odoo-migration.md)): `php artisan
-odoo:import <entity> <file> --company=<code> [--commit]` imports Odoo's
-own CSV/Excel exports -- Chart of Accounts, an opening-balance Trial
-Balance, Contacts, Subscriptions, Quotations, Invoices, Receipts and
-Timesheets -- dry run by default, all-or-nothing on commit, re-runnable
-through a permanent `odoo_record_map`. Decided with Dennis: imported
-documents keep their Odoo numbers, and invoices/receipts are history
-only -- they post nothing, the General Ledger arriving instead as one
-opening-balance journal voucher at cut-over.
+**Data Migration landed 2026-09-25**
+([docs/data-migration.md](docs/data-migration.md)): Maintenance → Data
+Migration, gated on the new `data_migration` module (VIEW looks, FULL
+acts), brings the old **ODOO** and **ZSOFT** data in module by module into
+a chosen Internal Company -- a live Dashboard, Migration Modules (Field
+Gap / Import / Roll back per module), a 4-step Import (upload → map
+fields → dry-run preview → import) and a Batch Log. Decided with Dennis:
+old document numbers are kept; **no ledger data comes from either
+system** (opening balances are one Journal Voucher here), so invoices
+and receipts are history only; a Company / Individual with the same UEN
+or GST no. links rather than duplicating, a name-only match waits for
+Link / Create new; staff who have left become inactive users; a
+module's import is locked until its Field Gap list is signed off; and
+roll back removes a batch only while none of its records has been
+touched, keeping the batch, a snapshot and the Event Log. ZSOFT past
+invoices show on the Company / Individual and the Prospect (CRM)
+screens.
 
 No other business area has application code yet. **Further commission
 business rules beyond what is built (the report, its rate and

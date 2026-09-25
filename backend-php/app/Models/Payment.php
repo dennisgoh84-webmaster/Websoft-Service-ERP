@@ -36,9 +36,9 @@ class Payment extends Model
     protected $fillable = [
         'company_id', 'customer_id', 'voucher_number', 'payment_date', 'amount_sgd',
         'method', 'reference', 'notes', 'bank_account_id', 'recorded_by_user_id',
-        // Odoo migration (docs/odoo-migration.md) -- zero/null on every
+        // Data Migration (docs/data-migration.md) -- zero/null on every
         // receipt recorded in this system.
-        'pre_migration_allocated_sgd', 'odoo_imported_at',
+        'pre_migration_allocated_sgd', 'migrated_at',
     ];
 
     protected $attributes = ['method' => self::METHOD_BANK_TRANSFER, 'pre_migration_allocated_sgd' => '0.00'];
@@ -47,7 +47,7 @@ class Payment extends Model
         'payment_date' => 'date',
         'amount_sgd' => 'decimal:2',
         'pre_migration_allocated_sgd' => 'decimal:2',
-        'odoo_imported_at' => 'datetime',
+        'migrated_at' => 'datetime',
         'created_at' => 'datetime',
     ];
 
@@ -67,8 +67,8 @@ class Payment extends Model
     }
 
     /**
-     * Allocations made here, plus -- on a receipt migrated from Odoo --
-     * what Odoo had already reconciled it against before cut-over,
+     * Allocations made here, plus -- on a receipt migrated from the old
+     * system -- what it had already been applied to before cut-over,
      * which has no PaymentAllocation rows behind it.
      */
     public function allocatedSgd(): Money

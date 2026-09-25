@@ -52,4 +52,12 @@ return [
     // Generated into .env by deploy/install.sh / upgrade.sh. Empty = agent
     // endpoints disabled (503). See App\Http\Controllers\Api\UpgradeAgentController.
     'upgrade_agent_token' => env('UPGRADE_AGENT_TOKEN'),
+
+    // Data Migration (docs/data-migration.md): a dry run or import runs
+    // as a background `php artisan data-migration:run` process, so a
+    // large file can outlast a web request. MIGRATION_BACKGROUND=false
+    // runs it inside the request instead. PHP_CLI is the command-line
+    // PHP binary (php-fpm's own binary cannot run artisan).
+    'migration_background' => env('MIGRATION_BACKGROUND', true),
+    'php_cli' => env('PHP_CLI', 'php'),
 ];

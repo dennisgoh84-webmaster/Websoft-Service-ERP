@@ -7,7 +7,8 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Odoo migration program (docs/planned-work.md #6,
- * docs/odoo-migration.md). Decided with Dennis 2026-09-25: the source
+ * docs/data-migration.md -- renamed and generalised by the next
+ * migration). Decided with Dennis 2026-09-25: the source
  * is Odoo's own CSV/Excel exports, imported documents keep their Odoo
  * number, and imported invoices/receipts are history only -- they
  * never post to the General Ledger, which is carried across instead by
