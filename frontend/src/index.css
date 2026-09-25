@@ -1144,6 +1144,46 @@ button.report-back:hover {
 .report-filter-grid .form-row {
   margin: 0;
 }
+.report-filter-grid .report-companies {
+  flex-basis: 100%;
+}
+.report-filter-actions {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  margin-left: auto;
+}
+.company-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+button.company-chip {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-family: inherit;
+}
+button.company-chip:hover {
+  background: var(--surface);
+  border-color: var(--accent);
+}
+button.company-chip.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+button.company-chip:disabled {
+  opacity: 1;
+  cursor: default;
+}
+button.company-chip.all {
+  border-style: dashed;
+  color: var(--text-muted);
+}
 .multi-pick {
   position: relative;
 }

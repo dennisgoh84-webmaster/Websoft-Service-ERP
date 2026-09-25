@@ -51,7 +51,7 @@ const SECTIONS: ReportSection<ReportType>[] = [
         summary: 'All service contracts, filtered however you need.',
         details:
           'Every service contract with its company / individual, kind, status, contracted / consumed / remaining amount, value, and start and end dates. Narrow it by status or kind, or use "Expiring within (days)" to find contracts ending soon.',
-        filters: ['Company / Individual', 'Status', 'Kind', 'Expiring within', 'Accounting period', 'Date from – to'],
+        filters: ['Company / Individual', 'Status', 'Kind', 'Expiring within', 'Month from – to', 'Dates'],
       },
       {
         key: 'contract-expiry-listing',
@@ -77,14 +77,14 @@ const SECTIONS: ReportSection<ReportType>[] = [
         title: 'Job Orders',
         summary: 'Job orders by status, assignee and date.',
         details: 'Every job order with its subject, priority, status, assignee and due date. Tick "Overdue only" to see just the jobs that are past due and still open.',
-        filters: ['Company / Individual', 'Status', 'Assigned to', 'Overdue only', 'Accounting period', 'Date from – to'],
+        filters: ['Company / Individual', 'Status', 'Assigned to', 'Overdue only', 'Month from – to', 'Dates'],
       },
       {
         key: 'service-records',
         title: 'Service Records',
         summary: 'Work done on site, by status, outcome and staff.',
-        details: 'Every service record with its work date, employee, hours, status, outcome and whether it was late -- use it to review what was done for a customer or by a technician over a period.',
-        filters: ['Company / Individual', 'Status', 'Outcome', 'Staff', 'Accounting period', 'Date from – to'],
+        details: 'Every service record with its work date, employee, hours, status, outcome and whether it was late -- use it to review what was done for a company / individual or by a technician over a period.',
+        filters: ['Company / Individual', 'Status', 'Outcome', 'Staff', 'Month from – to', 'Dates'],
       },
     ],
   },
@@ -94,7 +94,7 @@ const SECTIONS: ReportSection<ReportType>[] = [
       {
         key: 'customer-product-usage',
         title: 'Company / Individual Product Usage',
-        summary: 'Which customers use which products.',
+        summary: 'Which companies / individuals use which products.',
         details: 'Each company / individual with the products they use, filterable by product and by industry -- useful for upgrade campaigns and support planning.',
         filters: ['Company / Individual', 'Product', 'Industry'],
       },

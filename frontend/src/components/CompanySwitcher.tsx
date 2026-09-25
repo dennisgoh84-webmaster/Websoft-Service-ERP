@@ -22,7 +22,7 @@ export default function CompanySwitcher() {
 
   return (
     <label className="company-switcher">
-      <span className="muted">Company</span>
+      <span className="muted">Internal Company</span>
       <select
         value={activeCompany.id}
         disabled={switching}

@@ -1,8 +1,9 @@
 // Accounting Reports -- a card launcher grouped AR / AP / BANK / GL / GST /
 // SALES / SETUP (Dennis, 2026-09-24; see components/ReportLauncher.tsx),
 // each report then opening with only its own filters: one or several
-// Company / Individual (customer or supplier), salesperson, and an
-// accounting period or exact date range. Export offers CSV, Excel and
+// Internal Companies (the user's own companies), one or several Company /
+// Individual (one list -- a customer can also be a supplier), salesperson,
+// and a month-to-month range, accounting period or exact dates. Export offers CSV, Excel and
 // PDF (Print) -- the browser's print dialog, like the print forms. Most of these are the same
 // figures already shown inline elsewhere (Invoices' aging widget,
 // Accounts Payable's aging widget, General Ledger's trial balance,
@@ -15,7 +16,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
 import { ReportHeader, ReportLauncher, useSelectedReport, type ReportSection } from '../components/ReportLauncher'
-import { AsAtPicker, MultiPick, PeriodRange } from '../components/ReportFilters'
+import { AsAtPicker, InternalCompaniesPicker, MultiPick, PeriodRange } from '../components/ReportFilters'
 import { useAuth } from '../lib/AuthContext'
 import {
   api,
@@ -56,7 +57,7 @@ const SECTIONS: ReportSection<ReportType>[] = [
         summary: 'Who owes you money, and how overdue it is.',
         details:
           'Every unpaid sales invoice, totalled per company / individual and split by how many days past due it is -- current, 1-30, 31-60, 61-90 and over 90 days. Use it to plan collection follow-ups and for month-end review. Change "As at" to see what was outstanding on an earlier date.',
-        filters: ['Company / Individual', 'Accounting period', 'As at date'],
+        filters: ['Internal Companies', 'Company / Individual', 'Month end / As at'],
       },
     ],
   },
@@ -66,10 +67,10 @@ const SECTIONS: ReportSection<ReportType>[] = [
       {
         key: 'ap-aging',
         title: 'AP Aging',
-        summary: 'What you owe suppliers, and how overdue it is.',
+        summary: 'What you owe, and how overdue it is.',
         details:
-          'Every unpaid supplier bill, totalled per supplier and split by how many days past due it is -- current, 1-30, 31-60, 61-90 and over 90 days. Use it to plan payment runs. Change "As at" to see what was owed on an earlier date.',
-        filters: ['Company / Individual', 'Accounting period', 'As at date'],
+          'Every unpaid bill you have received, totalled per company / individual and split by how many days past due it is -- current, 1-30, 31-60, 61-90 and over 90 days. Use it to plan payment runs. Change "As at" to see what was owed on an earlier date.',
+        filters: ['Internal Companies', 'Company / Individual', 'Month end / As at'],
       },
     ],
   },
@@ -95,7 +96,7 @@ const SECTIONS: ReportSection<ReportType>[] = [
         summary: 'Debit and credit balance of every account.',
         details:
           'The balance of every general ledger account as at the chosen date. Total debits must equal total credits; if they do not, something was posted unbalanced. The starting point for month-end and year-end checks.',
-        filters: ['Accounting period', 'As at date'],
+        filters: ['Internal Companies', 'Month end / As at'],
       },
       {
         key: 'account-ledger',
@@ -115,8 +116,8 @@ const SECTIONS: ReportSection<ReportType>[] = [
         title: 'GST Return',
         summary: 'The figures you need for your GST return.',
         details:
-          'Output tax on sales invoices and input tax on supplier bills for the chosen period, totalled per tax code with the net amount and number of documents. Read-only: it does not file anything or post to the ledger.',
-        filters: ['Accounting period', 'Date from – to'],
+          'Output tax on sales invoices and input tax on bills received for the chosen period, totalled per tax code with the net amount and number of documents. Read-only: it does not file anything or post to the ledger.',
+        filters: ['Internal Companies', 'Month from – to', 'Dates'],
       },
     ],
   },
@@ -128,8 +129,8 @@ const SECTIONS: ReportSection<ReportType>[] = [
         title: 'Sales Invoice Listing (GP)',
         summary: 'Invoices with revenue, cost and gross profit.',
         details:
-          'Every sales invoice issued in the chosen period, with its revenue, cost and gross profit in dollars and as a percentage -- shows which jobs and customers actually make money.',
-        filters: ['Company / Individual', 'Accounting period', 'Date from – to'],
+          'Every sales invoice issued in the chosen period, with its revenue, cost and gross profit in dollars and as a percentage -- shows which jobs and companies / individuals actually make money.',
+        filters: ['Internal Companies', 'Company / Individual', 'Month from – to', 'Dates'],
       },
       {
         key: 'commission',
@@ -137,7 +138,7 @@ const SECTIONS: ReportSection<ReportType>[] = [
         summary: 'Commission earned per salesperson.',
         details:
           'Commission per salesperson per month, worked out only on the part of each invoice that a receipt has actually settled -- so unpaid invoices earn nothing yet. The commission rate itself is set on this report.',
-        filters: ['Salesperson', 'Accounting period', 'Date from – to'],
+        filters: ['Internal Companies', 'Salesperson', 'Month from – to', 'Dates'],
       },
     ],
   },
@@ -173,16 +174,18 @@ function today(): string {
   return isoLocal(new Date())
 }
 
+const USES_COMPANIES: ReportType[] = ['ar-aging', 'ap-aging', 'trial-balance', 'gst-return', 'sales-gp', 'commission']
 const USES_AS_AT: ReportType[] = ['ar-aging', 'ap-aging', 'trial-balance']
 const USES_RANGE: ReportType[] = ['gst-return', 'sales-gp', 'commission']
 
 export default function AccountingReportsPage() {
   const [reportType, openReport] = useSelectedReport(SECTIONS)
   const { user } = useAuth()
-  const [customerIds, setCustomerIds] = useState<string[]>([])
-  const [supplierIds, setSupplierIds] = useState<string[]>([])
+  const [companyIds, setCompanyIds] = useState<string[]>(user?.company_id ? [user.company_id] : [])
+  // One Company / Individual pick list for AR, AP and Sales GP alike.
+  const [partyIds, setPartyIds] = useState<string[]>([])
   const [staffIds, setStaffIds] = useState<string[]>([])
-  const [options, setOptions] = useState<ReportFilterOptions>({ customers: [], suppliers: [], sales_staff: [] })
+  const [options, setOptions] = useState<ReportFilterOptions>({ company_individuals: [], sales_staff: [] })
   const [asAt, setAsAt] = useState('')
   const [periodStart, setPeriodStart] = useState(firstOfMonth())
   const [periodEnd, setPeriodEnd] = useState(today())
@@ -200,38 +203,44 @@ export default function AccountingReportsPage() {
   const [commissionRateInput, setCommissionRateInput] = useState('')
   const [savingRate, setSavingRate] = useState(false)
 
+  const multiCompany = companyIds.length > 1
   const filters: AccountingReportFilters = {
-    customer_ids: customerIds.join(','),
-    supplier_ids: supplierIds.join(','),
+    company_ids: companyIds.join(','),
+    customer_ids: partyIds.join(','),
+    supplier_ids: partyIds.join(','),
     sales_staff_ids: staffIds.join(','),
   }
   const asAtFilters: AccountingReportFilters = { ...filters, as_at: asAt || undefined }
   const rangeFilters: AccountingReportFilters = { ...filters, period_start: periodStart, period_end: periodEnd }
   const filterKey = JSON.stringify({ filters, asAt, periodStart, periodEnd })
 
+  const companyNames: string[] =
+    (reportType === 'ar-aging' ? arAging?.companies : reportType === 'ap-aging' ? apAging?.companies : reportType === 'trial-balance' ? trialBalance?.companies
+      : reportType === 'gst-return' ? gstReturn?.companies : reportType === 'sales-gp' ? salesGP?.companies : commission?.companies) ?? []
   const picked = (ids: string[], opts: { id: string; name: string }[], all: string) =>
     ids.length === 0 ? all : ids.map((id) => (id === 'unassigned' ? 'Unassigned' : opts.find((o) => o.id === id)?.name ?? id)).join(', ')
   const printSummary: string[] = []
-  if (reportType === 'ar-aging' || reportType === 'sales-gp') printSummary.push(`Company / Individual: ${picked(customerIds, options.customers, 'All')}`)
-  if (reportType === 'ap-aging') printSummary.push(`Supplier: ${picked(supplierIds, options.suppliers, 'All')}`)
+  if (reportType && USES_COMPANIES.includes(reportType) && multiCompany) printSummary.push(`Internal Companies: ${companyNames.join(', ')}`)
+  if (reportType === 'ar-aging' || reportType === 'ap-aging' || reportType === 'sales-gp') {
+    printSummary.push(`Company / Individual: ${picked(partyIds, options.company_individuals, 'All')}`)
+  }
   if (reportType === 'commission') printSummary.push(`Salesperson: ${picked(staffIds, options.sales_staff, 'All')}`)
   // The date the server actually used (its own "today" when none was picked), not the browser's clock.
   const resolvedAsAt = asAt || (reportType === 'ar-aging' ? arAging?.as_at : reportType === 'ap-aging' ? apAging?.as_at : trialBalance?.as_at) || ''
   if (reportType && USES_AS_AT.includes(reportType)) printSummary.push(`As at: ${resolvedAsAt ? formatDate(resolvedAsAt) : 'today'}`)
   if (reportType && USES_RANGE.includes(reportType)) printSummary.push(`Period: ${formatDate(periodStart)} to ${formatDate(periodEnd)}`)
 
-  // Company / Individual and salesperson choices for the current company;
-  // switching company (top right) reloads them and drops stale picks.
-  const companyKey = user?.company_id ?? ''
+  // Company / Individual and salesperson choices follow the ticked internal
+  // companies; stale picks are dropped.
+  const companyKey = companyIds.join(',')
   useEffect(() => {
     if (!companyKey) return
     api.reportFilterOptions(companyKey).then((o) => {
       setOptions(o)
       const keep = (ids: string[], opts: { id: string }[]) => ids.filter((id) => id === 'unassigned' || opts.some((x) => x.id === id))
-      setCustomerIds((ids) => keep(ids, o.customers))
-      setSupplierIds((ids) => keep(ids, o.suppliers))
+      setPartyIds((ids) => keep(ids, o.company_individuals))
       setStaffIds((ids) => keep(ids, o.sales_staff))
-    }).catch(() => setOptions({ customers: [], suppliers: [], sales_staff: [] }))
+    }).catch(() => setOptions({ company_individuals: [], sales_staff: [] }))
   }, [companyKey])
 
   useEffect(() => {
@@ -324,22 +333,14 @@ export default function AccountingReportsPage() {
 
       <div className="card">
         <div className="report-filter-grid">
-          {(reportType === 'ar-aging' || reportType === 'sales-gp') && (
+          {USES_COMPANIES.includes(reportType) && <InternalCompaniesPicker value={companyIds} onChange={setCompanyIds} />}
+          {(reportType === 'ar-aging' || reportType === 'ap-aging' || reportType === 'sales-gp') && (
             <MultiPick
               label="Company / Individual"
               allLabel="All companies / individuals"
-              options={options.customers}
-              value={customerIds}
-              onChange={setCustomerIds}
-            />
-          )}
-          {reportType === 'ap-aging' && (
-            <MultiPick
-              label="Company / Individual (supplier)"
-              allLabel="All suppliers"
-              options={options.suppliers}
-              value={supplierIds}
-              onChange={setSupplierIds}
+              options={options.company_individuals}
+              value={partyIds}
+              onChange={setPartyIds}
             />
           )}
           {reportType === 'commission' && (
@@ -403,6 +404,7 @@ export default function AccountingReportsPage() {
               <table>
                 <thead>
                   <tr>
+                    {multiCompany && <th>Internal Company</th>}
                     <th>Company / Individual</th>
                     <th>Current</th>
                     <th>1-30</th>
@@ -415,6 +417,7 @@ export default function AccountingReportsPage() {
                 <tbody>
                   {arAging.rows.map((r) => (
                     <tr key={`${r.company_id}-${r.customer_id}`}>
+                      {multiCompany && <td>{r.company_name}</td>}
                       <td>{r.customer_name}</td>
                       <td>{money(r.current)}</td>
                       <td>{money(r.days_1_30)}</td>
@@ -428,7 +431,7 @@ export default function AccountingReportsPage() {
                   ))}
                   {arAging.rows.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="muted">
+                      <td colSpan={multiCompany ? 8 : 7} className="muted">
                         Nothing outstanding.
                       </td>
                     </tr>
@@ -446,7 +449,8 @@ export default function AccountingReportsPage() {
               <table>
                 <thead>
                   <tr>
-                    <th>Supplier</th>
+                    {multiCompany && <th>Internal Company</th>}
+                    <th>Company / Individual</th>
                     <th>Current</th>
                     <th>1-30</th>
                     <th>31-60</th>
@@ -458,6 +462,7 @@ export default function AccountingReportsPage() {
                 <tbody>
                   {apAging.rows.map((r) => (
                     <tr key={`${r.company_id}-${r.supplier_id}`}>
+                      {multiCompany && <td>{r.company_name}</td>}
                       <td>{r.supplier_name}</td>
                       <td>{money(r.current)}</td>
                       <td>{money(r.days_1_30)}</td>
@@ -471,7 +476,7 @@ export default function AccountingReportsPage() {
                   ))}
                   {apAging.rows.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="muted">
+                      <td colSpan={multiCompany ? 8 : 7} className="muted">
                         Nothing owed.
                       </td>
                     </tr>
@@ -713,9 +718,10 @@ export default function AccountingReportsPage() {
               <table>
                 <thead>
                   <tr>
+                    {multiCompany && <th>Internal Company</th>}
                     <th>Invoice</th>
                     <th>Date</th>
-                    <th>Customer</th>
+                    <th>Company / Individual</th>
                     <th>Revenue</th>
                     <th>Cost</th>
                     <th>GP</th>
@@ -725,6 +731,7 @@ export default function AccountingReportsPage() {
                 <tbody>
                   {salesGP.rows.map((r) => (
                     <tr key={r.invoice_id}>
+                      {multiCompany && <td>{r.company_name}</td>}
                       <td>{r.invoice_number}</td>
                       <td>{formatDate(r.issued_at)}</td>
                       <td>{r.customer_name}</td>
@@ -744,7 +751,7 @@ export default function AccountingReportsPage() {
                   ))}
                   {salesGP.rows.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="muted">
+                      <td colSpan={multiCompany ? 8 : 7} className="muted">
                         No invoices in this date range.
                       </td>
                     </tr>
@@ -796,6 +803,7 @@ export default function AccountingReportsPage() {
               <table>
                 <thead>
                   <tr>
+                    {multiCompany && <th>Internal Company</th>}
                     <th>Month</th>
                     <th>Salesperson</th>
                     <th>Commission</th>
@@ -804,6 +812,7 @@ export default function AccountingReportsPage() {
                 <tbody>
                   {commission.rows.map((r, i) => (
                     <tr key={`${r.company_id}-${r.month}-${r.sales_staff_id ?? 'none'}-${i}`}>
+                      {multiCompany && <td>{r.company_name}</td>}
                       <td>{r.month}</td>
                       <td>{r.sales_staff_name}</td>
                       <td>{money(r.commission_sgd)}</td>
@@ -811,7 +820,7 @@ export default function AccountingReportsPage() {
                   ))}
                   {commission.rows.length === 0 && (
                     <tr>
-                      <td colSpan={3} className="muted">
+                      <td colSpan={multiCompany ? 4 : 3} className="muted">
                         No receipts applied to invoices in this date range.
                       </td>
                     </tr>

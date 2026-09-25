@@ -2077,8 +2077,8 @@ export interface ReportFilterOption {
 }
 
 export interface ReportFilterOptions {
-  customers: ReportFilterOption[]
-  suppliers: ReportFilterOption[]
+  /** Every Company / Individual -- one list, since a customer can also be a supplier. */
+  company_individuals: ReportFilterOption[]
   sales_staff: ReportFilterOption[]
 }
 

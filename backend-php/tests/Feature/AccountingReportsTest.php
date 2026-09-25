@@ -608,18 +608,20 @@ class AccountingReportsTest extends TestCase
         $this->assertSame('Beta', $response->json('rows.0.customer_name'));
     }
 
-    public function test_filter_options_list_parties_across_the_selected_companies(): void
+    public function test_filter_options_list_every_company_individual_across_the_selected_companies(): void
     {
         $companyA = Company::factory()->create(['code' => 'C001']);
         $companyB = Company::factory()->create(['code' => 'C002']);
         $token = $this->ownerToken($companyA);
+        // One list whatever the flags: a customer can also be a supplier.
         CompanyIndividual::factory()->for($companyA)->create(['name' => 'Acme', 'is_customer' => true, 'is_supplier' => false]);
         CompanyIndividual::factory()->for($companyB)->create(['name' => 'Bolt', 'is_customer' => false, 'is_supplier' => true]);
 
-        $response = $this->getJson("/api/reports/accounting/filter-options?company_ids={$companyA->id},{$companyB->id}", $this->headers($token))->assertOk();
+        $both = $this->getJson("/api/reports/accounting/filter-options?company_ids={$companyA->id},{$companyB->id}", $this->headers($token))->assertOk();
+        $this->assertSame(['Acme (C001)', 'Bolt (C002)'], array_column($both->json('company_individuals'), 'name'));
 
-        $this->assertSame(['Acme (C001)'], array_column($response->json('customers'), 'name'));
-        $this->assertSame(['Bolt (C002)'], array_column($response->json('suppliers'), 'name'));
+        $one = $this->getJson("/api/reports/accounting/filter-options?company_ids={$companyA->id}", $this->headers($token))->assertOk();
+        $this->assertSame(['Acme'], array_column($one->json('company_individuals'), 'name'));
     }
 
     private function periodUrl(string $path): string

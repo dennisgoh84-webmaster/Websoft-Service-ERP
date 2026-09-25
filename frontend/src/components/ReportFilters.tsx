@@ -1,10 +1,51 @@
 // Filter controls shared by the report screens (Dennis, 2026-09-24:
 // "company selection, and multiple company selection, ACC period and
-// date selection from and to" -- "company" there meaning the Company /
-// Individual file, i.e. customers and suppliers).
+// date selection from and to"). Two different "companies": Internal
+// Companies are the user's own companies (the top-right switcher's list);
+// Company / Individual is the customer-or-supplier file.
 import { useEffect, useRef, useState } from 'react'
-import { api, type AccountingPeriod } from '../lib/api'
+import { api, type AccountingPeriod, type Company } from '../lib/api'
 import { formatDate } from '../lib/format'
+import { isoToMonth, monthEndISO, monthStartISO } from '../lib/period'
+
+/** One or several of the user's own (internal) companies; at least one always stays selected. */
+export function InternalCompaniesPicker({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
+  const [companies, setCompanies] = useState<Company[]>([])
+  useEffect(() => {
+    api.listMyCompanies().then(setCompanies).catch(() => setCompanies([]))
+  }, [])
+
+  const toggle = (id: string) => {
+    const next = value.includes(id) ? value.filter((x) => x !== id) : [...value, id]
+    if (next.length > 0) onChange(next)
+  }
+  const allSelected = companies.length > 0 && companies.every((c) => value.includes(c.id))
+
+  return (
+    <div className="form-row report-companies">
+      <label>Internal Companies{companies.length > 1 ? ' (tick one or more)' : ''}</label>
+      <div className="company-chips">
+        {companies.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            className={`company-chip${value.includes(c.id) ? ' on' : ''}`}
+            onClick={() => toggle(c.id)}
+            disabled={companies.length === 1}
+            title={c.name}
+          >
+            {c.code} {c.name}
+          </button>
+        ))}
+        {companies.length > 2 && (
+          <button type="button" className="company-chip all" onClick={() => onChange(allSelected ? [value[0]] : companies.map((c) => c.id))}>
+            {allSelected ? 'Clear' : 'All internal companies'}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
 
 /** Checkbox dropdown: nothing ticked means "all". */
 export function MultiPick({
@@ -85,13 +126,25 @@ function periodLabel(p: AccountingPeriod): string {
   return `${p.name} (FY${p.fiscal_year}) · ${formatDate(p.period_start)} – ${formatDate(p.period_end)}`
 }
 
-/** Accounting period shortcut + exact From / To dates. Picking a period fills both dates. */
+/**
+ * Month from / Month to (a whole-month range), an accounting period
+ * shortcut, and the exact From / To dates they fill in -- any one can be
+ * used; the dates are what the report runs on.
+ */
 export function PeriodRange({ from, to, onChange }: { from: string; to: string; onChange: (from: string, to: string) => void }) {
   const periods = usePeriods()
   const match = periods.find((p) => p.period_start === from && p.period_end === to)
 
   return (
     <>
+      <div className="form-row">
+        <label>Month from</label>
+        <input type="month" value={isoToMonth(from)} onChange={(e) => e.target.value && onChange(monthStartISO(e.target.value), to)} />
+      </div>
+      <div className="form-row">
+        <label>Month to</label>
+        <input type="month" value={isoToMonth(to)} onChange={(e) => e.target.value && onChange(from, monthEndISO(e.target.value))} />
+      </div>
       <div className="form-row">
         <label>Accounting period</label>
         <select
@@ -101,9 +154,9 @@ export function PeriodRange({ from, to, onChange }: { from: string; to: string; 
             if (p) onChange(p.period_start, p.period_end)
           }}
           disabled={periods.length === 0}
-          title={periods.length === 0 ? 'No accounting periods set up yet -- use the dates, or set periods up under Accounting Periods.' : undefined}
+          title={periods.length === 0 ? 'No accounting periods set up yet -- use the months or dates, or set periods up under Accounting Periods.' : undefined}
         >
-          <option value="">{periods.length === 0 ? 'None set up' : 'Custom dates'}</option>
+          <option value="">{periods.length === 0 ? 'None set up' : 'Custom'}</option>
           {periods.map((p) => (
             <option key={p.id} value={p.id}>{periodLabel(p)}</option>
           ))}
@@ -121,13 +174,17 @@ export function PeriodRange({ from, to, onChange }: { from: string; to: string; 
   )
 }
 
-/** "As at" date with an accounting-period shortcut (sets it to that period's last day). Empty = today. */
+/** "As at" date with month-end and accounting-period shortcuts (each sets it to that month's / period's last day). Empty = today. */
 export function AsAtPicker({ value, onChange }: { value: string; onChange: (asAt: string) => void }) {
   const periods = usePeriods()
   const match = periods.find((p) => p.period_end === value)
 
   return (
     <>
+      <div className="form-row">
+        <label>Month end</label>
+        <input type="month" value={isoToMonth(value)} onChange={(e) => e.target.value && onChange(monthEndISO(e.target.value))} />
+      </div>
       <div className="form-row">
         <label>Accounting period end</label>
         <select
@@ -138,7 +195,7 @@ export function AsAtPicker({ value, onChange }: { value: string; onChange: (asAt
           }}
           disabled={periods.length === 0}
         >
-          <option value="">{periods.length === 0 ? 'None set up' : 'Custom date'}</option>
+          <option value="">{periods.length === 0 ? 'None set up' : 'Custom'}</option>
           {periods.map((p) => (
             <option key={p.id} value={p.id}>{periodLabel(p)}</option>
           ))}

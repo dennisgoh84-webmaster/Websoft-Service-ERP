@@ -156,25 +156,27 @@ class ReportController extends Controller
         return count($scope) > 1 ? ['company_name', ...$fields] : $fields;
     }
 
-    /** Choices for the customer / supplier / salesperson filters across the selected companies. */
+    /**
+     * Choices for the Company / Individual and salesperson filters across
+     * the selected internal companies. One party list, not separate
+     * customer and supplier lists: the same Company / Individual can be
+     * both (Dennis, 2026-09-24).
+     */
     public function filterOptions(Request $request)
     {
         $user = $this->viewer($request);
         $scope = $this->companyScope($request, $user);
         $ids = array_keys($scope);
         $multi = count($ids) > 1;
-        $label = function ($row) use ($scope, $multi) {
-            return $multi ? "{$row->name} ({$this->companyCode($scope[$row->company_id] ?? '')})" : $row->name;
-        };
-
-        $parties = CompanyIndividual::whereIn('company_id', $ids)->orderBy('name')->get(['id', 'name', 'company_id', 'is_customer', 'is_supplier']);
+        $label = fn (string $name, string $companyId) => $multi ? "{$name} ({$this->companyCode($scope[$companyId] ?? '')})" : $name;
 
         return response()->json([
-            'customers' => $parties->where('is_customer', true)->map(fn ($c) => ['id' => $c->id, 'name' => $label($c)])->values(),
-            'suppliers' => $parties->where('is_supplier', true)->map(fn ($c) => ['id' => $c->id, 'name' => $label($c)])->values(),
+            'company_individuals' => CompanyIndividual::whereIn('company_id', $ids)->orderBy('name')->get(['id', 'name', 'company_id'])
+                ->map(fn ($c) => ['id' => $c->id, 'name' => $label($c->name, $c->company_id)])
+                ->values(),
             'sales_staff' => User::whereIn('company_id', $ids)->where('is_active', true)->orderBy('full_name')
                 ->get(['id', 'full_name', 'company_id'])
-                ->map(fn ($u) => ['id' => $u->id, 'name' => $multi ? "{$u->full_name} ({$this->companyCode($scope[$u->company_id] ?? '')})" : $u->full_name])
+                ->map(fn ($u) => ['id' => $u->id, 'name' => $label($u->full_name, $u->company_id)])
                 ->values(),
         ]);
     }
