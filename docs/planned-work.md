@@ -255,10 +255,14 @@ migration) and its note that "important historical data will eventually
 be migrated" -- this item is the concrete migration-program request for
 that strategy, scoped to the record types above.
 
-**Not yet started -- no migration scripts, field-mapping tables, or
-import tooling exist.** Real open questions once this is picked up (not
-resolved here, just flagged, per CLAUDE.md's "never assume a business
-rule when requirements have not been provided"):
+**Import tooling built 2026-09-25** -- `php artisan odoo:import`, see
+[odoo-migration.md](odoo-migration.md) for the field mapping, how to
+run it, and Dennis's answers to questions 1, 4 and 5 below (Odoo's
+CSV/Excel exports; invoices/receipts are history only with the GL
+carried by one opening-balance voucher; imported documents keep their
+Odoo number). Questions 3 and 6 are answered by the tool's design (a
+permanent `odoo_record_map`; dependency order). The questions as
+originally recorded:
 
 1. **Access to Odoo data** -- direct DB access to Odoo's PostgreSQL
    instance, or via Odoo's XML-RPC/JSON-RPC API? Read-only, one-off

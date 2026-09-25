@@ -124,8 +124,11 @@ class AccountsReceivableService
         if ($invoice->status === Invoice::STATUS_WRITTEN_OFF) {
             return;
         }
+        // Starts from what Odoo had already settled on a migrated
+        // invoice (zero on every invoice raised here), which has no
+        // allocation rows behind it -- see docs/odoo-migration.md.
         $paid = PaymentAllocation::where('invoice_id', $invoice->id)->get()
-            ->reduce(fn (Money $carry, PaymentAllocation $a) => $carry->plus(Money::of($a->amount_sgd)), Money::of(0));
+            ->reduce(fn (Money $carry, PaymentAllocation $a) => $carry->plus(Money::of($a->amount_sgd)), Money::of($invoice->pre_migration_paid_sgd ?? 0));
         $invoice->amount_paid_sgd = $paid->toString();
 
         $total = Money::of($invoice->total_amount_sgd);
