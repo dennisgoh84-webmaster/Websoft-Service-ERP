@@ -33,6 +33,7 @@ import CrmProspectActivityDetailPage from './pages/CrmProspectActivityDetailPage
 import DashboardPage from './pages/DashboardPage'
 import SalesDashboardPage from './pages/SalesDashboardPage'
 import EventLogsPage from './pages/EventLogsPage'
+import OutlookAddinPage from './pages/OutlookAddinPage'
 import DataMigrationBatchLogPage from './pages/DataMigrationBatchLogPage'
 import DataMigrationDashboardPage from './pages/DataMigrationDashboardPage'
 import DataMigrationImportPage from './pages/DataMigrationImportPage'
@@ -184,6 +185,7 @@ function AppRoutes() {
         <Route path="/approval-authorities" element={<ApprovalAuthoritiesPage />} />
         <Route path="/approval-center" element={<ApprovalCenterPage />} />
         <Route path="/event-logs" element={<EventLogsPage />} />
+        <Route path="/maintenance/outlook-addin" element={<OutlookAddinPage />} />
         <Route path="/data-migration" element={<DataMigrationDashboardPage />} />
         <Route path="/data-migration/modules" element={<DataMigrationModulesPage />} />
         <Route path="/data-migration/import" element={<DataMigrationImportPage />} />

@@ -1752,7 +1752,7 @@ the real target record (confirmed 2026-09-11), not just an assignment.
    alongside the in-app Incident screen rather than deferred, but
    **cannot be sideloaded or tested** without a real Microsoft 365
    tenant and an HTTPS host, neither of which exist in this
-   environment -- see outlook-addin/README.md. It also does not use
+   environment -- see docs/outlook-addin.md. It also does not use
    Azure AD / Office SSO as the original request's phrasing implied;
    it reuses this app's own existing login instead, which needed no
    Azure AD app registration to build against an environment that

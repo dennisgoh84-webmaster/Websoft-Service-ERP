@@ -1,16 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Outlook Add-in manifest for the Incident Module (2026-09-12).
-  See README.md in this folder before sideloading; in particular,
-  the {{HOST}} placeholders below must be replaced with the real
-  hosted URL of this add-in (the taskpane/icons must be served over
-  HTTPS; Outlook will not load a plain-HTTP add-in).
+  Outlook Add-in manifest for the Incident Module (docs/outlook-addin.md).
+  Do not upload this file as it is: download it from Maintenance ->
+  Outlook Add-in, which fills in this server's HTTPS address everywhere
+  the add-in's files are referenced (Outlook will not load a plain-HTTP
+  add-in).
 
-  This is the classic XML manifest (Add-in Commands / VSTO style),
-  which every Outlook client (desktop, web, mobile) still supports;
-  simpler to hand-write and review than the newer unified JSON
-  manifest, and there's no reason here to need the newer format's
-  extra capabilities.
+  This is the classic XML manifest, which every Outlook client (desktop,
+  web, mobile) still supports.
 -->
 <OfficeApp
   xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
@@ -20,7 +17,7 @@
   xsi:type="MailApp">
 
   <Id>3f6a7b2c-8e1d-4b5a-9c3e-1a2b3c4d5e6f</Id>
-  <Version>1.0.0.0</Version>
+  <Version>1.1.0.0</Version>
   <ProviderName>Web Master Consultancy Pte Ltd</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="Websoft Incidents" />

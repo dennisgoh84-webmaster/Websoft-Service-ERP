@@ -284,6 +284,8 @@ class IncidentTest extends TestCase
         $response->assertOk()->assertJson(['job_order_created' => true, 'fallback_reason' => null]);
         $this->assertSame('converted', $response->json('incident.status'));
         $this->assertNotNull($response->json('incident.converted_job_order_id'));
+        $this->assertSame($response->json('incident.converted_job_order_id'), $response->json('job_order_id'));
+        $this->assertSame(\App\Models\JobOrder::find($response->json('job_order_id'))->job_order_number, $response->json('job_order_number'));
     }
 
     public function test_user_with_no_group_is_denied(): void

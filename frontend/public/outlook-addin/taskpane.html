@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Websoft Incidents</title>
+  <!-- Microsoft's own CDN for Office.js -- required for any Office Add-in,
+       not something this project hosts itself. -->
+  <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      margin: 0;
+      padding: 16px;
+      color: #1a1315;
+      background: #fff;
+    }
+    h1 { font-size: 15px; margin: 0 0 12px; color: #7a1f2e; }
+    .card { border: 1px solid #e3dadb; border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+    .muted { color: #6b6067; font-size: 12px; }
+    label { display: block; font-size: 12px; color: #6b6067; margin: 8px 0 4px; }
+    input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #e3dadb; border-radius: 4px; font-size: 13px; }
+    input.code { letter-spacing: 0.3em; font-size: 16px; text-align: center; }
+    button {
+      display: block; width: 100%; margin-top: 10px; padding: 8px;
+      background: #7a1f2e; color: #fff; border: none; border-radius: 4px;
+      font-size: 13px; cursor: pointer;
+    }
+    button.secondary { background: #fff; color: #7a1f2e; border: 1px solid #7a1f2e; }
+    button.link { background: none; color: #7a1f2e; border: none; padding: 4px 0; text-align: left; width: auto; font-size: 12px; text-decoration: underline; }
+    button:disabled { opacity: 0.6; cursor: default; }
+    .error { color: #c0362c; font-size: 12px; margin-top: 8px; }
+    .result { font-size: 13px; white-space: pre-line; }
+    .result b { color: #2c6b2f; }
+    .summary { white-space: pre-line; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <h1>Websoft Incidents</h1>
+
+  <!-- Signs in with this app's own staff login (the same email and
+       password as the web app), not Azure AD SSO -- see
+       docs/outlook-addin.md. The token is kept only in this taskpane's
+       sessionStorage. -->
+  <div class="card" id="login-panel" hidden>
+    <p class="muted">Sign in with your Websoft email and password.</p>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="username" />
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" />
+    <button id="login-button">Sign in</button>
+    <div class="error" id="login-error"></div>
+  </div>
+
+  <!-- Both email and WhatsApp can deliver the sign-in code: the user picks. -->
+  <div class="card" id="channel-panel" hidden>
+    <p class="muted">Where should we send your sign-in code?</p>
+    <button id="channel-email">Email</button>
+    <button id="channel-whatsapp" class="secondary">WhatsApp</button>
+    <div class="error" id="channel-error"></div>
+  </div>
+
+  <div class="card" id="otp-panel" hidden>
+    <p class="muted" id="otp-sent-to">We sent you a 6-digit sign-in code.</p>
+    <label for="otp-code">Sign-in code</label>
+    <input id="otp-code" class="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" />
+    <button id="otp-button">Verify</button>
+    <button id="otp-cancel" class="link">Start again</button>
+    <div class="error" id="otp-error"></div>
+  </div>
+
+  <div id="app-panel" hidden>
+    <div class="card">
+      <div class="muted summary" id="email-summary"></div>
+    </div>
+    <button id="convert-incident-button">Log as Incident</button>
+    <button id="convert-job-order-button" class="secondary">Convert to Job Order</button>
+    <div class="error" id="action-error"></div>
+    <button id="sign-out" class="link">Sign out</button>
+  </div>
+
+  <div class="card" id="result-panel" hidden>
+    <div class="result" id="result-text"></div>
+  </div>
+
+  <script src="taskpane.js"></script>
+</body>
+</html>

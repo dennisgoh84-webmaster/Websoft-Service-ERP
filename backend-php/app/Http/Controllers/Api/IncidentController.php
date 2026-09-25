@@ -204,7 +204,7 @@ class IncidentController extends Controller
         return response()->json($this->present($incident->fresh()));
     }
 
-    // ---- Outlook Add-in endpoints -- see outlook-addin/README.md ----
+    // ---- Outlook Add-in endpoints -- see docs/outlook-addin.md ----
     // These act directly on an email with no Incident yet in
     // existence, so they take the raw sender/subject/body rather than
     // an incident_id. Registered in routes/api/incidents.php before
@@ -303,6 +303,9 @@ class IncidentController extends Controller
         return response()->json([
             'incident' => $this->present($incident->fresh()),
             'job_order_created' => true,
+            // So the Outlook Add-in can say which Job Order it opened.
+            'job_order_id' => $jobOrder->id,
+            'job_order_number' => $jobOrder->job_order_number,
             'fallback_reason' => null,
             'acknowledgement_sent' => $acknowledged,
         ]);

@@ -47,7 +47,7 @@ building (see docs/open-business-decisions.md for the settled decisions).
 settled rules and `app/models/incidents.py` / `app/routers/incidents.py`
 / `frontend/src/pages/IncidentsPage.tsx` for the implementation. The
 Outlook Add-in half is scaffolded but not deployable/testable here --
-see `outlook-addin/README.md`. Left below for the original request
+see `docs/outlook-addin.md`. Left below for the original request
 wording and design history.
 
 Requested as: Support Staff log incoming calls/issues, which get routed

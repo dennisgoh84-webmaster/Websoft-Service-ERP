@@ -373,9 +373,9 @@ shipped and when.
   → [planned-work.md #1](planned-work.md#1-mobile-web-app-for-support-staff----on-site-job-order--service-record-capture-raised-2026-09-11-built-2026-09-12)
 - [x] **Incident Module** -- built 2026-09-12. In-app screen (log,
   route to Quotation/Job Order/Software Task, or a callback status) is
-  live; the Outlook Add-in half is scaffolded only -- not deployable/
-  testable without a real Microsoft 365 tenant + HTTPS host (see
-  outlook-addin/README.md).
+  live; the Outlook Add-in half is built and tested (2026-09-25) and
+  waits only on an HTTPS address + a Microsoft 365 upload (see
+  docs/outlook-addin.md).
   → [planned-work.md #2](planned-work.md#2-incident-module----support-staff-callissue-log-with-routing-to-salesjob-ordersoftware-tasks-raised-2026-09-11-deferred-until-after-companyindividual)
 - [x] **eSignature + eDocument attachments** -- built 2026-09-12.
   Backend: DocumentAttachment + DocumentSignature models, file-upload
@@ -620,9 +620,12 @@ shipped and when.
   follow-up outside this repo:** Central Command checks
   `alembic_version` to version a client database; it must read
   Laravel's `migrations` table now (docs/central-command-schema-contract.md).
-- [ ] **Smaller things noticed, not done:** the Outlook Add-in half of
-  Incidents is still scaffold-only, needing a real Microsoft 365 tenant
-  + HTTPS host. (~~The SMTP transport has no connect timeout~~ -- already
+- [ ] **Outlook Add-in: built and tested 2026-09-25, waiting only on
+  going live** -- served by the app at `/outlook-addin/`, a Maintenance →
+  Outlook Add-in page that downloads the manifest filled in with the
+  server's address, and sign-in with the one-time code. Still needs the
+  server on HTTPS and a Microsoft 365 administrator to upload the
+  manifest ([outlook-addin.md](outlook-addin.md)). (~~The SMTP transport has no connect timeout~~ -- already
   fixed 2026-09-15: `Mailer` bounds the connect to 15 seconds for the
   duration of a send; this line had not been ticked. Confirmed
   2026-09-25.)

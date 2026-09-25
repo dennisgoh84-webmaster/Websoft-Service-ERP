@@ -125,6 +125,7 @@ explaining the reason first (see Development Rules below).
 - [docs/backlog.md](docs/backlog.md) — short, checkable summary of everything pending, linking into the detail docs above
 - [docs/walkthrough/index.html](docs/walkthrough/index.html) — a 47-step guided walkthrough of every built module (Operations → Stock → Accounts → Maintenance), with screenshots captured from the running application. Regenerate the screenshots by running the app and re-capturing; they are not auto-built.
 - [docs/ui-guidelines.md](docs/ui-guidelines.md) — screen label conventions and the Export (CSV/Excel) / Print (PDF/Word) pattern every screen follows
+- [docs/outlook-addin.md](docs/outlook-addin.md) — the Outlook Add-in (Log as Incident / Convert to Job Order from an email): served at `/outlook-addin/`, Maintenance → Outlook Add-in for the filled-in manifest, how to switch it on
 - [docs/data-migration.md](docs/data-migration.md) — Maintenance → Data Migration (ODOO / ZSOFT): decisions, the screens, modules in run order, Field Gap sign-off, roll back
 - [docs/php-conversion-plan.md](docs/php-conversion-plan.md) — the backend Python→PHP language conversion (complete; Python retired 2026-09-15): reason, approach, stack, findings
 - [DEV_SETUP.md](DEV_SETUP.md) — how to run the application locally

@@ -191,6 +191,7 @@ export default function Layout() {
     { key: 'event-logs', path: '/event-logs', label: 'Event Logs', visible: can('event_logs') },
     // ODOO / ZSOFT data migration (2026-09-25, docs/data-migration.md).
     { key: 'data-migration', path: '/data-migration', label: 'Data Migration', visible: can('data_migration') },
+    { key: 'outlook-addin', path: '/maintenance/outlook-addin', label: 'Outlook Add-in', visible: can('core_administration') },
   ]
 
   return (
