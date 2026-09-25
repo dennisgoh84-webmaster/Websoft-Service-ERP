@@ -349,114 +349,116 @@ export default function QuotationsPage() {
             <input value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
 
-          <table>
-            <thead>
-              <tr>
-                <th>Catalog item</th>
-                <th>Description</th>
-                <th>Unit</th>
-                <th>Qty</th>
-                <th>Unit price</th>
-                <th>Cost</th>
-                <th>Reference code</th>
-                <th>Line total</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line, i) => (
-                <tr key={i}>
-                  <td>
-                    <select value={line.productId} onChange={(e) => pickProduct(i, e.target.value)}>
-                      <option value="">Free text...</option>
-                      {catalog.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Catalog item</th>
+                  <th>Description</th>
+                  <th>Unit</th>
+                  <th>Qty</th>
+                  <th>Unit price</th>
+                  <th>Cost</th>
+                  <th>Reference code</th>
+                  <th>Line total</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((line, i) => (
+                  <tr key={i}>
+                    <td>
+                      <select value={line.productId} onChange={(e) => pickProduct(i, e.target.value)}>
+                        <option value="">Free text...</option>
+                        {catalog.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        value={line.description}
+                        onChange={(e) => updateLine(i, { description: e.target.value })}
+                        style={{ minWidth: 160 }}
+                        required
+                      />
+                    </td>
+                    <td>
+                      <input
+                        value={line.unitOfMeasure}
+                        onChange={(e) => updateLine(i, { unitOfMeasure: e.target.value })}
+                        style={{ width: 90 }}
+                        placeholder="Hours..."
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={line.quantity}
+                        onChange={(e) => updateLine(i, { quantity: e.target.value })}
+                        style={{ width: 70 }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={line.unitPrice}
+                        onChange={(e) => updateLine(i, { unitPrice: e.target.value })}
+                        style={{ width: 90 }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={line.costSgd}
+                        onChange={(e) => updateLine(i, { costSgd: e.target.value })}
+                        style={{ width: 90 }}
+                        title="Product cost, for GP reporting -- open field, doesn't affect the quotation price."
+                      />
+                    </td>
+                    <td>
+                      <select
+                        value={line.referenceCodeId}
+                        onChange={(e) => updateLine(i, { referenceCodeId: e.target.value })}
+                        style={{ minWidth: 140 }}
+                      >
+                        <option value="">None</option>
+                        {referenceCodes.map((rc) => (
+                          <option key={rc.id} value={rc.id}>
+                            {rc.code}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>{money((parseFloat(line.quantity) || 0) * (parseFloat(line.unitPrice) || 0))}</td>
+                    <td>
+                      {lines.length > 1 && (
+                        <button type="button" className="secondary" onClick={() => removeLine(i)}>
+                          Remove
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                <tr>
+                  <td colSpan={5}>
+                    <strong>Net total</strong>
                   </td>
-                  <td>
-                    <input
-                      value={line.description}
-                      onChange={(e) => updateLine(i, { description: e.target.value })}
-                      style={{ minWidth: 160 }}
-                      required
-                    />
-                  </td>
-                  <td>
-                    <input
-                      value={line.unitOfMeasure}
-                      onChange={(e) => updateLine(i, { unitOfMeasure: e.target.value })}
-                      style={{ width: 90 }}
-                      placeholder="Hours..."
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={line.quantity}
-                      onChange={(e) => updateLine(i, { quantity: e.target.value })}
-                      style={{ width: 70 }}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={line.unitPrice}
-                      onChange={(e) => updateLine(i, { unitPrice: e.target.value })}
-                      style={{ width: 90 }}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={line.costSgd}
-                      onChange={(e) => updateLine(i, { costSgd: e.target.value })}
-                      style={{ width: 90 }}
-                      title="Product cost, for GP reporting -- open field, doesn't affect the quotation price."
-                    />
-                  </td>
-                  <td>
-                    <select
-                      value={line.referenceCodeId}
-                      onChange={(e) => updateLine(i, { referenceCodeId: e.target.value })}
-                      style={{ minWidth: 140 }}
-                    >
-                      <option value="">None</option>
-                      {referenceCodes.map((rc) => (
-                        <option key={rc.id} value={rc.id}>
-                          {rc.code}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>{money((parseFloat(line.quantity) || 0) * (parseFloat(line.unitPrice) || 0))}</td>
-                  <td>
-                    {lines.length > 1 && (
-                      <button type="button" className="secondary" onClick={() => removeLine(i)}>
-                        Remove
-                      </button>
-                    )}
+                  <td colSpan={3}>
+                    <strong>{money(draftTotal)}</strong> (+ GST at acceptance-time rate)
                   </td>
                 </tr>
-              ))}
-              <tr>
-                <td colSpan={5}>
-                  <strong>Net total</strong>
-                </td>
-                <td colSpan={3}>
-                  <strong>{money(draftTotal)}</strong> (+ GST at acceptance-time rate)
-                </td>
-              </tr>
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
           <button type="button" className="secondary" style={{ marginTop: 10 }} onClick={addLine}>
             Add line
           </button>

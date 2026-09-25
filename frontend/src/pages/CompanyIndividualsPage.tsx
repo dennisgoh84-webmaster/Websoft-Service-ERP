@@ -226,67 +226,69 @@ export default function CompanyIndividualsPage() {
         </div>
 
         <h2>Company / Individual ({customers.length})</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Group</th>
-              <th>Industry</th>
-              <th>Type</th>
-              <th>Roles</th>
-              <th>Email</th>
-              <th>Phone</th>
-              <th>Address</th>
-              <th>Payment terms</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {customers.map((c) => (
-              <tr key={c.id}>
-                <td>
-                  <Link to={`/company-individuals/${c.id}`}>{c.name}</Link>
-                </td>
-                <td className="muted">{groupName(c.customer_group_id) ?? '-'}</td>
-                <td className="muted">{industryName(c.industry_code) ?? '-'}</td>
-                <td className="muted">{c.customer_type === 'individual' ? 'Individual' : 'Company'}</td>
-                <td className="muted">
-                  {[c.is_customer && 'Customer', c.is_supplier && 'Supplier'].filter(Boolean).join(' + ') || '-'}
-                </td>
-                <td>{c.billing_email ?? '-'}</td>
-                <td>{c.phone ?? '-'}</td>
-                <td className="muted">
-                  {[c.address_line1, c.address_city, c.address_country].filter(Boolean).join(', ') || '-'}
-                </td>
-                <td>
-                  {c.payment_terms_days === null ? (
-                    <span className="muted">not agreed</span>
-                  ) : (
-                    `Net ${c.payment_terms_days} days`
-                  )}
-                </td>
-                <td>
-                  <span className={`badge ${c.is_active ? 'active' : 'draft'}`}>
-                    {c.is_active ? 'Active' : 'Inactive'}
-                  </span>{' '}
-                  {c.is_archived && <span className="badge draft">Archived</span>}
-                </td>
-                <td style={{ display: 'flex', gap: 10 }}>
-                  <Link to={`/company-individuals/${c.id}`}>Open</Link>
-                  <Link to={`/contracts?customer=${c.id}`}>Service Contracts</Link>
-                </td>
-              </tr>
-            ))}
-            {customers.length === 0 && (
+        <div style={{ overflowX: 'auto' }}>
+          <table>
+            <thead>
               <tr>
-                <td colSpan={11} className="muted">
-                  No customers match these filters.
-                </td>
+                <th>Name</th>
+                <th>Group</th>
+                <th>Industry</th>
+                <th>Type</th>
+                <th>Roles</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Address</th>
+                <th>Payment terms</th>
+                <th>Status</th>
+                <th></th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {customers.map((c) => (
+                <tr key={c.id}>
+                  <td>
+                    <Link to={`/company-individuals/${c.id}`}>{c.name}</Link>
+                  </td>
+                  <td className="muted">{groupName(c.customer_group_id) ?? '-'}</td>
+                  <td className="muted">{industryName(c.industry_code) ?? '-'}</td>
+                  <td className="muted">{c.customer_type === 'individual' ? 'Individual' : 'Company'}</td>
+                  <td className="muted">
+                    {[c.is_customer && 'Customer', c.is_supplier && 'Supplier'].filter(Boolean).join(' + ') || '-'}
+                  </td>
+                  <td>{c.billing_email ?? '-'}</td>
+                  <td>{c.phone ?? '-'}</td>
+                  <td className="muted">
+                    {[c.address_line1, c.address_city, c.address_country].filter(Boolean).join(', ') || '-'}
+                  </td>
+                  <td>
+                    {c.payment_terms_days === null ? (
+                      <span className="muted">not agreed</span>
+                    ) : (
+                      `Net ${c.payment_terms_days} days`
+                    )}
+                  </td>
+                  <td>
+                    <span className={`badge ${c.is_active ? 'active' : 'draft'}`}>
+                      {c.is_active ? 'Active' : 'Inactive'}
+                    </span>{' '}
+                    {c.is_archived && <span className="badge draft">Archived</span>}
+                  </td>
+                  <td style={{ display: 'flex', gap: 10 }}>
+                    <Link to={`/company-individuals/${c.id}`}>Open</Link>
+                    <Link to={`/contracts?customer=${c.id}`}>Service Contracts</Link>
+                  </td>
+                </tr>
+              ))}
+              {customers.length === 0 && (
+                <tr>
+                  <td colSpan={11} className="muted">
+                    No customers match these filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )
