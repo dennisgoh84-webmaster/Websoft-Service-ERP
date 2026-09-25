@@ -10,6 +10,7 @@ use App\Models\Contract;
 use App\Models\Group;
 use App\Models\GroupModuleAuthority;
 use App\Models\Incident;
+use App\Models\JobOrder;
 use App\Models\ModuleCatalog;
 use App\Models\User;
 use App\Models\UserCompanyAccess;
@@ -285,7 +286,7 @@ class IncidentTest extends TestCase
         $this->assertSame('converted', $response->json('incident.status'));
         $this->assertNotNull($response->json('incident.converted_job_order_id'));
         $this->assertSame($response->json('incident.converted_job_order_id'), $response->json('job_order_id'));
-        $this->assertSame(\App\Models\JobOrder::find($response->json('job_order_id'))->job_order_number, $response->json('job_order_number'));
+        $this->assertSame(JobOrder::find($response->json('job_order_id'))->job_order_number, $response->json('job_order_number'));
     }
 
     public function test_user_with_no_group_is_denied(): void
