@@ -93,7 +93,21 @@ git clone https://github.com/dennisgoh84-webmaster/websoft-central-command
 
 ## 4. HTTPS (before sharing the link outside your own network)
 
-The stack serves plain HTTP. Put a TLS-terminating proxy in front:
+The stack serves plain HTTP. The quickest way to put HTTPS in front of
+both apps is Central Command's `scripts/setup-https.sh` (Caddy; a domain
+gets a free Let's Encrypt certificate, a bare IP address gets Caddy's
+own private one):
+
+```
+cd ~/central-command
+sudo ./scripts/setup-https.sh 192.168.0.188:8443=8082 192.168.0.188:8444=8083
+```
+
+Then close the plain-HTTP port to everything but the server itself: set
+`HTTP_BIND=127.0.0.1` in this repo's `.env` (and `CC_HTTP_BIND=127.0.0.1`
+in Central Command's) and run `docker compose up -d`.
+
+Or by hand:
 
 - **Caddy** -- automatic Let's Encrypt:
   ```
