@@ -19,6 +19,7 @@ import AiDataConsentGate from '../components/AiDataConsentGate'
 import { useAuth } from '../lib/AuthContext'
 import { getToken } from '../lib/api'
 import { getDeviceId } from '../lib/deviceId'
+import { setViewPreference } from '../lib/mobileDetect'
 import { formatDate } from '../lib/format'
 import MobileQuotationsPage from './Mobile/MobileQuotationsPage'
 import MobileCrmActivityDetailPage from './Mobile/MobileCrmActivityDetailPage'
@@ -1040,6 +1041,19 @@ function TabBar({ tabs, active, onChange }: { tabs: TabItem[]; active: string; o
           {tab.icon} {tab.label}
         </button>
       ))}
+      {/* Back to the full ERP, remembered on this phone (2026-09-25). */}
+      <button
+        onClick={() => {
+          setViewPreference('full')
+          window.location.assign('/')
+        }}
+        style={{
+          flex: 1, padding: '12px 8px', border: 'none', background: MAROON,
+          color: WHITE, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+        }}
+      >
+        🖥 Full site
+      </button>
     </div>
   )
 }

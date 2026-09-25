@@ -1520,3 +1520,52 @@ label.multi-pick-item:hover {
     text-align: left;
   }
 }
+
+/* ── Phone screens: the full ERP (Dennis, 2026-09-25: phones now open the
+   full ERP by default, with the Mobile App a choice -- lib/mobileDetect.ts).
+   One scrolling page instead of fixed-height columns: the announcement
+   panel moves below the page, the ☰ Menu opens above it, the top bar
+   wraps, and wide tables scroll sideways inside their card. */
+@media (max-width: 760px) {
+  .app-shell {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+  .sidebar {
+    width: auto;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .main {
+    height: auto;
+    overflow: visible;
+    max-width: none;
+    padding: 14px 14px 24px;
+  }
+  .main-topbar,
+  .main-topbar-left,
+  .main-topbar-right {
+    flex-wrap: wrap;
+  }
+  .main table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .app-ad-banner {
+    width: auto;
+    height: auto;
+  }
+  .app-ad-banner .promo-video {
+    flex: none;
+    max-height: 220px;
+  }
+  .main input,
+  .main select,
+  .main textarea {
+    font-size: 16px; /* below 16px iOS Safari zooms the page on focus */
+  }
+}

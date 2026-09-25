@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import CompanySwitcher from './CompanySwitcher'
 import NavSection, { type NavItem } from './NavSection'
 import PromoVideoPanel from './PromoVideoPanel'
 import ThemeToggle from './ThemeToggle'
 import { useAuth } from '../lib/AuthContext'
+import { canUseMobileApp, setViewPreference } from '../lib/mobileDetect'
 
 const NAV_COLLAPSE_KEY = 'websoft_nav_collapsed'
 
@@ -44,6 +45,7 @@ function loadCollapsed(): Record<string, boolean> {
 export default function Layout() {
   const { user, logout, activeCompany, moduleAccess } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
   const can = (moduleKey: string) => moduleAccess[moduleKey] === true
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed)
   const [sidebarPeek, setSidebarPeek] = useState(false)
@@ -273,6 +275,19 @@ export default function Layout() {
             >
               {sidebarPeek ? '✕ Hide menu' : '☰ Menu'}
             </button>
+            {canUseMobileApp() && (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  setViewPreference('mobile')
+                  navigate('/mobile')
+                }}
+                title="Switch to the Mobile App on this phone (remembered until you tap Full site there)"
+              >
+                📱 Mobile app
+              </button>
+            )}
           </div>
           <div className="main-topbar-right">
             <CompanySwitcher />
