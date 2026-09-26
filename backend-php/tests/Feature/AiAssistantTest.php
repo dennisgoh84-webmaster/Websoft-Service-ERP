@@ -101,7 +101,7 @@ class AiAssistantTest extends TestCase
         $res = $this->postJson("/api/ai/incidents/{$incident->id}/triage", [], $h)->assertOk();
         $res->assertJsonPath('status', 'ok')
             ->assertJsonPath('suggestion.customer_id', $acme->id)
-            ->assertJsonPath('suggestion.customer_name', 'Acme Manufacturing Pte Ltd')
+            ->assertJsonPath('suggestion.customer_name', 'ACME MANUFACTURING PTE LTD')
             ->assertJsonPath('suggestion.contract_id', $contract->id)
             ->assertJsonPath('suggestion.contract_number', $contract->contract_number)
             ->assertJsonPath('suggestion.route', 'job_order')
@@ -120,8 +120,8 @@ class AiAssistantTest extends TestCase
         $this->assertStringNotContainsString('9123 4567', $prompt);
         $this->assertStringNotContainsString($sender->name, $prompt);
         $this->assertStringContainsString('acme.com.sg', $prompt, 'the email domain is a company signal, kept');
-        $this->assertStringContainsString('Acme Manufacturing Pte Ltd', $prompt);
-        $this->assertStringContainsString('Other Co', $prompt);
+        $this->assertStringContainsString('ACME MANUFACTURING PTE LTD', $prompt);
+        $this->assertStringContainsString('OTHER CO', $prompt);
         $this->assertStringContainsString($contract->contract_number, $prompt);
         $this->assertStringContainsString('Reset the print spooler', $prompt, 'the past fix is shown');
         $this->assertSame('claude-opus-5', $sent[0]['model']);
@@ -263,9 +263,9 @@ class AiAssistantTest extends TestCase
         $incident = Incident::factory()->for($company)->create();
 
         $names = collect(IncidentTriage::buildContext($incident, true)['customers'])->pluck('name');
-        $this->assertTrue($names->contains('Acme Manufacturing Pte Ltd'));
-        $this->assertFalse($names->contains('Gone Ltd'));
-        $this->assertFalse($names->contains('Supplier Only'));
+        $this->assertTrue($names->contains('ACME MANUFACTURING PTE LTD'));
+        $this->assertFalse($names->contains('GONE LTD'));
+        $this->assertFalse($names->contains('SUPPLIER ONLY'));
     }
 
     // ---- helpers ----------------------------------------------------

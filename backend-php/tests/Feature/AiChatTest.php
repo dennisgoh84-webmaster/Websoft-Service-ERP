@@ -74,12 +74,12 @@ class AiChatTest extends TestCase
         // The language rule and the page context are in the system prompt; the tools are offered.
         $this->assertStringContainsString('reply in the language the person wrote in', $sent[0]['system']);
         $this->assertStringContainsString('Bahasa Melayu', $sent[0]['system']);
-        $this->assertStringContainsString('Company / Individual "Acme Manufacturing Pte Ltd"', $sent[0]['system']);
+        $this->assertStringContainsString('Company / Individual "ACME MANUFACTURING PTE LTD"', $sent[0]['system']);
         $this->assertStringContainsString('Never add, subtract or convert', $sent[0]['system']);
         $this->assertContains('get_customer_receivables', $sent[0]['tools']);
         // The second request carries the first tool's result, the third the contract figures the service computed.
         $found = $this->lastToolResult($sent[1]);
-        $this->assertSame('Acme Manufacturing Pte Ltd', $found['customers'][0]['name']);
+        $this->assertSame('ACME MANUFACTURING PTE LTD', $found['customers'][0]['name']);
         $contracts = $this->lastToolResult($sent[2]);
         $this->assertSame(8.5, $contracts['contracts'][0]['remaining_hours']);
         $this->assertSame(1.5, $contracts['contracts'][0]['consumed_hours']);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { dmyToIso, isoToDmy } from '../lib/format'
+import { dmyToIso, formatDateTyping, isoToDmy } from '../lib/format'
 
 /**
  * The one date box used everywhere (Dennis, 2026-09-25: "standardize
@@ -8,6 +8,15 @@ import { dmyToIso, isoToDmy } from '../lib/format'
  * locale picks, often MM/DD/YYYY; this is a text box that always takes
  * DD/MM/YYYY, plus a calendar button that still opens the browser's own
  * calendar for picking by mouse or finger.
+ *
+ * Dennis, 2026-09-26, after keying dates in on a phone: the slashes are
+ * "fixed inside the box" -- typing 12092026 shows 12/09/2026
+ * (formatDateTyping), since a phone's number pad has no "/" key -- and
+ * the calendar must open on a phone. The browser's own date input sits,
+ * invisible, exactly over the calendar button, so a tap lands on it and
+ * the phone opens its picker natively; on a desktop the same click also
+ * asks for the picker (showPicker). A two-digit year (12/09/26) is read
+ * as 20yy when the box is left.
  *
  * Drop-in for <input type="date">: `value` is the ISO date
  * (YYYY-MM-DD, '' for none) and `onChange` receives `{ target: { value } }`
@@ -59,7 +68,8 @@ export default function DateInput({ value, onChange, min, max, required, disable
     textRef.current?.setCustomValidity(message)
   }, [message])
 
-  function typed(t: string) {
+  function typed(raw: string) {
+    const t = formatDateTyping(raw, text)
     setText(t)
     if (t.trim() === '') {
       if (iso !== '') onChange({ target: { value: '' } })
@@ -74,13 +84,13 @@ export default function DateInput({ value, onChange, min, max, required, disable
     if (v !== iso) onChange({ target: { value: v } })
   }
 
+  // The native input is already under the pointer; ask for its picker
+  // too, for desktop browsers that only open it from their own icon.
   function openCalendar() {
-    const el = pickerRef.current
-    if (!el) return
     try {
-      el.showPicker()
+      pickerRef.current?.showPicker()
     } catch {
-      el.focus()
+      // A phone has already opened its own picker from the tap.
     }
   }
 
@@ -103,29 +113,39 @@ export default function DateInput({ value, onChange, min, max, required, disable
         style={style}
         onChange={(e) => typed(e.target.value)}
         onBlur={() => {
-          // Tidy a typed 1/9/2026 into 01/09/2026 once it is a real date.
-          const parsed = dmyToIso(text)
-          if (parsed) setText(isoToDmy(parsed))
+          // Tidy a typed 1/9/2026 into 01/09/2026 once it is a real date,
+          // and read a two-digit year as this century's.
+          const short = /^(\d{2})\/(\d{2})\/(\d{2})$/.exec(text)
+          const full = short ? `${short[1]}/${short[2]}/20${short[3]}` : text
+          const parsed = dmyToIso(full)
+          if (!parsed) return
+          setText(isoToDmy(parsed))
+          if (short && parsed !== iso) onChange({ target: { value: parsed } })
         }}
         aria-label={rest['aria-label']}
       />
-      <button type="button" className="secondary date-input-calendar" onClick={openCalendar} disabled={disabled} aria-label="Open calendar" title="Open calendar" tabIndex={-1}>
-        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-          <rect x="1.5" y="3" width="13" height="11.5" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
-          <path d="M1.5 6.5h13M5 1.5v3M11 1.5v3" stroke="currentColor" strokeWidth="1.3" fill="none" />
-        </svg>
-      </button>
-      <input
-        ref={pickerRef}
-        type="date"
-        className="date-input-native"
-        tabIndex={-1}
-        aria-hidden="true"
-        value={dmyToIso(text) ?? ''}
-        min={min}
-        max={max}
-        onChange={(e) => picked(e.target.value)}
-      />
+      <span className="date-input-cal">
+        <button type="button" className="secondary date-input-calendar" disabled={disabled} aria-hidden="true" tabIndex={-1}>
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+            <rect x="1.5" y="3" width="13" height="11.5" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M1.5 6.5h13M5 1.5v3M11 1.5v3" stroke="currentColor" strokeWidth="1.3" fill="none" />
+          </svg>
+        </button>
+        <input
+          ref={pickerRef}
+          type="date"
+          className="date-input-native"
+          tabIndex={-1}
+          aria-label="Open calendar"
+          title="Open calendar"
+          disabled={disabled}
+          value={dmyToIso(text) ?? ''}
+          min={min}
+          max={max}
+          onClick={openCalendar}
+          onChange={(e) => picked(e.target.value)}
+        />
+      </span>
     </span>
   )
 }

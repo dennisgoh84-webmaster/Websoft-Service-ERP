@@ -4,6 +4,11 @@
 // operations each. Individual cells can be toggled; "Close All" and
 // "Open All (owner)" set every lock at once.
 //
+// GST F5 workflow (Dennis, 2026-09-26): once a month is keyed in and
+// locked (Close All), "GST Calculation" sums it into the Form 5 boxes
+// and keeps them with the documents behind them; the GST Return and its
+// supporting listing (Accounting Reports) read only what was kept.
+//
 // Two pragmatic defaults still apply: a date with no period defined
 // is unrestricted (opt-in protection), and "fiscal year" is whatever
 // date range a period's rows say.
@@ -12,11 +17,12 @@ import { Link } from 'react-router-dom'
 import {
   api,
   type AccountingPeriod,
+  type GstReturnSaved,
   type PeriodDocType,
   type PeriodLock,
   type PeriodOperation,
 } from '../lib/api'
-import { formatDate, ymdIso } from '../lib/format'
+import { formatDate, formatDateTime, formatMoney as money, ymdIso } from '../lib/format'
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -67,6 +73,9 @@ export default function AccountingPeriodsPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null) // lock cell being toggled
+  const [gstFor, setGstFor] = useState<string | null>(null) // period whose saved GST is shown
+  const [gst, setGst] = useState<GstReturnSaved | null>(null)
+  const [calculating, setCalculating] = useState<string | null>(null)
 
   const now = new Date()
   const [fiscalYear, setFiscalYear] = useState(now.getFullYear())
@@ -97,6 +106,39 @@ export default function AccountingPeriodsPage() {
       setError(err instanceof Error ? err.message : 'Failed to create period')
     } finally {
       setCreating(false)
+    }
+  }
+
+  async function onCalculateGst(period: AccountingPeriod) {
+    if (period.gst && !window.confirm(`${period.name} already has GST Calculation v${period.gst.version}. Calculate again? The earlier one is kept as superseded.`)) return
+    setError(null)
+    setMessage(null)
+    setCalculating(period.id)
+    try {
+      const r = await api.calculatePeriodGst(period.id)
+      setMessage(`${period.name} — GST Calculation v${r.version} saved.`)
+      setGst(r)
+      setGstFor(period.id)
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'GST Calculation failed')
+    } finally {
+      setCalculating(null)
+    }
+  }
+
+  async function onShowGst(period: AccountingPeriod) {
+    if (gstFor === period.id) {
+      setGstFor(null)
+      return
+    }
+    setError(null)
+    try {
+      const r = await api.periodGst(period.id)
+      setGst(r.current)
+      setGstFor(period.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load the GST Calculation')
     }
   }
 
@@ -140,12 +182,17 @@ export default function AccountingPeriodsPage() {
 
   return (
     <div>
-      <h1>Accounting Periods</h1>
+      <h1>GST and Account Period</h1>
       <p className="muted">
         Each period carries a lock matrix per document type and operation.
         Locking an operation prevents that action on documents dated within the period.
         Click a cell to toggle; use Close All / Open All for bulk changes.
         A date with no period defined is unrestricted — periods are opt-in protection.
+      </p>
+      <p className="muted">
+        GST: once a month is fully keyed in, lock it (Close All), then press <strong>GST Calculation</strong>. It sums the
+        period's sales invoices and booked supplier bills into the IRAS Form 5 boxes and keeps them, with every document
+        behind them. The GST Return and GST Supporting Listing under Accounting Reports read only what is kept here.
       </p>
       {error && <div className="error-banner">{error}</div>}
       {message && (
@@ -164,6 +211,7 @@ export default function AccountingPeriodsPage() {
               <th>Start</th>
               <th>End</th>
               <th>Status</th>
+              <th>GST</th>
               <th></th>
             </tr>
           </thead>
@@ -194,7 +242,29 @@ export default function AccountingPeriodsPage() {
                         {summary === 'partial' ? 'Partial' : summary === 'open' ? 'Open' : 'Closed'}
                       </span>
                     </td>
+                    <td>
+                      {p.gst ? (
+                        <button className="link" onClick={() => onShowGst(p)} style={{ background: 'none', border: 'none', padding: 0, color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>
+                          Net {money(p.gst.net_gst_sgd)} (v{p.gst.version})
+                        </button>
+                      ) : (
+                        <span className="muted">Not calculated</span>
+                      )}
+                      {p.gst && summary !== 'closed' && (
+                        <div className="muted" style={{ fontSize: '0.8em' }}>
+                          Reopened since — lock and recalculate
+                        </div>
+                      )}
+                    </td>
                     <td style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        onClick={() => onCalculateGst(p)}
+                        disabled={summary !== 'closed' || calculating === p.id}
+                        title={summary !== 'closed' ? 'Lock the period (Close All) first' : 'Sum this period into the Form 5 boxes and keep them'}
+                        style={{ fontSize: '0.85em' }}
+                      >
+                        {calculating === p.id ? 'Calculating...' : 'GST Calculation'}
+                      </button>
                       {summary !== 'closed' && (
                         <button className="secondary" onClick={() => onCloseAll(p)} style={{ fontSize: '0.85em' }}>
                           Close All
@@ -207,9 +277,16 @@ export default function AccountingPeriodsPage() {
                       )}
                     </td>
                   </tr>
+                  {gstFor === p.id && (
+                    <tr key={`${p.id}-gst`}>
+                      <td colSpan={7} style={{ padding: '8px 12px' }}>
+                        {gst ? <GstPanel gst={gst} /> : <p className="muted">No GST Calculation saved for this period yet.</p>}
+                      </td>
+                    </tr>
+                  )}
                   {isExpanded && (
                     <tr key={`${p.id}-locks`}>
-                      <td colSpan={6} style={{ padding: '8px 12px' }}>
+                      <td colSpan={7} style={{ padding: '8px 12px' }}>
                         <LockMatrix
                           period={p}
                           busy={busy}
@@ -223,7 +300,7 @@ export default function AccountingPeriodsPage() {
             })}
             {periods.length === 0 && (
               <tr>
-                <td colSpan={6} className="muted">
+                <td colSpan={7} className="muted">
                   No periods defined yet — postings are unrestricted until one exists.
                 </td>
               </tr>
@@ -335,6 +412,75 @@ function LockMatrix({
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+/** A saved GST Calculation: the Form 5 boxes, then every document behind them, as kept. */
+function GstPanel({ gst }: { gst: GstReturnSaved }) {
+  const [showLines, setShowLines] = useState(false)
+  const BOX_LABEL: Record<string, string> = { '1': 'Box 1', '2': 'Box 2', '3': 'Box 3', out_of_scope: 'Out of scope', '5': 'Box 5', no_gst: 'No GST' }
+  return (
+    <div>
+      <p className="muted" style={{ marginTop: 0 }}>
+        GST Calculation v{gst.version} for {gst.period_name} ({formatDate(gst.period_start)} – {formatDate(gst.period_end)}), saved{' '}
+        {formatDateTime(gst.calculated_at)}
+        {gst.calculated_by_name ? ` by ${gst.calculated_by_name}` : ''} — {gst.output_document_count} sales and{' '}
+        {gst.input_document_count} purchase documents.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Box</th>
+            <th>Form 5</th>
+            <th style={{ textAlign: 'right' }}>SGD</th>
+          </tr>
+        </thead>
+        <tbody>
+          {gst.boxes.map((b) => (
+            <tr key={b.box}>
+              <td>{b.box}</td>
+              <td>{b.label}</td>
+              <td style={{ textAlign: 'right' }}>{b.box === 8 || b.box === 6 || b.box === 7 ? <strong>{money(b.amount_sgd)}</strong> : money(b.amount_sgd)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button type="button" className="secondary" onClick={() => setShowLines(!showLines)} style={{ marginTop: 8 }}>
+        {showLines ? 'Hide documents' : `Show the ${gst.lines.length} documents behind it`}
+      </button>
+      {showLines && (
+        <div style={{ overflowX: 'auto', marginTop: 8 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Document</th>
+                <th>Date</th>
+                <th>Company / Individual</th>
+                <th>Tax code</th>
+                <th>Counted in</th>
+                <th style={{ textAlign: 'right' }}>Net</th>
+                <th style={{ textAlign: 'right' }}>GST</th>
+              </tr>
+            </thead>
+            <tbody>
+              {gst.lines.map((l) => (
+                <tr key={`${l.document_type}-${l.document_id}`}>
+                  <td>{l.direction === 'output' ? 'Sales' : 'Purchase'}</td>
+                  <td>{l.document_number}</td>
+                  <td>{formatDate(l.document_date)}</td>
+                  <td>{l.party_name ?? '—'}</td>
+                  <td>{l.tax_code ?? '—'}</td>
+                  <td>{BOX_LABEL[l.box] ?? l.box}</td>
+                  <td style={{ textAlign: 'right' }}>{money(l.net_sgd)}</td>
+                  <td style={{ textAlign: 'right' }}>{money(l.gst_sgd)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

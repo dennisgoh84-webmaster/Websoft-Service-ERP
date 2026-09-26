@@ -5,7 +5,7 @@
 | Key | Value |
 |---|---|
 | Project Name | Websoft Service ERP Solution |
-| Repository | [github.com/dennisgoh84-webmaster/websoft-service-erp](https://github.com/dennisgoh84-webmaster/websoft-service-erp) |
+| Repository | [github.com/dennisgoh84-webmaster/Websoft-Service-ERP](https://github.com/dennisgoh84-webmaster/Websoft-Service-ERP) |
 | Company | Webmaster Consultancy Pte Ltd |
 | Country | Singapore |
 | Currency | SGD |
@@ -14,59 +14,52 @@
 
 ## Purpose
 
-Develop a custom ERP / business management system to eventually replace Odoo.
+A custom ERP / business management system replacing Odoo for Webmaster
+Consultancy, built module by module and run in parallel with Odoo until
+each module is cut over. The application is `backend-php/` (PHP 8.4 /
+Laravel 11 + PostgreSQL) and `frontend/` (React + TypeScript), plus the
+Mobile App and the Customer Helpdesk Portal served from the same
+frontend. See [DEV_SETUP.md](DEV_SETUP.md) to run it.
 
-This is a greenfield project. No application code, database schema, or
-business workflow assumptions exist yet. Documentation and rules are being
-established first; detailed requirements and architecture will be developed
-before any application coding begins.
+## What is built
 
-## Initial Business Areas
+Every module below is switched per company under **Module Control** and
+granted per group (VIEW / EDIT / FULL) under **Group Authority**.
 
-These are the initial candidate business areas for the ERP. None of these
-have detailed requirements yet — they are listed here only to scope the
-eventual project.
+- **Sales** — Prospect / Leads with Prospect Activities (pipeline New →
+  Qualified → Proposal → Negotiation → Won / Lost; accepting a quotation
+  wins the prospect; activities are voided, never deleted), Quotations
+  (Sales Manager approval, accept → contract), Product Catalog, Sales
+  Dashboard. Roles: Sales Manager, Sales Supervisor, Sales Staff.
+- **Company / Individual** — customers and suppliers in one file, with
+  Contacts, Branches, Relationships, PDPA consent, and per-party PO and
+  credit note approval limits.
+- **Service Operations** — Service Contracts (hours, renewal, project
+  milestones), Job Orders, Service Records (approval, contract-hour
+  deduction, excess usage), Incidents (Helpdesk, Outlook / Gmail
+  add-ins), Software Tasks, Ops Dashboard, Mobile App.
+- **Accounts** — Billing / Invoices, Accounts Receivable (receipts,
+  write-offs to 6700 Bad debts written off), Accounts Payable (purchase
+  orders, 2-way matching, payment vouchers), General Ledger (automatic
+  posting, journal vouchers, trial balance), Bank Book, GST and Account
+  Period (lock matrix, Year-End Closing, **GST Calculation** — the saved
+  Form 5 every GST report reads), Commission Management, Accounting and
+  Operations Reports.
+- **Stock** — Stock Master, Goods Receive / Transfer / Return / Issue
+  Notes, Stock Adjustment (weighted average cost; stock never negative;
+  movements never post to the GL — Finance journals it at month end).
+- **Maintenance** — Company Setup, Staff Master, Module Control, Group
+  Authority, Document Control, Setup Lists, Announcements, System Email,
+  Data Migration (ODOO / ZSOFT), AI Assistant (a paid add-on, hidden
+  everywhere unless switched on), Event Logs.
 
-- Prospect / Leads — each prospect's activities logged on the Mobile
-  App, its quotations, and the invoices they led to; built 2026-09-26
-  (see [docs/business-requirements.md](docs/business-requirements.md)
-  SALES-009 / SALES-010). Replaced the earlier "CRM" activities.
-- Sales
-- Customer Management
-- Service Contracts
-- Helpdesk / Service Operations (Job Orders)
-- Service Records
-- Billing
-- Accounts Receivable
-- Accounts Payable
-- Purchasing — part of Accounts Payable (purchase orders, 2-way
-  matching); its separate Module Control key was removed 2026-09-26 as
-  redundant
-- Inventory — built as Stock (Stock Master, Goods Receive / Transfer /
-  Return / Issue Notes, Stock Adjustment, Stock Operation Reports), each
-  on its own Module Control key; the empty `inventory` placeholder key
-  was removed 2026-09-26
-- Commission Management — the commission **report**, its rate setting
-  and **Commission Payouts** (generate / approve / pay / clawback) are
-  built, and since 2026-09-26 all of it is switched and granted under
-  its own `commission_management` Module Control key; further
-  commission business rules remain deferred (see
-  [docs/open-business-decisions.md](docs/open-business-decisions.md))
-- Management Reporting
-- AI Assistant — slices 1 (incident triage), 2 (multi-language staff
-  chat) and 3 (Customer Helpdesk Portal chat) built 2026-09-15; see
-  [docs/planned-work.md #12](docs/planned-work.md). Switched per company
-  under Module Control (`ai_assistant`), the owner included: with it
-  off, no AI screen, panel or settings link appears anywhere
+Dropped from scope on 2026-09-26: Projects and Hardware Management as
+modules (PROJECT-type contracts stay part of Service Contracts), and the
+separate Purchasing, Inventory and Integrations keys (covered by
+Accounts Payable, the Stock keys and Data Migration).
 
-Projects and Hardware Management were dropped from the scope on
-2026-09-26 at Dennis's request (their Module Control keys, which never
-had code, were removed, as was the empty `integrations` key that Data
-Migration replaced). PROJECT-type contracts and their milestone
-schedule are part of Service Contracts and are unaffected.
-
-"Ticket"/"Timesheet" terminology has been renamed throughout to "Job
-Order"/"Service Record" respectively, at Dennis's request.
+"Ticket" / "Timesheet" are called "Job Order" / "Service Record"
+throughout, at Dennis's request.
 
 ## Approved Architecture Decisions
 
@@ -110,9 +103,10 @@ explaining the reason first (see Development Rules below).
 - Use PostgreSQL as the primary database.
 - All important financial and operational transactions must have audit trails.
 - Never permanently delete important business or financial records.
-- Use soft-delete or archival where appropriate.
-- Database changes must use migrations.
-- Never modify production data directly.
+  Use soft-delete, archival, reversal or VOID with a reason instead.
+- Database changes must use migrations. Never modify production data
+  directly — a correction to existing data is a migration, and each
+  record it changes is written to Event Logs.
 - Authentication and role-based permissions are required.
 - Validate data on both frontend and backend.
 - Write automated tests for important business logic.
@@ -121,6 +115,8 @@ explaining the reason first (see Development Rules below).
 - Document major architectural decisions.
 - Do not change the approved architecture without explaining the reason first.
 - Never assume a business rule when requirements have not been provided.
+  A default taken meanwhile is named in a code comment and recorded in
+  [docs/open-business-decisions.md](docs/open-business-decisions.md).
 - **Times are Singapore time, end to end — check this before building
   anything that stores or shows a date or time.** The app
   (`APP_TIMEZONE`) and the PostgreSQL session (`config/database.php`
@@ -131,13 +127,32 @@ explaining the reason first (see Development Rules below).
   - New time columns are `timestampTz` (`timestamp with time zone`);
     a date with no time of day is a `date` column.
   - The frontend formats with `lib/format.ts` (`formatDate`,
-    `formatDateTime`), never raw `toLocaleString()` or string slicing.
+    `formatDateTime`, `formatTime`, `sgDateIso`, `todayIso`), never raw
+    `toLocaleString()`, `toISOString().slice(0, 10)` or string slicing.
   Until 2026-09-26 the session ran in UTC while the app ran in
   Singapore time, so every time the app wrote was stored eight hours
   ahead; migration `2026_09_30_002500` corrected the stored rows.
+- **Every date a person keys in uses `components/DateInput.tsx`** —
+  never a bare `<input type="date">` or a text box. It reads and takes
+  DD/MM/YYYY, fills in the slashes as digits are typed (a phone's number
+  pad has no "/"), accepts a two-digit year, and its calendar opens on
+  a phone. A form that records a document dated by the user (a bill, a
+  voucher, a stock note) offers the date, defaulting to today, rather
+  than silently using today.
+- **Test every new or changed field by keying it in, on a desktop and
+  on a phone-sized screen** (Playwright with a phone device profile):
+  type into it, pick from its picker, submit, and check what was saved.
+  A screen is not done until that has passed.
+- **Company / Individual ID and name are FULL CAPITALS**, tidied of
+  stray spaces, whichever way they arrive (screen, paste, import,
+  add-in) — enforced on the model (`CompanyIndividual::caps`).
+- **GST reports read saved GST Calculations, never live documents.**
+  A month's figures are produced once its period is locked, kept with
+  the documents behind them, and recalculated only as a new version.
 - The test suite gates `main`, in both directions. Run the full suite
-  (`cd backend-php && php artisan test`) and `./vendor/bin/pint --test`
-  before every push to `main`:
+  (`cd backend-php && php artisan test`), `./vendor/bin/pint --test`
+  and the frontend build (`cd frontend && npm run build`) before every
+  push to `main`:
   - **Red — never push.** A failing suite is a blocker, never something
     to note in the commit message and push anyway.
   - **Green — push.** Finished, verified work goes to `main`; it is not
@@ -147,7 +162,7 @@ explaining the reason first (see Development Rules below).
 
 ## Documentation
 
-- [docs/business-requirements.md](docs/business-requirements.md) — confirmed business rules (SRV-001..018, BILL/AR/PUR/INV/HW series) and open decisions still being gathered
+- [docs/business-requirements.md](docs/business-requirements.md) — confirmed business rules (SRV, BILL, AR, PUR, INV, SALES, GST series)
 - [docs/system-architecture.md](docs/system-architecture.md) — system architecture
 - [docs/module-map.md](docs/module-map.md), [docs/workflows.md](docs/workflows.md), [docs/open-business-decisions.md](docs/open-business-decisions.md) — supporting planning docs
 - [docs/planned-work.md](docs/planned-work.md) — confirmed future work, described in enough detail to record, not yet designed or built
@@ -158,472 +173,15 @@ explaining the reason first (see Development Rules below).
 - [docs/outlook-addin.md](docs/outlook-addin.md) — the Outlook Add-in and its Gmail twin (Log as Incident / Convert to Job Order from an email): served at `/outlook-addin/` and `/gmail-addon/`, Maintenance → Email Add-ins for the filled-in files, the Gmail add-on's one-time connect code (`/connect-addin`), how to switch each on
 - [docs/data-migration.md](docs/data-migration.md) — Maintenance → Data Migration (ODOO / ZSOFT): decisions, the screens, modules in run order, Field Gap sign-off, roll back
 - [docs/php-conversion-plan.md](docs/php-conversion-plan.md) — the backend Python→PHP language conversion (complete; Python retired 2026-09-15): reason, approach, stack, findings
+- [docs/build-history.md](docs/build-history.md) — the module-by-module record of how everything was built and what was found along the way (formerly this file's Status section)
 - [DEV_SETUP.md](DEV_SETUP.md) — how to run the application locally
 
 ## Status
 
-Active development has begun. The application is `backend-php/`
-(PHP 8.4 / Laravel 11 + PostgreSQL) and `frontend/` (React +
-TypeScript). It started as the **Service Operations core**, implementing the confirmed Service Operations and
-Billing/AR/Purchasing/Inventory rules end-to-end (Customer → Contract →
-Job Order → Service Record → Contract Hour Validation → Excess Review →
-Invoice). It also includes Module Control / multi-company licensing
-(Core / Administration — see [docs/system-architecture.md](docs/system-architecture.md)),
-a summary dashboard, and dynamic filters on the main list views. See
-[DEV_SETUP.md](DEV_SETUP.md) to run it.
-
-**Backend language conversion to PHP/Laravel: complete, and the Python
-backend retired 2026-09-15** (`backend-php/`, started 2026-09-14) — see
-[docs/php-conversion-plan.md](docs/php-conversion-plan.md) for the
-reason, approach, and findings. The module-by-module record follows,
-kept as the history of what was converted and what was found. Core /
-Administration (auth, audit logging, Group Authority, Module Control,
-Company Setup, Users/Staff Master), CompanyIndividual Management
-(Customer/Supplier master, Contacts, Branches, Relationships, PDPA
-consent/archive), Product/Service Catalog, Service Contracts + Job
-Orders (the SRV-001..018 contract lifecycle, PROJECT milestone
-scheduling), Service Records (SRV-003/004/007/015: hour rounding,
-submission deadline, the approval queue with suggested-deduction
-multipliers, the contract-deduction vs. excess-usage split, and Job
-Order auto-close -- Job Orders' budget-overrun figure is now a real
-query against approved Service Records rather than a stub), and
-Excess Usage (SRV-004/011/013: the treatment decision, restricted to
-the same Service Lead/Sales Manager/Owner reviewer set as Service
-Records, always with an auditable reason), and Billing/Invoicing
-(BILL-001/002/005, SRV-008: GST applied via a proper TaxCode table,
-due dates from customer payment terms, serial invoice numbering).
-Billing closes the two known gaps flagged by earlier modules:
-contract activation now issues its annual invoice (except Ad Hoc,
-which has no upfront value), and a Billable excess-usage decision now
-issues its own invoice at the contract's blended rate. Also converted:
-Accounts Receivable (AR-002 write-offs -- the owner always may, anyone
-else only below a configured threshold, nobody but the owner while
-that threshold is unset; AR-003 dispute flagging, which never holds
-collections; the 5-bucket aging report), and Accounts
-Payable/Purchasing (PUR-001 PO approval on the same owner/threshold
-pattern; PUR-002 2-way matching against the purchase order only;
-PUR-003 auto-approval on a match, an EXCEPTION spelling out exactly
-what differs on a mismatch; "confirm and import to AP"; AP aging).
-Also converted: GL posting + Bank (`docs/gl-posting-design.md`,
-ACC-001..004) -- every accounting event now posts a balanced double-
-entry voucher (Sales Invoice, Supplier Bill, Payment Voucher, Receipt
-Voucher), the explicit Bank step, and UNGL (a reversal, never a
-delete); and AR-001 (recording a customer receipt, symmetric to
-Accounts Payable's Payment Voucher -- manual allocation to invoices,
-the Bank step, UNGL). Together these close every remaining gap the
-modules above had flagged: invoices post to the General Ledger on
-issue, a matched Accounts Payable bill posts on auto-approval, and
-both Payment Vouchers and Receipt Vouchers are now fully built
-(create, allocate, bank, unbank, UNGL). Three things fixed in passing
-while converting these modules: `is_customer`/`is_supplier` were
-missing from CompanyIndividual's create/update entirely, a leftover
-gap from that module's own conversion that silently blocked anyone
-from ever being marked a supplier; a Bank Accounts API field-name
-mismatch (`balance_sgd` vs. the frontend's `current_balance_sgd`) that
-the Playwright verification pass caught before it shipped; and a
-caching bug in both AP's and AR's payment allocation (a payment's
-unallocated balance is computed from a relation Eloquent caches after
-first access, which didn't refresh between two allocations against
-the same payment in one request -- fixed, with a regression test on
-both sides). Also converted: Accounting Period management (create/
-close/reopen a period, the per-document-type per-operation lock
-matrix -- Close All/Open All plus single-cell toggling, owner-only
-reopen -- and Year-End Closing, which posts one balanced journal
-entry zeroing every Revenue/Expense account's movement for the fiscal
-year into a chosen Equity account once every period in that year is
-closed) and GL Trial Balance / the per-account transaction ledger
-(including the `accounting_reports`-gated trial-balance duplicate
-`AccountingReportsPage` depends on, kept alongside the
-`finance_accounting`-gated one on the General Ledger screen since
-Python itself serves both routes). This is the first time
-`Periods::requireAllows()` -- wired into every posting/bank/reversal
-path since the GL posting + Bank module -- is a real, non-stub check
-rather than a permanent no-op, since no endpoint had ever created an
-`AccountingPeriod` row before now. The manual Journal
-Voucher CRUD endpoints (raising/posting/reversing a voucher from the
-General Ledger screen) landed 2026-09-15, closing that gap, together
-with CSV/Excel export for the voucher list, the trial balance and the
-account ledger. Also converted:
-Quotations (create/list/get/send/accept/reject, single-rate GST
-totals, and the confirmed 2026-09-10 accept-to-auto-Contract
-conversion -- lines split by unit of measure, "Hours"/"Hour" lines
-summing into one Service Support contract and every other line into
-one Annual contract, a quotation mixing both never blending them into
-one). Also converted: the Stock Master half of Inventory / Stock (the
-`stock_master` module key -- setup masters Categories/Groups/
-Brands+Models/Usages, Warehouses, the stock item with its extended
-fields and picture/document attachments, and read-only per-warehouse
-stock levels), and its stock movements -- Goods Receive Note, Goods
-Transfer Note, Goods Return Note and Stock Adjustment, each on its own
-module key, carrying both confirmed Inventory rules: INV-002 (stock
-valued at weighted average cost -- only a receipt re-weights it, a
-transfer carries the source warehouse's cost across rather than
-revaluing, and stock can never go negative) and INV-001 (a stock
-adjustment moves nothing until it is approved; a draft or rejected one
-provably never touches a stock level), plus the stock operation
-reports (valuation, reorder alert and the movements journal, on their
-own module key so a manager can read them without any rights to move
-stock). Three things found while converting it: the Warehouses
-and Stock Item screens' Activate/Deactivate buttons could never have
-worked against `backend/` (its PATCH body required `code`/`name` and
-had no `is_active` field at all) -- fixed here with regression tests;
-the stock movements ledger's timestamp column stored only whole
-seconds, so same-second movements came back in an arbitrary order and
-the journal could show a transfer's receipt above the receipt that
-funded it -- fixed by an additive migration, with a regression test;
-and `backend/app/routers/stock.py` writes **no audit trail at all**
-for any of its six module keys, so the PHP version adds one, flagged
-in docs/php-conversion-plan.md as a gap in `backend/` worth raising.
-Also converted: Incidents (the Helpdesk front door for an
-incoming call or email -- logging one with its one automatic
-customer-by-email match, the "needs a callback" status + assignee,
-Close, and converting to a draft Sales Quotation or a Job Order
-against a valid contract, each auto-creating the real record with a
-back-reference rather than just a routing flag, plus both Outlook
-Add-in endpoints including the confirmed fallback-to-plain-Incident
-rule). Its convert-to-software-task route landed with the Software
-Tasks module (2026-09-15), so this module now has no known gaps.
-Also converted: the **Company Dashboard** summary -- the app's landing
-page, which until now reported "Company Dashboard summary
-unavailable" on every login against `backend-php/`. It aggregates
-only over modules already converted (contracts/hours, open Job
-Orders, undecided Excess Usage, SRV-015 late Service Records,
-invoices, AR/AP outstanding + overdue, and whether the GL trial
-balance balances), reusing each owning service rather than
-re-querying, so no tile reports a placeholder figure; it is
-deliberately ungated by Module Control, matching the Python route,
-which has no `require_module_access` either. Also converted:
-**Document Control** (the document-numbering admin screen -- the
-running-number counters plus each document kind's number format;
-both are FULL-only and both require a reason recorded to Event Logs,
-and a format change only ever affects numbers issued from that point
-on) and **Document Attachments + eSignature** (the generic panel
-mounted on ~12 document detail pages, every one of which previously
-404'd: file upload/list/download/soft-delete, stored on disk under
-the same layout the Python backend uses, 20MB per file, any file
-type, plus drawn electronic signatures). **Correction to an earlier
-note:** the `.docx` export / "Email X" gaps recorded against Service
-Records, Invoices, Purchase Orders and Quotations are **not** closed
-by the Documents conversion -- that wiring is a separate stack of
-Python services (`mailer.py`, `pdf_convert.py`, `docx_forms.py`,
-`document_email.py`), **which has since been converted in its own
-right -- see the document generation stack below.** Also
-converted: **Announcements + Ad Banner** (the platform announcements
-and promo video URL shown on the Login page and, smaller, on every
-page after signing in, plus the admin screen behind them) --
-`/announcements/public` is unauthenticated and is called on every
-page load by the app layout, which made it the most frequently 404'd
-request against `backend-php/` until now. These are deliberately
-global rather than company-scoped (they describe the software itself,
-and the Login page shows them before any company is selected), and
-the table's shape is kept identical to the Python model on purpose:
-[docs/planned-work.md #8a](docs/planned-work.md) has the future,
-separate Server Company Central Command application pushing
-advertisements by writing straight into it, which makes that shape a
-schema contract.
-
-Also converted: the **Customer Helpdesk Portal**
-(`docs/customer-portal-design.md`, PORTAL-001..006) -- the
-customer-side login as a genuinely separate auth realm: portal users
-live in their own `portal_users` table, never in staff `users`, and
-carry a `purpose="portal"` token that every staff endpoint refuses,
-while every portal endpoint refuses a staff token in return (a
-distinct middleware, never a relaxed mode of the staff one; tested
-explicitly in both directions). Ported exactly: the
-5-wrong-passwords/15-minute lockout, the same password-complexity
-policy staff use, the staff-side enable/disable/reset-password
-actions with their PDPA consent gate, and PORTAL-004's "archiving a
-Company/Individual disables every portal login under it,
-immediately". The customer sees only their own contracts and hour
-balance, job orders, service records, invoices and payments
-(PORTAL-005), can drill a contract into its own service records
-(PORTAL-006), and can raise an Incident that lands in the staff
-Helpdesk queue as `source=portal` through the same service function
-the staff screen and the Outlook Add-in use -- which closes the
-Incidents module's second known gap above. Every portal query is
-scoped to the token's own customer: another customer's document id
-returns 404, never 403, and a filter naming another customer's
-contract returns an empty list rather than their rows. This module
-also adds the two foreign keys (`login_otps.portal_user_id`,
-`incidents.raised_by_portal_user_id`) earlier migrations had
-deferred until `portal_users` existed.
-
-Also converted: the **document generation stack and every `.docx` /
-"Email X" endpoint** (`docx_forms.py`, `pdf_convert.py`,
-`document_email.py`) -- all seven Word forms (Sales Invoice, Sales
-Quotation, Receipt Voucher, Purchase Order, Payment Voucher, Service
-Record, Statement of Accounts), DOCX → PDF via LibreOffice headless,
-and the shared "Email this document" helper. This is the stack the
-Documents note above identified as the real blocker, so converting it
-closes the `.docx`/"Email X" KNOWN GAPs recorded against Service
-Records, Invoices, Purchase Orders, Payment Vouchers, Receipt
-Vouchers and Quotations, plus the AR Customer Statement endpoints
-(the statement itself is converted with them). The Python module's
-design decision is kept deliberately: the PDF attached to an email is
-the *same* .docx bytes the Word button serves, converted by shelling
-out to `soffice`, so one template feeds both formats and they can
-never drift -- which makes **`libreoffice-writer`** (not just
-`libreoffice-core`) a system dependency, and adds
-`phpoffice/phpword` as the only new PHP dependency, PHP having no
-built-in DOCX writer. `App\Services\Mailer` gained attachment
-support rather than a second mailer being written. Two bugs in
-`backend-php/` were found and fixed on the way: `Mailer`'s
-`SMTP_USE_TLS` setting was inert (both branches of a ternary were
-identical, so TLS could never be switched off), and PHPWord's default
-of writing document text unescaped meant a literal "&" -- which every
-Service Record carries in "Signature & Company Stamp" -- produced a
-file Word silently repairs but LibreOffice refuses, so the Word
-download looked fine while the PDF behind every Email button failed.
-**Closed since:** CSV/Excel export, a different Python service
-(`exports.py`), is ported as `App\Services\Exports` and wired into
-every list screen, so **every export route Python has now exists in
-`backend-php` too**. Each controller's list filter is shared with its
-exports, so an Export button always returns what is on screen. A
-fidelity bug was fixed on the way: the CSV writer used PHP's
-`fputcsv()`, which quotes any field containing a space and ends
-records with a bare newline, where Python quotes only where a field
-needs it and ends records with CRLF -- so every export was emitting
-`SR,"Standard Rated",9.00` against Python's `SR,Standard Rated,9.00`.
-The older `ExportService` (its "Excel" was an HTML table named
-`.xls`) has since been **retired**: the two report screens built
-directly in `backend-php` -- Contract Operation Report and the Sales
-Dashboard drill-downs -- now use the same writer, so there is exactly
-one. Those five downloads change from `.xls` to a genuine `.xlsx`
-(the `/export.xls` routes are gone), which is what
-[docs/ui-guidelines.md](docs/ui-guidelines.md) section 2 had specified
-all along.
-
-**The Python backend (`backend/`) was retired and removed from the
-tree on 2026-09-15** at Dennis's instruction, the conversion being
-complete and the PHP stack running on the test server. References to
-`backend/...py` files in `backend-php/` docblocks and in the docs are
-history -- what each module was converted from -- and resolve in git
-history, not in the working tree. Two things were deliberately not
-ported: `scripts/seed_demo.py`'s larger demo dataset (a second company,
-four staff, contracts, invoices) beyond what `DatabaseSeeder` seeds,
-and `scripts/post_backlog.py`, a one-off GL back-fill for databases
-that pre-date GL posting, which no PHP database does.
-
-Also converted (2026-09-15), the last six small maintenance modules: **Tax Types**, **GL
-Types**, the **Currency Rate Table**, **Setup Lists** (Nationality /
-Country / State / Area Code / Currency / Industry -- deliberately
-global rather than company-scoped, since a country's name does not
-differ per company), **Reference Codes** (the Reference Monitor, whose
-endpoint was the last remaining 404 against `backend-php`), and
-**Support Monitoring**. Three schema gaps were closed along the way:
-`accounts.gl_type_id`, which Python has always had and `backend-php`
-was missing outright, and the two foreign keys
-(`products.default_reference_code_id`,
-`quotation_lines.reference_code_id`) that earlier migrations had
-deferred until `reference_codes` existed. Also converted since: **Software Tasks** (which turned Support
-Monitoring's "Un-Test S/T" from a placeholder 0 into a real count,
-added the `incidents.converted_software_task_id` foreign key, and
-landed the convert-to-software-task route that was the Incidents
-module's last gap -- Incidents now has none), **Event Logs** (the
-read-only face of the audit trail; exporting it is itself audited),
-the **Bank Book** (bank transactions, voiding with a reason,
-per-line reconcile and full reconciliation sessions, plus the
-`bank_reconciliations` table), and the **Mobile Web App**
-(planned-work #1: own-Job-Orders-only, time in/out replacing keyed
-minutes, work photos and videos, and customer sign-off with a
-watermarked chop photo). Also converted: **Management Reporting**
-(the whole of `reports.py`) -- the four **Operations Reports**
-(Contracts, Job Orders, Service Records, Company/Individual Product
-Usage) and the **Accounting Reports** (AR aging, AP aging, trial
-balance, GST return, Sales GP, and Commission with its rate setting),
-each as JSON plus CSV and Excel, every export audited with its report
-name, format and row count. The two aging reports deliberately call
-the same services the AR and AP screens call rather than carrying
-Python's duplicated bucketing loop, so the figures on those screens
-can never drift apart. Commission adds a `commission_settings` table:
-the formula is confirmed but the percentage is Dennis's to set, so it
-starts at zero and a report run before it is set reports zero rather
-than an invented rate. Also converted: **Commission Payouts**
-(generate a month's draft payouts, submit/approve/reject/pay/cancel,
-the two month-wide batch actions, and the clawback an AR write-off
-raises) -- the last router in `backend/app/routers/` without a PHP
-equivalent, so **every Python router is now converted**. A generated
-batch sums to exactly what the Commission report reports for the same
-month, because both call the same calculation. **A real bug was found
-in `backend/` while converting it:** its commission service allocates
-payout numbers with three positional arguments against a
-keyword-only signature, so `generate_payouts` and `create_clawback`
-raise TypeError -- Commission Payouts has never worked there, and
-because AR write-off calls `create_clawback`, writing off an invoice
-would fail the moment a non-zero commission rate is set (a zero rate
-returns early, which is why nobody has hit it). Worth raising with
-Dennis; the PHP version does it properly. Two more things found while
-converting the reports: the Job
-Orders export's "overdue" column tests the status against a
-`"resolved"` state that does not exist in this system, so a VOID job
-order reads as overdue there while the `overdue_only` filter beside it
-excludes VOID correctly -- carried across verbatim so the backends
-match, and flagged in
-[docs/php-conversion-plan.md](docs/php-conversion-plan.md) as a
-`backend/` bug worth raising; and the reports' staff-name lookup now
-resolves the ids in the result set rather than filtering `users` by
-company, which had blanked out the name of anyone reached through
-`UserCompanyAccess` rather than their home company.
-
-**Sales module enhancements landed directly in `backend-php/` +
-`frontend/`, not as part of the conversion above** (`backend/` has no
-equivalent for any of these -- new business scope Dennis asked for; see
-[docs/planned-work.md #11](docs/planned-work.md#11-sales-module-enhancements-job-implementation-template-multi-product-job-orders-contract-hour-sharing-contract-filters-contract-operation-report-contractquotation-reference-sales-dashboard-raised-earlier-built-2026-09-22)):
-Product now carries a reusable Job Implementation Template (an ordered
-task checklist); a Job Order can select multiple Products, each
-importing its template's tasks onto the Job Order (deduped by name
-across products, completion gated to Sales Manager/Owner); a Contract
-keeps its own independent hour-sharing customer list, enforced when a
-Job Order is opened against it; the Contracts list gained a
-remaining-hours-less-than filter and an expiry-date-range filter; a new
-Contract Operation Report (Expiry Listing, Renewal Due Listing --
-reusing SRV-014's pre-expiry window exactly) with CSV/Excel export; and
-a new Sales Dashboard (Contracts Due for Renewal, Total/2-/3-month AR
-Outstanding reusing the AR Aging report's own bucket logic, each
-drilling into its underlying rows, plus Top 10 Sales Billing Customer
-/ Bottom 10 Non-Active Customer listings for "this Financial Year") --
-its own standalone Main Menu page/route (`/sales-dashboard`, gated on
-the `reporting` module), between Company Dashboard and My Ops
-Dashboard, per Dennis's explicit request that it not be merged into
-the Company Dashboard as originally built. **One of the two pragmatic defaults is now
-settled:** "this Financial Year" was taken as the calendar year because
-no fiscal-year-start field existed; since 2026-09-15 it is a real
-Company Setup value (`financial_year_start_month`, Webmaster runs
-1 Jul - 30 Jun, labelled by the year it ends in), so those listings now
-report the real financial year. **The other is settled too (2026-09-15,
-SALES-006):** the Contract-Quotation link is a real
-`contracts.quotation_id`, set by accepting a quotation or by hand, and
-an expiring contract can raise its renewal as a quotation whose
-acceptance renews it. The free-text `quotation_reference` it replaced is
-kept read-only where recorded. **And the Sales Dashboard's two
-Quotations-pending tiles count real rows (SALES-008):** the Quotation
-status model gained `pending_approval` and `approved` -- BILL-006's
-Sales Manager approval before sending -- so "pending approval" and
-"sent, awaiting the client" are distinct states. Both recorded in
-[docs/open-business-decisions.md #40](docs/open-business-decisions.md#40-sales-module-enhancements-financial-year-definition-and-contractquotation-link-raised-2026-09-22)
-and docs/business-requirements.md.
-
-**Also 2026-09-15:** the system mailboxes moved out of `.env` into a
-`system_mail_settings` table with a Maintenance → System Email screen
--- an OTP mailbox (sign-in codes, resets, portal invites; `.env`
-remains its bootstrap fallback) and a Helpdesk mailbox from which the
-Outlook Add-in's Incident / Job Order conversions acknowledge the
-sender. Neither borrows the other nor the company document mailbox on
-Company Setup (`App\Services\Mailer`).
-
-**Product-based Sales Invoicing landed 2026-09-15**, also directly in
-`backend-php/` + `frontend/` rather than as a conversion (`backend/`
-has no equivalent -- it is the behaviour Dennis asked for on stock
-costing). `invoices` had always been header-only, so a Sales Invoice
-had nowhere to put a product; there is now an `invoice_lines` table,
-`POST /invoices`, and a "Raise Sales Invoice" form on the Invoices
-page that shows on-hand quantity per line as it is filled in. **Lines
-are optional**: every existing header-only invoice keeps working
-untouched, with no backfill, and the auto-issued ones (contract
-activation, excess-usage decision) still issue a single amount. A
-stock line deducts through the same
-`InventoryService::deductStock()` a Goods Issue Note uses, so INV-002
-holds by construction rather than by a second implementation agreeing
--- insufficient stock refuses the WHOLE invoice, on-hand quantity can
-never go negative, and units leave at the item's weighted average
-without re-weighting it. The line stores the average **as at issue**,
-so a later goods receipt cannot move a past invoice's gross profit;
-that also makes `cost_sgd` a real cost basis on these, so the Sales GP
-report shows a measured margin instead of its no-cost stand-in. GST is
-applied once to the summed net, the same single-rate treatment every
-other invoice and quotation uses -- per-line tax codes would be a new
-business rule nobody has asked for. **Deliberately not done:** no
-COGS/inventory journal is posted, because whether stock movements post
-to the General Ledger is still an open question (see
-[docs/backlog.md](docs/backlog.md)) and this was not the place to
-answer it quietly.
-
-**AI Assistant slice 1 landed 2026-09-15** (`docs/planned-work.md`
-#12): incident triage + resolution suggestions on the Incidents page,
-a Maintenance → AI Assistant settings screen (API key write-only,
-model, personal-data mask, usage), the `ai_assistant` paid add-on
-module key (gates the owner too) and an `ai_interactions` audit row
-per call. Built under the rule the scoping set: the assistant calls
-the tested services, proposes rather than commits, and never does
-arithmetic on money or hours. Anthropic's PHP SDK is the one new
-dependency; structured JSON answers only; the provider is faked in
-tests (`AiClient::fake()`). Personal data is masked before sending
-by default (decision 12.1's pragmatic default — still Dennis's call
-whether a US-hosted API is acceptable at all). **Slice 2 the same
-day:** a chat panel on the Incidents, Company/Individual, Contract,
-Job Order and Service Records screens — any language in, the same
-language out — over read-only tools (`App\Services\Ai\AiTools`)
-that run as the signed-in user through the same module keys as the
-screens, plus the assistant's name and avatar as settings. **Slice 3,
-same day ("Yes on helpdesk portal is good"):** a chat widget on the
-Customer Helpdesk Portal, its own auth realm (`auth.portal`) and its
-own hard-scoped read-only tools (`App\Services\Ai\AiPortalTools`,
-never a customer id as input) so a portal customer can only ever see
-their own contracts, job orders, service records, invoices, payments
-and incidents; she never raises an Incident herself. **The same day,**
-a one-time PDPA self-declaration gates every staff login (Dennis:
-"they must acknowledge, tick then can login") -- recorded once as the
-structurally-protected `users.ai_data_consent_at`, never editable or
-clearable by any path including Staff Master's own edit form -- see
-[docs/open-business-decisions.md #43](docs/open-business-decisions.md#43-ai-assistant-pdpa-self-declaration-at-login-raised-and-built-2026-09-15).
-**Landed 2026-09-16:** an installation-wide monthly token spending cap
-(`App\Services\Ai\AiBudget`, decision 12.2), settled ahead of the
-original month-of-evidence plan at Dennis's explicit instruction --
-once a calendar month's usage reaches the configured cap, incident
-triage, staff chat, portal chat and the settings screen's connection
-test all refuse before any provider call, with no `ai_interactions`
-row written for the refused call; unset (the default) is unlimited,
-as before. See
-[docs/open-business-decisions.md #44](docs/open-business-decisions.md#44-ai-assistant-monthly-token-spending-cap-raised-and-built-2026-09-16).
-
-**Prospect / Leads landed 2026-09-26** (SALES-009 / SALES-010 in
-docs/business-requirements.md), replacing the "CRM" activities, which
-had hung off the Company / Individual directly. A prospect is one sales
-opportunity for a Company / Individual (`PRS-` numbers); activities are
-logged against it -- mostly from the Mobile App's new Prospects tab --
-it carries several quotations, and an invoice raised from a contract
-one of them became records the prospect (`Invoice::booted()`), so each
-prospect reports estimated / quoted / billed / paid / outstanding. The
-Main Menu opens with a Sales section (Prospect / Leads, Prospect
-Activities); Module Control's `crm` key became `prospects`, carrying
-every company's and group's setting across. Two new roles, Sales
-Supervisor and Sales Staff: staff see their own prospects, the owner /
-Sales Manager / Supervisor all of them. Dennis settled the defaults
-the same day (docs/open-business-decisions.md #46): pipeline stages New
--> Qualified -> Proposal -> Negotiation -> Won / Lost, the customer
-accepting a quotation marks its prospect Won, and an activity is never
-deleted, only voided with a reason. The eight-hours-ahead timestamp
-trap found while building it was then fixed at the root for the whole
-system -- see the time rule under Development Rules.
-
-**Data Migration landed 2026-09-25**
-([docs/data-migration.md](docs/data-migration.md)): Maintenance → Data
-Migration, gated on the new `data_migration` module (VIEW looks, FULL
-acts), brings the old **ODOO** and **ZSOFT** data in module by module into
-a chosen Internal Company -- a live Dashboard, Migration Modules (Field
-Gap / Import / Roll back per module), a 4-step Import (upload → map
-fields → dry-run preview → import) and a Batch Log. Decided with Dennis:
-old document numbers are kept; **no ledger data comes from either
-system** (opening balances are one Journal Voucher here), so invoices
-and receipts are history only; a Company / Individual with the same UEN
-or GST no. links rather than duplicating, a name-only match waits for
-Link / Create new; staff who have left become inactive users; a
-module's import is locked until its Field Gap list is signed off; and
-roll back removes a batch only while none of its records has been
-touched, keeping the batch, a snapshot and the Event Log. ZSOFT past
-invoices show on the Company / Individual and the Prospect
-screens.
-
-No other business area has application code yet. **Further commission
-business rules beyond what is built (the report, its rate and
-Payouts) and Odoo migration planning are deferred for now at Dennis's
-request** — see [docs/open-business-decisions.md](docs/open-business-decisions.md)
-— and will be revisited once Service Operations and related areas are
-finalized. The last two open Service Record rules were settled
-2026-09-15 (SRV-019: only Nico or Cherish approve, within a week;
-SRV-020: contract-covered / billable / non-billable follows the Job
-Order's billing classification), and SLA targets (SRV-009) were
-removed outright rather than deferred. Further modules are otherwise built incrementally, resolving
-open decisions as each area is reached rather than blocking all
-development on them upfront — pragmatic implementation defaults taken in
-the meantime are called out in code comments, not silently assumed.
+Built and in use on the test server; being extended module by module,
+with Odoo still running alongside until each module is cut over. What
+is pending — including every decision still waiting on Dennis — is in
+[docs/backlog.md](docs/backlog.md) and
+[docs/open-business-decisions.md](docs/open-business-decisions.md). The
+full record of how each module was built, and what was found and fixed
+along the way, is in [docs/build-history.md](docs/build-history.md).

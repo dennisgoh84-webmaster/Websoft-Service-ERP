@@ -106,6 +106,40 @@ export function isoToDmy(iso: string | null | undefined): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : ''
 }
 
+/**
+ * What a date box shows as it is typed (Dennis, 2026-09-26: the slashes
+ * are "fixed inside the box" -- nobody types them). Digits fill DD, MM
+ * and YYYY in turn and a slash is added as each part fills, so 12092026
+ * shows 12/09/2026; a phone's number pad has no "/" key at all. A slash
+ * (or - or .) typed after a one-digit day or month pads it (1/9 -> 01/09/).
+ * Deleting never re-adds the slash being deleted. A pasted ISO date
+ * (2026-09-12) becomes 12/09/2026.
+ */
+export function formatDateTyping(raw: string, previous = ''): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) return isoToDmy(raw.trim())
+  const deleting = raw.length < previous.length
+  const parts = ['', '', '']
+  let idx = 0
+  for (const ch of raw) {
+    if (ch >= '0' && ch <= '9') {
+      const cap = idx < 2 ? 2 : 4
+      if (parts[idx].length >= cap) {
+        if (idx === 2) continue
+        idx++
+      }
+      parts[idx] += ch
+    } else if ((ch === '/' || ch === '-' || ch === '.') && idx < 2 && parts[idx].length > 0) {
+      if (parts[idx].length === 1) parts[idx] = `0${parts[idx]}`
+      idx++
+    }
+  }
+  let out = parts[0]
+  if (idx >= 1) out += `/${parts[1]}`
+  if (idx >= 2) out += `/${parts[2]}`
+  if (!deleting && idx < 2 && parts[idx].length === 2) out += '/'
+  return out
+}
+
 /** DD/MM/YYYY (1- or 2-digit day and month; - or . also accepted) -> ISO, or null if not a real date. */
 export function dmyToIso(text: string): string | null {
   const m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(text.trim())

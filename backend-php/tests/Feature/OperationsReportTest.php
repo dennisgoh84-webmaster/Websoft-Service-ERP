@@ -160,7 +160,7 @@ class OperationsReportTest extends TestCase
         $body = $response->getContent();
         $this->assertStringContainsString('contract_number,customer_name', $body);
         $this->assertStringContainsString($contract->contract_number, $body);
-        $this->assertStringContainsString('Acme Pte Ltd', $body);
+        $this->assertStringContainsString('ACME PTE LTD', $body);
         $this->assertStringContainsString('10.50', $body);
     }
 
@@ -182,7 +182,7 @@ class OperationsReportTest extends TestCase
         $this->assertTrue($zip->open($path) === true);
         // PhpSpreadsheet writes cell text into the shared string
         // table, not into the sheet XML.
-        $this->assertStringContainsString('Acme Pte Ltd', $zip->getFromName('xl/sharedStrings.xml'));
+        $this->assertStringContainsString('ACME PTE LTD', $zip->getFromName('xl/sharedStrings.xml'));
         $zip->close();
         unlink($path);
     }
@@ -236,7 +236,7 @@ class OperationsReportTest extends TestCase
             ->assertOk()->getContent();
 
         $this->assertStringContainsString('Siti Rahman', $body);
-        $this->assertStringContainsString('Acme Pte Ltd', $body);
+        $this->assertStringContainsString('ACME PTE LTD', $body);
         $this->assertStringContainsString(',Yes,', $body);
     }
 
@@ -310,7 +310,7 @@ class OperationsReportTest extends TestCase
         $body = $this->get('/api/reports/operations/service-records/export.csv', $this->headers($token))
             ->assertOk()->getContent();
 
-        $this->assertStringContainsString('Beta Holdings', $body);
+        $this->assertStringContainsString('BETA HOLDINGS', $body);
         $this->assertStringContainsString('Kumar S', $body);
         $this->assertStringContainsString('1.50', $body);
     }
@@ -336,7 +336,7 @@ class OperationsReportTest extends TestCase
         $response = $this->getJson('/api/reports/operations/customer-product-usage', $this->headers($token));
 
         $response->assertOk()->assertJsonCount(2);
-        $this->assertSame('Acme Pte Ltd', $response->json('0.customer_name'));
+        $this->assertSame('ACME PTE LTD', $response->json('0.customer_name'));
         $this->assertSame('Food & Beverage', $response->json('0.industry_name'));
         // Ordered by customer name, then product name.
         $this->assertSame('Inventory Module', $response->json('0.product_name'));
@@ -446,10 +446,10 @@ class OperationsReportTest extends TestCase
         $both = "company_ids={$companyA->id},{$companyB->id}";
         $contracts = $this->getJson("/api/reports/operations/contracts?{$both}", $this->headers($token))->assertOk()->assertJsonCount(2);
         $this->assertEqualsCanonicalizing(['C001 Alpha', 'C002 Beta'], array_column($contracts->json(), 'company_name'));
-        $this->assertEqualsCanonicalizing(['Acme', 'Bolt'], array_column($contracts->json(), 'customer_name'));
+        $this->assertEqualsCanonicalizing(['ACME', 'BOLT'], array_column($contracts->json(), 'customer_name'));
 
         $orders = $this->getJson("/api/reports/operations/job-orders?{$both}", $this->headers($token))->assertOk()->assertJsonCount(2);
-        $this->assertEqualsCanonicalizing(['Acme', 'Bolt'], array_column($orders->json(), 'customer_name'));
+        $this->assertEqualsCanonicalizing(['ACME', 'BOLT'], array_column($orders->json(), 'customer_name'));
 
         $csv = $this->get("/api/reports/operations/contracts/export.csv?{$both}", $this->headers($token))->assertOk()->getContent();
         $this->assertStringStartsWith('company_name,contract_number,', $csv);
@@ -466,9 +466,9 @@ class OperationsReportTest extends TestCase
         CompanyIndividual::factory()->for($companyB)->create(['name' => 'Bolt']);
 
         $both = $this->getJson("/api/reports/operations/filter-options?company_ids={$companyA->id},{$companyB->id}", $this->headers($token))->assertOk();
-        $this->assertSame(['Acme (C001)', 'Bolt (C002)'], array_column($both->json('company_individuals'), 'name'));
+        $this->assertSame(['ACME (C001)', 'BOLT (C002)'], array_column($both->json('company_individuals'), 'name'));
         $one = $this->getJson('/api/reports/operations/filter-options', $this->headers($token))->assertOk();
-        $this->assertSame(['Acme'], array_column($one->json('company_individuals'), 'name'));
+        $this->assertSame(['ACME'], array_column($one->json('company_individuals'), 'name'));
     }
 
     public function test_operations_reports_refuse_a_company_the_user_cannot_switch_to(): void

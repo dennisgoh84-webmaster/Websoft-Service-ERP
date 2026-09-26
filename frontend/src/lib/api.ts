@@ -1382,6 +1382,55 @@ export interface AccountingPeriod {
   status: PeriodStatus
   closed_at: string | null
   locks: PeriodLock[]
+  /** The period's current saved GST Calculation, if one has been run. */
+  gst: GstSummary | null
+}
+
+export interface GstSummary {
+  id: string
+  version: number
+  calculated_at: string
+  calculated_by_name: string | null
+  output_tax_sgd: number
+  input_tax_sgd: number
+  net_gst_sgd: number
+}
+
+export interface GstBox {
+  box: number
+  label: string
+  amount_sgd: number
+}
+
+export interface GstReturnLine {
+  direction: 'output' | 'input'
+  document_type: string
+  document_id: string
+  document_number: string
+  document_date: string
+  party_name: string | null
+  tax_code: string | null
+  /** 1 / 2 / 3 / out_of_scope for sales; 5 / no_gst for purchases. */
+  box: string
+  net_sgd: number
+  gst_sgd: number
+}
+
+/** One saved GST Calculation (IRAS Form 5) of a locked period. */
+export interface GstReturnSaved {
+  id: string
+  accounting_period_id: string
+  period_name: string | null
+  period_start: string
+  period_end: string
+  version: number
+  status: 'current' | 'superseded'
+  calculated_at: string
+  calculated_by_name: string | null
+  boxes: GstBox[]
+  output_document_count: number
+  input_document_count: number
+  lines: GstReturnLine[]
 }
 
 export interface FiscalYearClosure {
@@ -1404,11 +1453,39 @@ export interface GSTReturn {
   period_start: string
   companies?: string[]
   period_end: string
+  /** Form 5 boxes 1-13, summed from the saved GST Calculations in the range. */
+  boxes: GstBox[]
+  periods: {
+    company_name: string
+    period_name: string | null
+    period_start: string
+    period_end: string
+    version: number
+    calculated_at: string
+    period_reopened: boolean
+    net_gst_sgd: number
+  }[]
+  /** Periods in the range with no GST Calculation saved yet -- not summed. */
+  missing_periods: { company_name: string; period_name: string; period_start: string; status: string }[]
   output_rows: GSTReturnRow[]
   input_rows: GSTReturnRow[]
   total_output_tax_sgd: number
   total_input_tax_sgd: number
   net_gst_payable_sgd: number
+}
+
+export interface GstSupportingRow {
+  company_id: string
+  company_name: string
+  period: string | null
+  direction: 'output' | 'input'
+  document_number: string
+  document_date: string
+  party_name: string | null
+  tax_code: string
+  box: string
+  net_sgd: number
+  gst_sgd: number
 }
 
 // ---- Sales GP + Commission (2026-09-12) ----
@@ -3645,6 +3722,14 @@ export const api = {
   exportTrialBalanceReportCsv: (f: AccountingReportFilters = {}) => requestBlob(`/reports/accounting/trial-balance/export.csv${qs(f)}`),
   exportTrialBalanceReportExcel: (f: AccountingReportFilters = {}) => requestBlob(`/reports/accounting/trial-balance/export.xlsx${qs(f)}`),
 
+  reportGstSupporting: (f: AccountingReportFilters & { direction?: 'output' | 'input' } = {}) =>
+    request<{ period_start: string; period_end: string; companies?: string[]; rows: GstSupportingRow[]; missing_periods: GSTReturn['missing_periods'] }>(
+      `/reports/accounting/gst-supporting${qs(f)}`,
+    ),
+  exportGstSupportingCsv: (f: AccountingReportFilters & { direction?: 'output' | 'input' } = {}) =>
+    requestBlob(`/reports/accounting/gst-supporting/export.csv${qs(f)}`),
+  exportGstSupportingExcel: (f: AccountingReportFilters & { direction?: 'output' | 'input' } = {}) =>
+    requestBlob(`/reports/accounting/gst-supporting/export.xlsx${qs(f)}`),
   reportGstReturn: (f: AccountingReportFilters = {}) => request<GSTReturn>(`/reports/accounting/gst-return${qs(f)}`),
   exportGstReturnCsv: (f: AccountingReportFilters = {}) => requestBlob(`/reports/accounting/gst-return/export.csv${qs(f)}`),
   exportGstReturnExcel: (f: AccountingReportFilters = {}) => requestBlob(`/reports/accounting/gst-return/export.xlsx${qs(f)}`),
@@ -3851,6 +3936,9 @@ export const api = {
     request<AccountingPeriod>(`/accounting-periods/${id}/toggle-lock`, { method: 'POST', body: JSON.stringify(payload) }),
   closeAccountingPeriod: (id: string) =>
     request<AccountingPeriod>(`/accounting-periods/${id}/close`, { method: 'POST' }),
+  periodGst: (id: string) =>
+    request<{ period: AccountingPeriod; current: GstReturnSaved | null; history: GstReturnSaved[] }>(`/accounting-periods/${id}/gst`),
+  calculatePeriodGst: (id: string) => request<GstReturnSaved>(`/accounting-periods/${id}/gst-calculate`, { method: 'POST' }),
   reopenAccountingPeriod: (id: string) =>
     request<AccountingPeriod>(`/accounting-periods/${id}/reopen`, { method: 'POST' }),
   listFiscalYearClosures: () => request<FiscalYearClosure[]>('/accounting-periods/closures'),

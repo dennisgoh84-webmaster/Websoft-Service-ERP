@@ -37,7 +37,7 @@ all of that inside the containers.
 ## 1. Clone the repo
 
 ```bash
-git clone https://github.com/dennisgoh84-webmaster/websoft-service-erp.git
+git clone https://github.com/dennisgoh84-webmaster/Websoft-Service-ERP.git
 cd websoft-service-erp
 ```
 

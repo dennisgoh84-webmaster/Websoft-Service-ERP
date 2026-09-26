@@ -160,7 +160,7 @@ class AccountingReportsTest extends TestCase
         $response = $this->getJson('/api/reports/accounting/ar-aging', $this->headers($token));
 
         $response->assertOk();
-        $this->assertSame('Acme Pte Ltd', $response->json('rows.0.customer_name'));
+        $this->assertSame('ACME PTE LTD', $response->json('rows.0.customer_name'));
         $this->assertEquals(100, $response->json('rows.0.current'));
         $this->assertEquals(200, $response->json('rows.0.over_90'));
         $this->assertEquals(300, $response->json('total'));
@@ -206,43 +206,15 @@ class AccountingReportsTest extends TestCase
         $response = $this->getJson('/api/reports/accounting/ap-aging', $this->headers($token));
 
         $response->assertOk();
-        $this->assertSame('Parts Supplier Pte Ltd', $response->json('rows.0.supplier_name'));
+        $this->assertSame('PARTS SUPPLIER PTE LTD', $response->json('rows.0.supplier_name'));
         $this->assertEquals(500, $response->json('rows.0.days_31_60'));
         $this->assertEquals(500, $response->json('total'));
     }
 
     // ── GST Return ──────────────────────────────────────────────────
 
-    public function test_gst_return_splits_output_tax_per_code_and_input_tax_as_one_total(): void
-    {
-        $company = Company::factory()->create();
-        $token = $this->ownerToken($company);
-        $customer = CompanyIndividual::factory()->for($company)->create();
-        $supplier = CompanyIndividual::factory()->for($company)->create(['is_supplier' => true]);
-        $this->invoice($company, $customer, ['tax_code' => 'SR', 'gst_amount_sgd' => '90.00']);
-        $this->invoice($company, $customer, [
-            'tax_code' => 'ZR', 'amount_sgd' => '500.00', 'gst_amount_sgd' => '0.00',
-            'total_amount_sgd' => '500.00',
-        ]);
-        SupplierInvoice::factory()->for($company)->create([
-            'supplier_id' => $supplier->id, 'amount_sgd' => '200.00', 'gst_amount_sgd' => '18.00',
-            'total_amount_sgd' => '218.00', 'invoice_date' => now()->toDateString(),
-        ]);
-
-        $response = $this->getJson($this->periodUrl('gst-return'), $this->headers($token));
-
-        $response->assertOk();
-        $output = collect($response->json('output_rows'))->keyBy('tax_code');
-        $this->assertEqualsWithDelta(90, $output['SR']['tax_sgd'], 0.001);
-        $this->assertEqualsWithDelta(0, $output['ZR']['tax_sgd'], 0.001);
-        // A supplier bill carries no tax code of its own, so input tax
-        // is one PURCHASES line rather than a per-code breakdown.
-        $this->assertCount(1, $response->json('input_rows'));
-        $this->assertSame('PURCHASES', $response->json('input_rows.0.tax_code'));
-        $this->assertEqualsWithDelta(90, $response->json('total_output_tax_sgd'), 0.001);
-        $this->assertEqualsWithDelta(18, $response->json('total_input_tax_sgd'), 0.001);
-        $this->assertEqualsWithDelta(72, $response->json('net_gst_payable_sgd'), 0.001);
-    }
+    // The GST Return's figures are covered in GstReturnTest: since
+    // 2026-09-26 it reads saved GST Calculations, not live documents.
 
     public function test_gst_return_needs_both_period_bounds(): void
     {
@@ -250,23 +222,6 @@ class AccountingReportsTest extends TestCase
         $token = $this->ownerToken($company);
 
         $this->getJson('/api/reports/accounting/gst-return', $this->headers($token))->assertStatus(422);
-    }
-
-    public function test_gst_return_export_tags_each_row_with_its_direction(): void
-    {
-        $company = Company::factory()->create();
-        $token = $this->ownerToken($company);
-        $customer = CompanyIndividual::factory()->for($company)->create();
-        $supplier = CompanyIndividual::factory()->for($company)->create(['is_supplier' => true]);
-        $this->invoice($company, $customer);
-        SupplierInvoice::factory()->for($company)->create(['supplier_id' => $supplier->id]);
-
-        $body = $this->get($this->periodUrl('gst-return/export.csv'), $this->headers($token))
-            ->assertOk()->getContent();
-
-        $this->assertStringContainsString('tax_code,net_sgd,tax_sgd,document_count,direction', $body);
-        $this->assertStringContainsString(',output', $body);
-        $this->assertStringContainsString('PURCHASES,1000,90,1,input', $body);
     }
 
     // ── Sales GP ────────────────────────────────────────────────────
@@ -293,7 +248,7 @@ class AccountingReportsTest extends TestCase
         $this->assertFalse($rows[500]['has_cost_basis']);
         $this->assertEqualsWithDelta(1500, $response->json('total_revenue_sgd'), 0.001);
         $this->assertEqualsWithDelta(1100, $response->json('total_gp_sgd'), 0.001);
-        $this->assertSame('Acme Pte Ltd', $response->json('rows.0.customer_name'));
+        $this->assertSame('ACME PTE LTD', $response->json('rows.0.customer_name'));
     }
 
     public function test_sales_gp_only_covers_invoices_issued_inside_the_period(): void
@@ -607,7 +562,7 @@ class AccountingReportsTest extends TestCase
 
         $response = $this->getJson("/api/reports/accounting/ar-aging?customer_ids={$beta->id}", $this->headers($token))
             ->assertOk()->assertJsonCount(1, 'rows');
-        $this->assertSame('Beta', $response->json('rows.0.customer_name'));
+        $this->assertSame('BETA', $response->json('rows.0.customer_name'));
     }
 
     public function test_filter_options_list_every_company_individual_across_the_selected_companies(): void
@@ -620,10 +575,10 @@ class AccountingReportsTest extends TestCase
         CompanyIndividual::factory()->for($companyB)->create(['name' => 'Bolt', 'is_customer' => false, 'is_supplier' => true]);
 
         $both = $this->getJson("/api/reports/accounting/filter-options?company_ids={$companyA->id},{$companyB->id}", $this->headers($token))->assertOk();
-        $this->assertSame(['Acme (C001)', 'Bolt (C002)'], array_column($both->json('company_individuals'), 'name'));
+        $this->assertSame(['ACME (C001)', 'BOLT (C002)'], array_column($both->json('company_individuals'), 'name'));
 
         $one = $this->getJson("/api/reports/accounting/filter-options?company_ids={$companyA->id}", $this->headers($token))->assertOk();
-        $this->assertSame(['Acme'], array_column($one->json('company_individuals'), 'name'));
+        $this->assertSame(['ACME'], array_column($one->json('company_individuals'), 'name'));
     }
 
     private function periodUrl(string $path): string

@@ -5,7 +5,8 @@ import {
   type Warehouse,
   type StockItemRow,
 } from '../lib/api'
-import { formatDate } from '../lib/format'
+import DateInput from '../components/DateInput'
+import { formatDate, todayIso } from '../lib/format'
 
 interface LineInput { stock_item_id: string; quantity_change: string; notes: string }
 const emptyLine = (): LineInput => ({ stock_item_id: '', quantity_change: '', notes: '' })
@@ -19,6 +20,7 @@ export default function StockAdjustmentPage() {
 
   const [warehouseId, setWarehouseId] = useState('')
   const [reason, setReason] = useState('')
+  const [docDate, setDocDate] = useState(todayIso())
   const [lines, setLines] = useState<LineInput[]>([emptyLine()])
 
   function refresh() {
@@ -40,6 +42,7 @@ export default function StockAdjustmentPage() {
     e.preventDefault(); setError(null)
     try {
       await api.createAdjustment({
+        adjustment_date: docDate || undefined,
         warehouse_id: warehouseId,
         reason: reason || undefined,
         lines: lines.filter((l) => l.stock_item_id).map((l) => ({
@@ -92,6 +95,10 @@ export default function StockAdjustmentPage() {
                 <option value="">Select...</option>
                 {warehouses.map((w) => <option key={w.id} value={w.id}>{w.code} – {w.name}</option>)}
               </select>
+            </div>
+            <div>
+              <label>Adjustment date</label>
+              <DateInput value={docDate} onChange={(e) => setDocDate(e.target.value)} required />
             </div>
             <div>
               <label>Reason</label>

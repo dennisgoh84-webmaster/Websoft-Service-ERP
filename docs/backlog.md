@@ -303,6 +303,17 @@ shipped and when.
   and (answered the same day) the customer accepting a quotation marks
   its prospect Won:
   [open-business-decisions.md #46](open-business-decisions.md#46-prospect--leads-defaults-taken-raised-and-built-2026-09-26).
+- [x] **GST F5 workflow built 2026-09-26** (4b.4, GST-001): GST
+  Calculation on each locked period keeps the Form 5 boxes and their
+  documents; the GST Return (Form 5) and GST Supporting Listing read
+  only what is kept. Defaults awaiting Dennis in
+  [open-business-decisions.md #47](open-business-decisions.md#47-gst-f5-workflow-defaults-taken-raised-and-built-2026-09-26)
+  (purchase tax codes, boxes 9–12, a "filed" lock).
+- [x] **Company / Individual ID and name in FULL CAPITALS** (2026-09-26),
+  however they arrive; existing records converted, each change logged.
+- [x] **Date boxes fixed and tested on a phone** (2026-09-26): slashes
+  fill in as digits are typed, the calendar opens on phones; supplier
+  bills, POs, payment vouchers and the goods notes gained a date field.
 - [x] **Accounting answers built 2026-09-26** -- PO and credit note
   approval limits now live on each Company / Individual file (4.4, 2.7;
   credit notes themselves still unbuilt); a bill for a different amount

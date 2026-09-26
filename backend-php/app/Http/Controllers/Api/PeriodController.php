@@ -8,9 +8,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\AccountingPeriod;
 use App\Models\FiscalYearClosure;
+use App\Models\GstReturn;
+use App\Models\GstReturnLine;
 use App\Models\User;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\GstReturns;
 use App\Services\Periods;
 use Illuminate\Http\Request;
 
@@ -61,7 +64,91 @@ class PeriodController extends Controller
             'status' => $period->status,
             'closed_at' => optional($period->closed_at)->toIso8601String(),
             'locks' => $period->locks->map(fn ($lk) => $this->presentLock($lk))->values(),
+            'gst' => ($gst = GstReturns::current($period)) ? $this->presentGstSummary($gst) : null,
         ];
+    }
+
+    /** @return array<string, mixed> */
+    private function presentGstSummary(GstReturn $gst): array
+    {
+        return [
+            'id' => $gst->id,
+            'version' => $gst->version,
+            'calculated_at' => $gst->calculated_at->toIso8601String(),
+            'calculated_by_name' => $gst->calculatedBy?->full_name,
+            'output_tax_sgd' => (float) $gst->box_6_sgd,
+            'input_tax_sgd' => (float) $gst->box_7_sgd,
+            'net_gst_sgd' => (float) $gst->box_8_sgd,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public static function presentGstReturn(GstReturn $gst, bool $withLines = true): array
+    {
+        $boxes = [];
+        foreach (GstReturn::BOXES as $n => $label) {
+            $boxes[] = ['box' => $n, 'label' => $label, 'amount_sgd' => (float) $gst->{"box_{$n}_sgd"}];
+        }
+
+        return [
+            'id' => $gst->id,
+            'accounting_period_id' => $gst->accounting_period_id,
+            'period_name' => $gst->period?->name,
+            'period_start' => $gst->period_start->toDateString(),
+            'period_end' => $gst->period_end->toDateString(),
+            'version' => $gst->version,
+            'status' => $gst->status,
+            'calculated_at' => $gst->calculated_at->toIso8601String(),
+            'calculated_by_name' => $gst->calculatedBy?->full_name,
+            'boxes' => $boxes,
+            'output_document_count' => $gst->output_document_count,
+            'input_document_count' => $gst->input_document_count,
+            'lines' => $withLines ? $gst->lines()->orderBy('direction', 'desc')->orderBy('document_date')->orderBy('document_number')->get()
+                ->map(fn (GstReturnLine $l) => [
+                    'direction' => $l->direction,
+                    'document_type' => $l->document_type,
+                    'document_id' => $l->document_id,
+                    'document_number' => $l->document_number,
+                    'document_date' => $l->document_date->toDateString(),
+                    'party_name' => $l->party_name,
+                    'tax_code' => $l->tax_code,
+                    'box' => $l->box,
+                    'net_sgd' => (float) $l->net_sgd,
+                    'gst_sgd' => (float) $l->gst_sgd,
+                ])->values() : [],
+        ];
+    }
+
+    /** The saved GST Calculation of a period (the current one, plus earlier versions' summaries). */
+    public function gst(Request $request, string $periodId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+        $period = $this->periodOrFail($user->company_id, $periodId);
+
+        $current = GstReturns::current($period);
+
+        return response()->json([
+            'period' => $this->present($period),
+            'current' => $current ? self::presentGstReturn($current) : null,
+            'history' => GstReturn::where('accounting_period_id', $period->id)->orderByDesc('version')->get()
+                ->map(fn (GstReturn $g) => self::presentGstReturn($g, withLines: false))->values(),
+        ]);
+    }
+
+    /**
+     * GST Calculation (open item 4b.4): sum the locked period's documents
+     * into the Form 5 boxes and keep them. Needs the period closed.
+     */
+    public function calculateGst(Request $request, string $periodId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'full');
+        $period = $this->periodOrFail($user->company_id, $periodId);
+
+        $gst = GstReturns::calculate($period, $user);
+
+        return response()->json(self::presentGstReturn($gst->load('period')));
     }
 
     private function presentClosure(FiscalYearClosure $closure): array

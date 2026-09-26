@@ -60,7 +60,7 @@ DOCX → PDF step) -- expect several minutes.
 ## 2. Install or upgrade
 
 ```bash
-git clone https://github.com/dennisgoh84-webmaster/websoft-service-erp.git
+git clone https://github.com/dennisgoh84-webmaster/Websoft-Service-ERP.git
 cd websoft-service-erp
 ./deploy/install.sh          # fresh server: writes .env, builds, migrates, seeds, starts
 ./deploy/upgrade.sh          # existing server: backup, pull main, rebuild, migrate, restart

@@ -166,12 +166,12 @@ class ListExportTest extends TestCase
         CompanyIndividual::factory()->for($this->company)->create(['name' => 'Beta Holdings']);
 
         $body = $this->csv('/api/company-individuals/export.csv?q=Acme');
-        $this->assertStringContainsString('Acme Pte Ltd', $body);
+        $this->assertStringContainsString('ACME PTE LTD', $body);
         $this->assertStringContainsString('Food & Beverage', $body);
         $this->assertStringContainsString('10 Anson Road, Singapore, 079903, Singapore', $body);
         // The filter reached the export, not just the screen.
-        $this->assertStringNotContainsString('Beta Holdings', $body);
-        $this->assertXlsxContains('/api/company-individuals/export.xlsx', 'Acme Pte Ltd');
+        $this->assertStringNotContainsString('BETA HOLDINGS', $body);
+        $this->assertXlsxContains('/api/company-individuals/export.xlsx', 'ACME PTE LTD');
     }
 
     public function test_groups_export_counts_members(): void
@@ -259,14 +259,14 @@ class ListExportTest extends TestCase
         ]);
 
         $body = $this->csv('/api/contracts/export.csv?customer_id='.$customer->id);
-        $this->assertStringContainsString('Acme Pte Ltd', $body);
+        $this->assertStringContainsString('ACME PTE LTD', $body);
         $this->assertStringContainsString('Chan Mei Ling', $body);
         $this->assertStringContainsString('Payroll Module', $body);
         $this->assertStringContainsString('10.00', $body);
         // The filter reached the export, not just the screen.
-        $this->assertStringNotContainsString('Beta Holdings', $body);
+        $this->assertStringNotContainsString('BETA HOLDINGS', $body);
         $this->assertSame(1, $this->dataRowCount($body));
-        $this->assertXlsxContains('/api/contracts/export.xlsx', 'Acme Pte Ltd');
+        $this->assertXlsxContains('/api/contracts/export.xlsx', 'ACME PTE LTD');
     }
 
     public function test_job_orders_export_honours_the_status_filter(): void
@@ -281,7 +281,7 @@ class ListExportTest extends TestCase
 
         $body = $this->csv('/api/job-orders/export.csv?status='.JobOrder::STATUS_OPEN);
         $this->assertStringContainsString('Server migration', $body);
-        $this->assertStringContainsString('Acme Pte Ltd', $body);
+        $this->assertStringContainsString('ACME PTE LTD', $body);
         $this->assertStringNotContainsString('Printer setup', $body);
         $this->assertSame(1, $this->dataRowCount($body));
         $this->assertXlsxContains('/api/job-orders/export.xlsx', 'Server migration');
@@ -322,9 +322,9 @@ class ListExportTest extends TestCase
 
         $body = $this->csv('/api/excess-usage/export.csv?pending_only=true');
         $this->assertStringContainsString('customer_name,excess_hours,treatment,reason,invoiced', $body);
-        $this->assertStringContainsString('Acme Pte Ltd', $body);
+        $this->assertStringContainsString('ACME PTE LTD', $body);
         $this->assertStringContainsString('1.50', $body);
-        $this->assertXlsxContains('/api/excess-usage/export.xlsx', 'Acme Pte Ltd');
+        $this->assertXlsxContains('/api/excess-usage/export.xlsx', 'ACME PTE LTD');
     }
 
     private function invoice(CompanyIndividual $customer, array $attributes = []): Invoice
@@ -350,13 +350,13 @@ class ListExportTest extends TestCase
 
         $body = $this->csv('/api/invoices/export.csv');
         $this->assertStringContainsString($invoice->invoice_number, $body);
-        $this->assertStringContainsString('Acme Pte Ltd', $body);
+        $this->assertStringContainsString('ACME PTE LTD', $body);
         $this->assertStringContainsString('1000.00,90.00,1090.00,1000.00', $body);
         // DD/MM/YYYY and the date alone -- no time, no ISO form (2026-09-25).
         $this->assertMatchesRegularExpression('#'.preg_quote(now()->format('d/m/Y'), '#').'(,|\r\n)#', $body);
         $this->assertStringNotContainsString(now()->toDateString(), $body);
         $this->assertStringNotContainsString('T00:', $body);
-        $this->assertXlsxContains('/api/invoices/export.xlsx', 'Acme Pte Ltd');
+        $this->assertXlsxContains('/api/invoices/export.xlsx', 'ACME PTE LTD');
     }
 
     public function test_quotations_export_honours_the_status_filter(): void
@@ -373,7 +373,7 @@ class ListExportTest extends TestCase
         $this->assertStringContainsString(',draft,', $body);
         $this->assertStringNotContainsString(',sent,', $body);
         $this->assertSame(1, $this->dataRowCount($body));
-        $this->assertXlsxContains('/api/quotations/export.xlsx', 'Acme Pte Ltd');
+        $this->assertXlsxContains('/api/quotations/export.xlsx', 'ACME PTE LTD');
     }
 
     // ── AR / AP ─────────────────────────────────────────────────────
@@ -388,8 +388,8 @@ class ListExportTest extends TestCase
 
         $body = $this->csv('/api/accounts-receivable/aging/export.csv');
         $this->assertStringContainsString('customer_name,current,days_1_30', $body);
-        $this->assertStringContainsString('Acme Pte Ltd,0.00,0.00,0.00,0.00,200.00,200.00', $body);
-        $this->assertXlsxContains('/api/accounts-receivable/aging/export.xlsx', 'Acme Pte Ltd');
+        $this->assertStringContainsString('ACME PTE LTD,0.00,0.00,0.00,0.00,200.00,200.00', $body);
+        $this->assertXlsxContains('/api/accounts-receivable/aging/export.xlsx', 'ACME PTE LTD');
     }
 
     public function test_ar_receipts_export_splits_allocated_from_unallocated(): void
@@ -407,7 +407,7 @@ class ListExportTest extends TestCase
         $body = $this->csv('/api/accounts-receivable/payments/export.csv');
         $this->assertStringContainsString($payment->voucher_number, $body);
         $this->assertStringContainsString('1000.00,400.00,600.00', $body);
-        $this->assertXlsxContains('/api/accounts-receivable/payments/export.xlsx', 'Acme Pte Ltd');
+        $this->assertXlsxContains('/api/accounts-receivable/payments/export.xlsx', 'ACME PTE LTD');
     }
 
     public function test_ap_aging_and_bills_exports(): void
@@ -423,15 +423,15 @@ class ListExportTest extends TestCase
 
         $aging = $this->csv('/api/accounts-payable/aging/export.csv');
         $this->assertStringContainsString('supplier_name,current,days_1_30', $aging);
-        $this->assertStringContainsString('Parts Supplier Pte Ltd,0.00,0.00,500.00,0.00,0.00,500.00', $aging);
+        $this->assertStringContainsString('PARTS SUPPLIER PTE LTD,0.00,0.00,500.00,0.00,0.00,500.00', $aging);
 
         $bills = $this->csv('/api/accounts-payable/bills/export.csv');
         $this->assertStringContainsString($bill->bill_number, $bills);
-        $this->assertStringContainsString('Parts Supplier Pte Ltd', $bills);
+        $this->assertStringContainsString('PARTS SUPPLIER PTE LTD', $bills);
         $this->assertStringContainsString('500.00', $bills);
 
-        $this->assertXlsxContains('/api/accounts-payable/aging/export.xlsx', 'Parts Supplier Pte Ltd');
-        $this->assertXlsxContains('/api/accounts-payable/bills/export.xlsx', 'Parts Supplier Pte Ltd');
+        $this->assertXlsxContains('/api/accounts-payable/aging/export.xlsx', 'PARTS SUPPLIER PTE LTD');
+        $this->assertXlsxContains('/api/accounts-payable/bills/export.xlsx', 'PARTS SUPPLIER PTE LTD');
     }
 
     public function test_purchase_orders_and_supplier_payments_exports(): void
@@ -456,6 +456,6 @@ class ListExportTest extends TestCase
         $this->assertStringContainsString('300.00,0.00,300.00', $payments);
 
         $this->assertXlsxContains('/api/accounts-payable/purchase-orders/export.xlsx', 'Replacement switches');
-        $this->assertXlsxContains('/api/accounts-payable/payments/export.xlsx', 'Parts Supplier Pte Ltd');
+        $this->assertXlsxContains('/api/accounts-payable/payments/export.xlsx', 'PARTS SUPPLIER PTE LTD');
     }
 }

@@ -5,7 +5,8 @@ import {
   type Warehouse,
   type StockItemRow,
 } from '../lib/api'
-import { formatDate } from '../lib/format'
+import DateInput from '../components/DateInput'
+import { formatDate, todayIso } from '../lib/format'
 
 interface LineInput { stock_item_id: string; quantity: string; notes: string }
 const emptyLine = (): LineInput => ({ stock_item_id: '', quantity: '', notes: '' })
@@ -20,6 +21,7 @@ export default function GoodsTransferNotePage() {
   const [fromWhId, setFromWhId] = useState('')
   const [toWhId, setToWhId] = useState('')
   const [notes, setNotes] = useState('')
+  const [docDate, setDocDate] = useState(todayIso())
   const [lines, setLines] = useState<LineInput[]>([emptyLine()])
 
   function refresh() {
@@ -41,6 +43,7 @@ export default function GoodsTransferNotePage() {
     e.preventDefault(); setError(null)
     try {
       await api.createGTN({
+        transfer_date: docDate || undefined,
         from_warehouse_id: fromWhId,
         to_warehouse_id: toWhId,
         notes: notes || undefined,
@@ -89,6 +92,10 @@ export default function GoodsTransferNotePage() {
                 <option value="">Select...</option>
                 {warehouses.map((w) => <option key={w.id} value={w.id}>{w.code} – {w.name}</option>)}
               </select>
+            </div>
+            <div>
+              <label>Transfer date</label>
+              <DateInput value={docDate} onChange={(e) => setDocDate(e.target.value)} required />
             </div>
             <div>
               <label>Notes</label>

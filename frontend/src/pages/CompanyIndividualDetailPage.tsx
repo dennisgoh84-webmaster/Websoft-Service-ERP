@@ -535,6 +535,16 @@ export default function CompanyIndividualDetailPage() {
   // already-archived record can always be unarchived regardless of date.
   const isPastExpiry = Boolean(customer.data_expiry_date && new Date(customer.data_expiry_date) < new Date())
 
+  // The ID and name are always FULL CAPITALS (Dennis, 2026-09-26) -- shown
+  // that way as they are typed or pasted; the server applies the same rule.
+  function capsField(key: 'name' | 'legacy_customer_code') {
+    return {
+      value: form[key],
+      onChange: (e: ChangeEvent<HTMLInputElement>) => setForm((prev) => ({ ...prev, [key]: e.target.value.toUpperCase() })),
+      autoCapitalize: 'characters' as const,
+    }
+  }
+
   function field(key: keyof ReturnType<typeof emptyForm>) {
     return {
       value: form[key],
@@ -613,7 +623,7 @@ export default function CompanyIndividualDetailPage() {
           </p>
           <div className="form-row">
             <label>Name</label>
-            <input {...field('name')} required />
+            <input {...capsField('name')} required />
           </div>
           <div className="form-row">
             <label>Group of companies</label>
@@ -668,7 +678,7 @@ export default function CompanyIndividualDetailPage() {
           </div>
           <div className="form-row">
             <label>Odoo Customer ID</label>
-            <input {...field('legacy_customer_code')} placeholder="Legacy code, for migration matching" />
+            <input {...capsField('legacy_customer_code')} placeholder="Legacy code, for migration matching" />
           </div>
           <div className="form-row">
             <label>UEN</label>

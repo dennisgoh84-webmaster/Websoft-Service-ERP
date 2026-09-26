@@ -8,7 +8,7 @@ import {
   type StockItemRow,
   type Warehouse,
 } from '../lib/api'
-import { formatDate, formatMoney as money } from '../lib/format'
+import { formatDate, formatMoney as money, todayIso } from '../lib/format'
 
 interface LineInput {
   stock_item_id: string
@@ -35,7 +35,7 @@ export default function GoodsIssueNotePage() {
   const [warehouseId, setWarehouseId] = useState('')
   const [customerId, setCustomerId] = useState('')
   const [jobOrderId, setJobOrderId] = useState('')
-  const [issueDate, setIssueDate] = useState('')
+  const [issueDate, setIssueDate] = useState(todayIso())
   const [reason, setReason] = useState('')
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<LineInput[]>([emptyLine()])
@@ -74,7 +74,7 @@ export default function GoodsIssueNotePage() {
       setWarehouseId('')
       setCustomerId('')
       setJobOrderId('')
-      setIssueDate('')
+      setIssueDate(todayIso())
       setReason('')
       setNotes('')
       setLines([emptyLine()])

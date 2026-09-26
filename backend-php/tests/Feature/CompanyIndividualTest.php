@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\UserCompanyAccess;
 use App\Services\PasswordPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -49,7 +50,7 @@ class CompanyIndividualTest extends TestCase
             'name' => 'Acme Manufacturing Pte Ltd',
             'customer_type' => 'company',
         ], $this->authHeaders($token));
-        $create->assertOk()->assertJson(['name' => 'Acme Manufacturing Pte Ltd']);
+        $create->assertOk()->assertJson(['name' => 'ACME MANUFACTURING PTE LTD']);
 
         $list = $this->getJson('/api/company-individuals', $this->authHeaders($token));
         $list->assertOk()->assertJsonCount(1);
@@ -81,6 +82,35 @@ class CompanyIndividualTest extends TestCase
         $this->patchJson("/api/company-individuals/{$id}", ['po_approval_limit_sgd' => -1], $h)->assertStatus(422);
 
         $this->assertDatabaseHas('audit_log_entries', ['entity_type' => 'customer', 'entity_id' => $id, 'action' => 'updated']);
+    }
+
+    public function test_the_id_and_name_are_always_full_capitals(): void
+    {
+        $company = Company::factory()->create();
+        $h = $this->authHeaders($this->ownerToken($company));
+
+        // Typed, or pasted with stray spaces.
+        $id = $this->postJson('/api/company-individuals', ['name' => "  acme   Logistics pte ltd\t", 'legacy_customer_code' => ' c-001 '], $h)
+            ->assertOk()->assertJson(['name' => 'ACME LOGISTICS PTE LTD', 'legacy_customer_code' => 'C-001'])->json('id');
+        $this->patchJson("/api/company-individuals/{$id}", ['name' => 'Acme Logistics (S) Pte. Ltd.'], $h)
+            ->assertOk()->assertJson(['name' => 'ACME LOGISTICS (S) PTE. LTD.']);
+        // Non-Latin names are left as they are; Latin letters with accents are capitalised.
+        $this->patchJson("/api/company-individuals/{$id}", ['name' => '新加坡 café'], $h)->assertOk()->assertJson(['name' => '新加坡 CAFÉ']);
+    }
+
+    public function test_existing_names_are_converted_to_capitals_and_each_change_is_logged(): void
+    {
+        $company = Company::factory()->create();
+        $ci = CompanyIndividual::factory()->for($company)->create();
+        DB::table('company_individuals')->where('id', $ci->id)->update(['name' => 'Old  mixed Case', 'legacy_customer_code' => 'ab1']);
+        $already = CompanyIndividual::factory()->for($company)->create(['name' => 'ALREADY FINE']);
+
+        (require database_path('migrations/2026_09_30_002900_company_individual_names_in_capitals.php'))->up();
+
+        $this->assertSame('OLD MIXED CASE', $ci->fresh()->name);
+        $this->assertSame('AB1', $ci->fresh()->legacy_customer_code);
+        $this->assertDatabaseHas('audit_log_entries', ['entity_id' => $ci->id, 'action' => 'standardised_to_capitals']);
+        $this->assertDatabaseMissing('audit_log_entries', ['entity_id' => $already->id, 'action' => 'standardised_to_capitals']);
     }
 
     public function test_user_with_no_group_is_denied(): void

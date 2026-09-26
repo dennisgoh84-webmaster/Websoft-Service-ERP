@@ -57,6 +57,17 @@ browser locale or time zone (Dennis's standing rule).
   DD/MM/YYYY, rejects an impossible date such as 31/02, honours
   `min`/`max`/`required` through the browser's own form validation, and
   has a calendar button for picking.
+  **Since 2026-09-26** (Dennis, after keying dates on a phone): the
+  slashes fill in as digits are typed -- 12092026 shows 12/09/2026, a
+  phone's number pad having no "/" -- a two-digit year is read as 20yy,
+  and the calendar button has the browser's own date input laid
+  invisibly over it, so a tap on a phone opens the phone's picker.
+- **A document the user dates** (a supplier bill, a voucher, a stock
+  note) offers its date field, defaulting to today -- never a hidden
+  "always today".
+- **Test every date field by keying it in**, on a desktop and on a
+  phone-sized screen (Playwright with a phone device profile): digits
+  only, a picked date, then submit and check what was saved.
 - **"Today" as a default:** `todayIso()` from `lib/format.ts` (today in
   Singapore), not `new Date().toISOString()` (today in UTC, which is
   still yesterday before 8am Singapore time).

@@ -11,7 +11,6 @@ use App\Models\PaymentAllocation;
 use App\Models\Product;
 use App\Models\ServiceRecord;
 use App\Models\SetupListItem;
-use App\Models\SupplierInvoice;
 use App\Models\User;
 use App\Support\Money;
 use Illuminate\Support\Carbon;
@@ -239,79 +238,6 @@ class ReportsService
     // ones -- the two screens can then never disagree about what a
     // customer owes, which is the property Python's own comment says
     // the copy is there to preserve.
-
-    /**
-     * GST Return (analysis only). Mirrors `gst_return_data`.
-     *
-     * Output tax comes from sales invoices broken out per tax code;
-     * input tax from supplier bills as a single total, because a
-     * SupplierInvoice carries no tax code of its own. The tax point is
-     * the invoice date. This files nothing with IRAS and posts nothing
-     * to the GL -- it is a read. Bad-debt relief on written-off
-     * invoices is a separate IRAS scheme this does not attempt.
-     *
-     * @return array<string, mixed>
-     */
-    public static function gstReturn(string $companyId, Carbon $periodStart, Carbon $periodEnd): array
-    {
-        $outputByCode = [];
-        $invoices = Invoice::where('company_id', $companyId)
-            ->whereDate('issued_at', '>=', $periodStart->toDateString())
-            ->whereDate('issued_at', '<=', $periodEnd->toDateString())
-            ->get();
-        foreach ($invoices as $invoice) {
-            $code = (string) $invoice->tax_code;
-            $row = $outputByCode[$code] ?? ['net' => Money::of(0), 'tax' => Money::of(0), 'count' => 0];
-            $outputByCode[$code] = [
-                'net' => $row['net']->plus(Money::of($invoice->amount_sgd ?? 0)),
-                'tax' => $row['tax']->plus(Money::of($invoice->gst_amount_sgd ?? 0)),
-                'count' => $row['count'] + 1,
-            ];
-        }
-
-        $bills = SupplierInvoice::where('company_id', $companyId)
-            ->whereDate('invoice_date', '>=', $periodStart->toDateString())
-            ->whereDate('invoice_date', '<=', $periodEnd->toDateString())
-            ->get();
-        $inputNet = Money::of(0);
-        $inputTax = Money::of(0);
-        foreach ($bills as $bill) {
-            $inputNet = $inputNet->plus(Money::of($bill->amount_sgd ?? 0));
-            $inputTax = $inputTax->plus(Money::of($bill->gst_amount_sgd ?? 0));
-        }
-
-        $outputRows = [];
-        foreach ($outputByCode as $code => $row) {
-            $outputRows[] = [
-                'tax_code' => $code,
-                'net_sgd' => $row['net']->toFloat(),
-                'tax_sgd' => $row['tax']->toFloat(),
-                'document_count' => $row['count'],
-            ];
-        }
-        $inputRows = $bills->isEmpty() ? [] : [[
-            'tax_code' => 'PURCHASES',
-            'net_sgd' => $inputNet->toFloat(),
-            'tax_sgd' => $inputTax->toFloat(),
-            'document_count' => $bills->count(),
-        ]];
-
-        $totalOutput = Money::of(0);
-        foreach ($outputByCode as $row) {
-            $totalOutput = $totalOutput->plus($row['tax']);
-        }
-
-        return [
-            'period_start' => $periodStart->toDateString(),
-            'period_end' => $periodEnd->toDateString(),
-            'output_rows' => $outputRows,
-            'input_rows' => $inputRows,
-            'total_output_tax_sgd' => $totalOutput->toFloat(),
-            'total_input_tax_sgd' => $inputTax->toFloat(),
-            // Negative means reclaimable.
-            'net_gst_payable_sgd' => $totalOutput->minus($inputTax)->toFloat(),
-        ];
-    }
 
     /**
      * Sales Gross Profit, one row per invoice issued in the range.

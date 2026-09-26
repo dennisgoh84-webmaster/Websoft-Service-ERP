@@ -6,16 +6,21 @@ use App\Http\Controllers\Api\Concerns\ScopesReportCompanies;
 use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
+use App\Models\AccountingPeriod;
 use App\Models\CommissionSettings;
 use App\Models\CompanyIndividual;
 use App\Models\GroupModuleAuthority;
+use App\Models\GstReturn;
+use App\Models\GstReturnLine;
 use App\Models\User;
 use App\Services\AccountsReceivableService;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\GstReturns;
 use App\Services\Ledger;
 use App\Services\PayablesService;
 use App\Services\ReportsService;
+use App\Support\Money;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
@@ -87,6 +92,8 @@ class ReportController extends Controller
 
     /** @var array<int, string> */
     private const GST_FIELDS = ['tax_code', 'net_sgd', 'tax_sgd', 'document_count', 'direction'];
+
+    private const GST_SUPPORTING_FIELDS = ['period', 'direction', 'document_number', 'document_date', 'party_name', 'tax_code', 'box', 'net_sgd', 'gst_sgd'];
 
     /** @var array<int, string> */
     private const SALES_GP_FIELDS = [
@@ -364,6 +371,14 @@ class ReportController extends Controller
     }
 
     // ── GST Return ──────────────────────────────────────────────────
+    //
+    // GST F5 workflow (Dennis, 2026-09-26, open item 4b.4): the GST
+    // Return and its supporting listing read ONLY what each locked
+    // period's GST Calculation kept (App\Services\GstReturns) -- never
+    // the live documents -- so a month once calculated cannot drift.
+    // The range picks periods by their start date; a period in it with
+    // no calculation yet is named in `missing_periods`, never silently
+    // summed as zero.
 
     public function gstReturn(Request $request)
     {
@@ -391,57 +406,118 @@ class ReportController extends Controller
         return $this->xlsxResponse(self::GST_FIELDS, $rows, 'GST Return', 'gst-return.xlsx');
     }
 
+    public function gstSupporting(Request $request)
+    {
+        $user = $this->viewer($request);
+        [$start, $end] = $this->period($request);
+        $scope = $this->companyScope($request, $user);
+
+        return response()->json([
+            'period_start' => $start->toDateString(),
+            'period_end' => $end->toDateString(),
+            'companies' => array_values($scope),
+            'rows' => $this->gstSupportingRows($request, $scope, $start, $end),
+            'missing_periods' => $this->gstMissing($scope, $start, $end),
+        ]);
+    }
+
+    public function gstSupportingCsv(Request $request)
+    {
+        $user = $this->viewer($request);
+        [$start, $end] = $this->period($request);
+        $scope = $this->companyScope($request, $user);
+        $rows = $this->gstSupportingRows($request, $scope, $start, $end);
+        $this->auditExport($user, 'Accounting Report: GST Supporting Listing', 'csv', count($rows));
+
+        return $this->csvResponse($this->withCompanyColumn(self::GST_SUPPORTING_FIELDS, $scope), $rows, 'gst-supporting.csv');
+    }
+
+    public function gstSupportingExcel(Request $request)
+    {
+        $user = $this->viewer($request);
+        [$start, $end] = $this->period($request);
+        $scope = $this->companyScope($request, $user);
+        $rows = $this->gstSupportingRows($request, $scope, $start, $end);
+        $this->auditExport($user, 'Accounting Report: GST Supporting Listing', 'excel', count($rows));
+
+        return $this->xlsxResponse($this->withCompanyColumn(self::GST_SUPPORTING_FIELDS, $scope), $rows, 'GST Supporting', 'gst-supporting.xlsx');
+    }
+
     /**
-     * The shared service's figures per company, added together per tax
-     * code when several companies are selected (a group-level view --
-     * each company still files its own return).
+     * The saved Form 5 figures of every calculated period in the range,
+     * added together (a quarter's return is its three months; several
+     * companies give a group view -- each still files its own).
      *
      * @return array<string, mixed>
      */
     private function gstReturnReport(array $scope, Carbon $start, Carbon $end): array
     {
-        $merge = function (array $into, array $rows): array {
-            foreach ($rows as $r) {
-                $code = $r['tax_code'];
-                if (! isset($into[$code])) {
-                    $into[$code] = ['tax_code' => $code, 'net_sgd' => 0.0, 'tax_sgd' => 0.0, 'document_count' => 0];
-                }
-                $into[$code]['net_sgd'] = round($into[$code]['net_sgd'] + $r['net_sgd'], 2);
-                $into[$code]['tax_sgd'] = round($into[$code]['tax_sgd'] + $r['tax_sgd'], 2);
-                $into[$code]['document_count'] += $r['document_count'];
+        $saved = GstReturns::savedBetween(array_keys($scope), $start, $end);
+        $boxes = [];
+        foreach (GstReturn::BOXES as $n => $label) {
+            $total = Money::of(0);
+            foreach ($saved as $g) {
+                $total = $total->plus(Money::of($g->{"box_{$n}_sgd"}));
             }
-
-            return $into;
-        };
-        $output = [];
-        $input = [];
-        $totalOutput = 0.0;
-        $totalInput = 0.0;
-        foreach (array_keys($scope) as $companyId) {
-            $r = ReportsService::gstReturn($companyId, $start, $end);
-            $output = $merge($output, $r['output_rows']);
-            $input = $merge($input, $r['input_rows']);
-            $totalOutput += $r['total_output_tax_sgd'];
-            $totalInput += $r['total_input_tax_sgd'];
+            $boxes[] = ['box' => $n, 'label' => $label, 'amount_sgd' => $total->toFloat()];
         }
+
+        // Per tax code, from the kept document lines.
+        $byCode = ['output' => [], 'input' => []];
+        $lines = GstReturnLine::whereIn('gst_return_id', $saved->pluck('id'))->get();
+        foreach ($lines as $l) {
+            $code = $l->direction === GstReturnLine::OUTPUT ? (string) $l->tax_code : ($l->box === '5' ? 'PURCHASES (GST charged)' : 'PURCHASES (no GST)');
+            $row = $byCode[$l->direction][$code] ?? ['tax_code' => $code, 'net_sgd' => Money::of(0), 'tax_sgd' => Money::of(0), 'document_count' => 0];
+            $row['net_sgd'] = $row['net_sgd']->plus(Money::of($l->net_sgd));
+            $row['tax_sgd'] = $row['tax_sgd']->plus(Money::of($l->gst_sgd));
+            $row['document_count']++;
+            $byCode[$l->direction][$code] = $row;
+        }
+        $flatten = fn (array $rows) => array_values(array_map(fn ($r) => [
+            'tax_code' => $r['tax_code'], 'net_sgd' => $r['net_sgd']->toFloat(), 'tax_sgd' => $r['tax_sgd']->toFloat(), 'document_count' => $r['document_count'],
+        ], $rows));
+
+        $box = fn (int $n) => $boxes[$n - 1]['amount_sgd'];
 
         return [
             'period_start' => $start->toDateString(),
             'period_end' => $end->toDateString(),
             'companies' => array_values($scope),
-            'output_rows' => array_values($output),
-            'input_rows' => array_values($input),
-            'total_output_tax_sgd' => round($totalOutput, 2),
-            'total_input_tax_sgd' => round($totalInput, 2),
+            'boxes' => $boxes,
+            'periods' => $saved->map(fn (GstReturn $g) => [
+                'company_name' => $scope[$g->company_id] ?? '',
+                'period_name' => $g->period?->name,
+                'period_start' => $g->period_start->toDateString(),
+                'period_end' => $g->period_end->toDateString(),
+                'version' => $g->version,
+                'calculated_at' => $g->calculated_at->toIso8601String(),
+                'period_reopened' => $g->period?->status !== AccountingPeriod::STATUS_CLOSED,
+                'net_gst_sgd' => (float) $g->box_8_sgd,
+            ])->values(),
+            'missing_periods' => $this->gstMissing($scope, $start, $end),
+            'output_rows' => $flatten($byCode['output']),
+            'input_rows' => $flatten($byCode['input']),
+            'total_output_tax_sgd' => $box(6),
+            'total_input_tax_sgd' => $box(7),
             // Negative means reclaimable.
-            'net_gst_payable_sgd' => round($totalOutput - $totalInput, 2),
+            'net_gst_payable_sgd' => $box(8),
         ];
     }
 
+    /** @return list<array<string, string>> */
+    private function gstMissing(array $scope, Carbon $start, Carbon $end): array
+    {
+        return GstReturns::uncalculatedBetween(array_keys($scope), $start, $end)->map(fn (AccountingPeriod $p) => [
+            'company_name' => $scope[$p->company_id] ?? '',
+            'period_name' => $p->name,
+            'period_start' => $p->period_start->toDateString(),
+            'status' => $p->status,
+        ])->values()->all();
+    }
+
     /**
-     * Output and input rows flattened into one sheet, each tagged with
-     * the direction it came from -- a spreadsheet has one table where
-     * the screen has two.
+     * The Form 5 boxes as rows, then the per-tax-code breakdown, each
+     * tagged with what it is -- a spreadsheet has one table.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -451,9 +527,46 @@ class ReportController extends Controller
         $report = $this->gstReturnReport($this->companyScope($request, $user), $start, $end);
 
         return [
+            ...array_map(fn (array $b) => [
+                'direction' => 'form_5', 'tax_code' => "Box {$b['box']}: {$b['label']}", 'net_sgd' => $b['amount_sgd'], 'tax_sgd' => '', 'document_count' => '',
+            ], $report['boxes']),
             ...array_map(fn (array $r) => [...$r, 'direction' => 'output'], $report['output_rows']),
             ...array_map(fn (array $r) => [...$r, 'direction' => 'input'], $report['input_rows']),
         ];
+    }
+
+    /**
+     * Every document kept behind the calculations in range. `direction`
+     * (output|input) narrows it to the sales or the purchases listing.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function gstSupportingRows(Request $request, array $scope, Carbon $start, Carbon $end): array
+    {
+        $saved = GstReturns::savedBetween(array_keys($scope), $start, $end)->keyBy('id');
+        $query = GstReturnLine::whereIn('gst_return_id', $saved->keys());
+        if (in_array($request->query('direction'), [GstReturnLine::OUTPUT, GstReturnLine::INPUT], true)) {
+            $query->where('direction', $request->query('direction'));
+        }
+
+        return $query->orderBy('direction', 'desc')->orderBy('document_date')->orderBy('document_number')->get()
+            ->map(function (GstReturnLine $l) use ($saved, $scope) {
+                $g = $saved[$l->gst_return_id];
+
+                return [
+                    'company_id' => $g->company_id,
+                    'company_name' => $scope[$g->company_id] ?? '',
+                    'period' => $g->period?->name,
+                    'direction' => $l->direction,
+                    'document_number' => $l->document_number,
+                    'document_date' => $l->document_date->toDateString(),
+                    'party_name' => $l->party_name,
+                    'tax_code' => $l->tax_code ?? '',
+                    'box' => $l->box,
+                    'net_sgd' => (float) $l->net_sgd,
+                    'gst_sgd' => (float) $l->gst_sgd,
+                ];
+            })->values()->all();
     }
 
     // ── Sales GP ────────────────────────────────────────────────────

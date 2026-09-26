@@ -119,7 +119,7 @@ class DataMigrationTest extends TestCase
 
     private function acme(): CompanyIndividual
     {
-        return CompanyIndividual::where('name', 'Acme Pte Ltd')->firstOrFail();
+        return CompanyIndividual::where('name', 'ACME PTE LTD')->firstOrFail();
     }
 
     // ---- flow ------------------------------------------------------------
@@ -234,7 +234,7 @@ class DataMigrationTest extends TestCase
         $this->assertFalse($acme->pdpa_consent_given, 'PDPA consent is never assumed by migration');
         $this->assertSame($acme->id, Contact::where('name', 'Jane Tan')->firstOrFail()->customer_id);
 
-        $bolt = CompanyIndividual::where('name', 'Bolt Supplies')->firstOrFail();
+        $bolt = CompanyIndividual::where('name', 'BOLT SUPPLIES')->firstOrFail();
         $this->assertTrue($bolt->is_supplier);
         $this->assertNull($bolt->payment_terms_days, 'a payment term with no day count is left blank');
     }
@@ -242,7 +242,7 @@ class DataMigrationTest extends TestCase
     public function test_a_second_upload_skips_what_is_already_imported(): void
     {
         $this->importOdooContacts();
-        $this->acme()->update(['name' => 'Acme (renamed here)']);
+        $this->acme()->update(['name' => 'Acme (renamed here)']); // stored as ACME (RENAMED HERE)
 
         $batch = $this->migrate('odoo', 'company_individuals', [
             ['id', 'name', 'is_company'],
@@ -251,7 +251,7 @@ class DataMigrationTest extends TestCase
         ]);
 
         $this->assertSame(['already_imported', 'created'], $this->outcomes($batch));
-        $this->assertTrue(CompanyIndividual::where('name', 'Acme (renamed here)')->exists(), 'never overwritten');
+        $this->assertTrue(CompanyIndividual::where('name', 'ACME (RENAMED HERE)')->exists(), 'never overwritten');
     }
 
     public function test_same_uen_links_to_the_existing_record_across_systems(): void
@@ -267,7 +267,7 @@ class DataMigrationTest extends TestCase
         $this->assertSame(['linked', 'created'], $this->outcomes($batch), json_encode($batch->report));
         $this->assertSame(1, $batch->rows_linked);
         $this->assertSame(3, CompanyIndividual::count(), 'Acme is not duplicated');
-        $this->assertSame('Acme Pte Ltd', $this->acme()->name, 'the existing record is not overwritten');
+        $this->assertSame('ACME PTE LTD', $this->acme()->name, 'the existing record is not overwritten');
 
         // A ZSOFT past invoice for Z001 lands on the ODOO-imported Acme.
         $this->migrate('zsoft', 'invoices', [
@@ -534,9 +534,9 @@ class DataMigrationTest extends TestCase
 
         $this->assertFalse($result['rolled_back']);
         $this->assertSame(2, CompanyIndividual::count(), 'nothing removed');
-        $this->assertTrue(CompanyIndividual::where('name', 'Acme Pte Ltd')->exists());
+        $this->assertTrue(CompanyIndividual::where('name', 'ACME PTE LTD')->exists());
         $this->assertTrue(Contact::where('name', 'Jane Tan')->exists(), 'not even the records that were free');
-        $this->assertStringContainsString('Sales Invoices', collect($result['blockers'])->firstWhere('record', 'Acme Pte Ltd')['reason']);
+        $this->assertStringContainsString('Sales Invoices', collect($result['blockers'])->firstWhere('record', 'ACME PTE LTD')['reason']);
         $this->assertSame(MigrationBatch::STATUS_SUCCEEDED, $contacts->fresh()->status);
     }
 
@@ -546,7 +546,7 @@ class DataMigrationTest extends TestCase
         $batch = MigrationBatch::where('entity', 'company_individuals')->firstOrFail();
         // (Stamped explicitly: inside the test's own transaction the
         // database clock stands still.)
-        Audit::record('company_individual', CompanyIndividual::where('name', 'Bolt Supplies')->value('id'), 'updated', $this->owner->id)
+        Audit::record('company_individual', CompanyIndividual::where('name', 'BOLT SUPPLIES')->value('id'), 'updated', $this->owner->id)
             ->forceFill(['at' => now()->addMinute()])->save();
 
         $result = MigrationRollback::run($batch, $this->owner, 'Try');
@@ -563,13 +563,13 @@ class DataMigrationTest extends TestCase
         $result = MigrationRollback::run($zsoft->fresh(), $this->owner, 'Undo ZSOFT');
 
         $this->assertTrue($result['rolled_back']);
-        $this->assertTrue(CompanyIndividual::where('name', 'Acme Pte Ltd')->exists());
+        $this->assertTrue(CompanyIndividual::where('name', 'ACME PTE LTD')->exists());
 
         // ...and the ODOO batch can't remove Acme while ZSOFT links to it.
         $this->migrate('zsoft', 'company_individuals', [['CUST_CODE', 'CUST_NAME', 'ROC_NO'], ['Z001', 'Acme', '201912345K']]);
         $odoo = MigrationBatch::where('source', 'odoo')->where('entity', 'company_individuals')->firstOrFail();
         $refused = MigrationRollback::run($odoo, $this->owner, 'Try');
         $this->assertFalse($refused['rolled_back']);
-        $this->assertStringContainsString('Linked to by ZSOFT', collect($refused['blockers'])->firstWhere('record', 'Acme Pte Ltd')['reason']);
+        $this->assertStringContainsString('Linked to by ZSOFT', collect($refused['blockers'])->firstWhere('record', 'ACME PTE LTD')['reason']);
     }
 }

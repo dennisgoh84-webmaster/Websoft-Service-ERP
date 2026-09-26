@@ -25,7 +25,7 @@ which is where all current work lives.
 ## Install
 
 ```bash
-git clone https://github.com/dennisgoh84-webmaster/websoft-service-erp.git
+git clone https://github.com/dennisgoh84-webmaster/Websoft-Service-ERP.git
 cd websoft-service-erp
 ./deploy/install.sh
 ```

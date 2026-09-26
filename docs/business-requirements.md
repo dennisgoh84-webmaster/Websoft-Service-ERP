@@ -876,6 +876,44 @@ supervisor and manager."
 - Quotation approval (BILL-006) stays with the Sales Manager and the
   owner; the Sales Supervisor does not approve quotations.
 
+## GST Business Rules (CONFIRMED)
+
+### GST-001 — GST F5 workflow — CONFIRMED and built (2026-09-26)
+
+Dennis, 2026-09-26: "Every month, when the last month transactions all
+settled keying in, they will look for the period in Period and GST
+Accounting and locked it up. In each period, there is a button to do
+GST Calculation, meaning based on the locked data, this GST Calculation
+screen will pull out the figures based on those document status and sum
+up like form 5 and keep it there… after each month all done, the report
+will pull those required information from what is saved inside. GST
+supporting reports also… all use the data that is kept inside."
+
+- **GST and Account Period** screen: once a month's period is locked
+  (Close All), its **GST Calculation** button sums the month into the
+  IRAS **Form 5** boxes 1–13 and keeps them, together with every
+  document behind them as it stood. It is refused while the period is
+  open. Recalculating adds the next version and keeps the earlier one
+  as superseded; both are in Event Logs.
+- **Which documents count** ("based on those document status"): every
+  Sales Invoice issued in the month (Singapore date) — outstanding,
+  paid or written off — except invoices brought in by Data Migration
+  (already filed from the old system); and every supplier bill dated in
+  the month that reached Accounts Payable (approved, partly paid or
+  paid — not one awaiting a match or held as an exception).
+- **Boxes**: tax code SR → box 1, ZR → box 2, ES → box 3, OS → revenue
+  (box 13) only; output tax → box 6. A bill charging GST → box 5
+  (taxable purchases) and box 7; a bill charging none is listed as "no
+  GST" and left out of box 5. Box 8 = 6 − 7. Boxes 9–12 stay zero (no
+  document produces them yet). Defaults behind this mapping:
+  [open-business-decisions.md #47](open-business-decisions.md#47-gst-f5-workflow-defaults-taken-raised-and-built-2026-09-26).
+- **Reports read only what was kept**: Accounting Reports → **GST
+  Return (Form 5)** adds up the saved months in the chosen range (a
+  quarter is its three months) and names any month not yet calculated
+  or reopened since; **GST Supporting Listing** lists the kept
+  documents (sales, purchases or both), with CSV / Excel / PDF.
+  Nothing is filed with IRAS and nothing posts to the ledger.
+
 ## Conceptual Business Entities
 
 This section lists the major business entities Websoft Service ERP Solution is expected

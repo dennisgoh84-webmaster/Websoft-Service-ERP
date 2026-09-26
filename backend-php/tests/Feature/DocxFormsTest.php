@@ -125,7 +125,7 @@ class DocxFormsTest extends TestCase
         $this->assertStringContainsString('Due: '.$invoice->due_date->format('d/m/Y'), $text);
         // Bill To block.
         $this->assertStringContainsString('Bill To', $text);
-        $this->assertStringContainsString('Acme Logistics Pte Ltd', $text);
+        $this->assertStringContainsString('ACME LOGISTICS PTE LTD', $text);
         $this->assertStringContainsString('UEN: 199912345B', $text);
         $this->assertStringContainsString('Contact Person: Jane Tan', $text);
         $this->assertStringContainsString('Contact Email: ap@acme.example', $text);
@@ -275,7 +275,7 @@ class DocxFormsTest extends TestCase
         // Python: status.value.replace('_', ' ').title().
         $this->assertStringContainsString('Status: Pending Approval', $text);
         $this->assertStringContainsString('Supplier', $text);
-        $this->assertStringContainsString('Hardware Supplies Pte Ltd', $text);
+        $this->assertStringContainsString('HARDWARE SUPPLIES PTE LTD', $text);
         $this->assertStringContainsString('GST Reg# M9-7654321-0', $text);
         $this->assertStringContainsString('Email: sales@hw.example', $text);
         $this->assertStringContainsString('10 x Laptop', $text);
@@ -350,7 +350,7 @@ class DocxFormsTest extends TestCase
         $this->assertStringContainsString('Work Date: 12/09/2026', $text);
         $this->assertStringContainsString('Status: Approved', $text);
         $this->assertStringContainsString('Company / Individual', $text);
-        $this->assertStringContainsString('Acme Logistics Pte Ltd', $text);
+        $this->assertStringContainsString('ACME LOGISTICS PTE LTD', $text);
         $this->assertStringContainsString('Time logged (raw)', $text);
         $this->assertStringContainsString('23 min', $text);
         $this->assertStringContainsString('Time logged (rounded, SRV-007)', $text);
@@ -399,7 +399,7 @@ class DocxFormsTest extends TestCase
         $text = $this->docxText(DocxForms::statementToDocx($statement, $customer, $company));
 
         $this->assertStringContainsString('STATEMENT OF ACCOUNTS', $text);
-        $this->assertStringContainsString('Acme Logistics Pte Ltd', $text);
+        $this->assertStringContainsString('ACME LOGISTICS PTE LTD', $text);
         $this->assertStringContainsString('As at: '.now()->format('d/m/Y'), $text);
         $this->assertStringContainsString('Payment terms: Net 30 days', $text);
         $this->assertStringContainsString('Outstanding ($)', $text);
@@ -458,7 +458,7 @@ class DocxFormsTest extends TestCase
         $xml = $this->docxXml($bytes);
 
         $this->assertStringContainsString('Signature &amp; Company Stamp:', $xml);
-        $this->assertStringContainsString('Smith &amp; Sons &lt;Holdings&gt;', $xml);
+        $this->assertStringContainsString('SMITH &amp; SONS &lt;HOLDINGS&gt;', $xml);
         $this->assertStringContainsString('Backup &amp; restore', $xml);
         // And the package still parses as XML, which is what
         // LibreOffice was rejecting.

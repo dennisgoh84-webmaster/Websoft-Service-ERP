@@ -4,6 +4,7 @@ import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type Account, type APAgingReport, type CompanyIndividual, type PurchaseOrder, type SupplierInvoice } from '../lib/api'
+import DateInput from '../components/DateInput'
 import { formatMoney as money, formatDate, todayIso } from '../lib/format'
 
 const BILL_BADGE: Record<string, string> = {
@@ -35,6 +36,8 @@ export default function AccountsPayablePage() {
   const [billExpenseAccountId, setBillExpenseAccountId] = useState('')
   const [busyBillId, setBusyBillId] = useState<string | null>(null)
   const [billRef, setBillRef] = useState('')
+  // The supplier's own invoice date -- it decides the bill's GST period.
+  const [billDate, setBillDate] = useState(todayIso())
 
   // ACC-004: reverse a bill's GL posting. A mirror-image voucher is posted;
   // the bill and its original entry are untouched.
@@ -84,7 +87,7 @@ export default function AccountsPayablePage() {
         supplier_id: billSupplier,
         purchase_order_id: billPo || null,
         supplier_invoice_no: billRef || undefined,
-        invoice_date: todayIso(),
+        invoice_date: billDate || todayIso(),
         description: billDesc,
         amount_sgd: parseFloat(billAmount),
         gst_amount_sgd: billGst === '' ? 0 : parseFloat(billGst),
@@ -361,6 +364,10 @@ export default function AccountsPayablePage() {
           <div className="form-row">
             <label>Supplier's invoice number</label>
             <input value={billRef} onChange={(e) => setBillRef(e.target.value)} />
+          </div>
+          <div className="form-row">
+            <label>Supplier's invoice date</label>
+            <DateInput value={billDate} onChange={(e) => setBillDate(e.target.value)} required />
           </div>
           <div className="form-row">
             <label>Expense account (optional — defaults to 5000 Cost of services)</label>

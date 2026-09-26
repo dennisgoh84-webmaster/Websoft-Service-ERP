@@ -33,6 +33,9 @@ Route::middleware('auth.jwt')->prefix('reports/accounting')->group(function () {
     Route::get('/gst-return', [ReportController::class, 'gstReturn']);
     Route::get('/gst-return/export.csv', [ReportController::class, 'gstReturnCsv']);
     Route::get('/gst-return/export.xlsx', [ReportController::class, 'gstReturnExcel']);
+    Route::get('/gst-supporting', [ReportController::class, 'gstSupporting']);
+    Route::get('/gst-supporting/export.csv', [ReportController::class, 'gstSupportingCsv']);
+    Route::get('/gst-supporting/export.xlsx', [ReportController::class, 'gstSupportingExcel']);
 
     Route::get('/sales-gp', [ReportController::class, 'salesGp']);
     Route::get('/sales-gp/export.csv', [ReportController::class, 'salesGpCsv']);

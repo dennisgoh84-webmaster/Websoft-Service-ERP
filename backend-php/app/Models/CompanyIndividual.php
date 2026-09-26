@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasUuidPrimaryKey;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -56,6 +57,33 @@ class CompanyIndividual extends Model
         'po_approval_limit_sgd' => 'float',
         'credit_note_approval_limit_sgd' => 'float',
     ];
+
+    /**
+     * The ID and the name are kept in FULL CAPITALS, tidied of stray
+     * spaces (Dennis, 2026-09-26: "standardize all to full caps...
+     * whether is from copy paste or migration"). Set here, on the model,
+     * so every way a record arrives -- the screen, a paste, a Data
+     * Migration import, the Outlook / Gmail add-ins -- goes through it.
+     */
+    public static function caps(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        $tidy = trim(preg_replace('/\s+/u', ' ', $value));
+
+        return $tidy === '' ? '' : mb_strtoupper($tidy, 'UTF-8');
+    }
+
+    protected function name(): Attribute
+    {
+        return Attribute::make(set: fn (?string $value) => self::caps($value));
+    }
+
+    protected function legacyCustomerCode(): Attribute
+    {
+        return Attribute::make(set: fn (?string $value) => self::caps($value) === '' ? null : self::caps($value));
+    }
 
     public function company(): BelongsTo
     {

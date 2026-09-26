@@ -11,6 +11,7 @@ import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type CompanyIndividual, type PurchaseOrder } from '../lib/api'
+import DateInput from '../components/DateInput'
 import { formatMoney as money, todayIso } from '../lib/format'
 
 const PO_BADGE: Record<string, string> = {
@@ -36,6 +37,7 @@ export default function PurchaseOrdersPage() {
   // New PO
   const [poSupplier, setPoSupplier] = useState('')
   const [poDesc, setPoDesc] = useState('')
+  const [poDate, setPoDate] = useState(todayIso())
   const [poAmount, setPoAmount] = useState('')
 
   function refresh() {
@@ -55,7 +57,7 @@ export default function PurchaseOrdersPage() {
     try {
       const po = await api.createPurchaseOrder({
         supplier_id: poSupplier,
-        order_date: todayIso(),
+        order_date: poDate || todayIso(),
         description: poDesc,
         amount_sgd: parseFloat(poAmount),
       })
@@ -274,6 +276,10 @@ export default function PurchaseOrdersPage() {
                 </option>
               ))}
             </select>
+          </div>
+          <div className="form-row">
+            <label>Order date</label>
+            <DateInput value={poDate} onChange={(e) => setPoDate(e.target.value)} required />
           </div>
           <div className="form-row">
             <label>Description</label>

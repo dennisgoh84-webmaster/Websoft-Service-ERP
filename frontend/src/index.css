@@ -1202,7 +1202,8 @@ button.report-reset {
   display: flex;
   gap: 6px;
 }
-.report-filter-grid .input-with-button input {
+.report-filter-grid .input-with-button > input,
+.report-filter-grid .input-with-button .date-input > input:first-child {
   flex: 1;
   min-width: 140px;
 }
@@ -1590,26 +1591,39 @@ label.multi-pick-item:hover {
 .date-input > input[aria-invalid='true'] {
   border-color: var(--danger);
 }
-button.date-input-calendar {
+/* The calendar button, with the browser's own date input laid invisibly
+   exactly over it: a tap on a phone lands on that input and opens the
+   phone's picker (DateInput.tsx). Anchored to the button, not the box,
+   so it can never drift over the text. */
+.date-input-cal {
+  position: relative;
   flex-shrink: 0;
-  padding: 0 9px;
+  display: inline-flex;
+}
+button.date-input-calendar {
+  width: 38px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
-.date-input > input.date-input-native {
+.date-input-cal > input.date-input-native {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 1px;
-  height: 1px;
+  inset: 0;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: 100%;
+  margin: 0;
   padding: 0;
   border: 0;
   opacity: 0;
-  pointer-events: none;
+  cursor: pointer;
+  font-size: 16px;
+  z-index: 1;
 }
 .report-filter-grid .date-input > input:first-child,
-.report-filter-grid .date-input > button {
+.report-filter-grid .date-input-cal > button {
   height: 36px;
   box-sizing: border-box;
 }

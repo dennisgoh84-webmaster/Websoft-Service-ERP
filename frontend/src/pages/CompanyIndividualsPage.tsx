@@ -136,7 +136,8 @@ export default function CompanyIndividualsPage() {
           </div>
           <div className="form-row">
             <label>Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} required />
+            {/* Always FULL CAPITALS (Dennis, 2026-09-26); the server applies the same rule. */}
+            <input value={name} onChange={(e) => setName(e.target.value.toUpperCase())} autoCapitalize="characters" required />
           </div>
           <div className="form-row">
             <label>Email (optional)</label>

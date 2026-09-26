@@ -5,6 +5,7 @@ import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type BankAccount, type CompanyIndividual, type SupplierInvoice, type SupplierPayment } from '../lib/api'
+import DateInput from '../components/DateInput'
 import { formatMoney as money, todayIso } from '../lib/format'
 
 export default function PaymentVoucherPage() {
@@ -19,6 +20,7 @@ export default function PaymentVoucherPage() {
   const [paySupplier, setPaySupplier] = useState('')
   const [payAmount, setPayAmount] = useState('')
   const [payRef, setPayRef] = useState('')
+  const [payDate, setPayDate] = useState(todayIso())
   // ACC-001: every payment names the bank account the money left from.
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([])
   const [bankAccountId, setBankAccountId] = useState('')
@@ -48,7 +50,7 @@ export default function PaymentVoucherPage() {
     try {
       await api.recordSupplierPayment({
         supplier_id: paySupplier,
-        payment_date: todayIso(),
+        payment_date: payDate || todayIso(),
         amount_sgd: parseFloat(payAmount),
         bank_account_id: bankAccountId,
         reference: payRef || undefined,
@@ -324,6 +326,10 @@ export default function PaymentVoucherPage() {
                 </option>
               ))}
             </select>
+          </div>
+          <div className="form-row">
+            <label>Payment date</label>
+            <DateInput value={payDate} onChange={(e) => setPayDate(e.target.value)} required />
           </div>
           <div className="form-row">
             <label>Amount (SGD)</label>

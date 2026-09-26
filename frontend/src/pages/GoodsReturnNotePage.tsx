@@ -5,7 +5,8 @@ import {
   type Warehouse,
   type StockItemRow,
 } from '../lib/api'
-import { formatMoney as money, formatDate } from '../lib/format'
+import DateInput from '../components/DateInput'
+import { formatMoney as money, formatDate, todayIso } from '../lib/format'
 
 interface LineInput { stock_item_id: string; quantity: string; unit_cost: string }
 const emptyLine = (): LineInput => ({ stock_item_id: '', quantity: '', unit_cost: '' })
@@ -20,6 +21,7 @@ export default function GoodsReturnNotePage() {
   const [warehouseId, setWarehouseId] = useState('')
   const [reason, setReason] = useState('')
   const [notes, setNotes] = useState('')
+  const [docDate, setDocDate] = useState(todayIso())
   const [lines, setLines] = useState<LineInput[]>([emptyLine()])
 
   function refresh() {
@@ -41,6 +43,7 @@ export default function GoodsReturnNotePage() {
     e.preventDefault(); setError(null)
     try {
       await api.createGRTN({
+        return_date: docDate || undefined,
         warehouse_id: warehouseId,
         reason: reason || undefined,
         notes: notes || undefined,
@@ -86,6 +89,10 @@ export default function GoodsReturnNotePage() {
             <div>
               <label>Reason</label>
               <input value={reason} onChange={(e) => setReason(e.target.value)} style={{ width: 200 }} />
+            </div>
+            <div>
+              <label>Return date</label>
+              <DateInput value={docDate} onChange={(e) => setDocDate(e.target.value)} required />
             </div>
             <div>
               <label>Notes</label>

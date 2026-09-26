@@ -76,7 +76,7 @@ class ReportScreenExportTest extends TestCase
         file_put_contents($file, $bytes);
         $zip = new \ZipArchive;
         $this->assertTrue($zip->open($file) === true);
-        $this->assertStringContainsString('Acme Pte Ltd', $zip->getFromName('xl/sharedStrings.xml'));
+        $this->assertStringContainsString('ACME PTE LTD', $zip->getFromName('xl/sharedStrings.xml'));
         // The human column labels these screens use, not field keys.
         $this->assertStringContainsString('Contract Number', $zip->getFromName('xl/sharedStrings.xml'));
         $zip->close();
@@ -92,7 +92,7 @@ class ReportScreenExportTest extends TestCase
         $response->assertOk();
         $body = $response->getContent();
         $this->assertStringContainsString('Contract Number,Company / Individual', $body);
-        $this->assertStringContainsString('Acme Pte Ltd', $body);
+        $this->assertStringContainsString('ACME PTE LTD', $body);
         // Python's CSV conventions now apply here too: CRLF records,
         // and no quoting of a field just because it contains a space.
         $this->assertStringContainsString("\r\n", $body);

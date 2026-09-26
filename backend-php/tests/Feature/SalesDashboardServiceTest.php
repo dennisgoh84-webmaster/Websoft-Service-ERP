@@ -104,7 +104,7 @@ class SalesDashboardServiceTest extends TestCase
 
         $rows = SalesDashboardService::topBillingCustomers($company->id, 2026);
 
-        $this->assertSame('Net Winner', $rows->first()['customer_name']);
+        $this->assertSame('NET WINNER', $rows->first()['customer_name']);
     }
 
     public function test_bottom_non_active_customers_are_customers_with_zero_invoices_in_the_year(): void
@@ -118,9 +118,9 @@ class SalesDashboardServiceTest extends TestCase
         $rows = SalesDashboardService::bottomNonActiveCustomers($company->id, 2026);
 
         $names = $rows->pluck('customer_name')->all();
-        $this->assertContains('Unbilled Co', $names);
-        $this->assertNotContains('Billed Co', $names);
-        $this->assertNotContains('Supplier Only', $names); // is_customer=false
+        $this->assertContains('UNBILLED CO', $names);
+        $this->assertNotContains('BILLED CO', $names);
+        $this->assertNotContains('SUPPLIER ONLY', $names); // is_customer=false
     }
 
     // ---- AR outstanding buckets (reuses AccountsReceivableService::agingBucketFor) ----

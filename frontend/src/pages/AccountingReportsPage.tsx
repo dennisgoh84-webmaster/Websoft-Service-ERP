@@ -8,10 +8,10 @@
 // figures already shown inline elsewhere (Invoices' aging widget,
 // Accounts Payable's aging widget, General Ledger's trial balance,
 // Chart of Accounts, Bank Master File, Tax Types); this screen is the
-// one-stop, filterable/exportable version. GST Return is the one
-// genuinely new calculation -- see app/services/reports.py
-// gst_return_data for what it does and does not do (read-only, no
-// filing, no GL posting). Every export is written to Event Logs.
+// one-stop, filterable/exportable version. The GST Return and GST
+// Supporting Listing read only the GST Calculations saved on each
+// locked period (GST and Account Period screen) -- never the live
+// documents (Dennis, 2026-09-26). Every export is written to Event Logs.
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
@@ -28,12 +28,13 @@ import {
   type BankAccount,
   type CommissionReport,
   type GSTReturn,
+  type GstSupportingRow,
   type SalesGPReport,
   type ReportFilterOptions,
   type TaxCode,
   type TrialBalance,
 } from '../lib/api'
-import { formatMoney as money, formatDate } from '../lib/format'
+import { formatMoney as money, formatDate, formatDateTime } from '../lib/format'
 
 type ReportType =
   | 'ar-aging'
@@ -44,6 +45,7 @@ type ReportType =
   | 'chart-of-accounts'
   | 'tax-types'
   | 'gst-return'
+  | 'gst-supporting'
   | 'sales-gp'
   | 'commission'
 
@@ -113,11 +115,19 @@ const SECTIONS: ReportSection<ReportType>[] = [
     reports: [
       {
         key: 'gst-return',
-        title: 'GST Return',
-        summary: 'The figures you need for your GST return.',
+        title: 'GST Return (Form 5)',
+        summary: 'The Form 5 boxes for your GST return.',
         details:
-          'Output tax on sales invoices and input tax on bills received for the chosen period, totalled per tax code with the net amount and number of documents. Read-only: it does not file anything or post to the ledger.',
+          'Boxes 1 to 13 of IRAS Form 5, added up from the GST Calculations saved on each locked month (GST and Account Period). Pick the months of your return -- a quarter is its three months. A month not yet calculated is named, never counted as zero. It does not file anything or post to the ledger.',
         filters: ['Internal Companies', 'Month from – to', 'Dates'],
+      },
+      {
+        key: 'gst-supporting',
+        title: 'GST Supporting Listing',
+        summary: 'Every sales invoice and supplier bill behind the return.',
+        details:
+          'The documents kept with each saved GST Calculation, as they stood when the month was calculated: number, date, Company / Individual, tax code, which Form 5 box it counted in, net and GST. Filter to sales (output) or purchases (input).',
+        filters: ['Internal Companies', 'Month from – to', 'Sales / Purchases'],
       },
     ],
   },
@@ -174,9 +184,11 @@ function today(): string {
   return isoLocal(new Date())
 }
 
-const USES_COMPANIES: ReportType[] = ['ar-aging', 'ap-aging', 'trial-balance', 'gst-return', 'sales-gp', 'commission']
+const GST_BOX_LABEL: Record<string, string> = { '1': 'Box 1', '2': 'Box 2', '3': 'Box 3', out_of_scope: 'Out of scope (revenue only)', '5': 'Box 5', no_gst: 'No GST charged' }
+
+const USES_COMPANIES: ReportType[] = ['ar-aging', 'ap-aging', 'trial-balance', 'gst-return', 'gst-supporting', 'sales-gp', 'commission']
 const USES_AS_AT: ReportType[] = ['ar-aging', 'ap-aging', 'trial-balance']
-const USES_RANGE: ReportType[] = ['gst-return', 'sales-gp', 'commission']
+const USES_RANGE: ReportType[] = ['gst-return', 'gst-supporting', 'sales-gp', 'commission']
 
 export default function AccountingReportsPage() {
   const { user, moduleAccess } = useAuth()
@@ -203,6 +215,8 @@ export default function AccountingReportsPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [taxCodes, setTaxCodes] = useState<TaxCode[]>([])
   const [gstReturn, setGstReturn] = useState<GSTReturn | null>(null)
+  const [gstSupporting, setGstSupporting] = useState<{ rows: GstSupportingRow[]; missing_periods: GSTReturn['missing_periods']; companies?: string[]; period_start: string; period_end: string } | null>(null)
+  const [gstDirection, setGstDirection] = useState<'' | 'output' | 'input'>('')
   const [salesGP, setSalesGP] = useState<SalesGPReport | null>(null)
   const [commission, setCommission] = useState<CommissionReport | null>(null)
   const [commissionRateInput, setCommissionRateInput] = useState('')
@@ -221,7 +235,7 @@ export default function AccountingReportsPage() {
 
   const companyNames: string[] =
     (reportType === 'ar-aging' ? arAging?.companies : reportType === 'ap-aging' ? apAging?.companies : reportType === 'trial-balance' ? trialBalance?.companies
-      : reportType === 'gst-return' ? gstReturn?.companies : reportType === 'sales-gp' ? salesGP?.companies : commission?.companies) ?? []
+      : reportType === 'gst-return' ? gstReturn?.companies : reportType === 'gst-supporting' ? gstSupporting?.companies : reportType === 'sales-gp' ? salesGP?.companies : commission?.companies) ?? []
   const picked = (ids: string[], opts: { id: string; name: string }[], all: string) =>
     ids.length === 0 ? all : ids.map((id) => (id === 'unassigned' ? 'Unassigned' : opts.find((o) => o.id === id)?.name ?? id)).join(', ')
   const printSummary: string[] = []
@@ -270,6 +284,8 @@ export default function AccountingReportsPage() {
       api.listTaxCodes().then(setTaxCodes).catch((e) => setError(e.message))
     } else if (reportType === 'gst-return') {
       api.reportGstReturn(rangeFilters).then(setGstReturn).catch((e) => setError(e.message))
+    } else if (reportType === 'gst-supporting') {
+      api.reportGstSupporting({ ...rangeFilters, direction: gstDirection || undefined }).then(setGstSupporting).catch((e) => setError(e.message))
     } else if (reportType === 'sales-gp') {
       api.reportSalesGP(rangeFilters).then(setSalesGP).catch((e) => setError(e.message))
     } else if (reportType === 'commission') {
@@ -280,7 +296,7 @@ export default function AccountingReportsPage() {
     }
     // filterKey captures every filter value; the objects built from it are new each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportType, filterKey])
+  }, [reportType, filterKey, gstDirection])
 
   async function onSaveCommissionRate() {
     setError(null)
@@ -322,6 +338,9 @@ export default function AccountingReportsPage() {
       downloadBlob(csv ? await api.exportCommissionReportCsv(rangeFilters) : await api.exportCommissionReportExcel(rangeFilters), `commission-report.${ext}`)
     } else if (reportType === 'gst-return') {
       downloadBlob(csv ? await api.exportGstReturnCsv(rangeFilters) : await api.exportGstReturnExcel(rangeFilters), `gst-return.${ext}`)
+    } else if (reportType === 'gst-supporting') {
+      const f = { ...rangeFilters, direction: gstDirection || undefined }
+      downloadBlob(csv ? await api.exportGstSupportingCsv(f) : await api.exportGstSupportingExcel(f), `gst-supporting.${ext}`)
     }
   }
 
@@ -353,6 +372,16 @@ export default function AccountingReportsPage() {
               value={partyIds}
               onChange={setPartyIds}
             />
+          )}
+          {reportType === 'gst-supporting' && (
+            <div className="form-row">
+              <label>Sales / Purchases</label>
+              <select value={gstDirection} onChange={(e) => setGstDirection(e.target.value as '' | 'output' | 'input')}>
+                <option value="">Both</option>
+                <option value="output">Sales (output tax)</option>
+                <option value="input">Purchases (input tax)</option>
+              </select>
+            </div>
           )}
           {reportType === 'commission' && (
             <MultiPick
@@ -845,27 +874,93 @@ export default function AccountingReportsPage() {
         {reportType === 'gst-return' && gstReturn && (
           <>
             <h2>
-              GST Return: {formatDate(gstReturn.period_start)} to {formatDate(gstReturn.period_end)}
+              GST Return (Form 5): {formatDate(gstReturn.period_start)} to {formatDate(gstReturn.period_end)}
             </h2>
             <p className="muted">
-              Tax point = invoice date, output vs input tax only -- this does not file a return or
-              post to the GL. Bad-debt relief on written-off invoices is a separate IRAS scheme not
-              covered here.
+              Added up from the GST Calculations saved on each locked month (GST and Account Period) -- the documents as
+              they stood when calculated. It does not file anything or post to the ledger.
             </p>
+            {gstReturn.missing_periods.length > 0 && (
+              <div className="error-banner">
+                Not calculated yet, so not included:{' '}
+                {gstReturn.missing_periods.map((m) => `${m.period_name}${m.company_name ? ` (${m.company_name})` : ''}`).join(', ')}.
+                Lock each and run GST Calculation first.
+              </div>
+            )}
+            {gstReturn.periods.some((p) => p.period_reopened) && (
+              <div className="error-banner">
+                Reopened since it was calculated:{' '}
+                {gstReturn.periods.filter((p) => p.period_reopened).map((p) => p.period_name).join(', ')} -- lock it and
+                recalculate if anything changed.
+              </div>
+            )}
             <div className="stat-grid">
               <div className="card stat-tile">
                 <div className="stat-value stat-value-text">{money(gstReturn.total_output_tax_sgd)}</div>
-                <div className="stat-label">Output tax (sales)</div>
+                <div className="stat-label">Box 6: Output tax due</div>
               </div>
               <div className="card stat-tile">
                 <div className="stat-value stat-value-text">{money(gstReturn.total_input_tax_sgd)}</div>
-                <div className="stat-label">Input tax (purchases)</div>
+                <div className="stat-label">Box 7: Input tax claimed</div>
               </div>
               <div className="card stat-tile">
                 <div className="stat-value stat-value-text">{money(gstReturn.net_gst_payable_sgd)}</div>
-                <div className="stat-label">{gstReturn.net_gst_payable_sgd >= 0 ? 'Net GST payable' : 'Net GST reclaimable'}</div>
+                <div className="stat-label">{gstReturn.net_gst_payable_sgd >= 0 ? 'Box 8: Net GST payable' : 'Box 8: Net GST reclaimable'}</div>
               </div>
             </div>
+            <div className="report-table-wrap" style={{ overflowX: 'auto' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Box</th>
+                    <th>Form 5</th>
+                    <th style={{ textAlign: 'right' }}>SGD</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gstReturn.boxes.map((b) => (
+                    <tr key={b.box}>
+                      <td>{b.box}</td>
+                      <td>{b.label}</td>
+                      <td style={{ textAlign: 'right' }}>{money(b.amount_sgd)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <h3>Months included</h3>
+            <div className="report-table-wrap" style={{ overflowX: 'auto' }}>
+              <table>
+                <thead>
+                  <tr>
+                    {(gstReturn.companies?.length ?? 0) > 1 && <th>Company</th>}
+                    <th>Period</th>
+                    <th>Calculation</th>
+                    <th>Saved</th>
+                    <th style={{ textAlign: 'right' }}>Net GST (SGD)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gstReturn.periods.map((p) => (
+                    <tr key={`${p.company_name}-${p.period_start}`}>
+                      {(gstReturn.companies?.length ?? 0) > 1 && <td>{p.company_name}</td>}
+                      <td>{p.period_name}</td>
+                      <td>v{p.version}</td>
+                      <td>{formatDateTime(p.calculated_at)}</td>
+                      <td style={{ textAlign: 'right' }}>{money(p.net_gst_sgd)}</td>
+                    </tr>
+                  ))}
+                  {gstReturn.periods.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="muted">
+                        No saved GST Calculation in this range.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <h3>By tax code</h3>
             <div className="report-table-wrap" style={{ overflowX: 'auto' }}>
               <table>
                 <thead>
@@ -896,10 +991,58 @@ export default function AccountingReportsPage() {
                       <td>{r.document_count}</td>
                     </tr>
                   ))}
-                  {gstReturn.output_rows.length === 0 && gstReturn.input_rows.length === 0 && (
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {reportType === 'gst-supporting' && gstSupporting && (
+          <>
+            <h2>
+              GST Supporting Listing: {formatDate(gstSupporting.period_start)} to {formatDate(gstSupporting.period_end)}
+            </h2>
+            <p className="muted">The documents kept with each saved GST Calculation, as they stood when the month was calculated.</p>
+            {gstSupporting.missing_periods.length > 0 && (
+              <div className="error-banner">
+                Not calculated yet, so not listed: {gstSupporting.missing_periods.map((m) => m.period_name).join(', ')}.
+              </div>
+            )}
+            <div className="report-table-wrap" style={{ overflowX: 'auto' }}>
+              <table>
+                <thead>
+                  <tr>
+                    {(gstSupporting.companies?.length ?? 0) > 1 && <th>Company</th>}
+                    <th>Period</th>
+                    <th>Type</th>
+                    <th>Document</th>
+                    <th>Date</th>
+                    <th>Company / Individual</th>
+                    <th>Tax code</th>
+                    <th>Counted in</th>
+                    <th style={{ textAlign: 'right' }}>Net</th>
+                    <th style={{ textAlign: 'right' }}>GST</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gstSupporting.rows.map((r, i) => (
+                    <tr key={i}>
+                      {(gstSupporting.companies?.length ?? 0) > 1 && <td>{r.company_name}</td>}
+                      <td>{r.period}</td>
+                      <td>{r.direction === 'output' ? 'Sales' : 'Purchase'}</td>
+                      <td>{r.document_number}</td>
+                      <td>{formatDate(r.document_date)}</td>
+                      <td>{r.party_name ?? '—'}</td>
+                      <td>{r.tax_code || '—'}</td>
+                      <td>{GST_BOX_LABEL[r.box] ?? r.box}</td>
+                      <td style={{ textAlign: 'right' }}>{money(r.net_sgd)}</td>
+                      <td style={{ textAlign: 'right' }}>{money(r.gst_sgd)}</td>
+                    </tr>
+                  ))}
+                  {gstSupporting.rows.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="muted">
-                        No invoices or bills in this date range.
+                      <td colSpan={10} className="muted">
+                        No saved GST Calculation in this range.
                       </td>
                     </tr>
                   )}

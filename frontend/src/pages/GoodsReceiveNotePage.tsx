@@ -5,7 +5,8 @@ import {
   type Warehouse,
   type StockItemRow,
 } from '../lib/api'
-import { formatMoney as money, formatDate } from '../lib/format'
+import DateInput from '../components/DateInput'
+import { formatMoney as money, formatDate, todayIso } from '../lib/format'
 
 interface LineInput { stock_item_id: string; quantity: string; unit_cost: string }
 const emptyLine = (): LineInput => ({ stock_item_id: '', quantity: '', unit_cost: '' })
@@ -19,6 +20,7 @@ export default function GoodsReceiveNotePage() {
 
   const [warehouseId, setWarehouseId] = useState('')
   const [notes, setNotes] = useState('')
+  const [docDate, setDocDate] = useState(todayIso())
   const [lines, setLines] = useState<LineInput[]>([emptyLine()])
 
   function refresh() {
@@ -40,6 +42,7 @@ export default function GoodsReceiveNotePage() {
     e.preventDefault(); setError(null)
     try {
       await api.createGRN({
+        receive_date: docDate || undefined,
         warehouse_id: warehouseId,
         notes: notes || undefined,
         lines: lines.filter((l) => l.stock_item_id).map((l) => ({
@@ -80,6 +83,10 @@ export default function GoodsReceiveNotePage() {
                 <option value="">Select...</option>
                 {warehouses.map((w) => <option key={w.id} value={w.id}>{w.code} – {w.name}</option>)}
               </select>
+            </div>
+            <div>
+              <label>Receive date</label>
+              <DateInput value={docDate} onChange={(e) => setDocDate(e.target.value)} required />
             </div>
             <div>
               <label>Notes</label>
