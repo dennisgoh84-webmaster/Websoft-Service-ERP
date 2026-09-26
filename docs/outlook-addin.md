@@ -129,6 +129,17 @@ calling the same two endpoints, so the rules above apply unchanged.
   Unlike Outlook, the calls come from Google's servers rather than
   the user's browser, so the server must be reachable from the
   internet.
+- **The address must be public, not just https.** Apps Script refuses
+  to save an `appsscript.json` whose address is not a public https://
+  one (found 2026-09-26, testing against the office server's
+  `https://192.168.0.188:8443`). And Google could not reach an
+  office-only address anyway. So Maintenance → Email Add-ins shows a
+  "Reachable by Google" row and only offers the Gmail files when
+  opened from a public https:// address. It treats as office-only:
+  localhost, 10.x, 172.16–31.x, 192.168.x, 100.64–127.x, and `.local`
+  / `.lan` / `.internal` names. For a quick test, a Cloudflare quick
+  tunnel (`cloudflared tunnel --url http://localhost:<port>`) gives a
+  public `https://….trycloudflare.com` address with no account.
 - **Installing:** Maintenance → Email Add-ins downloads `Code.gs` and
   `appsscript.json`, filled in with the server's address. Paste both
   into a new project at script.google.com, then install it.

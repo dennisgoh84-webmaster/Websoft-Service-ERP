@@ -22,6 +22,22 @@ async function addinFile(path: string, mustContain: string): Promise<string | nu
   }
 }
 
+/**
+ * Google's servers run the Gmail add-on and call this server, so an
+ * address only reachable inside the office (192.168.x.x, a .local name,
+ * localhost) can never work for it -- and Apps Script will not even
+ * save an appsscript.json whose address is not a public https:// one.
+ */
+function isPrivateHost(hostname: string): boolean {
+  const h = hostname.toLowerCase()
+  if (h === 'localhost' || h.endsWith('.local') || h.endsWith('.lan') || h.endsWith('.internal')) return true
+  if (!h.includes('.') || h.includes(':')) return true // single-label names, IPv6 literals
+  const m = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(h)
+  if (!m) return false
+  const [a, b] = [Number(m[1]), Number(m[2])]
+  return a === 10 || a === 127 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || (a === 169 && b === 254) || (a === 100 && b >= 64 && b <= 127)
+}
+
 function Badge({ ok, yes, no }: { ok: boolean | null; yes: string; no: string }) {
   if (ok === null) return <span className="muted">Checking…</span>
   return ok ? <span className="badge active">{yes}</span> : <span className="badge status-blocked">{no}</span>
@@ -43,6 +59,8 @@ export default function EmailAddinsPage() {
   const host = window.location.host
   const origin = window.location.origin
   const https = window.location.protocol === 'https:'
+  const privateHost = isPrivateHost(window.location.hostname)
+  const gmailReady = https && !privateHost
   const [outlookOk, setOutlookOk] = useState<boolean | null>(null)
   const [gmailOk, setGmailOk] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -87,8 +105,24 @@ export default function EmailAddinsPage() {
             <StatusRow label="Secure connection (HTTPS)" value={https ? 'Yes' : 'No'} ok={https} yes="Ready" no="Needed" />
             <StatusRow label="Outlook Add-in files" value={<code>/outlook-addin/</code>} ok={outlookOk} yes="Found" no="Missing" />
             <StatusRow label="Gmail add-on files" value={<code>/gmail-addon/</code>} ok={gmailOk} yes="Found" no="Missing" />
+            <StatusRow
+              label="Reachable by Google (Gmail)"
+              value={privateHost ? 'No: an office-only address' : https ? 'Public https:// address' : 'No: not https://'}
+              ok={gmailReady}
+              yes="Ready"
+              no="Needed"
+            />
           </tbody>
         </table>
+        {https && privateHost && (
+          <p className="muted">
+            <b>{window.location.hostname}</b> is only reachable inside your own network. That is fine for Outlook on
+            office PCs that trust this server’s certificate, but <b>not for Gmail</b>: Google’s servers run the Gmail
+            add-on and cannot reach it, and Google will not save the add-on’s appsscript.json with it. Give the server a
+            public https:// address (DEPLOY.md section 4: a domain, or a Cloudflare tunnel), open this page from that
+            address, and download the Gmail files from there.
+          </p>
+        )}
         {!https && (
           <p className="muted">
             Both need this server on an <b>https://</b> address: Outlook will not load an add-in from anything else, and
@@ -147,12 +181,15 @@ export default function EmailAddinsPage() {
         </p>
         <ol>
           <li>
-            <p>Download the two files. Both are filled in with <code>{origin}</code>.</p>
+            <p>
+              Download the two files. Both are filled in with <code>{origin}</code>
+              {gmailReady ? '.' : ', which Gmail cannot use: open this page from the server’s public https:// address first (see This server above).'}
+            </p>
             <div className="button-row">
               <button
                 type="button"
                 onClick={() => download('/gmail-addon/Code.gs', '{{BASE_URL}}', origin, 'Code.gs', 'text/plain')}
-                disabled={gmailOk === false}
+                disabled={gmailOk === false || !gmailReady}
               >
                 Download Code.gs
               </button>
@@ -160,7 +197,7 @@ export default function EmailAddinsPage() {
                 type="button"
                 className="secondary"
                 onClick={() => download('/gmail-addon/appsscript.json', '{{BASE_URL}}', origin, 'appsscript.json', 'application/json')}
-                disabled={gmailOk === false}
+                disabled={gmailOk === false || !gmailReady}
               >
                 Download appsscript.json
               </button>
