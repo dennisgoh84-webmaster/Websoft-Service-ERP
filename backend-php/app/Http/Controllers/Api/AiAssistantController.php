@@ -7,7 +7,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\AiInteraction;
 use App\Models\AiSetting;
+use App\Models\Company;
 use App\Models\Incident;
+use App\Models\JobOrder;
 use App\Models\PortalUser;
 use App\Models\User;
 use App\Services\Ai\AiBudget;
@@ -18,6 +20,7 @@ use App\Services\Ai\AiException;
 use App\Services\Ai\AiNotConfiguredException;
 use App\Services\Ai\AiValidationException;
 use App\Services\Ai\IncidentTriage;
+use App\Services\Ai\WorkDescriptionDraft;
 use App\Services\Audit;
 use App\Services\Authority;
 use Illuminate\Http\Request;
@@ -52,7 +55,7 @@ class AiAssistantController extends Controller
         $user = Authenticate::user($request);
         $this->requireAdmin($user, 'view');
 
-        return response()->json($this->presentSettings());
+        return response()->json($this->presentSettings($user));
     }
 
     public function updateSettings(Request $request)
@@ -67,6 +70,7 @@ class AiAssistantController extends Controller
             'assistant_name' => 'sometimes|string|min:1|max:40',
             'assistant_avatar' => 'sometimes|nullable|string',
             'monthly_token_cap' => 'sometimes|nullable|integer|min:1',
+            'fallback_model' => 'sometimes|nullable|string|max:60|regex:/^[a-z0-9\-.]+$/',
         ]);
         if (array_key_exists('assistant_avatar', $fields) && $fields['assistant_avatar'] !== null) {
             $avatar = $fields['assistant_avatar'];
@@ -82,6 +86,22 @@ class AiAssistantController extends Controller
         $oldValue = [];
         $newValue = [];
         foreach ($fields as $field => $new) {
+            if ($field === 'monthly_token_cap') {
+                // Per company (Backlog 2, 2026-09-26): the signed-in company's own cap.
+                $company = Company::findOrFail($user->company_id);
+                $old = $company->ai_monthly_token_cap;
+                if ($old != $new) {
+                    $company->ai_monthly_token_cap = $new;
+                    $company->save();
+                    $oldValue['monthly_token_cap'] = $old;
+                    $newValue['monthly_token_cap'] = $new;
+                }
+
+                continue;
+            }
+            if ($field === 'fallback_model') {
+                $new = trim((string) $new) === '' ? null : trim((string) $new);
+            }
             $old = $row->{$field};
             if ($field === 'api_key') {
                 $new = $new === '' ? null : $new;
@@ -111,12 +131,12 @@ class AiAssistantController extends Controller
 
         Audit::record(
             'ai_setting', self::SETTINGS_AUDIT_ID, 'updated', $user->id,
-            details: 'AI Assistant settings',
+            details: array_key_exists('monthly_token_cap', $newValue) ? 'AI Assistant settings (token cap for '.Company::whereKey($user->company_id)->value('name').')' : 'AI Assistant settings',
             oldValue: $oldValue ?: null,
             newValue: $newValue ?: null,
         );
 
-        return response()->json($this->presentSettings());
+        return response()->json($this->presentSettings($user));
     }
 
     /** A one-line round trip to the provider, so the owner can prove the key works. */
@@ -133,7 +153,7 @@ class AiAssistantController extends Controller
             'created_at' => Carbon::now(),
         ]);
         try {
-            AiBudget::assertWithinCap();
+            AiBudget::assertWithinCap($user->company_id);
             $result = AiClient::complete(
                 'You are checking a connection. Reply with the JSON you were asked for.',
                 'Reply with {"ok": true, "greeting": "<one short friendly sentence>"}.',
@@ -264,6 +284,52 @@ class AiAssistantController extends Controller
         ]);
     }
 
+    // ---- Service Record drafting -----------------------------------
+
+    /**
+     * "Draft with AI" by a Service Record's work description: rough
+     * notes in any language back as a proper English description, for
+     * the engineer to edit and save. Proposes only -- nothing is saved
+     * on the record here.
+     */
+    public function draftWorkDescription(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, 'service_operations', 'edit');
+        $this->requireLicensed($user);
+
+        $data = $request->validate([
+            'notes' => 'required|string|max:'.WorkDescriptionDraft::MAX_NOTES_CHARS,
+            'job_order_id' => 'sometimes|nullable|uuid',
+        ]);
+        if (trim($data['notes']) === '') {
+            throw new ApiException(422, 'Type some notes first.');
+        }
+        $jobOrderId = $data['job_order_id'] ?? null;
+        if ($jobOrderId !== null && ! JobOrder::where('company_id', $user->company_id)->whereKey($jobOrderId)->exists()) {
+            throw new ApiException(404, 'Job Order not found');
+        }
+
+        try {
+            $draft = WorkDescriptionDraft::draft($user, $data['notes'], $jobOrderId);
+        } catch (AiBudgetExceededException $e) {
+            throw new ApiException(422, $e->getMessage());
+        } catch (AiNotConfiguredException $e) {
+            throw new ApiException(422, $e->getMessage());
+        } catch (AiException $e) {
+            throw new ApiException(502, $e->getMessage());
+        }
+
+        return response()->json([
+            'description' => $draft['description'],
+            'refused' => $draft['refused'],
+            'refusal_reason' => $draft['refused'] ? $draft['interaction']->error : null,
+            'model' => $draft['interaction']->model,
+            'input_tokens' => $draft['interaction']->input_tokens,
+            'output_tokens' => $draft['interaction']->output_tokens,
+        ]);
+    }
+
     // ---- Incident triage ------------------------------------------
 
     public function triageIncident(Request $request, string $incident)
@@ -333,7 +399,7 @@ class AiAssistantController extends Controller
         return $inc;
     }
 
-    private function presentSettings(): array
+    private function presentSettings(User $user): array
     {
         $row = AiSetting::current();
 
@@ -342,9 +408,12 @@ class AiAssistantController extends Controller
             'redact_personal_data' => (bool) $row->redact_personal_data,
             'assistant_name' => $row->assistantName(),
             'assistant_avatar' => $row->assistant_avatar,
-            'monthly_token_cap' => $row->monthly_token_cap,
-            // Install-wide, unlike the company-scoped usage() endpoint -- the cap it is measured against is install-wide too.
-            'monthly_tokens_used' => AiBudget::tokensUsedThisMonth(),
+            'fallback_model' => $row->fallback_model,
+            // Per company (Backlog 2, 2026-09-26): the signed-in company's
+            // cap and its use this month, with the installation's total beside it.
+            'monthly_token_cap' => AiBudget::capFor($user->company_id),
+            'monthly_tokens_used' => AiBudget::tokensUsedThisMonth($user->company_id),
+            'install_monthly_tokens_used' => AiBudget::tokensUsedThisMonth(),
             'api_key_set' => $row->api_key_set,
             'api_key_from_env' => $row->api_key_from_env,
             'updated_at' => optional($row->updated_at)->toJSON(),

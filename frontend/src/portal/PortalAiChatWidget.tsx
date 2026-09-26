@@ -41,9 +41,16 @@ export default function PortalAiChatWidget({ context }: { context: PortalAiConte
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  // The one-time AI declaration (2026-09-26): ticked once, before the
+  // first chat, and recorded against this login on the server.
+  const [consented, setConsented] = useState(false)
+  const [ticked, setTicked] = useState(false)
 
   useEffect(() => {
-    loadPersona().then(setPersona)
+    loadPersona().then((p) => {
+      setPersona(p)
+      setConsented(p?.consent_given === true)
+    })
   }, [])
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'nearest' })
@@ -52,6 +59,21 @@ export default function PortalAiChatWidget({ context }: { context: PortalAiConte
   if (persona === undefined || persona === null) return null
   const name = persona.name
   const avatar = persona.avatar ?? DEFAULT_AVATAR
+
+  async function onAccept() {
+    if (!ticked || busy) return
+    setError(null)
+    setBusy(true)
+    try {
+      await portalApi.aiConsent()
+      setConsented(true)
+      if (persona) persona.consent_given = true
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not record your agreement')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function onSend(e: FormEvent) {
     e.preventDefault()
@@ -129,6 +151,34 @@ export default function PortalAiChatWidget({ context }: { context: PortalAiConte
             </button>
           </div>
 
+          {!consented ? (
+            <div style={{ padding: '12px 14px', overflowY: 'auto', fontSize: 13, color: INK }} data-testid="portal-ai-declaration">
+              <strong>Before you start</strong>
+              <p style={{ margin: '6px 0' }}>
+                {name} answers by sending your question, and the details from your own account it needs, to Anthropic, an AI
+                provider hosted in the United States.
+              </p>
+              <ul style={{ margin: '6px 0', paddingLeft: 18 }}>
+                <li>Personal details such as email addresses and phone numbers are masked before anything is sent.</li>
+                <li>It only looks up your own company's records, and never changes anything.</li>
+                <li>Your agreement is recorded once, with the date and time.</li>
+              </ul>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', margin: '10px 0', cursor: 'pointer' }}>
+                <input type="checkbox" checked={ticked} onChange={(e) => setTicked(e.target.checked)} style={{ marginTop: 2 }} />
+                <span>I understand and agree that my questions and the account details needed to answer them may be sent to a US-hosted AI provider.</span>
+              </label>
+              {error && <div style={{ color: '#c0362c', fontSize: 12, marginBottom: 8 }}>{error}</div>}
+              <button
+                type="button"
+                onClick={onAccept}
+                disabled={!ticked || busy}
+                style={{ background: MAROON, color: WHITE, border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13.5, cursor: 'pointer', opacity: !ticked || busy ? 0.6 : 1 }}
+              >
+                {busy ? 'Saving...' : 'Agree and start'}
+              </button>
+            </div>
+          ) : (
+          <>
           <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {turns.length === 0 && (
               <p style={{ margin: 0, fontSize: 13, color: MUTED }}>
@@ -181,6 +231,8 @@ export default function PortalAiChatWidget({ context }: { context: PortalAiConte
               Send
             </button>
           </form>
+          </>
+          )}
         </div>
       )}
     </>

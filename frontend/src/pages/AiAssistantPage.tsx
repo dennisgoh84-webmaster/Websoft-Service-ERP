@@ -15,6 +15,7 @@ export default function AiAssistantPage() {
   const [usage, setUsage] = useState<AiUsage | null>(null)
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState('claude-opus-5')
+  const [fallbackModel, setFallbackModel] = useState('')
   const [redact, setRedact] = useState(true)
   const [assistantName, setAssistantName] = useState('Websoft AI')
   const [avatar, setAvatar] = useState<string | null>(null)
@@ -31,6 +32,7 @@ export default function AiAssistantPage() {
       .then((s) => {
         setSettings(s)
         setModel(s.model)
+        setFallbackModel(s.fallback_model ?? '')
         setRedact(s.redact_personal_data)
         setAssistantName(s.assistant_name)
         setAvatar(s.assistant_avatar)
@@ -57,6 +59,7 @@ export default function AiAssistantPage() {
       await api.updateAiSettings({
         ...(apiKey ? { api_key: apiKey } : {}),
         model,
+        fallback_model: fallbackModel.trim() || null,
         redact_personal_data: redact,
         assistant_name: assistantName.trim() || 'Websoft AI',
         ...(avatarChanged ? { assistant_avatar: avatar } : {}),
@@ -185,6 +188,19 @@ export default function AiAssistantPage() {
             <span className="muted">Default claude-opus-5. Change only if Anthropic retires it or you want a cheaper model.</span>
           </div>
           <div className="form-row">
+            <label htmlFor="ai-fallback-model">Fallback model</label>
+            <input
+              id="ai-fallback-model"
+              value={fallbackModel}
+              onChange={(e) => setFallbackModel(e.target.value)}
+              placeholder="None"
+            />
+            <span className="muted">
+              Tried once when the model above fails (busy, retired or unreachable) or declines to answer. The Usage list
+              shows which model answered each call. Leave blank for none.
+            </span>
+          </div>
+          <div className="form-row">
             <label>
               <input type="checkbox" checked={redact} onChange={(e) => setRedact(e.target.checked)} /> Mask personal data before
               sending
@@ -207,15 +223,16 @@ export default function AiAssistantPage() {
               style={{ maxWidth: 160 }}
             />
             <span className="muted">
-              Once this many tokens (input + output combined) have been used <strong>across the whole installation</strong>{' '}
-              in a calendar month, every AI Assistant feature refuses further calls until the next month starts, or the
-              cap is raised here. Measured in tokens, not SGD, because Anthropic's per-token price differs by model and
+              Once this many tokens (input + output combined) have been used <strong>by this company</strong> in a
+              calendar month, every AI Assistant feature refuses this company's further calls until the next month
+              starts, or the cap is raised here. Each company has its own cap -- switch company to set another's. Measured in tokens, not SGD, because Anthropic's per-token price differs by model and
               can change -- see open decision #44. Leave blank for unlimited (the default).
             </span>
             {settings && (
               <span className="muted">
-                {settings.monthly_tokens_used.toLocaleString()} tokens used so far this month
-                {settings.monthly_token_cap ? ` of ${settings.monthly_token_cap.toLocaleString()} cap` : ' (no cap set)'}.
+                This company: {settings.monthly_tokens_used.toLocaleString()} tokens used so far this month
+                {settings.monthly_token_cap ? ` of ${settings.monthly_token_cap.toLocaleString()} cap` : ' (no cap set)'}. Whole
+                installation: {settings.install_monthly_tokens_used.toLocaleString()} tokens.
                 {settings.monthly_token_cap !== null && settings.monthly_tokens_used >= settings.monthly_token_cap && (
                   <span className="badge exceeded" style={{ marginLeft: 6 }}>
                     Cap reached -- calls are being refused

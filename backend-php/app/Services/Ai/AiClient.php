@@ -23,6 +23,15 @@ use App\Models\AiSetting;
  * thinking is the model's default and is left on. A refusal
  * (stop_reason "refusal") is returned as AiResult::$refused rather
  * than thrown, so the caller can tell the user the assistant declined.
+ *
+ * Fallback model (Backlog 2, 2026-09-26): when one is set under
+ * Maintenance -> AI Assistant, a call that fails at the provider
+ * (rejected, overloaded, unreachable) or is declined is tried once more
+ * on the fallback model; the answer then carries the fallback's name,
+ * so the interaction record shows which model answered, and a declined
+ * first try's tokens are added in. Not tried for a missing key or a
+ * reached cap -- the fallback would fail the same way. A caller that
+ * names a model explicitly gets that model only.
  */
 class AiClient
 {
@@ -73,7 +82,33 @@ class AiClient
     public static function chat(string $system, array $messages, array $tools, int $maxTokens = 4096, ?string $model = null): AiTurn
     {
         $settings = AiSetting::current();
-        $model ??= $settings->model ?: AiSetting::DEFAULT_MODEL;
+        $primary = $model ?? ($settings->model ?: AiSetting::DEFAULT_MODEL);
+        $fallback = $model === null ? $settings->fallbackModelFor($primary) : null;
+
+        try {
+            $turn = self::chatWith($settings, $system, $messages, $tools, $maxTokens, $primary);
+        } catch (AiException $e) {
+            if ($fallback === null) {
+                throw $e;
+            }
+
+            return self::chatWith($settings, $system, $messages, $tools, $maxTokens, $fallback);
+        }
+        if ($turn->refused && $fallback !== null) {
+            $second = self::chatWith($settings, $system, $messages, $tools, $maxTokens, $fallback);
+
+            return new AiTurn(
+                $second->text, $second->toolCalls, $second->assistantContent, $second->stopReason, $second->model,
+                $second->inputTokens + $turn->inputTokens, $second->outputTokens + $turn->outputTokens,
+                $second->refused, $second->refusalReason,
+            );
+        }
+
+        return $turn;
+    }
+
+    private static function chatWith(AiSetting $settings, string $system, array $messages, array $tools, int $maxTokens, string $model): AiTurn
+    {
 
         if (self::$fakeQueue !== null) {
             self::$fakeRequests[] = ['system' => $system, 'messages' => $messages, 'tools' => array_column($tools, 'name'), 'model' => $model];
@@ -158,7 +193,32 @@ class AiClient
     public static function complete(string $system, string $user, array $schema, int $maxTokens = 4096, ?string $model = null): AiResult
     {
         $settings = AiSetting::current();
-        $model ??= $settings->model ?: AiSetting::DEFAULT_MODEL;
+        $primary = $model ?? ($settings->model ?: AiSetting::DEFAULT_MODEL);
+        $fallback = $model === null ? $settings->fallbackModelFor($primary) : null;
+
+        try {
+            $result = self::completeWith($settings, $system, $user, $schema, $maxTokens, $primary);
+        } catch (AiException $e) {
+            if ($fallback === null) {
+                throw $e;
+            }
+
+            return self::completeWith($settings, $system, $user, $schema, $maxTokens, $fallback);
+        }
+        if ($result->refused && $fallback !== null) {
+            $second = self::completeWith($settings, $system, $user, $schema, $maxTokens, $fallback);
+
+            return new AiResult(
+                $second->data, $second->model, $second->inputTokens + $result->inputTokens,
+                $second->outputTokens + $result->outputTokens, $second->refused, $second->refusalReason,
+            );
+        }
+
+        return $result;
+    }
+
+    private static function completeWith(AiSetting $settings, string $system, string $user, array $schema, int $maxTokens, string $model): AiResult
+    {
 
         if (self::$fakeQueue !== null) {
             self::$fakeRequests[] = ['system' => $system, 'user' => $user, 'schema' => $schema, 'model' => $model];

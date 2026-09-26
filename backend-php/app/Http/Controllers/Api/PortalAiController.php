@@ -13,8 +13,10 @@ use App\Services\Ai\AiException;
 use App\Services\Ai\AiNotConfiguredException;
 use App\Services\Ai\AiPortalChat;
 use App\Services\Ai\AiValidationException;
+use App\Services\Audit;
 use App\Services\Authority;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 /**
  * The Customer Helpdesk Portal's AI Assistant chat (slice 3,
@@ -48,13 +50,49 @@ class PortalAiController extends Controller
         $this->requireLicensed($portalUser);
         $row = AiSetting::current();
 
-        return response()->json(['name' => $row->assistantName(), 'avatar' => $row->assistant_avatar]);
+        return response()->json([
+            'name' => $row->assistantName(),
+            'avatar' => $row->assistant_avatar,
+            'consent_given' => $portalUser->ai_data_consent_at !== null,
+        ]);
+    }
+
+    /**
+     * The customer's one-time AI declaration, ticked before the first
+     * chat (Dennis, 2026-09-26) -- the portal twin of the staff notice
+     * at login (PDPA-002). Recorded once; a second tick never moves it.
+     */
+    public function acknowledgeConsent(Request $request)
+    {
+        $portalUser = $this->portalUser($request);
+        $this->requireLicensed($portalUser);
+        $request->validate(['accepted' => 'required|accepted']);
+
+        if ($portalUser->ai_data_consent_at === null) {
+            $now = Carbon::now();
+            $portalUser->ai_data_consent_at = $now;
+            $portalUser->save();
+            Audit::record(
+                'portal_user', $portalUser->id, 'ai_data_consent_acknowledged',
+                actorUserId: null,
+                actorName: ($portalUser->contact?->name ?? $portalUser->email).' (portal)',
+                companyId: $portalUser->company_id,
+                details: 'AI Assistant declaration ticked on the Helpdesk Portal',
+            );
+
+            return response()->json(['consent_given' => true, 'ai_data_consent_at' => $now->toJSON()]);
+        }
+
+        return response()->json(['consent_given' => true, 'ai_data_consent_at' => $portalUser->ai_data_consent_at->toJSON()]);
     }
 
     public function chat(Request $request)
     {
         $portalUser = $this->portalUser($request);
         $this->requireLicensed($portalUser);
+        if ($portalUser->ai_data_consent_at === null) {
+            throw new ApiException(403, 'Please read and tick the AI Assistant declaration before chatting.');
+        }
 
         $data = $request->validate([
             'messages' => 'required|array|min:1|max:'.(AiChat::MAX_HISTORY * 2),

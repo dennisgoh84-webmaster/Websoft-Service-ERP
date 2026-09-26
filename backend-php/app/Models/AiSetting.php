@@ -30,7 +30,7 @@ class AiSetting extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['key', 'api_key', 'model', 'redact_personal_data', 'assistant_name', 'assistant_avatar', 'monthly_token_cap', 'updated_at'];
+    protected $fillable = ['key', 'api_key', 'model', 'redact_personal_data', 'assistant_name', 'assistant_avatar', 'monthly_token_cap', 'fallback_model', 'updated_at'];
 
     protected $hidden = ['api_key'];
 
@@ -54,6 +54,14 @@ class AiSetting extends Model
         $name = trim((string) ($this->assistant_name ?? ''));
 
         return $name !== '' ? $name : self::DEFAULT_ASSISTANT_NAME;
+    }
+
+    /** The model to try when the main one fails or declines -- none when unset or the same as the main one. */
+    public function fallbackModelFor(string $primary): ?string
+    {
+        $fallback = trim((string) ($this->fallback_model ?? ''));
+
+        return $fallback !== '' && $fallback !== $primary ? $fallback : null;
     }
 
     /** The key in use: the stored one, else the .env bootstrap value. */

@@ -14,6 +14,7 @@ import { otherPayment, otherReceipt, paymentVoucher, purchaseOrder, purchaseOrde
 import { goodsReceive, stockAdjustment, stockItem, warehouse } from './stock.mjs'
 import { journalVoucher, staff } from './admin.mjs'
 import { mobileApp } from './mobile.mjs'
+import { aiAssistant } from './ai.mjs'
 
 export const FLOWS = [
   setupLists,
@@ -42,5 +43,6 @@ export const FLOWS = [
   quotationProductInvoice,
   journalVoucher,
   staff,
+  aiAssistant,
   mobileApp,
 ]

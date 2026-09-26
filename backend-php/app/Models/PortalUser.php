@@ -52,6 +52,7 @@ class PortalUser extends Model
         'failed_attempts' => 'integer',
         'locked_until' => 'datetime',
         'last_login_at' => 'datetime',
+        'ai_data_consent_at' => 'datetime',
         'created_at' => 'datetime',
     ];
 

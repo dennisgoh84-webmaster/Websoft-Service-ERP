@@ -62,6 +62,7 @@ class PortalAiChatTest extends TestCase
         ]);
         $login = $this->postJson('/api/portal/auth/login', ['email' => $contact->email, 'password' => 'portal123']);
         $this->token = $login->json('portal_token');
+        $this->portalUser->forceFill(['ai_data_consent_at' => now()])->save();
     }
 
     protected function tearDown(): void
@@ -167,6 +168,26 @@ class PortalAiChatTest extends TestCase
         CompanyModule::where('company_id', $this->company->id)->where('module_key', 'ai_assistant')->update(['enabled' => false]);
         $this->getJson('/api/portal/ai/persona', $this->headers())->assertStatus(403);
         $this->postJson('/api/portal/ai/chat', ['messages' => [['role' => 'user', 'content' => 'x']]], $this->headers())->assertStatus(403);
+    }
+
+    public function test_the_customer_ticks_the_ai_declaration_once_before_the_first_chat(): void
+    {
+        $this->portalUser->forceFill(['ai_data_consent_at' => null])->save();
+        $this->getJson('/api/portal/ai/persona', $this->headers())->assertOk()->assertJsonPath('consent_given', false);
+        $this->postJson('/api/portal/ai/chat', ['messages' => [['role' => 'user', 'content' => 'x']]], $this->headers())
+            ->assertStatus(403)->assertJsonFragment(['detail' => 'Please read and tick the AI Assistant declaration before chatting.']);
+        $this->assertCount(0, AiClient::requests());
+
+        $this->postJson('/api/portal/ai/consent', [], $this->headers())->assertStatus(422);
+        $first = $this->postJson('/api/portal/ai/consent', ['accepted' => true], $this->headers())->assertOk()->json('ai_data_consent_at');
+        $this->travel(5)->minutes();
+        $again = $this->postJson('/api/portal/ai/consent', ['accepted' => true], $this->headers())->assertOk()->json('ai_data_consent_at');
+        $this->assertSame(substr($first, 0, 19), substr($again, 0, 19), 'the first tick is kept, never moved');
+        $this->getJson('/api/portal/ai/persona', $this->headers())->assertJsonPath('consent_given', true);
+        $this->assertDatabaseHas('audit_log_entries', ['entity_type' => 'portal_user', 'entity_id' => $this->portalUser->id, 'action' => 'ai_data_consent_acknowledged']);
+
+        AiClient::fake([['text' => 'Hello']]);
+        $this->postJson('/api/portal/ai/chat', ['messages' => [['role' => 'user', 'content' => 'x']]], $this->headers())->assertOk();
     }
 
     public function test_refusal_is_recorded_and_a_malformed_history_is_rejected(): void

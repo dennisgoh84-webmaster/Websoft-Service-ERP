@@ -2038,6 +2038,17 @@ Small details nobody foresaw, built with the recommended default
   in box 1. A box that does not fit the code's kind is refused.
 - **Event Logs day filter**: From and To are whole Singapore days, To
   included.
+- **AI cap per company**: the one installation-wide cap that was set is
+  copied onto every company when this goes in, so nothing capped became
+  unlimited; the old setting is kept but no longer read.
+- **Fallback model**: tried once, on a provider failure or a refusal --
+  not for a missing key or a reached cap, where it would fail the same
+  way.
+- **Draft with AI**: masks emails and phone numbers (not names -- the
+  notes seldom carry them, and a masked name would have to be retyped).
+  Needs EDIT on Service Operations as well as the AI module.
+- **Portal AI declaration**: recorded per portal login, not per
+  customer company -- each person ticks it for themselves.
 
 ## How to use this document
 

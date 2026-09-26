@@ -44,5 +44,6 @@ Route::prefix('portal')->group(function () {
         // AI Assistant slice 3 (docs/planned-work.md #12 Tier 2 item 6).
         Route::get('/ai/persona', [PortalAiController::class, 'persona']);
         Route::post('/ai/chat', [PortalAiController::class, 'chat']);
+        Route::post('/ai/consent', [PortalAiController::class, 'acknowledgeConsent']);
     });
 });

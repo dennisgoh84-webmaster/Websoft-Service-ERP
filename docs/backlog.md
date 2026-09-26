@@ -303,15 +303,15 @@ shipped and when.
   - [x] Overdue Service Record approval: daily 8:45 email to the approvers, sent by the new server `scheduler` service. Built 2026-09-26 (SRV-019).
   - [ ] Full multi-currency on sales and purchases (original + SGD, exchange gain/loss).
   - [ ] Data Migration: bring across everything since a cut-off date picked at run time (10.1).
-  - [ ] AI Assistant: Service Record drafting from the technician's notes.
+  - [x] AI Assistant: Service Record drafting from the technician's notes. Built 2026-09-26: "✨ Draft with AI" by the work description on the Job Order and the phone's Time Out.
   - [x] Email Inbox: the server reads the helpdesk mailbox over IMAP (no HTTPS needed), with Log as Incident / Convert to Job Order. Built 2026-09-26 (Operations → Email Inbox).
   - [x] Tax Types: a Form 5 box setting per tax code (sales and purchase), used by the GST Calculation (47.4). Built 2026-09-26: Maintenance → Tax Types, built-in codes pre-set as they worked before.
-  - [ ] Helpdesk Portal: one-time AI declaration tick before the portal chat.
+  - [x] Helpdesk Portal: one-time AI declaration tick before the portal chat. Built 2026-09-26.
   - [ ] eApproval: move Payment Voucher (with Bank Authority), PO and Service Record approval onto it.
-  - [ ] AI spending cap per company instead of one for the installation.
+  - [x] AI spending cap per company instead of one for the installation (installation total shown beside it). Built 2026-09-26.
   - [ ] Helpdesk Portal: customer attachments when raising an incident.
   - [x] Sales Dashboard: per-salesperson cards (prospects by stage, quoted, billed, paid). Built 2026-09-26 (SALES-007).
-  - [ ] AI Assistant: a fallback model, set on the AI settings screen.
+  - [x] AI Assistant: a fallback model, set on the AI settings screen. Built 2026-09-26.
   - [x] PDPA: archive before expiry for the owner only, with a reason, enforced on the server; unarchiving by anyone with FULL access, with a reason. Built 2026-09-26.
   - [x] Event Logs: From / To day filter. Built 2026-09-26.
   - [x] Staff Master: square crop when uploading a photo (drag and zoom, saved as 400 × 400). Built 2026-09-26.

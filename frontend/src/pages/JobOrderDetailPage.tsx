@@ -1,4 +1,5 @@
 import AiChatPanel from '../components/AiChatPanel'
+import AiDraftButton from '../components/AiDraftButton'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
@@ -455,6 +456,7 @@ export default function JobOrderDetailPage() {
               lang="en"
               placeholder="What was done this session..."
             />
+            <AiDraftButton notes={workDescription} jobOrderId={id} onDraft={setWorkDescription} />
           </div>
           <button type="submit">Submit Service Record</button>
         </form>

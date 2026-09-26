@@ -55,7 +55,7 @@ class IncidentTriage
     public static function suggest(Incident $incident, User $actor): AiInteraction
     {
         $settings = AiSetting::current();
-        AiBudget::assertWithinCap($settings);
+        AiBudget::assertWithinCap($incident->company_id);
         $redact = (bool) $settings->redact_personal_data;
 
         $context = self::buildContext($incident, $redact);

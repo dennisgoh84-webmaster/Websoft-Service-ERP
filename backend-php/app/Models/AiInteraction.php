@@ -22,6 +22,8 @@ class AiInteraction extends Model
 
     public const FEATURE_PORTAL_CHAT = 'portal_chat';
 
+    public const FEATURE_WORK_DESCRIPTION_DRAFT = 'work_description_draft';
+
     public const STATUS_OK = 'ok';
 
     public const STATUS_REFUSED = 'refused';

@@ -17,6 +17,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import AiDataConsentGate from '../components/AiDataConsentGate'
+import AiDraftButton from '../components/AiDraftButton'
 import { useAuth } from '../lib/AuthContext'
 import { getToken } from '../lib/api'
 import { getDeviceId } from '../lib/deviceId'
@@ -741,6 +742,7 @@ function TimeOutForm({ recordId, onDone }: { recordId: string; onDone: () => voi
           style={{ ...styles.input, resize: 'vertical' }}
           placeholder="Describe what was done..."
         />
+        <AiDraftButton notes={description} onDraft={setDescription} />
       </div>
       <div style={{ marginBottom: 10 }}>
         <label style={styles.label}>Job Completed?</label>

@@ -681,6 +681,30 @@ Status: **CONFIRMED / DECIDED** (2026-09-14). Full design in
 - **Unarchiving** is for anyone with FULL access, always with a reason.
 - Each archive and unarchive is written to Event Logs with its reason.
 
+### PDPA-004 — Helpdesk Portal AI declaration — CONFIRMED and built (2026-09-26)
+
+- Before a customer's first chat with the AI Assistant on the Helpdesk
+  Portal, they tick a one-time declaration: their questions and the
+  account details needed to answer them may be sent, masked, to a
+  US-hosted AI provider. Recorded once per portal login
+  (`portal_users.ai_data_consent_at`) and in Event Logs; the chat is
+  refused until it is ticked. The portal twin of PDPA-002.
+
+### AI-001 — AI Assistant additions (Backlog 2) — CONFIRMED and built (2026-09-26)
+
+- **Draft with AI**: by a Service Record's work description (Job Order
+  screen and the phone's Time Out), the engineer's rough notes in any
+  language become a proper English description in the same box, to
+  check, change and save. Nothing is saved by the assistant. Emails and
+  phone numbers are masked first when masking is on. Shown only when the
+  AI Assistant module is on.
+- **Monthly token cap per company**: each company has its own cap under
+  Maintenance → AI Assistant; the screen shows the company's use and the
+  whole installation's beside it.
+- **Fallback model**: when set, a call that fails at the provider or is
+  declined is tried once more on it; the Usage list shows which model
+  answered.
+
 ### PDPA-001 — Data expiry defaults to five years from consent — pragmatic default (2026-09-15)
 
 - A Company/Individual's **data expiry date** lives in the PDPA & Data

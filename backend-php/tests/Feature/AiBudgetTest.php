@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\AiInteraction;
-use App\Models\AiSetting;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\CompanyModule;
@@ -46,37 +45,37 @@ class AiBudgetTest extends TestCase
 
     public function test_no_cap_set_is_unlimited_the_default_and_backward_compatible(): void
     {
-        $this->assertNull(AiSetting::current()->monthly_token_cap);
         [$company] = $this->licensedCompany();
+        $this->assertNull(AiBudget::capFor($company->id));
         $this->recordUsage($company, 1_000_000, 1_000_000);
 
-        AiBudget::assertWithinCap(); // does not throw
+        AiBudget::assertWithinCap($company->id); // does not throw
         $this->assertTrue(true);
     }
 
     public function test_under_the_cap_proceeds_and_at_or_over_it_is_refused(): void
     {
         [$company] = $this->licensedCompany();
-        AiSetting::current()->fill(['monthly_token_cap' => 1000])->save();
+        $company->forceFill(['ai_monthly_token_cap' => 1000])->save();
         $this->recordUsage($company, 400, 400);
-        AiBudget::assertWithinCap(); // 800 used of 1000: fine
+        AiBudget::assertWithinCap($company->id); // 800 used of 1000: fine
 
         $this->recordUsage($company, 100, 100);
         // 1000 used of 1000: at the cap is already "reached"
         $this->expectException(AiBudgetExceededException::class);
-        AiBudget::assertWithinCap();
+        AiBudget::assertWithinCap($company->id);
     }
 
     public function test_the_boundary_is_the_same_singapore_calendar_month_the_usage_endpoint_reports(): void
     {
         [$company] = $this->licensedCompany();
-        AiSetting::current()->fill(['monthly_token_cap' => 100])->save();
+        $company->forceFill(['ai_monthly_token_cap' => 100])->save();
         $lastMonth = Carbon::now()->startOfMonth()->subDay();
         $this->recordUsage($company, 100, 100, $lastMonth);
 
         // Last month's usage does not count toward this month's cap.
-        $this->assertSame(0, AiBudget::tokensUsedThisMonth());
-        AiBudget::assertWithinCap();
+        $this->assertSame(0, AiBudget::tokensUsedThisMonth($company->id));
+        AiBudget::assertWithinCap($company->id);
         $this->assertTrue(true);
     }
 
@@ -84,11 +83,11 @@ class AiBudgetTest extends TestCase
     {
         [$company, $h] = $this->licensedCompany();
         $incident = Incident::factory()->for($company)->create();
-        AiSetting::current()->fill(['monthly_token_cap' => 10])->save();
+        $company->forceFill(['ai_monthly_token_cap' => 10])->save();
         $this->recordUsage($company, 5, 5);
 
         $this->postJson("/api/ai/incidents/{$incident->id}/triage", [], $h)->assertStatus(422)
-            ->assertJsonFragment(['detail' => "The AI Assistant's monthly token cap (10) has been reached (10 used so far this month) -- no further calls will be made until next month, or the cap is raised under Maintenance -> AI Assistant."]);
+            ->assertJsonFragment(['detail' => "This company's monthly AI token cap (10) has been reached (10 used so far this month) -- no further calls will be made until next month, or the cap is raised under Maintenance -> AI Assistant."]);
         $this->assertCount(0, AiClient::requests());
         $this->assertSame(1, AiInteraction::count(), 'no new interaction row for a capped call');
     }
@@ -96,7 +95,7 @@ class AiBudgetTest extends TestCase
     public function test_staff_chat_is_refused_at_the_cap(): void
     {
         [$company, $h] = $this->licensedCompany();
-        AiSetting::current()->fill(['monthly_token_cap' => 10])->save();
+        $company->forceFill(['ai_monthly_token_cap' => 10])->save();
         $this->recordUsage($company, 10, 0);
 
         $this->postJson('/api/ai/chat', ['messages' => [['role' => 'user', 'content' => 'hi']]], $h)->assertStatus(422);
@@ -106,7 +105,7 @@ class AiBudgetTest extends TestCase
     public function test_test_connection_is_refused_at_the_cap(): void
     {
         [$company, $h] = $this->licensedCompany();
-        AiSetting::current()->fill(['monthly_token_cap' => 10])->save();
+        $company->forceFill(['ai_monthly_token_cap' => 10])->save();
         $this->recordUsage($company, 10, 0);
 
         $this->postJson('/api/ai/settings/test', [], $h)->assertStatus(422);
@@ -127,8 +126,9 @@ class AiBudgetTest extends TestCase
             'hashed_password' => PasswordPolicy::hash('portal123'), 'must_change_password' => false,
         ]);
         $token = $this->postJson('/api/portal/auth/login', ['email' => $contact->email, 'password' => 'portal123'])->json('portal_token');
+        $this->postJson('/api/portal/ai/consent', ['accepted' => true], ['Authorization' => "Bearer {$token}"])->assertOk();
 
-        AiSetting::current()->fill(['monthly_token_cap' => 10])->save();
+        $company->forceFill(['ai_monthly_token_cap' => 10])->save();
         $this->recordUsage($company, 10, 0);
 
         $this->postJson('/api/portal/ai/chat', ['messages' => [['role' => 'user', 'content' => 'hi']]], ['Authorization' => "Bearer {$token}"])
@@ -149,6 +149,28 @@ class AiBudgetTest extends TestCase
         $this->recordUsage($company, 1_000_000, 0);
         AiClient::fake([['ok' => true, 'greeting' => 'hi']]);
         $this->postJson('/api/ai/settings/test', [], $h)->assertOk();
+    }
+
+    public function test_each_company_counts_against_its_own_cap_and_settings_show_the_installation_total(): void
+    {
+        [$company, $h] = $this->licensedCompany();
+        [$other] = $this->licensedCompany();
+        $company->forceFill(['ai_monthly_token_cap' => 1000])->save();
+        $this->recordUsage($other, 5000, 0); // another company's use does not count here
+        $this->recordUsage($company, 300, 0);
+        AiBudget::assertWithinCap($company->id);
+        AiBudget::assertWithinCap($other->id); // no cap on the other company
+
+        $this->getJson('/api/ai/settings', $h)->assertOk()
+            ->assertJsonPath('monthly_token_cap', 1000)
+            ->assertJsonPath('monthly_tokens_used', 300)
+            ->assertJsonPath('install_monthly_tokens_used', 5300);
+
+        $this->patchJson('/api/ai/settings', ['monthly_token_cap' => 250], $h)->assertOk();
+        $this->assertSame(250, $company->fresh()->ai_monthly_token_cap);
+        $this->assertNull($other->fresh()->ai_monthly_token_cap, 'setting one company\'s cap leaves the others alone');
+        $this->expectException(AiBudgetExceededException::class);
+        AiBudget::assertWithinCap($company->id);
     }
 
     // ---- helpers ----------------------------------------------------

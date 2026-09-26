@@ -897,10 +897,14 @@ export interface AiSettings {
   /** The assistant's name and face (slice 2). Avatar is a data URL or null. */
   assistant_name: string
   assistant_avatar: string | null
-  /** Monthly token spending cap (decision 12.2), or null for unlimited. Install-wide, not per company. */
+  /** Model tried once when the main one fails or declines (Backlog 2), or null for none. */
+  fallback_model: string | null
+  /** The signed-in company's monthly token cap (decision 12.2; per company since 2026-09-26), or null for unlimited. */
   monthly_token_cap: number | null
-  /** Install-wide tokens used so far this calendar month (Asia/Singapore) -- what the cap above is checked against. */
+  /** The company's tokens used so far this calendar month (Asia/Singapore) -- what the cap above is checked against. */
   monthly_tokens_used: number
+  /** The whole installation's tokens this month, shown beside the company's. */
+  install_monthly_tokens_used: number
   api_key_set: boolean
   api_key_from_env: boolean
   updated_at: string | null
@@ -3393,9 +3397,15 @@ export const api = {
       assistant_name: string
       assistant_avatar: string | null
       monthly_token_cap: number | null
+      fallback_model: string | null
     }>,
   ) =>
     request<AiSettings>('/ai/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
+  draftWorkDescription: (notes: string, job_order_id?: string | null) =>
+    request<{ description: string | null; refused: boolean; refusal_reason: string | null; model: string }>(
+      '/ai/draft-work-description',
+      { method: 'POST', body: JSON.stringify({ notes, job_order_id: job_order_id ?? null }) },
+    ),
   testAiConnection: () =>
     request<{ ok: boolean; model: string; greeting: string | null; input_tokens: number; output_tokens: number }>('/ai/settings/test', {
       method: 'POST',

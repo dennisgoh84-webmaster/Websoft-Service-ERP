@@ -197,6 +197,8 @@ export interface PortalPayment {
 export interface PortalAiPersona {
   name: string
   avatar: string | null
+  /** Whether this customer has ticked the one-time AI declaration (2026-09-26). */
+  consent_given: boolean
 }
 
 export interface PortalAiChatMessage {
@@ -232,6 +234,7 @@ export const portalApi = {
   invoices: () => request<PortalInvoice[]>('/invoices'),
   payments: () => request<PortalPayment[]>('/payments'),
   aiPersona: () => request<PortalAiPersona>('/ai/persona'),
+  aiConsent: () => request<{ consent_given: boolean }>('/ai/consent', { method: 'POST', body: JSON.stringify({ accepted: true }) }),
   aiChat: (messages: PortalAiChatMessage[], context?: { type: PortalAiContextType; id?: string | null } | null) =>
     request<PortalAiChatReply>('/ai/chat', { method: 'POST', body: JSON.stringify({ messages, context: context ?? null }) }),
 }

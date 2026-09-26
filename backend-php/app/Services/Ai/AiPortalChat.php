@@ -40,7 +40,7 @@ class AiPortalChat
     {
         $history = AiChat::validateHistory($history);
         $settings = AiSetting::current();
-        AiBudget::assertWithinCap($settings);
+        AiBudget::assertWithinCap($portalUser->company_id);
         $redact = (bool) $settings->redact_personal_data;
 
         $interaction = new AiInteraction([
