@@ -109,14 +109,27 @@ explaining the reason first (see Development Rules below).
 
 ## Working with Dennis
 
-- **Every question to Dennis is a pick-list, never free text** —
-  whenever a decision is his, ask it with the multiple-choice question
-  tool (`AskUserQuestion`): 2–4 short options, the recommended one
-  first and marked "(Recommended)", each with a one-line description
-  of what it means; he can still type "Other". Several open decisions
-  go in one call (up to 4 questions). Do not end a reply with questions
-  he has to answer by retyping. Set by Dennis 2026-09-26: "don't keep
-  making me repeat".
+- **Every question to Dennis is a choice to pick, never free text**
+  (Dennis, 2026-09-26: "don't keep making me repeat"). Each question has
+  2–4 short options, the recommended one first and marked
+  "(Recommended)", each with a one-line description of what it means,
+  and room for his own answer. Do not end a reply with questions he has
+  to answer by retyping.
+- **Several questions go on one decision page, not rounds of pop-ups**
+  (Dennis, 2026-09-26: "every time u ask me is 4 questions only, but …
+  behind got many many"). Publish all the open questions together as
+  one Artifact page with the recommendations already selected. He
+  changes only what he disagrees with and presses Submit once, and his
+  answers are read back from the page. The page is **Websoft
+  Decisions**, https://claude.ai/artifact/Rk2LsEp9qDcqggjqstJeTv (private
+  to Dennis): new questions are added as documents in its `questions`
+  collection (with `ArtifactData`: area, ref, title, context, options
+  with key / label / desc, recommended, order, status `open`), his
+  answers arrive in `answers/<question id>`, and a question is set to
+  `closed` once built. Always reuse this page; never start a new one.
+  The multiple-choice tool
+  (`AskUserQuestion`, at most 4 questions) is only for one to four quick
+  questions that block the work in hand.
 - When he answers, build it, record it where the rule lives
   (business-requirements.md / open-business-decisions.md), and don't
   ask the same thing again.

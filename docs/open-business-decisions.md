@@ -1923,6 +1923,24 @@ can supply: DBS / UOB and insurer page sources, the Odoo / ZSOFT exports,
 an HTTPS address, Twilio credentials, the advert videos, and values to
 key in (commission rate, per-customer limits, accounting periods).
 
+## 50. Sales / Service batch: questions on the decision page (raised 2026-09-26)
+
+From 2026-09-26, open questions go on one page, **Websoft Decisions**
+(https://claude.ai/artifact/Rk2LsEp9qDcqggjqstJeTv), with the
+recommended answer already selected. Dennis submits them together.
+Raised there for the Sales / Service batch:
+
+- 11.2: when the Sales Invoice for a quotation's product lines is
+  raised, and which lines count as product lines;
+- SRV-019: how the daily overdue-approval email is sent, and at what
+  time;
+- 12.2: who sees which salesperson cards, and whose card a quotation or
+  invoice counts on;
+- 12.1: where existing Software Tasks land in the new statuses, and who
+  may mark one Released.
+
+The answers are recorded here once submitted.
+
 ## How to use this document
 
 - Do not start detailed schema or workflow design for an area until the
