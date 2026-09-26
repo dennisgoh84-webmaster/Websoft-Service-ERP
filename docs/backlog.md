@@ -302,6 +302,11 @@ shipped and when.
   - [ ] Accepted quotation: product / stock lines to a Sales Invoice, hours to a contract.
   - [ ] Overdue Service Record approval: daily email to the approvers.
   - [ ] Full multi-currency on sales and purchases (original + SGD, exchange gain/loss).
+  - [ ] Data Migration: bring across everything since a cut-off date picked at run time (10.1).
+  - [ ] AI Assistant: Service Record drafting from the technician's notes.
+  - [ ] Email Inbox: the server reads the helpdesk mailbox over IMAP (no HTTPS needed), with Log as Incident / Convert to Job Order.
+  - [ ] Tax Types: a Form 5 box setting per sales tax code, used by the GST Calculation (47.4).
+  - [ ] Software Task statuses (Open → Programming → For Testing → Tested → Released) and a per-programmer Dev dashboard.
 
 - [x] **Prospect / Leads + Sales Supervisor / Sales Staff roles** --
   built 2026-09-26 (SALES-009 / SALES-010 in business-requirements.md).

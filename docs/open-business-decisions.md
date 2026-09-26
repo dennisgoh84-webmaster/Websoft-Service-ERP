@@ -1887,6 +1887,21 @@ decided; the build is tracked in backlog.md.
 | 9.1 / SRV-019 | Service Record unapproved a week after submission | **Flag + email the approvers** once a day while any are overdue. |
 | 9.2 / SRV-020 | Billable Job Order approval raises an invoice? | **Keep as is**: bill by milestone or a hand-raised Sales Invoice. Closed. |
 | 31.1 | Bank Book lines keyed directly | Dennis (Other): **"Should not allow them to key direct, have to key in through receipt or payment."** Bank charges, interest etc. come in as a Receipt or Payment, which reach both the Bank Book and the GL; direct keying in the Bank Book is removed. |
+| 5.4 / 5.5 | Hardware RMA and warranty | **Close both.** Any case goes through Incidents and Job Orders. |
+| 10.1 | Which Odoo / ZSOFT history goes live | **Everything since a date**: all records from a cut-off date Dennis picks come across. The date is chosen when the migration is run. |
+| Planned-work #12 | Next AI feature | **Service Record drafting**: the AI drafts the work description from the technician's notes, for them to check (AI Assistant add-on only). |
+| Email add-ins | Which goes live first | Dennis (Other): **"I need without https first… not ready."** Both add-ins need a public HTTPS address; Google and Microsoft require it, so there is no setting to turn it off. **Without HTTPS: the server reads the mailbox.** The system signs in to the helpdesk mailbox over IMAP, which needs no HTTPS, and lists new emails on an Email Inbox screen. Staff press Log as Incident or Convert to Job Order there. The add-ins are kept for when HTTPS is ready. |
+| 42.3 / 42.5 / 44 | AI defaults | **Confirmed as built.** The answer is stored but not the prompt; chat is read-only with at most 8 look-ups; one monthly token cap for the installation. |
+| 12.1 / 12.3 | Software Task and Dev dashboard | **Add statuses and a dashboard.** Software Task goes Open → Programming → For Testing → Tested → Released, with per-programmer cards for open, overdue and awaiting-test tasks. Job Schedule was not chosen. |
+| #43 | Staff AI consent wording | **Accepted as is.** |
+| 47.2 | Migrated invoices in the GST Calculation | **Keep them out.** They were filed from the old system. Confirmed as built. |
+| 47.4 | Sales tax codes other than SR / ZR / ES / OS | **Pick a Form 5 box**: each tax code in Tax Types gets a Form 5 box setting, and the GST Calculation places every code where it says. |
+| 46.3 | Who sees a prospect | **Keep as built.** Sales Staff see only prospects they are salesperson on or raised. Confirmed. |
+| 27.6 | PDPA data expiry | **Flag only.** Staff archive by hand. Confirmed. |
+| 13.3 | Contracts Coverage filter | **Active any time in the period.** Confirmed as built. |
+| 19.3 | Urgent / after-hours multiplier | **Minutes only.** The excess rate stays the same. Confirmed. |
+| 4b.6 | Sales Invoice number format | **Keep INV-YYYY-0001.** Closed. |
+| 26.3 | Reference sub-codes in the GL | Dennis (Other): **"Reference Monitoring already linked to COA."** The Reference Monitor module (#26) already holds the sub-codes under their Chart of Accounts rows, so nothing more is needed. Closed. |
 
 ## How to use this document
 
