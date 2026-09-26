@@ -393,8 +393,19 @@ in [open-business-decisions.md](open-business-decisions.md).
   approval. **Settled 2026-09-26:** the limit is set per customer, on
   its Company / Individual file ("Credit Note limit should be set in the
   company/individual file"); with none set, the owner approves every
-  credit note. Stored now; credit notes themselves are not built yet, so
-  it applies once they are.
+  credit note.
+- **Built 2026-09-26.** A credit note is raised from its row on the
+  Sales Invoice page, with a reason and a net amount; GST follows the
+  invoice's own tax code and rate. It waits on Accounts → Credit Note
+  until someone allowed approves or rejects it; either way it is kept.
+  Approving issues it: a CN number (issued ones number without gaps),
+  the invoice's ledger entry posted in reverse (Dr revenue, Dr 2100 GST
+  output / Cr 1100 AR, under the Sales Invoice period locks), the total
+  taken off what the invoice owes, and it counts in the GST Calculation
+  as negative output tax in its tax code's box. An invoice credited in
+  full reads "Credited". Word and PDF print, CSV / Excel export.
+  Defaults taken are in
+  [open-business-decisions.md #52](open-business-decisions.md#52-credit-note-defaults-taken-raised-and-built-2026-09-26).
 - **Separate from the customer's credit limit** (Dennis, 2026-09-26:
   "2 separate matter and settings, all in company/individual file"):
   the **credit limit** is the most a customer may owe at once, also on

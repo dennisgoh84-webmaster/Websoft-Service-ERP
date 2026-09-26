@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Exceptions\ARRuleViolation;
 use App\Exceptions\PostingError;
 use App\Models\CompanyIndividual;
+use App\Models\CreditNote;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentAllocation;
@@ -121,12 +122,18 @@ class AccountsReceivableService
         $paid = PaymentAllocation::where('invoice_id', $invoice->id)->get()
             ->reduce(fn (Money $carry, PaymentAllocation $a) => $carry->plus(Money::of($a->amount_sgd)), Money::of($invoice->pre_migration_paid_sgd ?? 0));
         $invoice->amount_paid_sgd = $paid->toString();
+        // Issued credit notes take their total off too (BILL-003).
+        $credited = CreditNote::where('invoice_id', $invoice->id)->where('status', CreditNote::STATUS_ISSUED)->get()
+            ->reduce(fn (Money $carry, CreditNote $c) => $carry->plus(Money::of($c->total_amount_sgd)), Money::of(0));
+        $invoice->credited_sgd = $credited->toString();
 
         $total = Money::of($invoice->total_amount_sgd);
-        if ($paid->toFloat() <= 0) {
+        $settled = $paid->plus($credited);
+        if ($settled->toFloat() <= 0) {
             $invoice->status = Invoice::STATUS_OUTSTANDING;
-        } elseif ($paid->toFloat() >= $total->toFloat()) {
-            $invoice->status = Invoice::STATUS_PAID;
+        } elseif ($settled->toFloat() >= $total->toFloat()) {
+            // Fully credited with nothing paid reads "credited", not "paid".
+            $invoice->status = $paid->toFloat() > 0 ? Invoice::STATUS_PAID : Invoice::STATUS_CREDITED;
         } else {
             $invoice->status = Invoice::STATUS_PARTIALLY_PAID;
         }
@@ -235,7 +242,8 @@ class AccountsReceivableService
 
         $invoices = Invoice::where('company_id', $companyId)
             ->where('customer_id', $customer->id)
-            ->where('status', '!=', Invoice::STATUS_PAID)
+            // Paid, or credited in full (BILL-003): nothing left to show.
+            ->whereNotIn('status', [Invoice::STATUS_PAID, Invoice::STATUS_CREDITED])
             ->orderBy('issued_at')
             ->get();
 
@@ -251,6 +259,7 @@ class AccountsReceivableService
                 'due_date' => optional($invoice->due_date)->toDateString(),
                 'total_amount_sgd' => (float) $invoice->total_amount_sgd,
                 'amount_paid_sgd' => (float) $invoice->amount_paid_sgd,
+                'credited_sgd' => (float) $invoice->credited_sgd,
                 'outstanding_sgd' => $outstanding->toFloat(),
                 'status' => $invoice->status,
                 'is_disputed' => (bool) $invoice->is_disputed,

@@ -38,6 +38,7 @@ app treats it exactly as it treats a real phone).
    | Quotation | a catalog line and a free-text line, GST, then Submit → Approve → Send → Accept into a Service Support and an Annual contract |
    | Sales Invoice | a catalog line, GST, due date from the 30-day terms, posted to the GL |
    | Receipt | recorded, allocated to the invoice, invoice paid |
+   | Credit Note | raised from the contract's annual invoice row (100 + 9% GST); changes nothing while pending; the owner approves (no limit set, BILL-003); issued with a CN number, posted to the GL, the invoice owes 109 less |
    | Prospect | added, then a meeting logged on it |
    | Software Task | programmer, tester, target date, hours |
    | Purchase Order within the limit | 200 (218 with GST) against the 500 limit: a draft anyone with authority approves (PUR-001) |

@@ -44,6 +44,8 @@ import DataMigrationModulesPage from './pages/DataMigrationModulesPage'
 import ExcessReviewPage from './pages/ExcessReviewPage'
 import GroupsPage from './pages/GroupsPage'
 import InvoicePrintPage from './pages/InvoicePrintPage'
+import CreditNotesPage from './pages/CreditNotesPage'
+import CreditNotePrintPage from './pages/CreditNotePrintPage'
 import InvoicesPage from './pages/InvoicesPage'
 import JobOrderDetailPage from './pages/JobOrderDetailPage'
 import JobOrderPrintPage from './pages/JobOrderPrintPage'
@@ -172,6 +174,8 @@ function AppRoutes() {
         <Route path="/quotations/:id/print" element={<QuotationPrintPage />} />
         <Route path="/invoices" element={<InvoicesPage />} />
         <Route path="/invoices/:id/print" element={<InvoicePrintPage />} />
+        <Route path="/credit-notes" element={<CreditNotesPage />} />
+        <Route path="/credit-notes/:id/print" element={<CreditNotePrintPage />} />
         <Route path="/receipts" element={<ReceiptsPage />} />
         <Route path="/receipts/:id/print" element={<ReceiptPrintPage />} />
         <Route path="/purchase-orders" element={<PurchaseOrdersPage />} />

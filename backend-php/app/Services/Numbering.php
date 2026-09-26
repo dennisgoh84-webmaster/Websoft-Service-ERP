@@ -39,6 +39,8 @@ class Numbering
         'migration_batch' => 'MIG',
         // Prospect / Leads.
         'prospect' => 'PRS',
+        // Credit notes (BILL-003), numbered when issued.
+        'credit_note' => 'CN',
     ];
 
     /** Allocate the next number for this company/kind/year. */

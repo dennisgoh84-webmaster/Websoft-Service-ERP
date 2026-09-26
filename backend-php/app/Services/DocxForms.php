@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Company;
 use App\Models\CompanyIndividual;
+use App\Models\CreditNote;
 use App\Models\Invoice;
 use App\Models\JobOrder;
 use App\Models\Payment;
@@ -281,6 +282,59 @@ class DocxForms
             ['Subtotal', self::money($invoice->amount_sgd)],
             ["Tax {$invoice->gst_rate}% ({$invoice->tax_code})", self::money($invoice->gst_amount_sgd)],
             ['Grand Total (SGD)', self::money($invoice->total_amount_sgd)],
+        ]);
+
+        return self::toBytes($doc);
+    }
+
+    /**
+     * A credit note (BILL-003), on the same letterhead as the Tax Invoice
+     * it credits, naming that invoice and the reason.
+     */
+    public static function creditNoteToDocx(CreditNote $note, ?CompanyIndividual $customer, ?Company $company): string
+    {
+        [$doc, $section] = self::newDocument();
+
+        $section->addText((string) $company?->name, ['bold' => true]);
+        foreach ([$company?->address, $company?->phone ? "Tel: {$company->phone}" : null, $company?->website,
+            $company?->uen ? "Business Reg# {$company->uen}" : null,
+            $company?->gst_registration_no ? "GST Reg# {$company->gst_registration_no}" : null] as $line) {
+            if ($line) {
+                $section->addText($line);
+            }
+        }
+
+        self::addTitle($section, 'CREDIT NOTE');
+
+        $meta = $section->addTextRun();
+        self::addRun($meta, "{$note->credit_note_number}\n", ['bold' => true]);
+        self::addRun($meta, 'Issued: '.self::docDate($note->issued_at)."\n");
+        self::addRun($meta, 'Against Tax Invoice: '.($note->invoice?->invoice_number ?? '').' dated '.self::docDate($note->invoice?->issued_at)."\n");
+
+        $section->addText('Credit To', ['italic' => true]);
+        $to = $section->addTextRun();
+        self::addRun($to, ($customer?->name ?? '')."\n", ['bold' => true]);
+        if ($customer?->uen) {
+            self::addRun($to, "UEN: {$customer->uen}\n");
+        }
+        $address = self::addressLine($customer);
+        if ($address !== '') {
+            self::addRun($to, $address);
+        }
+
+        $table = $section->addTable(self::GRID_STYLE);
+        $table->addRow();
+        self::cell($table, 8000, 'Reason', true);
+        self::cell($table, 2000, 'Amount ($)', true);
+        $table->addRow();
+        self::cell($table, 8000, (string) $note->reason);
+        self::cell($table, 2000, self::money($note->amount_sgd));
+
+        $section->addTextBreak();
+        self::addTotalsTable($section, [
+            ['Subtotal', self::money($note->amount_sgd)],
+            ["Tax {$note->gst_rate}% ({$note->tax_code})", self::money($note->gst_amount_sgd)],
+            ['Total Credit (SGD)', self::money($note->total_amount_sgd)],
         ]);
 
         return self::toBytes($doc);
@@ -668,7 +722,8 @@ class DocxForms
         self::cell($table, 1900, 'Outstanding ($)', true);
         foreach ($statement['lines'] as $line) {
             $table->addRow();
-            self::cell($table, 2400, $line['invoice_number'].($line['is_disputed'] ? ' (disputed)' : ''));
+            self::cell($table, 2400, $line['invoice_number'].($line['is_disputed'] ? ' (disputed)' : '')
+                .(($line['credited_sgd'] ?? 0) > 0 ? ' (credited '.self::money($line['credited_sgd']).')' : ''));
             self::cell($table, 1600, self::docDate($line['issued_on']));
             self::cell($table, 1600, $line['due_date'] !== null ? self::docDate($line['due_date']) : '-');
             self::cell($table, 1700, self::money($line['total_amount_sgd']));

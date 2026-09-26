@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\ApiException;
 use App\Models\AccountingPeriod;
+use App\Models\CreditNote;
 use App\Models\GstReturn;
 use App\Models\GstReturnLine;
 use App\Models\Invoice;
@@ -86,7 +87,7 @@ class GstReturns
         self::assertNotSubmitted($period);
 
         return DB::transaction(function () use ($period, $actor) {
-            $lines = [...self::outputLines($period), ...self::inputLines($period)];
+            $lines = [...self::outputLines($period), ...self::creditNoteLines($period), ...self::inputLines($period)];
 
             $sum = function (string $direction, ?array $boxes, string $field) use ($lines): Money {
                 $total = Money::of(0);
@@ -279,6 +280,44 @@ class GstReturns
                     'box' => self::BOX_BY_TAX_CODE[$code] ?? ($gst->toFloat() > 0 ? '1' : 'out_of_scope'),
                     'net_sgd' => Money::of($i->amount_sgd ?? 0)->toString(),
                     'gst_sgd' => $gst->toString(),
+                ];
+            })->all();
+    }
+
+    /**
+     * Credit notes issued in the period (BILL-003; #49: "counts in the GST
+     * Calculation"): each takes its amounts off the box its invoice's tax
+     * code decides, in the month the credit note is issued -- including one
+     * on an invoice brought in by Data Migration, since the credit note
+     * itself is new here.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function creditNoteLines(AccountingPeriod $period): array
+    {
+        return CreditNote::with(['customer', 'invoice'])
+            ->where('company_id', $period->company_id)
+            ->where('status', CreditNote::STATUS_ISSUED)
+            ->whereDate('issued_at', '>=', $period->period_start->toDateString())
+            ->whereDate('issued_at', '<=', $period->period_end->toDateString())
+            ->orderBy('issued_at')->orderBy('credit_note_number')
+            ->get()
+            ->map(function (CreditNote $n) {
+                $gst = Money::of($n->gst_amount_sgd ?? 0);
+                $code = strtoupper((string) $n->tax_code);
+
+                return [
+                    'direction' => GstReturnLine::OUTPUT,
+                    'document_type' => 'credit_note',
+                    'document_id' => $n->id,
+                    'document_number' => "{$n->credit_note_number} (on {$n->invoice?->invoice_number})",
+                    'document_date' => Carbon::parse($n->issued_at)->setTimezone(config('app.timezone'))->toDateString(),
+                    'party_id' => $n->customer_id,
+                    'party_name' => $n->customer?->name,
+                    'tax_code' => $n->tax_code,
+                    'box' => self::BOX_BY_TAX_CODE[$code] ?? ($gst->toFloat() > 0 ? '1' : 'out_of_scope'),
+                    'net_sgd' => Money::of(0)->minus(Money::of($n->amount_sgd))->toString(),
+                    'gst_sgd' => Money::of(0)->minus($gst)->toString(),
                 ];
             })->all();
     }

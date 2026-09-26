@@ -536,3 +536,19 @@ the meantime are called out in code comments, not silently assumed.
     stay.
   - Migration `2026_09_30_003800`; a database check keeps exactly one
     of Company / Individual or account on each voucher.
+- **Credit Note document** (BILL-003, #49).
+  - Raised from its row on the Sales Invoice page: a net amount and a
+    reason; GST at the invoice's own tax code and rate.
+  - Approved on Accounts → Credit Note by Finance, the Sales Manager
+    or the owner within the Company / Individual's credit note limit;
+    above it, or with none set, by the owner only. Rejected or
+    withdrawn ones are kept.
+  - Approving issues it: a CN number, the invoice's ledger entry
+    posted in reverse, and the total off what the invoice owes
+    (`invoices.credited_sgd`; fully credited reads "Credited"). It
+    counts in the GST Calculation as negative output tax, and shows on
+    the customer statement.
+  - Prospect billed, the salesperson cards and Top 10 billing
+    customers count invoices net of issued credit notes.
+  - Word / PDF print, CSV / Excel export, a self-test flow.
+  - Migration `2026_09_30_004000`. Defaults taken are #52.

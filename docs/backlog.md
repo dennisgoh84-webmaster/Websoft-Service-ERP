@@ -298,7 +298,7 @@ shipped and when.
 - [ ] **Answered 2026-09-26, to build** ([open-business-decisions.md #49](open-business-decisions.md#49-outstanding-questions-answered-by-pick-list-2026-09-26)):
   - [x] Self-testing program (every screen, desktop and phone) plus the nightly report on the test server. **Built 2026-09-26** ([self-test.md](self-test.md)). To switch the nightly run on: `sudo ./deploy/install-selftest.sh <email>` on the test server (the email goes out through Maintenance → System Email). Its first runs found and fixed six bugs, listed in self-test.md.
   - [x] Bank Book: no direct keying; bank charges and interest go through Receipt / Payment. **Built 2026-09-26** (ACC-005): an "Other" Receipt / Payment Voucher against a GL account, banked with the usual Bank step. Open: whether bank interest counts in the GST return (decision page, #51).
-  - [ ] Credit Note document (GST and GL reversal, owner approval above the customer's limit).
+  - [x] Credit Note document (GST and GL reversal, owner approval above the customer's limit). **Built 2026-09-26** (BILL-003): raised from the invoice row, approved on Accounts → Credit Note, printable. Open: crediting a paid invoice, and returned goods (decision page, #52).
   - [x] Accepted quotation: product lines become a Sales Invoice issued on acceptance, and hours go to a contract. Built 2026-09-26 (SALES-011).
   - [x] Overdue Service Record approval: daily 8:45 email to the approvers, sent by the new server `scheduler` service. Built 2026-09-26 (SRV-019).
   - [ ] Full multi-currency on sales and purchases (original + SGD, exchange gain/loss).
@@ -353,7 +353,7 @@ shipped and when.
   bills, POs, payment vouchers and the goods notes gained a date field.
 - [x] **Accounting answers built 2026-09-26** -- PO and credit note
   approval limits now live on each Company / Individual file (4.4, 2.7;
-  credit notes themselves still unbuilt); a bill for a different amount
+  credit notes built the same day, BILL-003); a bill for a different amount
   than its PO is approved and paid on the billed amount, with a Match
   again action for bills flagged before (4.5); revenue on invoice, no
   deferral (4b.3); stock movements never post to the GL (month-end

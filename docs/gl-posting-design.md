@@ -155,8 +155,11 @@ allowed because the prior one is marked reversed).
   journal voucher dated the write-off day (`Posting::postWriteOff`).
 - **Stock movements** — confirmed 2026-09-26 not to post; Finance makes
   a month-end Journal Voucher instead.
-- **Credit notes** — no model exists yet (BILL-003 is a rule without a
-  document). Out of scope.
+- ~~**Credit notes**~~ — **built 2026-09-26** (BILL-003): issuing one
+  posts its invoice's entry in reverse -- Dr the invoice type's revenue
+  account, Dr 2100 GST output / Cr 1100 AR -- dated the day it is
+  issued, source `credit_note`, voucher number the CN number, under the
+  Sales Invoice period locks (`Posting::postCreditNote`).
 - **Project / hardware invoice types** — accounts mapped, no issuing
   path yet.
 - **Bank charges / FX** — single-currency SGD only; `BankAccount.currency_code`

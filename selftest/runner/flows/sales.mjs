@@ -1,7 +1,8 @@
 // Key-in flows: sales and service -- the catalog, a contract through to
 // its annual invoice, a job order and its service record, an incident,
 // a quotation through to acceptance, a sales invoice and the receipt
-// that settles it, a prospect with an activity, and a software task.
+// that settles it, a credit note on the annual invoice, a prospect with
+// an activity, and a software task.
 
 import { apiGet, expectStored, keyIn, rows, selectByText, sgDate, sgDateOf, sleep } from '../lib.mjs'
 import { button, card, open, submit, tag } from './helpers.mjs'
@@ -266,6 +267,48 @@ export const receipt = {
     const inv = await apiGet(page, `/invoices/${shared.invoice.id}`)
     expectStored('Invoice outstanding', money(inv.outstanding_sgd), '0.00')
     expectStored('Invoice status', inv.status, 'paid')
+  },
+}
+
+export const creditNote = {
+  name: 'Credit Note: raise on the annual invoice, owner approves, GL reversed, invoice owes less',
+  screen: '/credit-notes',
+  needs: ['contract'],
+  async run({ page, profileName, shared }) {
+    const t = tag(profileName)
+    const inv = rows(await apiGet(page, `/invoices?contract_id=${shared.contract.id}`)).find((i) => i.invoice_type === 'contract_annual')
+    if (!inv) throw new Error('The contract has no annual invoice to credit.')
+    await open(page, '/invoices')
+    await button(page.locator('tr', { hasText: inv.invoice_number }), 'Credit note').click()
+    const f = page.locator('form.credit-note-form')
+    await keyIn(f, 'Amount to credit, net of GST (SGD)', '100')
+    await keyIn(f, 'Reason', `Goodwill for a late visit ${t}`)
+    const created = await submit(page, button(f, 'Raise credit note'), '/api/credit-notes')
+
+    let cn = await apiGet(page, `/credit-notes/${created.id}`)
+    expectStored('Status', cn.status, 'pending_approval')
+    expectStored('Against invoice', cn.invoice_number, inv.invoice_number)
+    expectStored('Net', money(cn.amount_sgd), '100.00')
+    expectStored('GST 9%', money(cn.gst_amount_sgd), '9.00')
+    expectStored('Total', money(cn.total_amount_sgd), '109.00')
+    expectStored('Reason', cn.reason, `Goodwill for a late visit ${t}`)
+    expectStored('Owner approves (no credit note limit set)', cn.needs_owner, 'true')
+    expectStored('Number before approval', cn.credit_note_number, '')
+    let after = await apiGet(page, `/invoices/${inv.id}`)
+    expectStored('Invoice outstanding while pending', money(after.outstanding_sgd), money(inv.outstanding_sgd))
+
+    await open(page, '/credit-notes')
+    const row = page.locator('tr', { hasText: `Goodwill for a late visit ${t}` })
+    await submit(page, button(row, 'Approve'), `/api/credit-notes/${cn.id}/approve`)
+    cn = await apiGet(page, `/credit-notes/${cn.id}`)
+    expectStored('Status after Approve', cn.status, 'issued')
+    if (!/^CN/.test(cn.credit_note_number ?? '')) throw new Error(`Issued credit note number "${cn.credit_note_number}" does not start with CN.`)
+    expectStored('Issued date', sgDateOf(cn.issued_at), sgDate(0).iso)
+    expectStored('Posted to the General Ledger', cn.gl_status, 'posted')
+    after = await apiGet(page, `/invoices/${inv.id}`)
+    expectStored('Invoice credited', money(after.credited_sgd), '109.00')
+    expectStored('Invoice outstanding', money(after.outstanding_sgd), money(inv.outstanding_sgd - 109))
+    expectStored('Invoice status', after.status, 'partially_paid')
   },
 }
 

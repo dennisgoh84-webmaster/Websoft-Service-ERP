@@ -22,6 +22,7 @@ const RECORD_FOR = {
   '/bank-accounts/:id': '/bank-accounts',
   '/company-individuals/:id': '/company-individuals',
   '/contracts/:id': '/contracts',
+  '/credit-notes/:id/print': '/credit-notes?status=issued',
   '/invoices/:id/print': '/invoices',
   '/job-orders/:id': '/job-orders',
   '/job-orders/:id/print': '/job-orders',

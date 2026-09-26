@@ -31,6 +31,7 @@ require __DIR__.'/api/excess_usage.php';
 require __DIR__.'/api/incidents.php';
 require __DIR__.'/api/email_inbox.php';
 require __DIR__.'/api/invoices.php';
+require __DIR__.'/api/credit_notes.php';
 require __DIR__.'/api/accounts_receivable.php';
 require __DIR__.'/api/payables.php';
 require __DIR__.'/api/accounts.php';

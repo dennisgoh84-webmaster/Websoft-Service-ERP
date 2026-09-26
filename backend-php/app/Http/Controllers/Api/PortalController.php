@@ -177,6 +177,8 @@ class PortalController extends Controller
             'gst_amount_sgd' => (float) $inv->gst_amount_sgd,
             'total_amount_sgd' => (float) $inv->total_amount_sgd,
             'amount_paid_sgd' => (float) $inv->amount_paid_sgd,
+            // Taken off by issued credit notes (BILL-003).
+            'credited_sgd' => (float) $inv->credited_sgd,
             'outstanding_sgd' => $inv->outstandingSgd()->toFloat(),
             'status' => $inv->status,
             'due_date' => optional($inv->due_date)->toDateString(),

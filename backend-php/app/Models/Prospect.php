@@ -134,7 +134,8 @@ class Prospect extends Model
         $paid = Money::of(0);
         $outstanding = Money::of(0);
         foreach ($this->invoices()->get() as $invoice) {
-            $billed = $billed->plus(Money::of($invoice->total_amount_sgd ?? 0));
+            // Net of issued credit notes (BILL-003): what was credited was never really billed.
+            $billed = $billed->plus(Money::of($invoice->total_amount_sgd ?? 0))->minus(Money::of($invoice->credited_sgd ?? 0));
             $paid = $paid->plus(Money::of($invoice->amount_paid_sgd ?? 0));
             $outstanding = $outstanding->plus($invoice->outstandingSgd());
         }

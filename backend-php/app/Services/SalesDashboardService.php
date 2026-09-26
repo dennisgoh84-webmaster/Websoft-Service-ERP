@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Company;
 use App\Models\CompanyIndividual;
+use App\Models\CreditNote;
 use App\Models\Invoice;
 use App\Models\Prospect;
 use App\Models\Quotation;
@@ -144,14 +145,16 @@ class SalesDashboardService
     /**
      * "Top 10 Sales Billing Customer for this Financial Year" -- ranked
      * by total invoiced revenue NET OF GST (Invoice::amount_sgd, not
-     * total_amount_sgd, which includes GST).
+     * total_amount_sgd, which includes GST), less the net of any credit
+     * notes issued on them (BILL-003).
      *
      * @return Collection<int, array{customer_id: string, customer_name: string, invoice_count: int, net_revenue_sgd: float}>
      */
     public static function topBillingCustomers(string $companyId, ?int $year = null, int $limit = 10): Collection
     {
         ['start' => $start, 'end' => $end] = self::financialYearRange($companyId, $year);
-        $invoices = Invoice::where('company_id', $companyId)
+        $invoices = Invoice::with(['creditNotes' => fn ($q) => $q->where('status', CreditNote::STATUS_ISSUED)])
+            ->where('company_id', $companyId)
             ->whereBetween('issued_at', [$start, $end])
             ->get();
         $customerNames = CompanyIndividual::where('company_id', $companyId)->pluck('name', 'id');
@@ -161,7 +164,7 @@ class SalesDashboardService
                 'customer_id' => $customerId,
                 'customer_name' => $customerNames->get($customerId, '(unknown)'),
                 'invoice_count' => $group->count(),
-                'net_revenue_sgd' => round((float) $group->sum(fn (Invoice $i) => (float) $i->amount_sgd), 2),
+                'net_revenue_sgd' => round((float) $group->sum(fn (Invoice $i) => (float) $i->amount_sgd - (float) $i->creditNotes->sum('amount_sgd')), 2),
             ];
         })->values();
 
@@ -287,7 +290,7 @@ class SalesDashboardService
                 ->where('invoices.company_id', $companyId)
                 ->whereBetween('invoices.issued_at', [$pFrom, $pTo])
                 ->when(! $all, fn ($q) => $q->where('prospects.salesperson_user_id', $viewer->id))
-                ->selectRaw('invoices.prospect_id is null as no_prospect, prospects.salesperson_user_id, sum(invoices.total_amount_sgd) as billed, sum(invoices.amount_paid_sgd) as paid')
+                ->selectRaw('invoices.prospect_id is null as no_prospect, prospects.salesperson_user_id, sum(invoices.total_amount_sgd - invoices.credited_sgd) as billed, sum(invoices.amount_paid_sgd) as paid')
                 ->groupByRaw('invoices.prospect_id is null, prospects.salesperson_user_id')->get();
             foreach ($billed as $row) {
                 $k = $card($row->no_prospect ? 'no_prospect' : $key($row->salesperson_user_id));

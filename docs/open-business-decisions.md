@@ -1882,7 +1882,7 @@ decided; the build is tracked in backlog.md.
 | Self-test | Build a saved self-testing program? | **Build it, with a nightly report**: one command runs it, walking every screen on a desktop and a phone-sized screen, keying in fields, saving and checking what was stored. It runs before every push, and nightly on the test server with a pass/fail email and screenshots of failures. **Built 2026-09-26** (docs/self-test.md); nightly at 02:30 Singapore time, to the addresses given to `deploy/install-selftest.sh`. |
 | 47.5 | Who may Revise a submitted GST return? | **Same as Submit**: FULL on GST and Account Period. Built. |
 | 4b.5 | Currencies other than SGD? | **Full multi-currency**: sales and purchases in any currency, keeping the original and SGD amounts, with exchange gain/loss. Closes 4b.5. |
-| 2.7 / #38 | Build the Credit Note document? | **Build it now**: a Credit Note against an invoice reverses its GST and ledger entries and counts in the GST Calculation; above the customer's credit note limit it needs the owner's approval. |
+| 2.7 / #38 | Build the Credit Note document? | **Build it now**: a Credit Note against an invoice reverses its GST and ledger entries and counts in the GST Calculation; above the customer's credit note limit it needs the owner's approval. **Built 2026-09-26** (BILL-003); defaults taken are #52. |
 | 11.2 | Accepted quotation with product / hardware lines | **Split automatically**: product and stock lines go to a Sales Invoice, hour and service lines to a contract as now. |
 | 9.1 / SRV-019 | Service Record unapproved a week after submission | **Flag + email the approvers** once a day while any are overdue. |
 | 9.2 / SRV-020 | Billable Job Order approval raises an invoice? | **Keep as is**: bill by milestone or a hand-raised Sales Invoice. Closed. |
@@ -1972,6 +1972,26 @@ not change.
 **Default taken meanwhile:** no. An Other receipt or payment carries no
 tax code and is left out of the GST Calculation. Bank charges paid carry
 no input tax either way.
+
+## 52. Credit Note: defaults taken (raised and built 2026-09-26)
+
+Raised building the Credit Note document (BILL-003, backlog #49). Two
+questions are on the **Websoft Decisions** page.
+
+| Question | Default taken meanwhile | Recommended on the page |
+|---|---|---|
+| Can a credit note be given on an invoice that is already paid? | **No.** A credit note takes off at most what the invoice still owes, less credit notes already waiting on it. So there is never commission to take back: commission is earned on money received, and a credit note only takes off what has not been received. | **Yes, as credit on the customer's account**, set against the next invoice or refunded with a Payment Voucher; commission earned on the credited part is taken back, as for a write-off. |
+| When a customer returns goods, should the credit note put them back in stock? | **No.** The credit note handles only the money; goods that come back are put back separately with a Stock Adjustment. | **Yes**: the credit note picks the invoice's stock lines returned; approving it puts them back at the cost they left at. |
+
+Also taken, not asked: a credit note is one amount with a reason, not
+lines; its GST follows the invoice's own tax code and rate; it posts
+under the Sales Invoice period locks; the person who raised it may
+withdraw it before a decision, as may anyone who could approve it; a
+written-off invoice cannot be credited; and the sales figures -- a
+prospect's billed amount, the Sales Dashboard's salesperson cards and
+Top 10 billing customers -- count an invoice net of its issued credit
+notes, while the Sales GP report and commission keep each invoice's own
+figures as issued.
 
 ## How to use this document
 

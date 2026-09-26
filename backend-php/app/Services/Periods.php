@@ -38,6 +38,10 @@ class Periods
         JournalEntry::TYPE_RECEIPT => 'receipt_voucher',
         JournalEntry::TYPE_PAYMENT => 'payment_voucher',
         JournalEntry::TYPE_SALES_INVOICE => 'sales_invoice',
+        // A credit note is a correction to a sales invoice, so it follows
+        // the Sales Invoice locks of the month it is issued in (default
+        // taken 2026-09-26 rather than a sixth row in the lock matrix).
+        JournalEntry::TYPE_CREDIT_NOTE => 'sales_invoice',
         JournalEntry::TYPE_PURCHASE_INVOICE => 'purchase_bill',
     ];
 

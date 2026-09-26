@@ -51,6 +51,9 @@ class Invoice extends Model
 
     public const STATUS_WRITTEN_OFF = 'written_off';
 
+    /** Nothing left to pay because credit notes took off the whole amount (BILL-003). */
+    public const STATUS_CREDITED = 'credited';
+
     // Mirrors the DB column defaults (see the migration) so a freshly
     // constructed, not-yet-saved/refreshed Invoice (e.g. the one
     // BillingService returns) behaves the same as one just reloaded
@@ -59,6 +62,7 @@ class Invoice extends Model
     protected $attributes = [
         'status' => self::STATUS_OUTSTANDING,
         'amount_paid_sgd' => '0.00',
+        'credited_sgd' => '0.00',
         'pre_migration_paid_sgd' => '0.00',
         'is_disputed' => false,
     ];
@@ -67,7 +71,7 @@ class Invoice extends Model
         'company_id', 'customer_id', 'contract_id', 'excess_usage_record_id',
         'invoice_number', 'invoice_type', 'description', 'amount_sgd', 'tax_code',
         'gst_rate', 'gst_amount_sgd', 'total_amount_sgd', 'cost_sgd', 'due_date',
-        'status', 'amount_paid_sgd', 'is_disputed', 'dispute_note',
+        'status', 'amount_paid_sgd', 'credited_sgd', 'is_disputed', 'dispute_note',
         // Data Migration (docs/data-migration.md) -- zero/null on every
         // invoice raised in this system.
         'pre_migration_paid_sgd', 'migrated_at',
@@ -81,6 +85,7 @@ class Invoice extends Model
         'total_amount_sgd' => 'decimal:2',
         'cost_sgd' => 'decimal:2',
         'amount_paid_sgd' => 'decimal:2',
+        'credited_sgd' => 'decimal:2',
         'pre_migration_paid_sgd' => 'decimal:2',
         'migrated_at' => 'datetime',
         'due_date' => 'date',
@@ -123,19 +128,26 @@ class Invoice extends Model
         return $this->belongsTo(Contract::class);
     }
 
+    public function creditNotes(): HasMany
+    {
+        return $this->hasMany(CreditNote::class);
+    }
+
     /** Empty on every auto-issued invoice -- see the class docblock. */
     public function lines(): HasMany
     {
         return $this->hasMany(InvoiceLine::class)->orderBy('line_no');
     }
 
-    /** What is still owed on this invoice (never negative). */
+    /** What is still owed on this invoice (never negative): its total, less what was paid and what issued credit notes took off. */
     public function outstandingSgd(): Money
     {
         if ($this->status === self::STATUS_WRITTEN_OFF) {
             return Money::of(0);
         }
-        $remaining = Money::of($this->total_amount_sgd ?? 0)->minus(Money::of($this->amount_paid_sgd ?? 0));
+        $remaining = Money::of($this->total_amount_sgd ?? 0)
+            ->minus(Money::of($this->amount_paid_sgd ?? 0))
+            ->minus(Money::of($this->credited_sgd ?? 0));
 
         return $remaining->toFloat() < 0 ? Money::of(0) : $remaining;
     }

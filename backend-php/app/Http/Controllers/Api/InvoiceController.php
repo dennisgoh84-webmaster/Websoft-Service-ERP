@@ -69,6 +69,8 @@ class InvoiceController extends Controller
             'gst_amount_sgd' => (float) $invoice->gst_amount_sgd,
             'total_amount_sgd' => (float) $invoice->total_amount_sgd,
             'amount_paid_sgd' => (float) $invoice->amount_paid_sgd,
+            // Taken off by issued credit notes (BILL-003).
+            'credited_sgd' => (float) $invoice->credited_sgd,
             'outstanding_sgd' => $invoice->outstandingSgd()->toFloat(),
             'due_date' => optional($invoice->due_date)->toDateString(),
             'status' => $invoice->status,

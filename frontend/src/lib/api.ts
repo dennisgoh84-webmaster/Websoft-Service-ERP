@@ -1081,7 +1081,7 @@ export interface ExcessUsageRecord {
   invoiced: boolean
 }
 
-export type InvoiceStatus = 'outstanding' | 'partially_paid' | 'paid' | 'written_off'
+export type InvoiceStatus = 'outstanding' | 'partially_paid' | 'paid' | 'written_off' | 'credited'
 
 export interface InvoiceLine {
   id: string
@@ -1099,6 +1099,35 @@ export interface InvoiceLine {
   cost_amount_sgd: number | null
 }
 
+/** A credit note against a Sales Invoice (BILL-003). The number is given when it is issued. */
+export interface CreditNote {
+  id: string
+  credit_note_number: string | null
+  invoice_id: string
+  invoice_number: string
+  customer_id: string
+  customer_name: string
+  reason: string
+  amount_sgd: number
+  tax_code: string | null
+  gst_rate: number | null
+  gst_amount_sgd: number
+  total_amount_sgd: number
+  status: 'pending_approval' | 'issued' | 'rejected' | 'withdrawn'
+  raised_by: string | null
+  raised_at: string
+  decided_by: string | null
+  decided_at: string | null
+  decision_note: string | null
+  issued_at: string | null
+  /** The customer's credit note approval limit; null = the owner approves every one. */
+  credit_note_limit_sgd: number | null
+  needs_owner: boolean
+  can_approve: boolean
+  gl_status: 'posted' | 'not_posted'
+  gl_voucher_number: string | null
+}
+
 export interface Invoice {
   id: string
   invoice_number: string
@@ -1113,6 +1142,8 @@ export interface Invoice {
   gst_amount_sgd: number
   total_amount_sgd: number
   amount_paid_sgd: number
+  /** Taken off by issued credit notes (BILL-003). */
+  credited_sgd: number
   outstanding_sgd: number
   due_date: string | null
   status: InvoiceStatus
@@ -3437,6 +3468,20 @@ export const api = {
   exportInvoicesExcel: (filters: { customer_id?: string; contract_id?: string } = {}) =>
     requestBlob(`/invoices/export.xlsx${qs(filters)}`),
   exportInvoiceDocx: (id: string) => requestBlob(`/invoices/${id}/export.docx`),
+
+  // ---- Credit Notes (BILL-003) ----
+  listCreditNotes: (filters: { status?: string; customer_id?: string; invoice_id?: string } = {}) =>
+    request<CreditNote[]>(`/credit-notes${qs(filters)}`),
+  getCreditNote: (id: string) => request<CreditNote>(`/credit-notes/${id}`),
+  raiseCreditNote: (payload: { invoice_id: string; amount_sgd: number; reason: string }) =>
+    request<CreditNote>('/credit-notes', { method: 'POST', body: JSON.stringify(payload) }),
+  approveCreditNote: (id: string) => request<CreditNote>(`/credit-notes/${id}/approve`, { method: 'POST' }),
+  rejectCreditNote: (id: string, reason: string) =>
+    request<CreditNote>(`/credit-notes/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  withdrawCreditNote: (id: string) => request<CreditNote>(`/credit-notes/${id}/withdraw`, { method: 'POST' }),
+  exportCreditNotes: (filters: { status?: string }, format: 'csv' | 'xlsx') =>
+    requestBlob(`/credit-notes/export.${format}${qs(filters)}`),
+  exportCreditNoteDocx: (id: string) => requestBlob(`/credit-notes/${id}/export.docx`),
   emailInvoice: (id: string) => request<{ sent: boolean; to: string }>(`/invoices/${id}/email`, { method: 'POST' }),
 
   // Accounts Receivable

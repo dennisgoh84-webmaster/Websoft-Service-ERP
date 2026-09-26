@@ -8,6 +8,7 @@ use App\Exceptions\PostingError;
 use App\Models\Account;
 use App\Models\BankAccount;
 use App\Models\BankTransaction;
+use App\Models\CreditNote;
 use App\Models\Invoice;
 use App\Models\JournalEntry;
 use App\Models\Payment;
@@ -72,6 +73,8 @@ class Posting
     public const SOURCE_SUPPLIER_PAYMENT = 'supplier_payment';
 
     public const SOURCE_WRITE_OFF = 'invoice_write_off';
+
+    public const SOURCE_CREDIT_NOTE = 'credit_note';
 
     public static function accountByCode(string $companyId, string $code): Account
     {
@@ -210,6 +213,40 @@ class Posting
             entryDate: $entryDate, narration: trim("Sales invoice {$invoice->invoice_number} — {$customerName}", ' —'),
             lines: $lines, sourceType: self::SOURCE_INVOICE, sourceId: $invoice->id,
             actorUserId: $actorUserId, auditEntityType: 'invoice',
+        );
+    }
+
+    /**
+     * BILL-003 credit note -- on issue. The invoice's own entry in
+     * reverse, for the credit note's amounts: Dr the invoice's revenue
+     * account net / Dr 2100 GST output / Cr 1100 AR total, dated the day
+     * it is issued.
+     */
+    public static function postCreditNote(CreditNote $note, ?string $actorUserId): JournalEntry
+    {
+        $invoice = $note->invoice;
+        $cid = $note->company_id;
+        $revenueCode = self::REVENUE_BY_INVOICE_TYPE[$invoice->invoice_type] ?? null;
+        if ($revenueCode === null) {
+            throw new PostingError("No revenue account is mapped for invoice type '{$invoice->invoice_type}'.");
+        }
+        $net = Money::of($note->amount_sgd);
+        $gst = Money::of($note->gst_amount_sgd ?? 0);
+        $total = Money::of($note->total_amount_sgd);
+        $customerName = $note->customer?->name ?? '';
+
+        $lines = [self::line(self::accountByCode($cid, $revenueCode), $net, Money::of(0), "Credit note on {$invoice->invoice_number}: {$note->reason}")];
+        if ($gst->toFloat() > 0) {
+            $lines[] = self::line(self::accountByCode($cid, self::GST_OUTPUT), $gst, Money::of(0), "GST {$note->tax_code}");
+        }
+        $lines[] = self::line(self::accountByCode($cid, self::AR_CONTROL), Money::of(0), $total, trim("{$note->credit_note_number} {$customerName}"));
+
+        return self::post(
+            companyId: $cid, voucherType: JournalEntry::TYPE_CREDIT_NOTE, voucherNumber: $note->credit_note_number,
+            entryDate: Carbon::parse($note->issued_at)->setTimezone(config('app.timezone')),
+            narration: trim("Credit note {$note->credit_note_number} on {$invoice->invoice_number} — {$customerName}", ' —'),
+            lines: $lines, sourceType: self::SOURCE_CREDIT_NOTE, sourceId: $note->id,
+            actorUserId: $actorUserId, auditEntityType: 'credit_note',
         );
     }
 

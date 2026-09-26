@@ -29,6 +29,9 @@ class JournalEntry extends Model
 
     public const TYPE_SALES_INVOICE = 'sales_invoice';
 
+    /** A Sales Invoice's credit note (BILL-003) -- the invoice's entry in reverse. */
+    public const TYPE_CREDIT_NOTE = 'credit_note';
+
     public const TYPE_PURCHASE_INVOICE = 'purchase_invoice';
 
     public const STATUS_DRAFT = 'draft';

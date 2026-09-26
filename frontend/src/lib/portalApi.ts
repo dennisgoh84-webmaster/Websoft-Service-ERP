@@ -167,8 +167,10 @@ export interface PortalInvoice {
   gst_amount_sgd: number
   total_amount_sgd: number
   amount_paid_sgd: number
+  /** Taken off by issued credit notes (BILL-003). */
+  credited_sgd: number
   outstanding_sgd: number
-  status: 'outstanding' | 'partially_paid' | 'paid' | 'written_off'
+  status: 'outstanding' | 'partially_paid' | 'paid' | 'written_off' | 'credited'
   due_date: string | null
   issued_at: string
 }

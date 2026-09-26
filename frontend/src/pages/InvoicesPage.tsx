@@ -51,6 +51,7 @@ const STATUS_BADGE: Record<InvoiceStatus, string> = {
   partially_paid: 'exceeded',
   paid: 'active',
   written_off: 'expired',
+  credited: 'active',
 }
 
 export default function InvoicesPage() {
@@ -65,6 +66,11 @@ export default function InvoicesPage() {
   const [statementBusy, setStatementBusy] = useState(false)
   const [busyInvoiceId, setBusyInvoiceId] = useState<string | null>(null)
   const [docPanelId, setDocPanelId] = useState<string | null>(null)
+  // Credit note being raised against one invoice (BILL-003).
+  const [creditFor, setCreditFor] = useState<string | null>(null)
+  const [cnAmount, setCnAmount] = useState('')
+  const [cnReason, setCnReason] = useState('')
+  const [cnSaving, setCnSaving] = useState(false)
 
   // Raise Sales Invoice form
   const [showRaise, setShowRaise] = useState(false)
@@ -243,6 +249,28 @@ export default function InvoicesPage() {
       refresh()
     } catch (err) { setError(err instanceof Error ? err.message : 'UNGL failed') }
     finally { setBusyInvoiceId(null) }
+  }
+
+  async function onRaiseCreditNote(e: FormEvent, invoice: Invoice) {
+    e.preventDefault()
+    setError(null)
+    setMessage(null)
+    setCnSaving(true)
+    try {
+      const cn = await api.raiseCreditNote({ invoice_id: invoice.id, amount_sgd: parseFloat(cnAmount), reason: cnReason })
+      setMessage(
+        `Credit note for ${money(cn.total_amount_sgd)} on ${invoice.invoice_number} raised -- waiting for approval by ` +
+          (cn.needs_owner ? 'the owner' : 'Finance, the Sales Manager or the owner') +
+          ' under Credit Notes. It changes nothing until it is approved.',
+      )
+      setCreditFor(null)
+      setCnAmount('')
+      setCnReason('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to raise the credit note')
+    } finally {
+      setCnSaving(false)
+    }
   }
 
   async function onWriteOff(invoice: Invoice) {
@@ -793,7 +821,10 @@ export default function InvoicesPage() {
                 <td>
                   <strong>{money(inv.total_amount_sgd)}</strong>
                 </td>
-                <td>{money(inv.outstanding_sgd)}</td>
+                <td>
+                  {money(inv.outstanding_sgd)}
+                  {inv.credited_sgd > 0 && <div className="muted">credited {money(inv.credited_sgd)}</div>}
+                </td>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   {inv.due_date ? formatDate(inv.due_date) : <span className="muted">no terms set</span>}
                 </td>
@@ -857,6 +888,18 @@ export default function InvoicesPage() {
                   <button className="secondary" onClick={() => onToggleDispute(inv)}>
                     {inv.is_disputed ? 'Clear dispute' : 'Flag dispute'}
                   </button>
+                  {inv.outstanding_sgd > 0 && inv.status !== 'written_off' && (
+                    <button
+                      className="secondary"
+                      onClick={() => {
+                        setCreditFor(creditFor === inv.id ? null : inv.id)
+                        setCnAmount('')
+                        setCnReason('')
+                      }}
+                    >
+                      Credit note
+                    </button>
+                  )}
                   {inv.outstanding_sgd > 0 && (
                     <button className="secondary" onClick={() => onWriteOff(inv)}>
                       Write off
@@ -864,6 +907,36 @@ export default function InvoicesPage() {
                   )}
                 </td>
               </tr>
+              {creditFor === inv.id && (
+                <tr>
+                  <td colSpan={10} style={{ padding: 16, background: 'var(--bg-muted, #f9f9f9)' }}>
+                    <form className="credit-note-form" onSubmit={(e) => onRaiseCreditNote(e, inv)}>
+                      <h3 style={{ marginTop: 0 }}>Credit note on {inv.invoice_number}</h3>
+                      <div className="form-row">
+                        <label>Amount to credit, net of GST (SGD)</label>
+                        <input type="number" min="0.01" step="0.01" value={cnAmount} onChange={(e) => setCnAmount(e.target.value)} required />
+                      </div>
+                      <div className="form-row">
+                        <label>Reason</label>
+                        <input value={cnReason} onChange={(e) => setCnReason(e.target.value)} placeholder="e.g. Two switches returned faulty" required />
+                      </div>
+                      <p className="muted">
+                        GST {inv.tax_code} {inv.gst_rate}%: {money(((parseFloat(cnAmount) || 0) * inv.gst_rate) / 100)} &middot; total credit{' '}
+                        <strong>{money((parseFloat(cnAmount) || 0) * (1 + inv.gst_rate / 100))}</strong>, of {money(inv.outstanding_sgd)} still owed.
+                        It needs approval (BILL-003) before it changes anything.
+                      </p>
+                      <div className="button-row">
+                        <button type="submit" disabled={cnSaving}>
+                          {cnSaving ? 'Raising...' : 'Raise credit note'}
+                        </button>
+                        <button type="button" className="secondary" onClick={() => setCreditFor(null)}>
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </td>
+                </tr>
+              )}
               {docPanelId === inv.id && (
                 <tr>
                   <td colSpan={10} style={{ padding: 16, background: 'var(--bg-muted, #f9f9f9)' }}>

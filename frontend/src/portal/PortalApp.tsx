@@ -223,7 +223,7 @@ function incidentBadgeKind(status: string): 'ok' | 'warn' | 'danger' | 'neutral'
 }
 
 function invoiceBadgeKind(status: string): 'ok' | 'warn' | 'danger' | 'neutral' {
-  if (status === 'paid') return 'ok'
+  if (status === 'paid' || status === 'credited') return 'ok'
   if (status === 'partially_paid') return 'warn'
   if (status === 'written_off') return 'neutral'
   return 'danger' // outstanding
@@ -880,6 +880,12 @@ function InvoiceCard({ inv }: { inv: PortalInvoice }) {
         <span style={{ color: MUTED, fontWeight: 400 }}>Total</span>
         <span>{fmtMoney(inv.total_amount_sgd)}</span>
       </div>
+      {inv.credited_sgd > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginTop: 4 }}>
+          <span style={{ color: MUTED }}>Credit notes</span>
+          <span>{fmtMoney(-inv.credited_sgd)}</span>
+        </div>
+      )}
       {inv.outstanding_sgd > 0 && (
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginTop: 4, fontWeight: 700 }}>
           <span style={{ color: MUTED, fontWeight: 400 }}>Outstanding</span>
