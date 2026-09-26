@@ -2,7 +2,7 @@
 // into Accounts Payable, a supplier bill with its tax code and expense
 // account, and a payment voucher allocated to the bill and banked.
 
-import { apiGet, expectStored, keyIn, selectByText, sgDate } from '../lib.mjs'
+import { apiGet, expectStored, keyIn, rows, selectByText, sgDate } from '../lib.mjs'
 import { button, card, open, submit, tag } from './helpers.mjs'
 
 const money = (n) => Number(n).toFixed(2)
@@ -127,5 +127,80 @@ export const paymentVoucher = {
     pv = await apiGet(page, `/accounts-payable/payments/${pv.id}`)
     expectStored('Bank status', pv.bank_status, 'banked')
     if (!pv.bank_transaction_number) throw new Error('Banking the voucher gave no Bank Book transaction number.')
+  },
+}
+
+// Bank interest and bank charges: keyed as an Other receipt / payment,
+// never straight into the Bank Book (#49 / 31.1), so each bank line has
+// its General Ledger entry.
+
+async function bankBookLine(page, text) {
+  const banks = rows(await apiGet(page, '/bank-accounts'))
+  for (const b of banks) {
+    const hit = (await apiGet(page, `/bank-accounts/${b.id}/transactions`)).rows.find((r) => (r.description ?? '').includes(text))
+    if (hit) return { bank: b, line: hit }
+  }
+  return null
+}
+
+export const otherReceipt = {
+  name: 'Other receipt: bank interest to 4900, banked into the Bank Book',
+  screen: '/receipts',
+  async run({ page, profileName }) {
+    const t = tag(profileName)
+    const what = `DBS interest ${t}`
+    await open(page, '/receipts')
+    const f = card(page, 'Record a receipt')
+    await keyIn(f, 'Received from', 'Other')
+    await keyIn(f, 'Account', '4900')
+    await keyIn(f, 'What it is', what)
+    await keyIn(f, 'Payment date', sgDate(0).dmy)
+    await keyIn(f, 'Amount received (SGD)', '12.34')
+    const created = await submit(page, button(f, 'Record receipt'), '/api/accounts-receivable/payments')
+    const rv = await apiGet(page, `/accounts-receivable/payments/${created.id}`)
+    expectStored('Kind', rv.kind, 'other')
+    expectStored('Company / Individual (none)', rv.customer_id, '')
+    expectStored('Account', rv.gl_account, '4900 Other income')
+    expectStored('What it is', rv.notes, what)
+    expectStored('Posted to the General Ledger', rv.gl_status, 'posted')
+    expectStored('Nothing to allocate', Number(rv.unallocated_sgd).toFixed(2), '0.00')
+
+    await submit(page, button(page.locator('tr', { hasText: rv.voucher_number }), 'Bank'), `/api/accounts-receivable/payments/${rv.id}/bank`)
+    const found = await bankBookLine(page, what)
+    if (!found) throw new Error('After Bank, the receipt is not in any Bank Book.')
+    expectStored('Bank Book: money in', Number(found.line.debit_sgd).toFixed(2), '12.34')
+
+    // The Bank Book itself takes no direct keying any more.
+    await open(page, `/bank-accounts/${found.bank.id}`)
+    if (await page.getByRole('button', { name: 'Add transaction' }).count()) throw new Error('The Bank Book still offers "Add transaction".')
+    await page.getByRole('heading', { name: 'Adding to the Bank Book' }).waitFor()
+  },
+}
+
+export const otherPayment = {
+  name: 'Other payment: bank charges to 6500, banked into the Bank Book',
+  screen: '/payment-voucher',
+  async run({ page, profileName }) {
+    const t = tag(profileName)
+    const what = `DBS service charge ${t}`
+    await open(page, '/payment-voucher')
+    const f = card(page, 'Payment vouchers')
+    await keyIn(f, 'Paid to', 'Other')
+    await keyIn(f, 'Account', '6500')
+    await keyIn(f, 'What it is', what)
+    await keyIn(f, 'Payment date', sgDate(0).dmy)
+    await keyIn(f, 'Amount (SGD)', '25')
+    const created = await submit(page, button(f, 'Record payment'), '/api/accounts-payable/payments')
+    const pv = await apiGet(page, `/accounts-payable/payments/${created.id}`)
+    expectStored('Kind', pv.kind, 'other')
+    expectStored('Supplier (none)', pv.supplier_id, '')
+    expectStored('Account', pv.gl_account, '6500 Bank charges')
+    expectStored('What it is', pv.notes, what)
+    expectStored('Posted to the General Ledger', pv.gl_status, 'posted')
+
+    await submit(page, button(page.locator('tr', { hasText: pv.voucher_number }), 'Bank'), `/api/accounts-payable/payments/${pv.id}/bank`)
+    const found = await bankBookLine(page, what)
+    if (!found) throw new Error('After Bank, the payment is not in any Bank Book.')
+    expectStored('Bank Book: money out', Number(found.line.credit_sgd).toFixed(2), '25.00')
   },
 }

@@ -399,9 +399,15 @@ class DocxForms
 
         $section->addText('Received From', ['italic' => true]);
         $from = $section->addTextRun();
-        self::addRun($from, ($customer?->name ?? '')."\n", ['bold' => true]);
-        if ($customer?->uen) {
-            self::addRun($from, "UEN: {$customer->uen}");
+        if ($payment->isOther()) {
+            // An Other receipt (bank interest and the like): what it is, and the account it went to.
+            self::addRun($from, ((string) $payment->notes)."\n", ['bold' => true]);
+            self::addRun($from, "Account: {$payment->glAccount?->code} {$payment->glAccount?->name}");
+        } else {
+            self::addRun($from, ($customer?->name ?? '')."\n", ['bold' => true]);
+            if ($customer?->uen) {
+                self::addRun($from, "UEN: {$customer->uen}");
+            }
         }
 
         $section->addTextBreak();
@@ -529,9 +535,15 @@ class DocxForms
 
         $section->addText('Paid To', ['italic' => true]);
         $to = $section->addTextRun();
-        self::addRun($to, ($supplier?->name ?? '')."\n", ['bold' => true]);
-        if ($supplier?->gst_registration_no) {
-            self::addRun($to, "GST Reg# {$supplier->gst_registration_no}");
+        if ($payment->isOther()) {
+            // An Other payment (bank charges and the like): what it is, and the account it was charged to.
+            self::addRun($to, ((string) $payment->notes)."\n", ['bold' => true]);
+            self::addRun($to, "Account: {$payment->glAccount?->code} {$payment->glAccount?->name}");
+        } else {
+            self::addRun($to, ($supplier?->name ?? '')."\n", ['bold' => true]);
+            if ($supplier?->gst_registration_no) {
+                self::addRun($to, "GST Reg# {$supplier->gst_registration_no}");
+            }
         }
 
         $section->addTextBreak();

@@ -6,6 +6,8 @@ import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type BankAccount, type CompanyIndividual, type SupplierInvoice, type SupplierPayment } from '../lib/api'
 import DateInput from '../components/DateInput'
+import OtherVoucherFields from '../components/OtherVoucherFields'
+import { useOtherVoucherAccounts } from '../lib/otherVoucherAccounts'
 import { formatMoney as money, todayIso } from '../lib/format'
 
 export default function PaymentVoucherPage() {
@@ -17,6 +19,11 @@ export default function PaymentVoucherPage() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [docPanelId, setDocPanelId] = useState<string | null>(null)
 
+  // A supplier, or "Other" -- bank charges and the like, against a GL
+  // account (#49 / 31.1: never keyed into the Bank Book).
+  const [kind, setKind] = useState<'supplier' | 'other'>('supplier')
+  const [glAccountId, setGlAccountId] = useState('')
+  const [description, setDescription] = useState('')
   const [paySupplier, setPaySupplier] = useState('')
   const [payAmount, setPayAmount] = useState('')
   const [payRef, setPayRef] = useState('')
@@ -39,8 +46,9 @@ export default function PaymentVoucherPage() {
 
   useEffect(refresh, [])
 
-  const supplierName = (id: string) => suppliers.find((s) => s.id === id)?.name ?? id.slice(0, 8)
-  const supplierOf = (id: string) => suppliers.find((s) => s.id === id)
+  const otherAccounts = useOtherVoucherAccounts(bankAccounts)
+  const supplierName = (id: string | null) => (id ? (suppliers.find((s) => s.id === id)?.name ?? id.slice(0, 8)) : '')
+  const supplierOf = (id: string | null) => (id ? suppliers.find((s) => s.id === id) : undefined)
   const openBills = bills.filter((b) => b.outstanding_sgd > 0)
 
   async function onRecordPayment(e: FormEvent) {
@@ -48,8 +56,8 @@ export default function PaymentVoucherPage() {
     setError(null)
     setMessage(null)
     try {
-      await api.recordSupplierPayment({
-        supplier_id: paySupplier,
+      const pv = await api.recordSupplierPayment({
+        ...(kind === 'other' ? { gl_account_id: glAccountId, notes: description } : { supplier_id: paySupplier }),
         payment_date: payDate || todayIso(),
         amount_sgd: parseFloat(payAmount),
         bank_account_id: bankAccountId,
@@ -57,7 +65,12 @@ export default function PaymentVoucherPage() {
       })
       setPayAmount('')
       setPayRef('')
-      setMessage('Payment voucher recorded. Allocate it below to settle a bill.')
+      setDescription('')
+      setMessage(
+        kind === 'other'
+          ? `${pv.voucher_number} recorded and posted to ${pv.gl_account}. Press Bank above to put it in the Bank Book.`
+          : 'Payment voucher recorded. Allocate it below to settle a bill.',
+      )
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to record payment')
@@ -180,7 +193,7 @@ export default function PaymentVoucherPage() {
           <thead>
             <tr>
               <th>Voucher</th>
-              <th>Supplier</th>
+              <th>Paid to</th>
               <th>Amount</th>
               <th>Unallocated</th>
               <th>Allocate to bill</th>
@@ -195,13 +208,22 @@ export default function PaymentVoucherPage() {
                 <Fragment key={p.id}>
                 <tr>
                   <td>{p.voucher_number}</td>
-                  <td>{supplierName(p.supplier_id)}</td>
+                  <td>
+                    {p.kind === 'other' ? (
+                      <>
+                        {p.notes}
+                        <div className="muted small">Other: {p.gl_account}</div>
+                      </>
+                    ) : (
+                      supplierName(p.supplier_id)
+                    )}
+                  </td>
                   <td>{money(p.amount_sgd)}</td>
                   <td>
                     {p.unallocated_sgd > 0 ? (
                       <strong>{money(p.unallocated_sgd)}</strong>
                     ) : (
-                      <span className="muted">fully allocated</span>
+                      <span className="muted">{p.kind === 'other' ? 'to an account' : 'fully allocated'}</span>
                     )}
                     {p.allocations.length > 0 && (
                       <div className="muted">
@@ -317,16 +339,34 @@ export default function PaymentVoucherPage() {
         <h2 style={{ marginTop: 18 }}>Record a payment voucher</h2>
         <form onSubmit={onRecordPayment}>
           <div className="form-row">
-            <label>Supplier</label>
-            <select value={paySupplier} onChange={(e) => setPaySupplier(e.target.value)} required>
-              <option value="">Select...</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
+            <label>Paid to</label>
+            <select value={kind} onChange={(e) => setKind(e.target.value as 'supplier' | 'other')}>
+              <option value="supplier">A supplier (settles its bills)</option>
+              <option value="other">Other -- bank charges... (to an account)</option>
             </select>
           </div>
+          {kind === 'supplier' ? (
+            <div className="form-row">
+              <label>Supplier</label>
+              <select value={paySupplier} onChange={(e) => setPaySupplier(e.target.value)} required>
+                <option value="">Select...</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <OtherVoucherFields
+              accounts={otherAccounts}
+              accountId={glAccountId}
+              onAccountId={setGlAccountId}
+              description={description}
+              onDescription={setDescription}
+              placeholder="e.g. DBS service charge for September"
+            />
+          )}
           <div className="form-row">
             <label>Payment date</label>
             <DateInput value={payDate} onChange={(e) => setPayDate(e.target.value)} required />
@@ -357,7 +397,7 @@ export default function PaymentVoucherPage() {
             <label>Reference</label>
             <input value={payRef} onChange={(e) => setPayRef(e.target.value)} />
           </div>
-          <button type="submit" disabled={!paySupplier}>
+          <button type="submit" disabled={kind === 'supplier' ? !paySupplier : !glAccountId || !description.trim()}>
             Record payment
           </button>
         </form>

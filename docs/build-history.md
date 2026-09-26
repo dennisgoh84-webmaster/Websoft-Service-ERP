@@ -524,3 +524,15 @@ the meantime are called out in code comments, not silently assumed.
     - A Purchase Order within the supplier's approval limit had no
       Approve button, so it could never reach Accounts Payable.
     - Event Logs showed a GL posting's lines as "[object Object]".
+- **No direct Bank Book keying** (ACC-005, #49 / 31.1).
+  - Money in and out is a Receipt or Payment Voucher. Bank interest
+    and charges are "Other" vouchers against a GL account: Dr bank /
+    Cr account, or Dr account / Cr bank.
+  - The Bank step puts them in the Bank Book, so every bank line has
+    its ledger entry.
+  - Control accounts and banks' own accounts are refused as the
+    account.
+  - The Bank Book's entry form and its API are gone; older keyed lines
+    stay.
+  - Migration `2026_09_30_003800`; a database check keeps exactly one
+    of Company / Individual or account on each voucher.

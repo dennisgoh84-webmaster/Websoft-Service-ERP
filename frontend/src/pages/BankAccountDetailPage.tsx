@@ -16,13 +16,6 @@ export default function BankAccountDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
 
-  const [txnDate, setTxnDate] = useState(todayIso())
-  const [txnDescription, setTxnDescription] = useState('')
-  const [txnReference, setTxnReference] = useState('')
-  const [txnType, setTxnType] = useState<'debit' | 'credit'>('debit')
-  const [txnAmount, setTxnAmount] = useState('')
-  const [posting, setPosting] = useState(false)
-
   const [showReconcile, setShowReconcile] = useState(false)
   const [statementDate, setStatementDate] = useState(todayIso())
   const [statementBalance, setStatementBalance] = useState('')
@@ -38,31 +31,6 @@ export default function BankAccountDetailPage() {
   }
 
   useEffect(refresh, [id])
-
-  async function onAddTransaction(e: FormEvent) {
-    e.preventDefault()
-    if (!id) return
-    setError(null)
-    setPosting(true)
-    try {
-      const amount = Number(txnAmount)
-      await api.createBankTransaction(id, {
-        transaction_date: txnDate,
-        description: txnDescription,
-        reference: txnReference || null,
-        debit_sgd: txnType === 'debit' ? amount : 0,
-        credit_sgd: txnType === 'credit' ? amount : 0,
-      })
-      setTxnDescription('')
-      setTxnReference('')
-      setTxnAmount('')
-      refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add transaction')
-    } finally {
-      setPosting(false)
-    }
-  }
 
   async function onVoidTransaction(transactionId: string) {
     const reason = window.prompt('Reason for voiding this transaction (required):')
@@ -262,43 +230,17 @@ export default function BankAccountDetailPage() {
         </div>
       </div>
 
+      {/* No direct keying (Dennis, 2026-09-26, #49 / 31.1): every line comes
+          from a Receipt or Payment Voucher's Bank step, so it is in the
+          General Ledger too. Lines keyed here before stay, and can still be
+          voided and reconciled. */}
       <div className="card">
-        <h2>Add a transaction</h2>
-        <form onSubmit={onAddTransaction}>
-          <div className="form-row">
-            <label>Date</label>
-            <DateInput value={txnDate} onChange={(e) => setTxnDate(e.target.value)} required />
-          </div>
-          <div className="form-row">
-            <label>Description</label>
-            <input value={txnDescription} onChange={(e) => setTxnDescription(e.target.value)} required />
-          </div>
-          <div className="form-row">
-            <label>Reference</label>
-            <input value={txnReference} onChange={(e) => setTxnReference(e.target.value)} />
-          </div>
-          <div className="form-row">
-            <label>Type</label>
-            <select value={txnType} onChange={(e) => setTxnType(e.target.value as 'debit' | 'credit')}>
-              <option value="debit">Debit (money in)</option>
-              <option value="credit">Credit (money out)</option>
-            </select>
-          </div>
-          <div className="form-row">
-            <label>Amount (SGD)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              value={txnAmount}
-              onChange={(e) => setTxnAmount(e.target.value)}
-              required
-            />
-          </div>
-          <button type="submit" disabled={posting}>
-            {posting ? 'Adding...' : 'Add transaction'}
-          </button>
-        </form>
+        <h2>Adding to the Bank Book</h2>
+        <p style={{ margin: 0 }}>
+          Lines are not keyed in here. Record money in as a <Link to="/receipts">Receipt</Link> and money out as a{' '}
+          <Link to="/payment-voucher">Payment Voucher</Link> -- bank interest and bank charges as <b>Other</b>, against an
+          account -- then press <b>Bank</b> on it. It reaches this Bank Book and the General Ledger together.
+        </p>
       </div>
 
       <div className="card">

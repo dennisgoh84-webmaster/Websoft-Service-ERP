@@ -1144,7 +1144,12 @@ export interface PaymentAllocation {
 export interface Payment {
   id: string
   voucher_number: string
-  customer_id: string
+  /** Null on an Other receipt (bank interest and the like), which is against gl_account instead. */
+  customer_id: string | null
+  kind: 'customer' | 'other'
+  gl_account_id: string | null
+  /** "4910 Interest income" on an Other receipt. */
+  gl_account: string | null
   payment_date: string
   amount_sgd: number
   allocated_sgd: number
@@ -1799,7 +1804,13 @@ export interface SupplierPaymentAllocation {
 export interface SupplierPayment {
   id: string
   voucher_number: string
-  supplier_id: string
+  /** Null on an Other payment (bank charges and the like), which is against gl_account instead. */
+  supplier_id: string | null
+  kind: 'supplier' | 'other'
+  gl_account_id: string | null
+  /** "6500 Bank charges" on an Other payment. */
+  gl_account: string | null
+  notes: string | null
   payment_date: string
   amount_sgd: number
   allocated_sgd: number
@@ -3431,7 +3442,9 @@ export const api = {
       })}`,
     ),
   recordPayment: (payload: {
-    customer_id: string
+    /** One of customer_id / gl_account_id; an Other receipt needs notes saying what it is. */
+    customer_id?: string
+    gl_account_id?: string
     payment_date: string
     amount_sgd: number
     bank_account_id: string
@@ -3551,7 +3564,9 @@ export const api = {
   emailSupplierPayment: (id: string) =>
     request<{ sent: boolean; to: string }>(`/accounts-payable/payments/${id}/email`, { method: 'POST' }),
   recordSupplierPayment: (payload: {
-    supplier_id: string
+    /** One of supplier_id / gl_account_id; an Other payment needs notes saying what it is. */
+    supplier_id?: string
+    gl_account_id?: string
     payment_date: string
     amount_sgd: number
     bank_account_id: string
@@ -3975,20 +3990,7 @@ export const api = {
   // Separate from the General Ledger's Journal Vouchers -- confirmed with Dennis, 2026-09-12.
   listBankTransactions: (bankAccountId: string) =>
     request<BankLedger>(`/bank-accounts/${bankAccountId}/transactions`),
-  createBankTransaction: (
-    bankAccountId: string,
-    payload: {
-      transaction_date: string
-      description: string
-      reference?: string | null
-      debit_sgd?: number
-      credit_sgd?: number
-    },
-  ) =>
-    request<BankTransaction>(`/bank-accounts/${bankAccountId}/transactions`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+  // No createBankTransaction: lines come from a Receipt / Payment Voucher's Bank step (#49 / 31.1).
   voidBankTransaction: (transactionId: string, reason: string) =>
     request<BankTransaction>(`/bank-transactions/${transactionId}/void`, {
       method: 'POST',

@@ -13,7 +13,6 @@ use App\Models\User;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\BankBook;
-use App\Services\Numbering;
 use App\Support\Money;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -77,61 +76,25 @@ class BankTransactionController extends Controller
         ]);
     }
 
+    /**
+     * Keying a line straight into the Bank Book is no longer allowed
+     * (Dennis, 2026-09-26, open-business-decisions.md #49 / 31.1):
+     * "Should not allow them to key direct, have to key in through
+     * receipt or payment." A line keyed here never reached the General
+     * Ledger, so the Bank Book and the GL drifted apart. Every line now
+     * comes from a Receipt or Payment Voucher's Bank step -- bank
+     * interest as an Other receipt, bank charges as an Other payment.
+     * Lines keyed before this stay, and can still be voided and
+     * reconciled.
+     */
     public function store(Request $request, string $bankAccountId)
     {
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, GroupModuleAuthority::EDIT);
-        $bankAccount = $this->bankAccountOrFail($user->company_id, $bankAccountId);
+        $this->bankAccountOrFail($user->company_id, $bankAccountId);
 
-        $data = $request->validate([
-            'transaction_date' => 'required|date',
-            'description' => 'required|string|max:500',
-            'reference' => 'sometimes|nullable|string|max:200',
-            'debit_sgd' => 'sometimes|numeric|min:0',
-            'credit_sgd' => 'sometimes|numeric|min:0',
-        ]);
-
-        $debit = Money::of($data['debit_sgd'] ?? 0);
-        $credit = Money::of($data['credit_sgd'] ?? 0);
-        // A line carries one or the other, never both -- the same
-        // convention JournalLine uses, for the same reason.
-        if ($debit->toFloat() > 0 && $credit->toFloat() > 0) {
-            throw new ApiException(422, 'A transaction is either a debit or a credit, not both.');
-        }
-        if ($debit->toFloat() == 0 && $credit->toFloat() == 0) {
-            throw new ApiException(422, 'Enter a debit or a credit amount.');
-        }
-
-        $txn = DB::transaction(function () use ($data, $user, $bankAccount, $debit, $credit) {
-            $txn = BankTransaction::create([
-                'company_id' => $user->company_id,
-                'bank_account_id' => $bankAccount->id,
-                'transaction_number' => Numbering::next($user->company_id, 'bank_transaction'),
-                'transaction_date' => $data['transaction_date'],
-                'description' => $data['description'],
-                'reference' => $data['reference'] ?? null,
-                'debit_sgd' => $debit->quantize()->toString(),
-                'credit_sgd' => $credit->quantize()->toString(),
-                'created_by_user_id' => $user->id,
-            ]);
-
-            Audit::record(
-                entityType: 'bank_transaction',
-                entityId: $txn->id,
-                action: 'created',
-                actorUserId: $user->id,
-                details: "{$bankAccount->bank_name} {$bankAccount->account_number}: {$data['description']}",
-                newValue: [
-                    'transaction_number' => $txn->transaction_number,
-                    'debit_sgd' => $debit->toFloat() > 0 ? $debit->quantize()->toString() : null,
-                    'credit_sgd' => $credit->toFloat() > 0 ? $credit->quantize()->toString() : null,
-                ],
-            );
-
-            return $txn;
-        });
-
-        return response()->json($this->out($txn->refresh(), BankBook::currentBalance($bankAccount)));
+        throw new ApiException(422, 'Bank Book lines are not keyed in directly. Record money in as a Receipt and money out as a Payment Voucher '
+            .'(bank interest or charges as "Other", against an account), then press Bank on it -- it reaches the Bank Book and the General Ledger together.');
     }
 
     public function void(Request $request, string $transactionId)

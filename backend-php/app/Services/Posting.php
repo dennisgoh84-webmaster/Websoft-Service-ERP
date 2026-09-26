@@ -277,14 +277,18 @@ class Posting
         );
     }
 
-    /** §4.3 Receipt Voucher -- on save. Dr bank GL / Cr 1100 AR. */
+    /**
+     * §4.3 Receipt Voucher -- on save. Dr bank GL / Cr 1100 AR; an
+     * Other receipt (bank interest and the like, #49 / 31.1) credits
+     * its own GL account instead of AR.
+     */
     public static function postReceipt(Payment $payment, ?string $actorUserId): JournalEntry
     {
         $cid = $payment->company_id;
         $bank = self::bankGlAccount($cid, $payment->bank_account_id);
-        $ar = self::accountByCode($cid, self::AR_CONTROL);
+        $ar = $payment->isOther() ? self::otherAccount($cid, $payment->gl_account_id) : self::accountByCode($cid, self::AR_CONTROL);
         $amount = Money::of($payment->amount_sgd);
-        $customerName = $payment->customer?->name ?? '';
+        $customerName = $payment->isOther() ? (string) $payment->notes : ($payment->customer?->name ?? '');
         $ref = $payment->reference ? " ref {$payment->reference}" : '';
 
         return self::post(
@@ -299,14 +303,18 @@ class Posting
         );
     }
 
-    /** §4.4 Payment Voucher -- on save. Dr 2000 AP / Cr bank GL. */
+    /**
+     * §4.4 Payment Voucher -- on save. Dr 2000 AP / Cr bank GL; an Other
+     * payment (bank charges and the like, #49 / 31.1) debits its own GL
+     * account instead of AP.
+     */
     public static function postSupplierPayment(SupplierPayment $payment, ?string $actorUserId): JournalEntry
     {
         $cid = $payment->company_id;
         $bank = self::bankGlAccount($cid, $payment->bank_account_id);
-        $ap = self::accountByCode($cid, self::AP_CONTROL);
+        $ap = $payment->isOther() ? self::otherAccount($cid, $payment->gl_account_id) : self::accountByCode($cid, self::AP_CONTROL);
         $amount = Money::of($payment->amount_sgd);
-        $supplierName = $payment->supplier?->name ?? '';
+        $supplierName = $payment->isOther() ? (string) $payment->notes : ($payment->supplier?->name ?? '');
         $ref = $payment->reference ? " ref {$payment->reference}" : '';
 
         return self::post(
@@ -319,6 +327,42 @@ class Posting
             sourceType: self::SOURCE_SUPPLIER_PAYMENT, sourceId: $payment->id,
             actorUserId: $actorUserId, auditEntityType: 'supplier_payment',
         );
+    }
+
+    /**
+     * Which GL account an Other receipt or payment may be against: any
+     * active account of the company except the control accounts (AR,
+     * AP, GST -- their balances must come only from their documents)
+     * and a bank account's own GL account (moving money between banks
+     * is a transfer, not a receipt or a charge). Checked when the
+     * voucher is saved.
+     */
+    public static function otherVoucherAccountOrFail(string $companyId, string $accountId): Account
+    {
+        $account = Account::where('id', $accountId)->where('company_id', $companyId)->where('is_active', true)->first();
+        if ($account === null) {
+            throw new PostingError('Pick one of this company\'s active accounts.');
+        }
+        if (in_array($account->code, [self::AR_CONTROL, self::AP_CONTROL, self::GST_OUTPUT, self::GST_INPUT], true)) {
+            throw new PostingError("{$account->code} {$account->name} is a control account: its balance comes only from invoices, bills and their receipts and payments.");
+        }
+        // 1000 is also every bank's account when a bank has none of its own (bankGlAccount()).
+        if ($account->code === self::CASH_AT_BANK_FALLBACK || BankAccount::where('company_id', $companyId)->where('gl_account_id', $account->id)->exists()) {
+            throw new PostingError("{$account->code} {$account->name} is a bank account's own account; money between banks is a transfer, not a receipt or payment.");
+        }
+
+        return $account;
+    }
+
+    /** The GL account an Other receipt or payment is against: this company's, and still active. */
+    private static function otherAccount(string $companyId, string $accountId): Account
+    {
+        $account = Account::find($accountId);
+        if ($account === null || $account->company_id !== $companyId || ! $account->is_active) {
+            throw new PostingError('The account on this voucher is missing or retired.');
+        }
+
+        return $account;
     }
 
     // §4.6 UNGL (ACC-004).
@@ -445,7 +489,7 @@ class Posting
             // money twice.
             throw new PostingError("{$payment->voucher_number} was migrated from the old system as history and is already reflected in the opening bank balance.");
         }
-        $customerName = $payment->customer?->name ?? '';
+        $customerName = $payment->isOther() ? (string) $payment->notes : ($payment->customer?->name ?? '');
 
         return self::bank(
             companyId: $payment->company_id, bankAccountId: $payment->bank_account_id,
@@ -460,7 +504,7 @@ class Posting
 
     public static function bankSupplierPayment(SupplierPayment $payment, string $actorUserId): BankTransaction
     {
-        $supplierName = $payment->supplier?->name ?? '';
+        $supplierName = $payment->isOther() ? (string) $payment->notes : ($payment->supplier?->name ?? '');
 
         return self::bank(
             companyId: $payment->company_id, bankAccountId: $payment->bank_account_id,

@@ -10,7 +10,7 @@
 
 import { companyIndividual, setupLists } from './masters.mjs'
 import { contract, incident, jobOrder, product, prospect, quotation, quotationProductInvoice, receipt, salesInvoice, serviceRecord, softwareTask } from './sales.mjs'
-import { paymentVoucher, purchaseOrder, purchaseOrderWithinLimit, supplierBill } from './purchasing.mjs'
+import { otherPayment, otherReceipt, paymentVoucher, purchaseOrder, purchaseOrderWithinLimit, supplierBill } from './purchasing.mjs'
 import { goodsReceive, stockAdjustment, stockItem, warehouse } from './stock.mjs'
 import { journalVoucher, staff } from './admin.mjs'
 import { mobileApp } from './mobile.mjs'
@@ -32,6 +32,8 @@ export const FLOWS = [
   purchaseOrder,
   supplierBill,
   paymentVoucher,
+  otherReceipt,
+  otherPayment,
   warehouse,
   stockItem,
   goodsReceive,

@@ -18,7 +18,8 @@ export default function PaymentVoucherPrintPage() {
     if (!id) return
     api.getSupplierPayment(id).then((p) => {
       setPayment(p)
-      api.getCompanyIndividual(p.supplier_id).then(setSupplier)
+      // An Other payment (bank charges and the like) has no supplier.
+      if (p.supplier_id) api.getCompanyIndividual(p.supplier_id).then(setSupplier)
     })
   }, [id])
 
@@ -31,7 +32,7 @@ export default function PaymentVoucherPrintPage() {
     downloadBlob(await api.exportSupplierPaymentDocx(id), `${payment.voucher_number}.docx`)
   }
 
-  if (!payment || !supplier) return <p>Loading...</p>
+  if (!payment || (payment.supplier_id && !supplier)) return <p>Loading...</p>
 
   return (
     <div className="invoice-sheet">
@@ -60,8 +61,17 @@ export default function PaymentVoucherPrintPage() {
       <div className="form-meta">
         <div>
           <div className="form-section-label">Paid To</div>
-          <div className="form-customer-name">{supplier.name}</div>
-          {supplier.gst_registration_no && <div>GST Reg# {supplier.gst_registration_no}</div>}
+          {supplier ? (
+            <>
+              <div className="form-customer-name">{supplier.name}</div>
+              {supplier.gst_registration_no && <div>GST Reg# {supplier.gst_registration_no}</div>}
+            </>
+          ) : (
+            <>
+              <div className="form-customer-name">{payment.notes}</div>
+              <div>Account: {payment.gl_account}</div>
+            </>
+          )}
         </div>
         <div className="form-meta-right">
           <div className="form-meta-row">

@@ -44,6 +44,7 @@ app treats it exactly as it treats a real phone).
    | Purchase Order above the limit | 1,000: needs the owner (PUR-001); approved, imported to Accounts Payable |
    | Supplier bill | tax code TX, an expense account other than the default |
    | Payment Voucher | recorded, allocated to the bill, banked |
+   | Other receipt / Other payment | bank interest to 4900 and bank charges to 6500 (ACC-005), posted, banked into the Bank Book; the Bank Book has no entry form |
    | Warehouse, Stock Item | added |
    | Goods Receive Note | 10 at 12.50; nothing moves until Confirm; then quantity 10 at an average of 12.50 (INV-002) |
    | Stock Adjustment | −2; nothing moves while pending (INV-001); moves on Approve |

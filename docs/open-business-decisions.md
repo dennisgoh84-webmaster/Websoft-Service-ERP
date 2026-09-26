@@ -1954,6 +1954,24 @@ changed one):
 | 12.1: where do existing Software Tasks land? | **By what they show today**: tested ones become Tested; untested ones past their finish date become For Testing; the rest become Open. Each move is logged in Event Logs. |
 | 12.1: who may mark Released? | **Anyone with EDIT on Software Development**, and only from Tested. |
 
+## 51. Bank interest in the GST Calculation (raised 2026-09-26)
+
+Raised building ACC-005 (no direct Bank Book keying; bank interest and
+charges as Other receipts and payments). It is on the **Websoft
+Decisions** page.
+
+Bank interest received is an exempt supply for GST. Question: should an
+Other receipt's amount be counted in the GST Calculation's exempt
+supplies box?
+
+**Recommended on the page:** yes. An Other receipt could be marked
+exempt (ES) and count in the exempt supplies box; the tax payable does
+not change.
+
+**Default taken meanwhile:** no. An Other receipt or payment carries no
+tax code and is left out of the GST Calculation. Bank charges paid carry
+no input tax either way.
+
 ## How to use this document
 
 - Do not start detailed schema or workflow design for an area until the

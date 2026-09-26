@@ -34,7 +34,7 @@ class Payment extends Model
     public const METHOD_OTHER = 'other';
 
     protected $fillable = [
-        'company_id', 'customer_id', 'voucher_number', 'payment_date', 'amount_sgd',
+        'company_id', 'customer_id', 'gl_account_id', 'voucher_number', 'payment_date', 'amount_sgd',
         'method', 'reference', 'notes', 'bank_account_id', 'recorded_by_user_id',
         // Data Migration (docs/data-migration.md) -- zero/null on every
         // receipt recorded in this system.
@@ -79,8 +79,29 @@ class Payment extends Model
         );
     }
 
+    /**
+     * An "Other" voucher is against a GL account, not a Company /
+     * Individual -- bank interest, bank charges and the like, which go
+     * through a voucher rather than straight into the Bank Book (#49,
+     * 31.1). Exactly one of customer_id / gl_account_id is set.
+     */
+    public function isOther(): bool
+    {
+        return $this->gl_account_id !== null;
+    }
+
+    public function glAccount(): BelongsTo
+    {
+        return $this->belongsTo(Account::class, 'gl_account_id');
+    }
+
+    /** An Other voucher settles no invoices, so it never has anything left to allocate. */
     public function unallocatedSgd(): Money
     {
+        if ($this->isOther()) {
+            return Money::of(0);
+        }
+
         return Money::of($this->amount_sgd)->minus($this->allocatedSgd());
     }
 }

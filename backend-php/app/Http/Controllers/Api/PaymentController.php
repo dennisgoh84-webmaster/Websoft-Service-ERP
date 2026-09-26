@@ -93,6 +93,11 @@ class PaymentController extends Controller
             'id' => $payment->id,
             'voucher_number' => $payment->voucher_number,
             'customer_id' => $payment->customer_id,
+            // An Other receipt (bank interest and the like, #49 / 31.1) is
+            // against a GL account instead of a Company / Individual.
+            'kind' => $payment->isOther() ? 'other' : 'customer',
+            'gl_account_id' => $payment->gl_account_id,
+            'gl_account' => $payment->glAccount ? "{$payment->glAccount->code} {$payment->glAccount->name}" : null,
             'payment_date' => optional($payment->payment_date)->toDateString(),
             'amount_sgd' => (float) $payment->amount_sgd,
             'allocated_sgd' => $payment->allocatedSgd()->toFloat(),
@@ -149,7 +154,7 @@ class PaymentController extends Controller
 
         return $this->filtered($companyId, $request)->map(fn (Payment $p) => [
             'voucher_number' => $p->voucher_number,
-            'customer_name' => $customerNames[$p->customer_id] ?? '',
+            'customer_name' => $p->isOther() ? "Other: {$p->glAccount?->code} {$p->glAccount?->name} -- {$p->notes}" : ($customerNames[$p->customer_id] ?? ''),
             'payment_date' => optional($p->payment_date)->toDateString(),
             'amount_sgd' => number_format((float) $p->amount_sgd, 2, '.', ''),
             'allocated_sgd' => $p->allocatedSgd()->toString(),
@@ -198,7 +203,11 @@ class PaymentController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'edit');
 
         $data = $request->validate([
-            'customer_id' => 'required|uuid',
+            // A Company / Individual, or -- for bank interest and the like,
+            // which are never keyed straight into the Bank Book (#49 /
+            // 31.1) -- a GL account, with a description saying what it is.
+            'customer_id' => 'required_without:gl_account_id|nullable|uuid',
+            'gl_account_id' => 'required_without:customer_id|nullable|uuid',
             'payment_date' => 'required|date',
             'amount_sgd' => 'required|numeric|gt:0',
             'method' => 'sometimes|in:bank_transfer,paynow,cheque,cash,credit_card,other',
@@ -209,13 +218,33 @@ class PaymentController extends Controller
             'allocations.*.invoice_id' => 'required_with:allocations|uuid',
             'allocations.*.amount_sgd' => 'required_with:allocations|numeric|gt:0',
         ]);
-        $customer = $this->customerOrFail($user->company_id, $data['customer_id']);
+        $customer = null;
+        if (! empty($data['customer_id']) && ! empty($data['gl_account_id'])) {
+            throw new ApiException(422, 'A receipt is from a Company / Individual or against an account, not both.');
+        }
+        if (! empty($data['gl_account_id'])) {
+            if (trim((string) ($data['notes'] ?? '')) === '') {
+                throw new ApiException(422, 'Say what this receipt is, e.g. "Bank interest for September".');
+            }
+            if (! empty($data['allocations'])) {
+                throw new ApiException(422, 'A receipt against an account settles no invoices.');
+            }
+            try {
+                $account = Posting::otherVoucherAccountOrFail($user->company_id, $data['gl_account_id']);
+            } catch (PostingError $e) {
+                throw new ApiException(422, $e->getMessage());
+            }
+        } else {
+            $customer = $this->customerOrFail($user->company_id, $data['customer_id']);
+        }
+        $from = $customer ? $customer->name : "{$account->code} {$account->name} ({$data['notes']})";
 
         try {
-            $payment = DB::transaction(function () use ($user, $data, $customer) {
+            $payment = DB::transaction(function () use ($user, $data, $from) {
                 $payment = Payment::create([
                     'company_id' => $user->company_id,
-                    'customer_id' => $data['customer_id'],
+                    'customer_id' => $data['customer_id'] ?? null,
+                    'gl_account_id' => $data['gl_account_id'] ?? null,
                     'voucher_number' => Numbering::next($user->company_id, 'receipt'),
                     'payment_date' => $data['payment_date'],
                     'amount_sgd' => $data['amount_sgd'],
@@ -245,8 +274,8 @@ class PaymentController extends Controller
                     entityId: $payment->id,
                     action: 'recorded',
                     actorUserId: $user->id,
-                    details: "{$payment->voucher_number}: SGD {$data['amount_sgd']} from {$customer->name} ({$payment->method}, ref=".($data['reference'] ?? '-').')',
-                    newValue: ['amount_sgd' => (string) $data['amount_sgd'], 'customer' => $customer->name, 'allocations' => count($data['allocations'] ?? [])],
+                    details: "{$payment->voucher_number}: SGD {$data['amount_sgd']} from {$from} ({$payment->method}, ref=".($data['reference'] ?? '-').')',
+                    newValue: ['amount_sgd' => (string) $data['amount_sgd'], 'from' => $from, 'allocations' => count($data['allocations'] ?? [])],
                 );
 
                 return $payment;
@@ -265,6 +294,9 @@ class PaymentController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'edit');
 
         $payment = $this->paymentOrFail($user->company_id, $paymentId);
+        if ($payment->isOther()) {
+            throw new ApiException(422, "{$payment->voucher_number} is against an account, not a Company / Individual, so it settles no invoices.");
+        }
         $data = $request->validate([
             'allocations' => 'required|array|min:1',
             'allocations.*.invoice_id' => 'required|uuid',

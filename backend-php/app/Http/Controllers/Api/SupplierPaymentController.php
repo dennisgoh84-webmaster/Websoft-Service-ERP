@@ -94,12 +94,18 @@ class SupplierPaymentController extends Controller
             'id' => $payment->id,
             'voucher_number' => $payment->voucher_number,
             'supplier_id' => $payment->supplier_id,
+            // An Other payment (bank charges and the like, #49 / 31.1) is
+            // against a GL account instead of a supplier.
+            'kind' => $payment->isOther() ? 'other' : 'supplier',
+            'gl_account_id' => $payment->gl_account_id,
+            'gl_account' => $payment->glAccount ? "{$payment->glAccount->code} {$payment->glAccount->name}" : null,
             'payment_date' => optional($payment->payment_date)->toDateString(),
             'amount_sgd' => (float) $payment->amount_sgd,
             'allocated_sgd' => $payment->allocatedSgd()->toFloat(),
             'unallocated_sgd' => $payment->unallocatedSgd()->toFloat(),
             'method' => $payment->method,
             'reference' => $payment->reference,
+            'notes' => $payment->notes,
             // bill_number as well, as Receipts give invoice_number: the
             // screen names each bill it was allocated to, and showed
             // "undefined" until 2026-09-26 (found by the self-test).
@@ -148,7 +154,7 @@ class SupplierPaymentController extends Controller
 
         return $this->filtered($companyId, $request)->map(fn (SupplierPayment $p) => [
             'voucher_number' => $p->voucher_number,
-            'supplier_name' => $supplierNames[$p->supplier_id] ?? '',
+            'supplier_name' => $p->isOther() ? "Other: {$p->glAccount?->code} {$p->glAccount?->name} -- {$p->notes}" : ($supplierNames[$p->supplier_id] ?? ''),
             'payment_date' => optional($p->payment_date)->toDateString(),
             'amount_sgd' => number_format((float) $p->amount_sgd, 2, '.', ''),
             'allocated_sgd' => $p->allocatedSgd()->toString(),
@@ -197,7 +203,11 @@ class SupplierPaymentController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'edit');
 
         $data = $request->validate([
-            'supplier_id' => 'required|uuid',
+            // A supplier, or -- for bank charges and the like, which are
+            // never keyed straight into the Bank Book (#49 / 31.1) -- a GL
+            // account, with a description saying what it is.
+            'supplier_id' => 'required_without:gl_account_id|nullable|uuid',
+            'gl_account_id' => 'required_without:supplier_id|nullable|uuid',
             'payment_date' => 'required|date',
             'amount_sgd' => 'required|numeric|gt:0',
             'method' => 'sometimes|in:bank_transfer,paynow,cheque,cash,credit_card,other',
@@ -208,13 +218,33 @@ class SupplierPaymentController extends Controller
             'allocations.*.supplier_invoice_id' => 'required_with:allocations|uuid',
             'allocations.*.amount_sgd' => 'required_with:allocations|numeric|gt:0',
         ]);
-        $supplier = $this->supplierOrFail($user->company_id, $data['supplier_id']);
+        $supplier = null;
+        if (! empty($data['supplier_id']) && ! empty($data['gl_account_id'])) {
+            throw new ApiException(422, 'A payment is to a supplier or against an account, not both.');
+        }
+        if (! empty($data['gl_account_id'])) {
+            if (trim((string) ($data['notes'] ?? '')) === '') {
+                throw new ApiException(422, 'Say what this payment is, e.g. "Bank charges for September".');
+            }
+            if (! empty($data['allocations'])) {
+                throw new ApiException(422, 'A payment against an account settles no bills.');
+            }
+            try {
+                $account = Posting::otherVoucherAccountOrFail($user->company_id, $data['gl_account_id']);
+            } catch (PostingError $e) {
+                throw new ApiException(422, $e->getMessage());
+            }
+        } else {
+            $supplier = $this->supplierOrFail($user->company_id, $data['supplier_id']);
+        }
+        $to = $supplier ? $supplier->name : "{$account->code} {$account->name} ({$data['notes']})";
 
         try {
-            $payment = DB::transaction(function () use ($user, $data, $supplier) {
+            $payment = DB::transaction(function () use ($user, $data, $to) {
                 $payment = SupplierPayment::create([
                     'company_id' => $user->company_id,
-                    'supplier_id' => $data['supplier_id'],
+                    'supplier_id' => $data['supplier_id'] ?? null,
+                    'gl_account_id' => $data['gl_account_id'] ?? null,
                     'voucher_number' => Numbering::next($user->company_id, 'payment'),
                     'payment_date' => $data['payment_date'],
                     'amount_sgd' => $data['amount_sgd'],
@@ -244,8 +274,8 @@ class SupplierPaymentController extends Controller
                     entityId: $payment->id,
                     action: 'recorded',
                     actorUserId: $user->id,
-                    details: "{$payment->voucher_number}: SGD {$data['amount_sgd']} to {$supplier->name}",
-                    newValue: ['voucher_number' => $payment->voucher_number, 'amount_sgd' => (string) $data['amount_sgd'], 'supplier' => $supplier->name],
+                    details: "{$payment->voucher_number}: SGD {$data['amount_sgd']} to {$to}",
+                    newValue: ['voucher_number' => $payment->voucher_number, 'amount_sgd' => (string) $data['amount_sgd'], 'to' => $to],
                 );
 
                 return $payment;
@@ -263,6 +293,9 @@ class SupplierPaymentController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'edit');
 
         $payment = $this->paymentOrFail($user->company_id, $paymentId);
+        if ($payment->isOther()) {
+            throw new ApiException(422, "{$payment->voucher_number} is against an account, not a supplier, so it settles no bills.");
+        }
         $data = $request->validate([
             'allocations' => 'required|array|min:1',
             'allocations.*.supplier_invoice_id' => 'required|uuid',

@@ -587,6 +587,36 @@ Status: **CONFIRMED / DECIDED** (2026-09-14). Full design in
   the bank transaction with a required reason. No financial record is
   ever deleted (CLAUDE.md).
 
+### ACC-005 — No Direct Bank Book Keying — CONFIRMED
+
+Dennis, 2026-09-26 (open-business-decisions.md #49, item 31.1): "Should
+not allow them to key direct, have to key in through receipt or
+payment." Built 2026-09-26.
+
+- **The Bank Book takes no lines keyed straight into it.** Every line
+  comes from a Receipt Voucher or Payment Voucher's Bank step (ACC-002),
+  so every bank line has its General Ledger entry. A line keyed directly
+  never reached the General Ledger, and the two drifted apart.
+- **Bank interest, bank charges and the like are an "Other" receipt or
+  payment.** These are made against a GL account instead of a
+  Company / Individual, with a description of what they are.
+  - An Other receipt posts Dr bank / Cr that account.
+  - An Other payment posts Dr that account / Cr bank.
+  - Neither settles invoices or bills.
+  - Numbering (RV / PV), Bank / Unbank and UNGL are the same as any
+    voucher.
+- **Which accounts are allowed.** Any active account of the company,
+  except:
+  - the control accounts (1100 AR, 2000 AP, 2100 / 2110 GST), whose
+    balances must come only from their documents;
+  - a bank's own account. Money between two banks is a transfer, which
+    is not built.
+- Lines keyed before this stay in the Bank Book, and can still be voided
+  and reconciled.
+- **Default taken, for Dennis to confirm** (open-business-decisions.md
+  #51): an Other receipt or payment carries no GST. So bank interest
+  received is not counted in the GST Calculation as an exempt supply.
+
 ## Customer Portal Business Rules (CONFIRMED)
 
 Status: **CONFIRMED / DECIDED** (2026-09-14). Full design in

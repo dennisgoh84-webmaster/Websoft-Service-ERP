@@ -7,6 +7,8 @@ import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type BankAccount, type CompanyIndividual, type Invoice, type Payment } from '../lib/api'
 import { formatMoney as money, formatDate, todayIso } from '../lib/format'
 import DateInput from '../components/DateInput'
+import OtherVoucherFields from '../components/OtherVoucherFields'
+import { useOtherVoucherAccounts } from '../lib/otherVoucherAccounts'
 
 const METHODS = [
   { value: 'bank_transfer', label: 'Bank transfer' },
@@ -27,6 +29,11 @@ export default function ReceiptsPage() {
   const [docPanelId, setDocPanelId] = useState<string | null>(null)
 
   // Record payment form
+  // A Company / Individual, or "Other" -- bank interest and the like,
+  // against a GL account (#49 / 31.1: never keyed into the Bank Book).
+  const [kind, setKind] = useState<'customer' | 'other'>('customer')
+  const [glAccountId, setGlAccountId] = useState('')
+  const [description, setDescription] = useState('')
   const [customerId, setCustomerId] = useState('')
   const [paymentDate, setPaymentDate] = useState(todayIso())
   const [amount, setAmount] = useState('')
@@ -52,7 +59,8 @@ export default function ReceiptsPage() {
 
   useEffect(refresh, [])
 
-  const customerName = (id: string) => customers.find((c) => c.id === id)?.name ?? id.slice(0, 8)
+  const otherAccounts = useOtherVoucherAccounts(bankAccounts)
+  const customerName = (id: string | null) => (id ? (customers.find((c) => c.id === id)?.name ?? id.slice(0, 8)) : '')
   const openInvoices = invoices.filter((i) => i.outstanding_sgd > 0)
 
   async function onRecordPayment(e: FormEvent) {
@@ -61,8 +69,8 @@ export default function ReceiptsPage() {
     setMessage(null)
     setSaving(true)
     try {
-      await api.recordPayment({
-        customer_id: customerId,
+      const rv = await api.recordPayment({
+        ...(kind === 'other' ? { gl_account_id: glAccountId, notes: description } : { customer_id: customerId }),
         payment_date: paymentDate,
         amount_sgd: parseFloat(amount),
         bank_account_id: bankAccountId,
@@ -71,7 +79,12 @@ export default function ReceiptsPage() {
       })
       setAmount('')
       setReference('')
-      setMessage('Receipt recorded. Allocate it below to settle specific invoices (AR-001).')
+      setDescription('')
+      setMessage(
+        kind === 'other'
+          ? `${rv.voucher_number} recorded and posted to ${rv.gl_account}. Press Bank below to put it in the Bank Book.`
+          : 'Receipt recorded. Allocate it below to settle specific invoices (AR-001).',
+      )
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to record payment')
@@ -187,16 +200,34 @@ export default function ReceiptsPage() {
         <h2>Record a receipt</h2>
         <form onSubmit={onRecordPayment}>
           <div className="form-row">
-            <label>Company / Individual</label>
-            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
-              <option value="">Select...</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
+            <label>Received from</label>
+            <select value={kind} onChange={(e) => setKind(e.target.value as 'customer' | 'other')}>
+              <option value="customer">A Company / Individual (settles its invoices)</option>
+              <option value="other">Other -- bank interest, refunds... (to an account)</option>
             </select>
           </div>
+          {kind === 'customer' ? (
+            <div className="form-row">
+              <label>Company / Individual</label>
+              <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
+                <option value="">Select...</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <OtherVoucherFields
+              accounts={otherAccounts}
+              accountId={glAccountId}
+              onAccountId={setGlAccountId}
+              description={description}
+              onDescription={setDescription}
+              placeholder="e.g. DBS interest for September"
+            />
+          )}
           <div className="form-row">
             <label>Payment date</label>
             <DateInput
@@ -241,7 +272,7 @@ export default function ReceiptsPage() {
             <label>Bank / remittance reference</label>
             <input value={reference} onChange={(e) => setReference(e.target.value)} />
           </div>
-          <button type="submit" disabled={saving || !customerId}>
+          <button type="submit" disabled={saving || (kind === 'customer' ? !customerId : !glAccountId || !description.trim())}>
             {saving ? 'Recording...' : 'Record receipt'}
           </button>
         </form>
@@ -264,7 +295,7 @@ export default function ReceiptsPage() {
             <tr>
               <th>Voucher</th>
               <th>Date</th>
-              <th>Company / Individual</th>
+              <th>Received from</th>
               <th>Amount</th>
               <th>Unallocated</th>
               <th>Reference</th>
@@ -281,13 +312,22 @@ export default function ReceiptsPage() {
                 <tr>
                   <td style={{ whiteSpace: 'nowrap' }}>{p.voucher_number}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>{formatDate(p.payment_date)}</td>
-                  <td>{customerName(p.customer_id)}</td>
+                  <td>
+                    {p.kind === 'other' ? (
+                      <>
+                        {p.notes}
+                        <div className="muted small">Other: {p.gl_account}</div>
+                      </>
+                    ) : (
+                      customerName(p.customer_id)
+                    )}
+                  </td>
                   <td>{money(p.amount_sgd)}</td>
                   <td>
                     {p.unallocated_sgd > 0 ? (
                       <strong>{money(p.unallocated_sgd)}</strong>
                     ) : (
-                      <span className="muted">fully allocated</span>
+                      <span className="muted">{p.kind === 'other' ? 'to an account' : 'fully allocated'}</span>
                     )}
                     {p.allocations.length > 0 && (
                       <div className="muted">

@@ -69,11 +69,22 @@ class BankTransactionTest extends TestCase
         return ['Authorization' => 'Bearer '.($token ?? $this->token)];
     }
 
+    /**
+     * A Bank Book line. Keying one in directly is refused since
+     * 2026-09-26 (#49 / 31.1), so these stand for lines keyed before
+     * then, which stay and can still be voided and reconciled.
+     */
     private function addLine(array $attrs): array
     {
-        return $this->postJson("/api/bank-accounts/{$this->bank->id}/transactions", array_merge([
+        static $n = 0;
+        $n++;
+
+        return BankTransaction::create(array_merge([
+            'company_id' => $this->company->id, 'bank_account_id' => $this->bank->id,
+            'transaction_number' => sprintf('BT-2026-%04d', $n),
             'transaction_date' => '2026-02-01', 'description' => 'A line',
-        ], $attrs), $this->headers())->assertOk()->json();
+            'debit_sgd' => '0.00', 'credit_sgd' => '0.00',
+        ], array_map(fn ($v) => is_int($v) || is_float($v) ? number_format($v, 2, '.', '') : $v, $attrs)))->toArray();
     }
 
     public function test_the_ledger_runs_a_balance_from_the_opening_balance(): void
@@ -92,17 +103,15 @@ class BankTransactionTest extends TestCase
         $this->assertSame(2, $ledger['unreconciled_count']);
     }
 
-    public function test_a_line_is_either_a_debit_or_a_credit_never_both_and_never_neither(): void
+    /** #49 / 31.1: money in and out is keyed as a Receipt or Payment Voucher, never straight into the Bank Book. */
+    public function test_keying_a_line_directly_is_refused(): void
     {
         $this->postJson("/api/bank-accounts/{$this->bank->id}/transactions", [
-            'transaction_date' => '2026-02-01', 'description' => 'Both', 'debit_sgd' => 10, 'credit_sgd' => 5,
+            'transaction_date' => '2026-02-01', 'description' => 'Bank charges', 'credit_sgd' => 15,
         ], $this->headers())->assertStatus(422)
-            ->assertJsonPath('detail', 'A transaction is either a debit or a credit, not both.');
+            ->assertJsonPath('detail', fn ($d) => str_contains($d, 'not keyed in directly'));
 
-        $this->postJson("/api/bank-accounts/{$this->bank->id}/transactions", [
-            'transaction_date' => '2026-02-01', 'description' => 'Neither',
-        ], $this->headers())->assertStatus(422)
-            ->assertJsonPath('detail', 'Enter a debit or a credit amount.');
+        $this->assertSame(0, BankTransaction::where('bank_account_id', $this->bank->id)->count());
     }
 
     public function test_a_voided_line_stays_visible_but_stops_moving_the_balance(): void

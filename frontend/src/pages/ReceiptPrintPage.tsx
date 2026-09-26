@@ -27,7 +27,8 @@ export default function ReceiptPrintPage() {
     if (!id) return
     api.getPayment(id).then((p) => {
       setPayment(p)
-      api.getCompanyIndividual(p.customer_id).then(setCustomer)
+      // An Other receipt (bank interest and the like) has no Company / Individual.
+      if (p.customer_id) api.getCompanyIndividual(p.customer_id).then(setCustomer)
     })
   }, [id])
 
@@ -40,7 +41,7 @@ export default function ReceiptPrintPage() {
     downloadBlob(await api.exportPaymentDocx(id), `${payment.voucher_number}.docx`)
   }
 
-  if (!payment || !customer) return <p>Loading...</p>
+  if (!payment || (payment.customer_id && !customer)) return <p>Loading...</p>
 
   return (
     <div className="invoice-sheet">
@@ -69,8 +70,17 @@ export default function ReceiptPrintPage() {
       <div className="form-meta">
         <div>
           <div className="form-section-label">Received From</div>
-          <div className="form-customer-name">{customer.name}</div>
-          {customer.uen && <div>UEN: {customer.uen}</div>}
+          {customer ? (
+            <>
+              <div className="form-customer-name">{customer.name}</div>
+              {customer.uen && <div>UEN: {customer.uen}</div>}
+            </>
+          ) : (
+            <>
+              <div className="form-customer-name">{payment.notes}</div>
+              <div>Account: {payment.gl_account}</div>
+            </>
+          )}
         </div>
         <div className="form-meta-right">
           <div className="form-meta-row">
