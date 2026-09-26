@@ -15,9 +15,10 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * Module Control tidy-up (Dennis, 2026-09-26): Purchasing, Projects and
- * Hardware Management are gone; Commission Management owns the
- * commission report, its rate and Commission Payouts.
+ * Module Control tidy-up (Dennis, 2026-09-26): Purchasing, Projects,
+ * Hardware Management, Inventory and Integrations are gone; Commission
+ * Management owns the commission report, its rate and Commission
+ * Payouts.
  */
 class ModuleControlTidyTest extends TestCase
 {
@@ -25,7 +26,7 @@ class ModuleControlTidyTest extends TestCase
 
     public function test_the_removed_modules_are_gone_and_commission_management_is_built(): void
     {
-        foreach (['purchasing', 'projects', 'hardware_management'] as $key) {
+        foreach (['purchasing', 'projects', 'hardware_management', 'inventory', 'integrations'] as $key) {
             $this->assertDatabaseMissing('modules', ['key' => $key]);
         }
         $this->assertDatabaseHas('modules', ['key' => 'commission_management', 'is_built' => true]);
@@ -51,6 +52,31 @@ class ModuleControlTidyTest extends TestCase
         $this->assertTrue((bool) CompanyModule::where('company_id', $company->id)->where('module_key', 'commission_management')->value('enabled'));
         $this->assertFalse((bool) CompanyModule::where('company_id', $off->id)->where('module_key', 'commission_management')->value('enabled'));
         $this->assertSame(GroupModuleAuthority::FULL, GroupModuleAuthority::where('group_id', $group->id)->where('module_key', 'commission_management')->value('access_level'));
+    }
+
+    public function test_the_inventory_and_integrations_placeholders_are_removed_with_their_settings(): void
+    {
+        $company = Company::factory()->create();
+        $group = Group::factory()->for($company)->create();
+        foreach (['inventory', 'integrations'] as $key) {
+            ModuleCatalog::firstOrCreate(['key' => $key], ['name' => $key, 'is_built' => false]);
+            CompanyModule::create(['company_id' => $company->id, 'module_key' => $key, 'enabled' => false]);
+            GroupModuleAuthority::create(['group_id' => $group->id, 'module_key' => $key, 'access_level' => GroupModuleAuthority::VIEW]);
+        }
+        foreach (['stock_master', 'data_migration'] as $key) {
+            ModuleCatalog::firstOrCreate(['key' => $key], ['name' => $key, 'is_built' => true]);
+        }
+
+        (require database_path('migrations/2026_09_30_002600_remove_inventory_and_integrations_modules.php'))->up();
+
+        foreach (['inventory', 'integrations'] as $key) {
+            $this->assertDatabaseMissing('modules', ['key' => $key]);
+            $this->assertDatabaseMissing('company_modules', ['module_key' => $key]);
+            $this->assertDatabaseMissing('group_module_authorities', ['module_key' => $key]);
+        }
+        // The stock and data-migration modules that do the real work stay.
+        $this->assertDatabaseHas('modules', ['key' => 'stock_master']);
+        $this->assertDatabaseHas('modules', ['key' => 'data_migration']);
     }
 
     public function test_accounting_reports_alone_no_longer_opens_commission(): void

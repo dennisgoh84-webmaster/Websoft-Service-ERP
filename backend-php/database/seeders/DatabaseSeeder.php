@@ -49,7 +49,6 @@ class DatabaseSeeder extends Seeder
         'billing' => ['Billing', true, true],
         'accounts_receivable' => ['Accounts Receivable', true, true],
         'accounts_payable' => ['Accounts Payable', true, true],
-        'inventory' => ['Inventory', false, false],
         // Commission report, rate and Payouts (moved from accounting_reports 2026-09-26).
         'commission_management' => ['Commission Management', true, true],
         'finance_accounting' => ['Finance / Accounting', true, true],
@@ -57,7 +56,6 @@ class DatabaseSeeder extends Seeder
         'software_development' => ['Software Development (Software Tasks)', true, true],
         'operations_reports' => ['Operations Reports (Contracts / Job Orders / Service Records)', true, true],
         'accounting_reports' => ['Accounting Reports (AR/AP Aging, Trial Balance)', true, true],
-        'integrations' => ['Integrations (incl. Odoo migration)', false, false], // deferred
         // Built 2026-09-15 (incident triage). A paid add-on (decision 12.4):
         // seeded OFF; enable per company under Module Control once licensed.
         'ai_assistant' => ['AI Assistant', true, false],

@@ -170,7 +170,7 @@ per company.
 
 | Column | Type | Purpose |
 |---|---|---|
-| `key` | `varchar(50)` PK | Module identifier (e.g. `prospects`, `billing`). `crm` was renamed `prospects` on 2026-09-26, keeping each company's enabled flag and each group's access; a Central Command record still naming `crm` must be updated to `prospects`. On the same day `purchasing`, `projects` and `hardware_management` were removed (rows deleted from `modules`, `company_modules` and `group_module_authorities`), and `commission_management` became a built module carrying each company's and group's access copied from `accounting_reports`. |
+| `key` | `varchar(50)` PK | Module identifier (e.g. `prospects`, `billing`). `crm` was renamed `prospects` on 2026-09-26, keeping each company's enabled flag and each group's access; a Central Command record still naming `crm` must be updated to `prospects`. On the same day `purchasing`, `projects`, `hardware_management`, `inventory` and `integrations` were removed (rows deleted from `modules`, `company_modules` and `group_module_authorities`), and `commission_management` became a built module carrying each company's and group's access copied from `accounting_reports`. |
 | `name` | `varchar(100)` | Human-readable name |
 | `description` | `text` nullable | What the module does |
 | `is_built` | `boolean` default false | Whether application code for this module exists |

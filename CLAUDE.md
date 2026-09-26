@@ -42,7 +42,10 @@ eventual project.
 - Purchasing — part of Accounts Payable (purchase orders, 2-way
   matching); its separate Module Control key was removed 2026-09-26 as
   redundant
-- Inventory
+- Inventory — built as Stock (Stock Master, Goods Receive / Transfer /
+  Return / Issue Notes, Stock Adjustment, Stock Operation Reports), each
+  on its own Module Control key; the empty `inventory` placeholder key
+  was removed 2026-09-26
 - Commission Management — the commission **report**, its rate setting
   and **Commission Payouts** (generate / approve / pay / clawback) are
   built, and since 2026-09-26 all of it is switched and granted under
@@ -58,7 +61,8 @@ eventual project.
 
 Projects and Hardware Management were dropped from the scope on
 2026-09-26 at Dennis's request (their Module Control keys, which never
-had code, were removed). PROJECT-type contracts and their milestone
+had code, were removed, as was the empty `integrations` key that Data
+Migration replaced). PROJECT-type contracts and their milestone
 schedule are part of Service Contracts and are unaffected.
 
 "Ticket"/"Timesheet" terminology has been renamed throughout to "Job

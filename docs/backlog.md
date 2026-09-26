@@ -321,9 +321,10 @@ shipped and when.
   grants the commission report, its rate and Commission Payouts (each
   company's and group's access copied from Accounting Reports); the AI
   Assistant, the owner included, shows nothing anywhere unless it is
-  switched on. Still unbuilt placeholders: `inventory` and
-  `integrations` (the latter superseded by `data_migration`) -- not
-  raised.
+  switched on. The last two empty placeholders went the same day
+  (Dennis: "Proceed to remove"): `inventory` (stock runs under its own
+  Stock Master / goods-note / adjustment / report keys) and
+  `integrations` (superseded by `data_migration`).
 
 - [x] **Sales module enhancements (Job Implementation Template,
   multi-Product Job Orders, Contract hour-sharing, Contract filters,
