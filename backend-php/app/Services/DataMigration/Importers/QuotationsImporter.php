@@ -104,6 +104,10 @@ class QuotationsImporter extends EntityImporter
         if ($number === null) {
             throw new RowFailed('Quotation number is required.');
         }
+        // Before the cut-off date, only a quotation still awaiting the customer (draft or sent) comes across.
+        $mapped = self::STATUSES[mb_strtolower((string) $row->get('state'))] ?? null;
+        $ctx->skipBeforeCutoff($ctx->date($row->get('date_order'), 'Quotation date'),
+            $mapped === null || in_array($mapped, [Quotation::STATUS_DRAFT, Quotation::STATUS_SENT], true), "Quotation {$number}");
         $ctx->requireUnusedNumber(Quotation::class, 'quotation_number', $number);
         $customer = $ctx->customer($row);
 

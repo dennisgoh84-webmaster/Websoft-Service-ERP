@@ -32,7 +32,7 @@ class ApprovalRequest extends Model
 
     protected $fillable = [
         'company_id', 'entity_type', 'entity_id', 'rule_id', 'authority_id',
-        'status', 'requested_by_user_id', 'resolved_at',
+        'status', 'requested_by_user_id', 'resolved_at', 'summary',
     ];
 
     protected $attributes = ['status' => self::STATUS_PENDING];

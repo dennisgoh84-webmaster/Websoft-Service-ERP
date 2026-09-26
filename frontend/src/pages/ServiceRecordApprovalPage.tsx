@@ -16,6 +16,28 @@ export default function ServiceRecordApprovalPage() {
   const [deductions, setDeductions] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [approvingId, setApprovingId] = useState<string | null>(null)
+  // Reject with a reason (Backlog 2, 2026-09-26).
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+
+  async function onReject(id: string) {
+    if (rejectReason.trim().length < 3) {
+      setError('Give a reason for rejecting it (at least 3 characters).')
+      return
+    }
+    setError(null)
+    setApprovingId(id)
+    try {
+      await api.rejectServiceRecord(id, rejectReason.trim())
+      setRejectingId(null)
+      setRejectReason('')
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reject')
+    } finally {
+      setApprovingId(null)
+    }
+  }
 
   function refresh() {
     api
@@ -57,8 +79,9 @@ export default function ServiceRecordApprovalPage() {
     <div>
       <h1>Service Record Approval</h1>
       <p className="muted">
-        Every Submitted Service Record, oldest first. Only Nico (Service Lead) or Cherish (Sales
-        Manager) can approve, and each record should be approved within a week of submission
+        Every Submitted Service Record, oldest first. Only the Service Record approvers (the
+        Service Record Approval authority under eApproval Master -- Nico and Cherish) can approve
+        or reject one, with a reason, and each record should be approved within a week of submission
         (SRV-019) -- anything past that is marked overdue here and counted on the Company
         Dashboard. Approving keys in the actual minutes to deduct from the contract -- a suggestion
         is prefilled (rounded minutes x the Urgent/after-hours multiplier, higher one wins if both
@@ -132,9 +155,35 @@ export default function ServiceRecordApprovalPage() {
                   />
                 </td>
                 <td>
-                  <button onClick={() => onApprove(r.id)} disabled={approvingId === r.id}>
-                    {approvingId === r.id ? 'Approving...' : 'Approve'}
-                  </button>
+                  {rejectingId === r.id ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 200 }}>
+                      <label htmlFor={`reject-reason-${r.id}`}>Reason for rejecting</label>
+                      <textarea id={`reject-reason-${r.id}`} rows={2} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="danger" onClick={() => onReject(r.id)} disabled={approvingId === r.id}>
+                          Reject
+                        </button>
+                        <button className="secondary" onClick={() => setRejectingId(null)}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button onClick={() => onApprove(r.id)} disabled={approvingId === r.id}>
+                        {approvingId === r.id ? 'Approving...' : 'Approve'}
+                      </button>
+                      <button
+                        className="secondary"
+                        onClick={() => {
+                          setRejectingId(r.id)
+                          setRejectReason('')
+                        }}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}

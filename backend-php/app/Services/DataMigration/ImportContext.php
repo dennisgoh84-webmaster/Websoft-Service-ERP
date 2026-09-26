@@ -214,6 +214,28 @@ class ImportContext
     }
 
     /** Singapore DD/MM/YYYY, or ISO YYYY-MM-DD (optionally with a time) as ODOO and Excel write it. */
+    /**
+     * The run's cut-off date (Dennis, 2026-09-26, decision page): it
+     * covers transactions only -- customers, contacts and contracts come
+     * across whole -- and a transaction dated before it is left out
+     * unless it is still open (unpaid, active, not closed), which is
+     * brought in whatever its date. A row with no date is brought in.
+     *
+     * @throws RowSkipped
+     */
+    public function skipBeforeCutoff(?Carbon $documentDate, bool $stillOpen, string $what): void
+    {
+        $cutoff = $this->batch->cutoff_date;
+        if ($cutoff === null || $documentDate === null || $stillOpen) {
+            return;
+        }
+        $cutoff = Carbon::parse($cutoff)->startOfDay();
+        if ($documentDate->copy()->startOfDay()->lt($cutoff)) {
+            throw new RowSkipped(sprintf('%s is dated %s, before the cut-off date %s, and is closed -- left out.',
+                $what, $documentDate->format('d/m/Y'), $cutoff->format('d/m/Y')));
+        }
+    }
+
     public function date(?string $value, string $label, bool $required = true): ?Carbon
     {
         if ($value === null || $value === '') {

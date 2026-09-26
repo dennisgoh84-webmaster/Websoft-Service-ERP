@@ -284,10 +284,24 @@ export default function PaymentVoucherPage() {
                       >
                         {p.bank_status === 'banked' ? 'Banked' : 'Not banked'}
                       </span>
+                      {p.approval_status && (
+                        <span
+                          className={`badge badge-${p.approval_status === 'approved' ? 'success' : p.approval_status === 'rejected' ? 'danger' : 'warning'}`}
+                          title={p.approval_note ?? undefined}
+                        >
+                          {p.approval_status === 'approved' ? 'Approved' : p.approval_status === 'rejected' ? 'Rejected' : 'Awaiting approval'}
+                        </span>
+                      )}
                       {p.bank_status === 'banked' ? (
                         <button className="secondary" disabled={busyId === p.id} onClick={() => onUnbank(p)} title="Void this payment's bank book line (needs a reason)">Unbank</button>
                       ) : (
-                        <button disabled={busyId === p.id || !p.bank_account_id} onClick={() => onBank(p)} title="Confirm the money left the bank — writes the bank book line">Bank</button>
+                        <button
+                          disabled={busyId === p.id || !p.bank_account_id || p.approval_status === 'pending' || p.approval_status === 'rejected'}
+                          onClick={() => onBank(p)}
+                          title={p.approval_status === 'pending' || p.approval_status === 'rejected' ? (p.approval_note ?? '') : 'Confirm the money left the bank — writes the bank book line'}
+                        >
+                          Bank
+                        </button>
                       )}
                       {p.gl_status === 'posted' && (
                         <button className="secondary" disabled={busyId === p.id} onClick={() => onUngl(p)} title="Reverse the GL posting (needs a reason)">UNGL</button>

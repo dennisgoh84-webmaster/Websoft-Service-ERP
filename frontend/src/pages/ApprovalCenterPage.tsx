@@ -12,6 +12,7 @@ import {
   type DocumentEntityType,
   type StaffUser,
 } from '../lib/api'
+import { Link } from 'react-router-dom'
 import { formatDate } from '../lib/format'
 
 const DOC_TYPE_LABELS: Record<DocumentEntityType, string> = {
@@ -123,11 +124,14 @@ export default function ApprovalCenterPage() {
                   </div>
                 </div>
 
+                {req.summary && <div style={{ marginBottom: 6 }}>{req.summary}</div>}
                 <div style={{ fontSize: '0.9em', opacity: 0.7, marginBottom: 8 }}>
                   Requested by: <strong>{staffName(req.requested_by_user_id)}</strong>
-                  <span style={{ marginLeft: 12 }}>
-                    Entity: {req.entity_id.slice(0, 8)}…
-                  </span>
+                  {!req.summary && (
+                    <span style={{ marginLeft: 12 }}>
+                      Entity: {req.entity_id.slice(0, 8)}…
+                    </span>
+                  )}
                 </div>
 
                 {req.decisions.length > 0 && (
@@ -151,6 +155,9 @@ export default function ApprovalCenterPage() {
                   </div>
                 )}
 
+                {req.entity_type === 'service_record' ? (
+                  <Link to="/service-record-approval">Approve or reject it on Service Record Approval, with the hours to deduct</Link>
+                ) : (
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <input
                     type="text"
@@ -176,6 +183,7 @@ export default function ApprovalCenterPage() {
                     ✕ Reject
                   </button>
                 </div>
+                )}
               </div>
             )
           })}

@@ -40,6 +40,9 @@ Route::prefix('portal')->group(function () {
         Route::get('/payments', [PortalController::class, 'payments']);
         Route::get('/incidents', [PortalController::class, 'incidents']);
         Route::post('/incidents', [PortalController::class, 'createIncident']);
+        Route::get('/incidents/{incident}/attachments', [PortalController::class, 'incidentAttachments']);
+        Route::post('/incidents/{incident}/attachments', [PortalController::class, 'uploadIncidentAttachment']);
+        Route::get('/incidents/{incident}/attachments/{attachment}', [PortalController::class, 'downloadIncidentAttachment']);
 
         // AI Assistant slice 3 (docs/planned-work.md #12 Tier 2 item 6).
         Route::get('/ai/persona', [PortalAiController::class, 'persona']);

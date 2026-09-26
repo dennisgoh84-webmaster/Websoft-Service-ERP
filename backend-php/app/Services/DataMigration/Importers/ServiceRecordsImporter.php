@@ -85,6 +85,8 @@ class ServiceRecordsImporter extends EntityImporter
         }
         $minutes = (int) round((float) $hours * 60);
         $workDate = $ctx->date($row->get('date'), 'Work date');
+        // History only, never open: before the cut-off date a service record is left out.
+        $ctx->skipBeforeCutoff($workDate, false, 'Service record of '.$workDate->format('d/m/Y').' ('.$staffName.')');
 
         $number = $row->get('record_number');
         if ($number !== null) {

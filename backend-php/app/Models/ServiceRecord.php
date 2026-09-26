@@ -40,6 +40,10 @@ class ServiceRecord extends Model
 
     public const STATUS_APPROVED = 'approved';
 
+    // Backlog 2 (2026-09-26): an approver can reject a submitted record,
+    // with a reason. It then counts nowhere; the engineer logs a new one.
+    public const STATUS_REJECTED = 'rejected';
+
     public const OUTCOME_PENDING = 'pending';
 
     public const OUTCOME_CONTRACT_DEDUCTION = 'contract_deduction';
@@ -69,6 +73,7 @@ class ServiceRecord extends Model
     ];
 
     protected $casts = [
+        'rejected_at' => 'datetime',
         'work_date' => 'date',
         'raw_minutes' => 'integer',
         'rounded_minutes' => 'integer',

@@ -16,6 +16,7 @@ use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\MobileFileStorage;
 use App\Services\Numbering;
+use App\Services\ServiceRecordService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -231,6 +232,8 @@ class MobileController extends Controller
         });
 
         $record->refresh();
+        // Timed out: now it is ready for its approvers (Backlog 2).
+        ServiceRecordService::requestApproval($record, $user->id);
 
         return response()->json([
             'id' => $record->id,

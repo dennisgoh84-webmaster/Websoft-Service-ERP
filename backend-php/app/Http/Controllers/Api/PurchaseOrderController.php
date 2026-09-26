@@ -13,6 +13,7 @@ use App\Models\CompanyIndividual;
 use App\Models\PurchaseOrder;
 use App\Models\SupplierInvoice;
 use App\Models\TaxCode;
+use App\Services\ApprovalService;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\DocxForms;
@@ -82,6 +83,10 @@ class PurchaseOrderController extends Controller
             'gst_amount_sgd' => (float) $po->gst_amount_sgd,
             'total_amount_sgd' => (float) $po->total_amount_sgd,
             'status' => $po->status,
+            // eApproval (Backlog 2): above the supplier's limit, where the approvers' decision stands.
+            'approval_status' => ApprovalService::stateOf($po->company_id, 'purchase_order', $po->id),
+            'approval_note' => ApprovalService::describeState($po->company_id, 'purchase_order', $po->id),
+            'cancel_reason' => $po->cancel_reason,
             'imported_bill_id' => $importedBill?->id,
             'imported_bill_number' => $importedBill?->bill_number,
         ];
@@ -194,6 +199,17 @@ class PurchaseOrderController extends Controller
                 'status' => $needsOwner ? PurchaseOrder::STATUS_PENDING_APPROVAL : PurchaseOrder::STATUS_DRAFT,
             ]);
 
+            // Above the supplier's PO limit (Backlog 2, 2026-09-26): the
+            // eApproval approvers decide, when an authority is set up for
+            // Purchase Orders; with none, the owner approves as before.
+            if ($needsOwner) {
+                $supplierName = CompanyIndividual::whereKey($data['supplier_id'])->value('name');
+                ApprovalService::submitForApproval(
+                    $user->company_id, 'purchase_order', $po->id, $user->id, $total->toString(),
+                    summary: "Purchase Order {$po->po_number}, SGD {$total->toString()} to {$supplierName}",
+                );
+            }
+
             Audit::record(
                 entityType: 'purchase_order',
                 entityId: $po->id,
@@ -216,6 +232,10 @@ class PurchaseOrderController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'edit');
 
         $po = $this->poOrFail($user->company_id, $poId);
+        if (ApprovalService::stateOf($po->company_id, 'purchase_order', $po->id) !== null) {
+            throw new ApiException(422, 'This purchase order is above the supplier\'s limit and goes through eApproval -- '.
+                ApprovalService::describeState($po->company_id, 'purchase_order', $po->id).' The approvers decide in the Approval Center.');
+        }
 
         try {
             DB::transaction(function () use ($po, $user) {

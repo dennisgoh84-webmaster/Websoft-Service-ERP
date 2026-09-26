@@ -203,10 +203,22 @@ export default function PurchaseOrdersPage() {
                             Approve
                           </button>
                         )}
-                        {po.status === 'pending_approval' && (
+                        {/* Above the supplier's limit with an eApproval authority set
+                            up, the approvers decide in the Approval Center (Backlog 2). */}
+                        {po.status === 'pending_approval' && !po.approval_status && (
                           <button className="secondary" onClick={() => onApprovePO(po)}>
                             Approve (owner)
                           </button>
+                        )}
+                        {po.approval_status === 'pending' && (
+                          <span className="muted" style={{ alignSelf: 'center', fontSize: 13 }}>
+                            {po.approval_note}
+                          </span>
+                        )}
+                        {po.status === 'cancelled' && po.cancel_reason && (
+                          <span className="muted" style={{ alignSelf: 'center', fontSize: 13 }}>
+                            {po.cancel_reason}
+                          </span>
                         )}
                         {po.status === 'approved' && !po.imported_bill_id && (
                           <button

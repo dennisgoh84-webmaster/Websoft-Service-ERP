@@ -2049,6 +2049,27 @@ Small details nobody foresaw, built with the recommended default
   Needs EDIT on Service Operations as well as the AI module.
 - **Portal AI declaration**: recorded per portal login, not per
   customer company -- each person ticks it for themselves.
+- **Portal attachments "while open"**: open or awaiting a call back.
+  Once converted to a Job Order or closed, the incident is no longer
+  where the work is followed, so no more files are added there.
+- **eApproval, Service Records**: decided on the Service Record
+  Approval screen (the hours to deduct are keyed there), never with the
+  Approval Center's buttons; any one member's decision settles it,
+  whatever the authority's mode. A rejected record is final -- the
+  engineer logs a new one.
+- **eApproval, Purchase Orders**: with no authority for Purchase Orders
+  set up, a PO above the limit still goes to the owner, so nothing gets
+  stuck.
+- **eApproval, Payment Vouchers**: an authority with no bank account
+  set covers every account. The PV is still posted to the GL when saved
+  (ACC-003); only the Bank step waits.
+- **Approval Center**: shown to everyone signed in, listing only what
+  waits on their own authorities; approvers need no Core Administration
+  access to decide.
+- **Migration cut-off, receipts and service records**: history only and
+  never "open", so before the cut-off they are always left out (what a
+  receipt settled is already in each invoice's amount due; a contract's
+  used hours arrive as its Consumed hours).
 
 ## How to use this document
 

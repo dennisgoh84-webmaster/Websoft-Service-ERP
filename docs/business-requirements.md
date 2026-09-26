@@ -297,6 +297,16 @@ resolves the remaining Service Operations items from that document: 1.1,
   mailbox, and nothing goes out on a day with none overdue. Each send,
   or skip, is recorded in Event Logs. The server's `scheduler` service
   runs it.
+- **On eApproval** (Dennis, 2026-09-26, decision page): the approvers
+  are the **Service Record Approval** authority under eApproval Master --
+  Nico and Cherish, **any one** of them decides -- set up for each
+  company from the two roles, and changeable there like any authority.
+  Each record goes to them as it is submitted (or timed out on the
+  phone), with an **email as it arrives**, and shows in their Approval
+  Center, which links to the Service Record Approval screen: the hours
+  to deduct are keyed in there. An approver can also **Reject** a
+  record, **with a reason**; it then counts nowhere and stays on file,
+  and the engineer logs a new one.
 - Excess-usage review (SRV-004 / SRV-011) is unchanged by this rule:
   it is about the treatment of excess hours, not the approval of the
   record.
@@ -486,6 +496,13 @@ in [open-business-decisions.md](open-business-decisions.md).
   … should be set in the company/individual file"), replacing the single
   Company Setup threshold. With no limit set on a supplier, the owner
   approves every PO to it.
+- **On eApproval** (Dennis, 2026-09-26): within the supplier's limit
+  nothing changes. Above it (or with no limit set) the PO goes to the
+  **eApproval approvers** -- the authority with a Purchase Order rule
+  under eApproval Master -- who are emailed as it arrives and decide in
+  the Approval Center: approved, the PO is approved; rejected, it is
+  cancelled with their reason. With no such authority set up, the owner
+  approves as before.
 
 ### PUR-002 — Supplier Invoice Matching — CONFIRMED
 
@@ -583,6 +600,15 @@ Status: **CONFIRMED / DECIDED** (2026-09-14). Full design in
   reversible by **"Unbank"** — the `BANK` / `UNBANK` operations already
   declared in the period-lock matrix. Recording a voucher and confirming
   the money actually moved are separate steps.
+- **Bank Authority** (Dennis, 2026-09-26, decision page): a Bank
+  Authority is the **signatories of one bank account**, set under
+  eApproval Master (the authority's bank account), with **"any one"** or
+  **"all must"** approve. A Payment Voucher paid from that account at or
+  above the amount on its Payment Voucher rule waits for the
+  signatories -- emailed as it arrives, decided in the Approval Center --
+  and **cannot be banked** until approved; below the amount it goes
+  straight. A rejected PV cannot be banked (Finance reverses it with
+  UNGL).
 
 ### ACC-003 — GL Posting Trigger — pragmatic default
 
@@ -734,6 +760,17 @@ Status: **CONFIRMED / DECIDED** (2026-09-14). Full design in
   against it (via that contract's Job Orders) — not just the flat,
   company-wide list. Explains where the consumed hours on a
   SERVICE_SUPPORT contract actually went.
+
+### PORTAL-007 — Customer attachments on incidents — CONFIRMED and built (2026-09-26)
+
+- A customer can attach **photos, screenshots and PDFs** to an incident
+  on the Helpdesk Portal: up to **10 MB each** and **5 per incident**,
+  when raising it or later **while it is still open** (open or awaiting
+  a call back).
+- Staff see them as ordinary attachments on the incident (Incidents
+  screen), labelled as coming from the customer. The customer sees the
+  files raised through the portal, not staff's own. Every upload is in
+  Event Logs.
 
 ## Helpdesk Business Rules (CONFIRMED)
 

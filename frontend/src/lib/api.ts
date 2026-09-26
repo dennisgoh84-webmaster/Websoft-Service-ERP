@@ -1803,6 +1803,10 @@ export interface PurchaseOrder {
   gst_amount_sgd: number
   total_amount_sgd: number
   status: PurchaseOrderStatus
+  /** eApproval above the supplier's limit (Backlog 2): null when none was needed. */
+  approval_status: 'pending' | 'approved' | 'rejected' | null
+  approval_note: string | null
+  cancel_reason: string | null
   imported_bill_id: string | null
   imported_bill_number: string | null
 }
@@ -1862,6 +1866,9 @@ export interface SupplierPayment {
   gl_voucher_number: string | null
   bank_status: 'banked' | 'not_banked'
   bank_transaction_number: string | null
+  /** Bank Authority approval (Backlog 2): null when the PV needed none. */
+  approval_status: 'pending' | 'approved' | 'rejected' | null
+  approval_note: string | null
 }
 
 export interface APAgingRow {
@@ -2301,6 +2308,8 @@ export interface ApprovalRequest {
   authority_id: string
   status: ApprovalStatus
   requested_by_user_id: string
+  /** What the approver is asked about, e.g. "Purchase Order PO-2026-0007, SGD 12,000.00 to ACME". */
+  summary: string | null
   requested_at: string
   resolved_at: string | null
   decisions: ApprovalDecision[]
@@ -2570,6 +2579,10 @@ export type MigrationBatchStatus = 'uploaded' | 'running' | 'dry_run' | 'failed'
 export interface MigrationBatch {
   id: string
   batch_number: string
+  /** Transactions dated before this (YYYY-MM-DD) were left out unless still open; null = everything. */
+  cutoff_date: string | null
+  /** Whether this module takes a cut-off date (transactions only). */
+  cutoff_applies: boolean
   company_id: string
   company_name: string | null
   source: MigrationSource
@@ -3435,6 +3448,8 @@ export const api = {
     work_description?: string | null
   }) => request<ServiceRecord>('/service-records', { method: 'POST', body: JSON.stringify(payload) }),
   listPendingServiceRecordApprovals: () => request<PendingServiceRecord[]>('/service-records/pending-approval'),
+  rejectServiceRecord: (id: string, reason: string) =>
+    request<ServiceRecord>(`/service-records/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
   approveServiceRecord: (id: string, deducted_minutes: number) =>
     request<ServiceRecord>(`/service-records/${id}/approve`, {
       method: 'POST',
@@ -4390,7 +4405,8 @@ export const api = {
     request<Pick<MigrationBatch, 'id' | 'status' | 'mode' | 'progress_done' | 'progress_total'>>(`/data-migration/batches/${id}/progress`),
   saveMigrationDecisions: (id: string, decisions: Record<string, string>) =>
     request<MigrationBatch>(`/data-migration/batches/${id}/decisions`, { method: 'PUT', body: JSON.stringify({ decisions }) }),
-  dryRunMigrationBatch: (id: string) => request<MigrationBatch>(`/data-migration/batches/${id}/dry-run`, { method: 'POST' }),
+  dryRunMigrationBatch: (id: string, cutoff_date?: string | null) =>
+    request<MigrationBatch>(`/data-migration/batches/${id}/dry-run`, { method: 'POST', body: JSON.stringify({ cutoff_date: cutoff_date ?? null }) }),
   importMigrationBatch: (id: string) => request<MigrationBatch>(`/data-migration/batches/${id}/import`, { method: 'POST' }),
   /** 200 when rolled back; 409 (an ApiError whose body is the result) when something blocks it. */
   rollbackMigrationBatch: (id: string, reason: string) =>

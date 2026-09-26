@@ -44,7 +44,7 @@ class MigrationBatch extends Model
 
     protected $fillable = [
         'company_id', 'source', 'entity', 'batch_number', 'source_filename', 'stored_path', 'sheet_name',
-        'headers', 'sample_row', 'mapping', 'decisions', 'mode', 'status',
+        'headers', 'sample_row', 'mapping', 'decisions', 'mode', 'status', 'cutoff_date',
         'rows_read', 'rows_created', 'rows_linked', 'rows_already_imported', 'rows_skipped',
         'rows_failed', 'rows_needs_decision', 'progress_done', 'progress_total',
         'report', 'error_message', 'started_by_user_id', 'started_at', 'finished_at', 'imported_at',
@@ -53,6 +53,7 @@ class MigrationBatch extends Model
 
     protected $casts = [
         'headers' => 'array',
+        'cutoff_date' => 'date',
         'sample_row' => 'array',
         'mapping' => 'array',
         'decisions' => 'array',

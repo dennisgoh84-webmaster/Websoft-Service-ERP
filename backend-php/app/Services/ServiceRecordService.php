@@ -3,12 +3,15 @@
 namespace App\Services;
 
 use App\Exceptions\ContractRuleViolation;
+use App\Models\ApprovalAuthorityMember;
+use App\Models\ApprovalDecision;
 use App\Models\Contract;
 use App\Models\ExcessUsageRecord;
 use App\Models\JobOrder;
 use App\Models\ServiceRecord;
 use App\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * Service Records business logic (formerly "Timesheets"): SRV-007
@@ -138,18 +141,87 @@ class ServiceRecordService
         return true;
     }
 
+    /**
+     * Who approves Service Records (Backlog 2, 2026-09-26: "an authority
+     * with Nico and Cherish, any one"): the members of the eApproval
+     * authority whose rule covers Service Records (set up by migration
+     * 2026_09_30_004400 as "Service Record Approval"); with no such
+     * authority, the Service Lead and Sales Manager roles as before.
+     */
+    public static function isApprover(User $user): bool
+    {
+        $authorities = ApprovalService::authoritiesFor($user->company_id, 'service_record');
+        if ($authorities->isEmpty()) {
+            return in_array($user->role, self::APPROVER_ROLES, true);
+        }
+
+        return ApprovalAuthorityMember::whereIn('authority_id', $authorities)->where('user_id', $user->id)->exists();
+    }
+
+    /** @return Collection<int, User> the active approvers of a company, for the reminder emails */
+    public static function approvers(string $companyId)
+    {
+        $authorities = ApprovalService::authoritiesFor($companyId, 'service_record');
+        $query = User::where('company_id', $companyId)->where('is_active', true);
+        $authorities->isEmpty()
+            ? $query->whereIn('role', self::APPROVER_ROLES)
+            : $query->whereIn('id', ApprovalAuthorityMember::whereIn('authority_id', $authorities)->pluck('user_id'));
+
+        return $query->get();
+    }
+
+    private static function assertApprover(User $approver, string $what): void
+    {
+        if (self::isApprover($approver)) {
+            return;
+        }
+        if (ApprovalService::authoritiesFor($approver->company_id, 'service_record')->isEmpty()) {
+            throw new ContractRuleViolation(
+                "Only Nico (service_lead) or Cherish (sales_manager) may {$what} (SRV-019)."
+            );
+        }
+        throw new ContractRuleViolation("Only the Service Record approvers (Maintenance -> eApproval Master) may {$what}.");
+    }
+
+    /** Puts a submitted record in front of its approvers: the Approval Center, and an email to each (Backlog 2). */
+    public static function requestApproval(ServiceRecord $record, string $actorUserId): void
+    {
+        $jobOrder = JobOrder::find($record->job_order_id);
+        $who = User::whereKey($record->employee_user_id)->value('full_name');
+        $minutes = (int) ($record->rounded_minutes ?? 0);
+        ApprovalService::submitForApproval(
+            $record->company_id, 'service_record', $record->id, $actorUserId,
+            summary: sprintf('Service Record %s, %dh %02dm on Job Order %s (%s)', $record->service_record_number,
+                intdiv($minutes, 60), $minutes % 60, $jobOrder?->job_order_number ?? '-', $who ?? '-'),
+        );
+    }
+
+    /** Backlog 2: reject a submitted record with a reason -- it then counts nowhere, and is never deleted. */
+    public static function rejectServiceRecord(ServiceRecord $record, User $approver, string $reason): ServiceRecord
+    {
+        self::assertApprover($approver, 'reject a Service Record');
+        if ($record->status !== ServiceRecord::STATUS_SUBMITTED) {
+            throw new ContractRuleViolation('Only a submitted Service Record can be rejected.');
+        }
+        $record->status = ServiceRecord::STATUS_REJECTED;
+        $record->rejected_reason = $reason;
+        $record->rejected_at = Carbon::now();
+        $record->rejected_by_user_id = $approver->id;
+        $record->save();
+        ApprovalService::settleFromDocument($record->company_id, 'service_record', $record->id, $approver->id, ApprovalDecision::REJECTED, $reason);
+        Audit::record('service_record', $record->id, 'rejected', $approver->id, reason: $reason,
+            details: "{$record->service_record_number} rejected", oldValue: ['status' => ServiceRecord::STATUS_SUBMITTED], newValue: ['status' => $record->status]);
+
+        return $record;
+    }
+
     public static function approveServiceRecord(
         ServiceRecord $record,
         JobOrder $jobOrder,
         User $approver,
         int $deductedMinutes,
     ): ?ExcessUsageRecord {
-        if (! in_array($approver->role, self::APPROVER_ROLES, true)) {
-            throw new ContractRuleViolation(
-                'Only Nico (service_lead) or Cherish (sales_manager) may approve a Service '
-                .'Record and key in the deducted hours (SRV-019).'
-            );
-        }
+        self::assertApprover($approver, 'approve a Service Record and key in the deducted hours');
         if ($record->status !== ServiceRecord::STATUS_SUBMITTED) {
             throw new ContractRuleViolation('Only a submitted Service Record can be approved.');
         }
@@ -240,6 +312,8 @@ class ServiceRecordService
             'service_record', $record->id, 'approved', $approver->id,
             details: "outcome={$record->outcome}, deducted_minutes={$deductedMinutes}",
         );
+        ApprovalService::settleFromDocument($record->company_id, 'service_record', $record->id, $approver->id, ApprovalDecision::APPROVED,
+            "Approved with {$deductedMinutes} minutes to deduct");
 
         self::maybeAutoCloseJobOrder($jobOrder, $approver);
 

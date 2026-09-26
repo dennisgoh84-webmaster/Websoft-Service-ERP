@@ -26,7 +26,7 @@
  * once Dennis asked for it explicitly), and Incidents (+ raise a new
  * one, with a friendlier status once routed to a Job Order).
  */
-import { useEffect, useState, type CSSProperties, type FormEvent } from 'react'
+import { useEffect, useState, type ChangeEvent, type CSSProperties, type FormEvent } from 'react'
 import { api } from '../lib/api'
 import type { PublicBranding } from '../lib/api'
 import { PortalAuthProvider, usePortalAuth } from '../lib/PortalAuthContext'
@@ -39,12 +39,16 @@ import {
   portalVerifyOtp,
   type PortalContract,
   type PortalIncident,
+  type PortalIncidentAttachment,
   type PortalInvoice,
   type PortalJobOrder,
   type PortalJobOrderDetail,
   type PortalLoginResult,
   type PortalPayment,
   type PortalServiceRecord,
+  PORTAL_ATTACHMENT_ACCEPT,
+  PORTAL_ATTACHMENT_MAX_BYTES,
+  PORTAL_ATTACHMENTS_PER_INCIDENT,
 } from '../lib/portalApi'
 import { formatDate, formatDateTime } from '../lib/format'
 import PortalAiChatWidget, { type PortalAiContext } from './PortalAiChatWidget'
@@ -1004,8 +1008,95 @@ function PortalIncidents({ onNew }: { onNew: () => void }) {
           )}
           {i.description && <div style={{ fontSize: 13, color: MUTED, marginTop: 8 }}>{i.description}</div>}
           <div style={{ fontSize: 12, color: MUTED, marginTop: 8 }}>{fmtDateTime(i.created_at)}</div>
+          <PortalIncidentFiles incident={i} />
         </div>
       ))}
+    </div>
+  )
+}
+
+/** A file the customer picked, checked against the portal's limits before anything is sent. */
+function checkPortalFile(file: File): string | null {
+  if (!(file.type.startsWith('image/') || file.type === 'application/pdf')) return `${file.name}: only photos, screenshots and PDF files can be attached.`
+  if (file.size > PORTAL_ATTACHMENT_MAX_BYTES) return `${file.name} is larger than 10 MB.`
+  return null
+}
+
+function fmtSize(bytes: number): string {
+  return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
+}
+
+/** The files on one incident: open them, and add more while the incident is open. */
+function PortalIncidentFiles({ incident }: { incident: PortalIncident }) {
+  const [files, setFiles] = useState<PortalIncidentAttachment[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const canAdd = incident.status === 'open' || incident.status === 'pending_callback'
+
+  function load() {
+    portalApi.incidentAttachments(incident.id).then(setFiles).catch((e) => setError(e instanceof Error ? e.message : 'Failed to load files'))
+  }
+  useEffect(load, [incident.id])
+
+  async function onAdd(e: ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(e.target.files ?? [])
+    e.target.value = ''
+    if (picked.length === 0) return
+    setError(null)
+    const room = PORTAL_ATTACHMENTS_PER_INCIDENT - (files?.length ?? 0)
+    if (picked.length > room) {
+      setError(`An incident can have up to ${PORTAL_ATTACHMENTS_PER_INCIDENT} files -- ${room} more can be added.`)
+      return
+    }
+    const problem = picked.map(checkPortalFile).find(Boolean)
+    if (problem) {
+      setError(problem)
+      return
+    }
+    setUploading(true)
+    try {
+      for (const f of picked) await portalApi.uploadIncidentAttachment(incident.id, f)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not attach the file')
+    } finally {
+      setUploading(false)
+      load()
+    }
+  }
+
+  async function onOpen(a: PortalIncidentAttachment) {
+    try {
+      const blob = await portalApi.downloadIncidentAttachment(incident.id, a.id)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = a.original_filename
+      link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 10000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not open the file')
+    }
+  }
+
+  if (files === null && !error) return null
+  if ((files?.length ?? 0) === 0 && !canAdd) return null
+  return (
+    <div style={{ marginTop: 10, borderTop: `1px solid #eee`, paddingTop: 8 }} data-testid="portal-incident-files">
+      {(files ?? []).map((a) => (
+        <div key={a.id} style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', gap: 8, padding: '3px 0' }}>
+          <button type="button" onClick={() => onOpen(a)} style={{ background: 'none', border: 'none', padding: 0, color: MAROON, cursor: 'pointer', textAlign: 'left', wordBreak: 'break-all' }}>
+            📎 {a.original_filename}
+          </button>
+          <span style={{ color: MUTED, whiteSpace: 'nowrap' }}>{fmtSize(a.file_size_bytes)}</span>
+        </div>
+      ))}
+      {canAdd && (files?.length ?? 0) < PORTAL_ATTACHMENTS_PER_INCIDENT && (
+        <label style={{ ...styles.btn, ...styles.btnSecondary, display: 'inline-block', width: 'auto', padding: '6px 12px', fontSize: 13, marginTop: 6, cursor: 'pointer' }}>
+          {uploading ? 'Attaching...' : '+ Add photo or PDF'}
+          <input type="file" accept={PORTAL_ATTACHMENT_ACCEPT} multiple onChange={onAdd} disabled={uploading} style={{ display: 'none' }} />
+        </label>
+      )}
+      {error && <div style={{ ...styles.errorBox, margin: '8px 0 0' }}>{error}</div>}
     </div>
   )
 }
@@ -1013,18 +1104,40 @@ function PortalIncidents({ onNew }: { onNew: () => void }) {
 function PortalNewIncident({ onDone }: { onDone: () => void }) {
   const [subject, setSubject] = useState('')
   const [description, setDescription] = useState('')
+  const [files, setFiles] = useState<File[]>([])
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  function onPick(e: ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(e.target.files ?? [])
+    e.target.value = ''
+    setError(null)
+    const problem = picked.map(checkPortalFile).find(Boolean)
+    if (problem) {
+      setError(problem)
+      return
+    }
+    const next = [...files, ...picked]
+    if (next.length > PORTAL_ATTACHMENTS_PER_INCIDENT) {
+      setError(`An incident can have up to ${PORTAL_ATTACHMENTS_PER_INCIDENT} files.`)
+      return
+    }
+    setFiles(next)
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
     setSubmitting(true)
+    let created: PortalIncident | null = null
     try {
-      await portalApi.createIncident(subject, description)
+      created = await portalApi.createIncident(subject, description)
+      for (const f of files) await portalApi.uploadIncidentAttachment(created.id, f)
       onDone()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not raise incident')
+      const why = err instanceof Error ? err.message : 'Could not raise incident'
+      // The incident itself was raised: say so, and let the files be added from the list.
+      setError(created ? `Incident ${created.incident_number} was raised, but a file could not be attached (${why}). Add it from the incident list.` : why)
     } finally {
       setSubmitting(false)
     }
@@ -1045,6 +1158,18 @@ function PortalNewIncident({ onDone }: { onDone: () => void }) {
         <div style={{ marginBottom: 16 }}>
           <label style={styles.label}>Description (optional)</label>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} style={{ ...styles.input, resize: 'vertical' as const }} placeholder="Any extra detail that would help our team" />
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={styles.label} htmlFor="portal-incident-files">Photos, screenshots or PDF (optional, up to 5, 10 MB each)</label>
+          <input id="portal-incident-files" type="file" accept={PORTAL_ATTACHMENT_ACCEPT} multiple onChange={onPick} style={{ fontSize: 13 }} />
+          {files.map((f, idx) => (
+            <div key={`${f.name}-${idx}`} style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 6 }}>
+              <span style={{ wordBreak: 'break-all' }}>📎 {f.name} <span style={{ color: MUTED }}>({fmtSize(f.size)})</span></span>
+              <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== idx))} style={{ background: 'none', border: 'none', color: MAROON, cursor: 'pointer' }} aria-label={`Remove ${f.name}`}>
+                Remove
+              </button>
+            </div>
+          ))}
         </div>
         <button type="submit" disabled={submitting || !subject.trim()} style={{ ...styles.btn, ...styles.btnPrimary }}>
           {submitting ? 'Submitting...' : 'Submit incident'}

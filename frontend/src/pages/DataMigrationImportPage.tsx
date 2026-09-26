@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import DateInput from '../components/DateInput'
 import ExportControl from '../components/ExportControl'
 import {
   BatchStatusBadge,
@@ -13,7 +14,7 @@ import {
 } from '../components/DataMigration'
 import { useAuth } from '../lib/AuthContext'
 import { api, downloadBlob, type MigrationBatch, type MigrationMappingInfo, type MigrationReportRow, type MigrationSource } from '../lib/api'
-import { formatDateTime } from '../lib/format'
+import { formatDate, formatDateTime } from '../lib/format'
 
 type Step = 1 | 2 | 3 | 4
 
@@ -60,6 +61,15 @@ export default function DataMigrationImportPage() {
   const [step, setStep] = useState<Step>(1)
   const [mapping, setMapping] = useState<MigrationMappingInfo | null>(null)
   const [decisions, setDecisions] = useState<Record<string, string>>({})
+  // Cut-off date (Backlog 2, 2026-09-26): transactions dated before it
+  // are left out unless still open. Picked for the dry run; the import
+  // uses the same one.
+  const [cutoff, setCutoff] = useState('')
+  const [cutoffFor, setCutoffFor] = useState<string | null>(null)
+  if (batch && batch.id !== cutoffFor) {
+    setCutoffFor(batch.id)
+    setCutoff(batch.cutoff_date ?? '')
+  }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const poller = useRef<number | null>(null)
@@ -284,11 +294,21 @@ export default function DataMigrationImportPage() {
             onChanged={setMapping}
             onError={setError}
           />
+          {batch.cutoff_applies && (
+            <div className="form-row" style={{ maxWidth: 420 }}>
+              <label htmlFor="migration-cutoff">Cut-off date (optional)</label>
+              <DateInput id="migration-cutoff" value={cutoff} onChange={(e) => setCutoff(e.target.value)} />
+              <span className="muted">
+                Rows dated before this are left out, unless still open (unpaid, not yet accepted or rejected, not
+                closed). Receipts and service records before it are always left out. Blank brings everything.
+              </span>
+            </div>
+          )}
           <div className="button-row" style={{ justifyContent: 'flex-end' }}>
             <button type="button" className="secondary" onClick={startOver} disabled={busy}>
               Upload a different file
             </button>
-            <button type="button" onClick={() => run(() => api.dryRunMigrationBatch(batch.id))} disabled={busy}>
+            <button type="button" onClick={() => run(() => api.dryRunMigrationBatch(batch.id, cutoff || null))} disabled={busy}>
               {busy ? 'Running dry run...' : 'Next: dry run'}
             </button>
           </div>
@@ -305,11 +325,17 @@ export default function DataMigrationImportPage() {
           ) : (
             <>
               {batch.error_message && <div className="error-banner">{batch.error_message}</div>}
+              {batch.cutoff_date && (
+                <p className="muted">
+                  Cut-off date {formatDate(batch.cutoff_date)}: rows dated before it and already closed are left out (counted
+                  as skipped). Change it with Back to field mapping.
+                </p>
+              )}
               <div className="stat-grid">
                 <Tile n={batch.rows_created} label="New records" />
                 <Tile n={batch.rows_linked} label="Linked to existing (same UEN / GST no. or your choice)" />
                 <Tile n={batch.rows_already_imported} label="Already imported earlier" />
-                <Tile n={batch.rows_skipped} label="Skipped (drafts, cancelled, credit notes)" />
+                <Tile n={batch.rows_skipped} label={batch.cutoff_date ? 'Skipped (drafts, cancelled, credit notes, closed before the cut-off)' : 'Skipped (drafts, cancelled, credit notes)'} />
                 <Tile n={batch.rows_needs_decision} label="Possible duplicates for you to decide" warn />
                 <Tile n={batch.rows_failed} label="Errors (block the import)" danger />
               </div>
@@ -376,7 +402,7 @@ export default function DataMigrationImportPage() {
                       onClick={() =>
                         run(async () => {
                           await api.saveMigrationDecisions(batch.id, decisions)
-                          return api.dryRunMigrationBatch(batch.id)
+                          return api.dryRunMigrationBatch(batch.id, cutoff || null)
                         })
                       }
                     >
@@ -410,7 +436,7 @@ export default function DataMigrationImportPage() {
                 <button type="button" className="secondary" onClick={startOver} disabled={busy}>
                   Upload a corrected file
                 </button>
-                <button type="button" className="secondary" onClick={() => run(() => api.dryRunMigrationBatch(batch.id))} disabled={busy}>
+                <button type="button" className="secondary" onClick={() => run(() => api.dryRunMigrationBatch(batch.id, cutoff || null))} disabled={busy}>
                   Dry run again
                 </button>
                 <button type="button" onClick={() => setStep(4)} disabled={!!importBlocker || busy} title={importBlocker ?? undefined}>
@@ -472,7 +498,7 @@ export default function DataMigrationImportPage() {
             <>
               <div className="error-banner">{batch.error_message ?? 'The import was refused; nothing was written.'}</div>
               <ProblemTable rows={problems.filter((p) => p.outcome === 'failed' || p.outcome === 'needs_decision')} />
-              <button type="button" className="secondary" onClick={() => run(() => api.dryRunMigrationBatch(batch.id))}>
+              <button type="button" className="secondary" onClick={() => run(() => api.dryRunMigrationBatch(batch.id, cutoff || null))}>
                 Dry run again
               </button>
             </>

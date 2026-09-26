@@ -90,6 +90,9 @@ class InvoicesImporter extends EntityImporter
         if (! in_array($state, ['posted', 'open', 'paid', 'partial', 'outstanding', 'issued', 'confirmed'], true)) {
             throw new RowSkipped("{$number} is {$state} -- only issued invoices are migrated.");
         }
+        // Before the cut-off date, only an invoice with money still due comes across.
+        $due = $ctx->money($row->get('amount_residual'), 'Amount due', required: false);
+        $ctx->skipBeforeCutoff($ctx->date($row->get('invoice_date'), 'Invoice date'), $due !== null && $due->toFloat() > 0, "Invoice {$number}");
 
         $ctx->requireSgd($row);
         $ctx->requireUnusedNumber(Invoice::class, 'invoice_number', $number);

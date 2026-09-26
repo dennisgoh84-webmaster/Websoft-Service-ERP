@@ -484,6 +484,47 @@ class DataMigrationTest extends TestCase
         $this->assertSame(240, Contract::where('contract_number', 'ZC-001')->value('consumed_minutes'), 'hours used carried; not deducted again');
     }
 
+    public function test_a_cut_off_date_leaves_out_closed_transactions_before_it_and_brings_open_ones(): void
+    {
+        $this->importOdooContacts();
+        $batch = $this->upload('odoo', 'invoices', [
+            ['id', 'name', 'partner_id/id', 'move_type', 'state', 'invoice_date', 'invoice_date_due', 'amount_untaxed', 'amount_tax', 'amount_total', 'amount_residual'],
+            ['m1', 'INV/2025/00001', '__export__.res_partner_1', 'out_invoice', 'posted', '2025-01-15', '', '1000.00', '90.00', '1090.00', '0.00'],
+            ['m2', 'INV/2025/00002', '__export__.res_partner_1', 'out_invoice', 'posted', '2025-01-20', '', '2000.00', '180.00', '2180.00', '1180.00'],
+            ['m5', 'INV/2025/00005', '__export__.res_partner_1', 'out_invoice', 'posted', '2025-03-01', '', '100.00', '9.00', '109.00', '0.00'],
+        ]);
+        $batch = MigrationBatches::startDryRun($batch, $this->owner, '2025-02-01');
+        $this->assertSame('2025-02-01', $batch->cutoff_date->toDateString());
+        $this->assertSame(['skipped', 'created', 'created'], $this->outcomes($batch), json_encode($batch->report));
+        $this->assertStringContainsString('before the cut-off date 01/02/2025', $batch->report[0]['message']);
+
+        MigrationMappings::signOff(MigrationMappings::get($this->company->id, 'odoo', 'invoices'), $this->owner);
+        $batch = MigrationBatches::startImport($batch->fresh(), $this->owner);
+        $this->assertSame(MigrationBatch::STATUS_SUCCEEDED, $batch->status, json_encode($batch->report));
+        $this->assertSame(['INV/2025/00002', 'INV/2025/00005'], Invoice::orderBy('invoice_number')->pluck('invoice_number')->all(),
+            'the paid invoice before the cut-off is left out; the unpaid one comes across whatever its date');
+
+        // Job orders: closed before the cut-off left out, still open brought in.
+        $this->migrate('zsoft', 'contracts', [
+            ['CONTRACT_NO', 'CUST_NAME', 'STATUS', 'START DATE', 'EXPIRY DATE', 'CONTRACT VALUE', 'HOURS', 'HOURS USED'],
+            ['ZC-001', 'Acme Pte Ltd', 'Active', '01/07/2024', '30/06/2026', '3000', '20', '4'],
+        ]);
+        $jobs = $this->upload('zsoft', 'job_orders', [
+            ['JO_NO', 'CUST_NAME', 'SUBJECT', 'STATUS', 'CONTRACT NO', 'ENGINEER', 'DATE'],
+            ['ZJ-1', 'Acme Pte Ltd', 'Old and done', 'Closed', 'ZC-001', 'Former Tech', '02/08/2024'],
+            ['ZJ-2', 'Acme Pte Ltd', 'Old and still open', 'Open', 'ZC-001', '', '03/08/2024'],
+        ]);
+        $jobs = MigrationBatches::startDryRun($jobs, $this->owner, '2025-01-01');
+        $this->assertSame(['skipped', 'created'], $this->outcomes($jobs), json_encode($jobs->report));
+
+        // Customers, contacts and contracts come across whole: no cut-off is kept for them.
+        $parties = $this->upload('odoo', 'company_individuals', [
+            ['id', 'name', 'is_company', 'email', 'parent_id/id', 'customer_rank', 'supplier_rank', 'property_payment_term_id', 'ref', 'company_registry'],
+            ['__export__.res_partner_9', 'Zed Pte Ltd', '1', '', '', '1', '0', '', '', ''],
+        ]);
+        $this->assertNull(MigrationBatches::startDryRun($parties, $this->owner, '2030-01-01')->cutoff_date);
+    }
+
     public function test_excel_files_are_read_like_csv(): void
     {
         $sheet = new Spreadsheet;

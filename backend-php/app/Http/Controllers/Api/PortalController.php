@@ -6,6 +6,7 @@ use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\AuthenticatePortal;
 use App\Models\Contract;
+use App\Models\DocumentAttachment;
 use App\Models\Incident;
 use App\Models\Invoice;
 use App\Models\JobOrder;
@@ -13,8 +14,13 @@ use App\Models\Payment;
 use App\Models\PortalUser;
 use App\Models\ServiceRecord;
 use App\Models\User;
+use App\Services\Audit;
+use App\Services\DocumentService;
 use App\Services\IncidentService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Customer Helpdesk Portal -- customer-facing data endpoints
@@ -255,6 +261,122 @@ class PortalController extends Controller
         );
 
         return response()->json($this->incidentOut($incident->fresh(), []));
+    }
+
+    // ---- Incident attachments (Backlog 2, 2026-09-26) --------------------
+    //
+    // Photos, screenshots and PDFs, up to 10 MB each and 5 per incident,
+    // added when raising it or later while it is still open (open or
+    // awaiting a call back -- once converted to a Job Order or closed,
+    // the incident is no longer where the work is followed). Stored as
+    // ordinary document attachments on the incident, so staff see them
+    // on the Incidents screen. The customer sees the files raised
+    // through the portal, not staff's own.
+
+    public const ATTACHMENT_TYPES = [
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif', 'application/pdf',
+    ];
+
+    public const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+
+    public const ATTACHMENTS_PER_INCIDENT = 5;
+
+    public function incidentAttachments(Request $request, string $incident)
+    {
+        $inc = $this->myIncident($request, $incident);
+
+        return response()->json($this->portalAttachments($inc)->map(fn (DocumentAttachment $a) => $this->attachmentOut($a))->values());
+    }
+
+    public function uploadIncidentAttachment(Request $request, string $incident)
+    {
+        $portalUser = $this->portalUser($request);
+        $inc = $this->myIncident($request, $incident);
+        if (! in_array($inc->status, [Incident::STATUS_OPEN, Incident::STATUS_PENDING_CALLBACK], true)) {
+            throw new ApiException(422, 'Files can be added only while the incident is open.');
+        }
+        $request->validate(['file' => 'required|file']);
+        $file = $request->file('file');
+        $type = $file->getMimeType() ?: $file->getClientMimeType();
+        if (! in_array($type, self::ATTACHMENT_TYPES, true)) {
+            throw new ApiException(422, 'Only photos, screenshots and PDF files can be attached.');
+        }
+        if ($file->getSize() > self::ATTACHMENT_MAX_BYTES) {
+            throw new ApiException(422, 'Each file can be up to 10 MB.');
+        }
+
+        $attachment = DB::transaction(function () use ($inc, $portalUser, $file, $type) {
+            // Counted under a lock on the incident, so two uploads at once cannot make six.
+            Incident::whereKey($inc->id)->lockForUpdate()->first();
+            if ($this->portalAttachments($inc)->count() >= self::ATTACHMENTS_PER_INCIDENT) {
+                throw new ApiException(422, 'An incident can have up to 5 files.');
+            }
+            $contact = $portalUser->contact;
+            $attachment = DocumentService::uploadAttachment(
+                companyId: $inc->company_id,
+                entityType: 'incident',
+                entityId: $inc->id,
+                uploadedByUserId: null,
+                originalFilename: $file->getClientOriginalName() ?: 'upload',
+                contentType: $type,
+                data: (string) file_get_contents($file->getRealPath()),
+                description: 'From the customer on the Helpdesk Portal ('.($contact?->name ?? $portalUser->email).')',
+                uploadedByPortalUserId: $portalUser->id,
+            );
+            Audit::record(
+                'incident', $inc->id, 'document_attachment_upload',
+                actorUserId: null,
+                actorName: ($contact?->name ?? $portalUser->email).' (portal)',
+                companyId: $inc->company_id,
+                details: json_encode(['filename' => $attachment->original_filename, 'size' => $attachment->file_size_bytes]),
+            );
+
+            return $attachment;
+        });
+
+        return response()->json($this->attachmentOut($attachment), 201);
+    }
+
+    public function downloadIncidentAttachment(Request $request, string $incident, string $attachment)
+    {
+        $inc = $this->myIncident($request, $incident);
+        $a = $this->portalAttachments($inc)->firstWhere('id', $attachment);
+        $path = $a ? DocumentService::attachmentFilePath($a) : null;
+        if ($path === null) {
+            throw new ApiException(404, 'File not found');
+        }
+
+        return response()->download($path, $a->original_filename, ['Content-Type' => $a->content_type]);
+    }
+
+    private function myIncident(Request $request, string $incidentId): Incident
+    {
+        $inc = Str::isUuid($incidentId) ? Incident::where('customer_id', $this->customerId($request))->find($incidentId) : null;
+        if (! $inc) {
+            throw new ApiException(404, 'Incident not found');
+        }
+
+        return $inc;
+    }
+
+    /** @return Collection<int, DocumentAttachment> */
+    private function portalAttachments(Incident $inc)
+    {
+        return DocumentAttachment::where('company_id', $inc->company_id)
+            ->where('entity_type', 'incident')->where('entity_id', $inc->id)
+            ->whereNotNull('uploaded_by_portal_user_id')->where('is_deleted', false)
+            ->orderBy('uploaded_at')->get();
+    }
+
+    private function attachmentOut(DocumentAttachment $a): array
+    {
+        return [
+            'id' => $a->id,
+            'original_filename' => $a->original_filename,
+            'content_type' => $a->content_type,
+            'file_size_bytes' => $a->file_size_bytes,
+            'uploaded_at' => optional($a->uploaded_at)->toIso8601String(),
+        ];
     }
 
     // ---- presenters ------------------------------------------------------

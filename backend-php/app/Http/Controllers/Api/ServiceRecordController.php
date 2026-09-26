@@ -77,6 +77,8 @@ class ServiceRecordController extends Controller
             'approval_due_at' => $record->approvalDueAt()?->toIso8601String(),
             'is_approval_overdue' => $record->isApprovalOverdue(),
             'work_description' => $record->work_description,
+            'rejected_reason' => $record->rejected_reason,
+            'rejected_at' => $record->rejected_at?->toIso8601String(),
         ];
     }
 
@@ -106,6 +108,24 @@ class ServiceRecordController extends Controller
                 isAfterHours: $data['is_after_hours'] ?? false,
                 workDescription: $data['work_description'] ?? null,
             ));
+        } catch (ContractRuleViolation $e) {
+            throw new ApiException(422, $e->getMessage());
+        }
+        ServiceRecordService::requestApproval($record, $user->id);
+
+        return response()->json($this->present($record->fresh()));
+    }
+
+    /** Backlog 2 (2026-09-26): an approver rejects a submitted record, with a reason. */
+    public function reject(Request $request, string $recordId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'full');
+        $record = $this->recordOrFail($user->company_id, $recordId);
+        $data = $request->validate(['reason' => 'required|string|min:3|max:1000']);
+
+        try {
+            DB::transaction(fn () => ServiceRecordService::rejectServiceRecord($record, $user, trim($data['reason'])));
         } catch (ContractRuleViolation $e) {
             throw new ApiException(422, $e->getMessage());
         }

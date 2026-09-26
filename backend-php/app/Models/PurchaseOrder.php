@@ -30,7 +30,7 @@ class PurchaseOrder extends Model
     protected $fillable = [
         'company_id', 'supplier_id', 'po_number', 'order_date', 'description',
         'amount_sgd', 'gst_amount_sgd', 'total_amount_sgd', 'status',
-        'approved_by_user_id', 'approved_at',
+        'approved_by_user_id', 'approved_at', 'cancel_reason', 'cancelled_at', 'cancelled_by_user_id',
     ];
 
     protected $attributes = [
@@ -40,6 +40,7 @@ class PurchaseOrder extends Model
     ];
 
     protected $casts = [
+        'cancelled_at' => 'datetime',
         'order_date' => 'date',
         'amount_sgd' => 'decimal:2',
         'gst_amount_sgd' => 'decimal:2',

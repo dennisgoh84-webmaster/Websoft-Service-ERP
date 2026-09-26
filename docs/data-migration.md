@@ -24,9 +24,10 @@ at a time, into the **Internal Company** you choose.
 | Field Gap | Every column in an old file is **mapped**, **left out**, or marked a **Field Gap** (it needs a field added here first). A module's import stays **locked until its list is signed off**. |
 | Access | New `data_migration` module in Module Control / Group Authority. **VIEW** sees the Dashboard, the modules and the Batch Log. **FULL** can upload, map, sign off, dry run, import and roll back. Switch it off after cut-over. |
 
-Still open (open-business-decisions #10.1 / #10.2): which history is
-"important", and the phasing order. The tool imports whatever subset is
-chosen, whenever it is chosen.
+| Cut-off date | Picked when a batch is **dry run** (optional); the import uses the same one. It covers **transactions only** -- Companies / Individuals, contacts and contracts come across whole. A transaction dated before it is left out (counted as skipped) **unless still open**: an invoice with money still due, a quotation still draft or sent, a job order not closed or void. Receipts and service records are history only, so before the cut-off they are always left out. Settled 2026-09-26 (#10.1). |
+
+Still open (open-business-decisions #10.2): the phasing order. The tool
+imports whatever subset is chosen, whenever it is chosen.
 
 ## The screens
 

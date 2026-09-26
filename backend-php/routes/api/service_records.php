@@ -14,6 +14,7 @@ Route::middleware('auth.jwt')->prefix('service-records')->group(function () {
     Route::get('/pending-approval', [ServiceRecordController::class, 'pendingApproval']);
     Route::get('/{serviceRecord}', [ServiceRecordController::class, 'show']);
     Route::post('/{serviceRecord}/approve', [ServiceRecordController::class, 'approve']);
+    Route::post('/{serviceRecord}/reject', [ServiceRecordController::class, 'reject']);
     Route::get('/{serviceRecord}/export.docx', [ServiceRecordController::class, 'exportDocx']);
     Route::post('/{serviceRecord}/email', [ServiceRecordController::class, 'email']);
 });

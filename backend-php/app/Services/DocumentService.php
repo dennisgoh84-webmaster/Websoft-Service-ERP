@@ -56,11 +56,12 @@ class DocumentService
         string $companyId,
         string $entityType,
         string $entityId,
-        string $uploadedByUserId,
+        ?string $uploadedByUserId,
         string $originalFilename,
         string $contentType,
         string $data,
         ?string $description = null,
+        ?string $uploadedByPortalUserId = null,
     ): DocumentAttachment {
         $size = strlen($data);
         if ($size > self::MAX_FILE_SIZE) {
@@ -84,6 +85,7 @@ class DocumentService
             'entity_type' => $entityType,
             'entity_id' => $entityId,
             'uploaded_by_user_id' => $uploadedByUserId,
+            'uploaded_by_portal_user_id' => $uploadedByPortalUserId,
             'original_filename' => $originalFilename,
             'stored_filename' => $storedName,
             'content_type' => $contentType,

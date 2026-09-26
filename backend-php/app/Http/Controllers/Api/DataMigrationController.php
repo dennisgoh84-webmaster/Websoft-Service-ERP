@@ -351,8 +351,9 @@ class DataMigrationController extends Controller
     {
         $user = Authenticate::user($request);
         $batch = $this->batch($user, $batchId, GroupModuleAuthority::FULL);
+        $data = $request->validate(['cutoff_date' => 'sometimes|nullable|date_format:Y-m-d']);
 
-        return $this->guarded(fn () => MigrationBatches::startDryRun($batch, $user));
+        return $this->guarded(fn () => MigrationBatches::startDryRun($batch, $user, $data['cutoff_date'] ?? null));
     }
 
     public function import(Request $request, string $batchId)
@@ -507,6 +508,8 @@ class DataMigrationController extends Controller
             'status' => $b->status,
             'status_label' => $this->statusLabel($b),
             'mode' => $b->mode,
+            'cutoff_date' => $b->cutoff_date?->toDateString(),
+            'cutoff_applies' => in_array($b->entity, MigrationBatches::CUTOFF_ENTITIES, true),
             'rows_read' => $b->rows_read,
             'rows_created' => $b->rows_created,
             'rows_linked' => $b->rows_linked,

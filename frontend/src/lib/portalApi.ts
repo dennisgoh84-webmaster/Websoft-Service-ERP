@@ -22,7 +22,8 @@ export function clearPortalToken() {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getPortalToken()
   const headers: Record<string, string> = {
-    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+    // A file upload (FormData) sets its own multipart content type.
+    ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     'X-Device-Id': getDeviceId(),
   }
@@ -154,6 +155,20 @@ export interface PortalIncident {
   converted_job_order_number: string | null
 }
 
+// Files a customer attaches to an incident (Backlog 2, 2026-09-26):
+// photos, screenshots and PDFs, up to 10 MB each and 5 per incident.
+export interface PortalIncidentAttachment {
+  id: string
+  original_filename: string
+  content_type: string
+  file_size_bytes: number
+  uploaded_at: string | null
+}
+
+export const PORTAL_ATTACHMENT_ACCEPT = 'image/*,application/pdf'
+export const PORTAL_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
+export const PORTAL_ATTACHMENTS_PER_INCIDENT = 5
+
 // PORTAL-005 (confirmed 2026-09-14): a customer's own Invoices and
 // Payments -- same figures as the PDF copy, never GP/cost internals.
 export interface PortalInvoice {
@@ -231,6 +246,20 @@ export const portalApi = {
       method: 'POST',
       body: JSON.stringify({ subject, description: description || null }),
     }),
+  incidentAttachments: (incidentId: string) => request<PortalIncidentAttachment[]>(`/incidents/${incidentId}/attachments`),
+  uploadIncidentAttachment: (incidentId: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<PortalIncidentAttachment>(`/incidents/${incidentId}/attachments`, { method: 'POST', body: form })
+  },
+  downloadIncidentAttachment: async (incidentId: string, attachmentId: string): Promise<Blob> => {
+    const token = getPortalToken()
+    const res = await fetch(`/api/portal/incidents/${incidentId}/attachments/${attachmentId}`, {
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'X-Device-Id': getDeviceId() },
+    })
+    if (!res.ok) throw new Error('Could not open the file')
+    return res.blob()
+  },
   invoices: () => request<PortalInvoice[]>('/invoices'),
   payments: () => request<PortalPayment[]>('/payments'),
   aiPersona: () => request<PortalAiPersona>('/ai/persona'),

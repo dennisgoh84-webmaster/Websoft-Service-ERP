@@ -99,7 +99,9 @@ export default function Layout() {
       label: 'Service Record Approval',
       visible: can('service_records'),
     },
-    { key: 'approval-center', path: '/approval-center', label: 'Approval Center', visible: can('core_administration') },
+    // Every approver's to-do list (Backlog 2): shown to everyone signed in,
+    // listing only what waits on their own authorities.
+    { key: 'approval-center', path: '/approval-center', label: 'Approval Center', visible: true },
     { key: 'excess-review', path: '/excess-review', label: 'Excess Review', visible: can('service_contracts') },
     { key: 'software-tasks', path: '/software-tasks', label: 'Software Tasks', visible: can('software_development') },
     { key: 'operations-reports', path: '/operations-reports', label: 'Operations Reports', visible: can('operations_reports') },

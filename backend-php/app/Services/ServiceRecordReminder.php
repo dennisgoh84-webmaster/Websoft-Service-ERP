@@ -40,11 +40,9 @@ class ServiceRecordReminder
                 ->where('submitted_at', '<', $cutoff)
                 ->orderBy('submitted_at')
                 ->get();
-            $approvers = User::where('company_id', $companyId)
-                ->whereIn('role', ServiceRecordService::APPROVER_ROLES)
-                ->where('is_active', true)
-                ->whereNotNull('email')
-                ->get();
+            // The Service Record approvers (Backlog 2): the eApproval
+            // authority's members, or the two roles when none is set up.
+            $approvers = ServiceRecordService::approvers($companyId)->filter(fn (User $u) => (string) $u->email !== '')->values();
 
             $company = Company::find($companyId);
             $subject = sprintf('%d Service Record%s waiting over %d days for approval', $records->count(), $records->count() === 1 ? '' : 's', ServiceRecord::APPROVAL_DEADLINE_DAYS);

@@ -309,7 +309,10 @@ class ApprovalController extends Controller
 
     public function decide(Request $request, string $requestId)
     {
-        $user = $this->at($request, GroupModuleAuthority::EDIT);
+        // Any signed-in approver (Backlog 2): being a member of the
+        // request's authority is the permission, checked by
+        // recordDecision -- approvers need no Core Administration access.
+        $user = Authenticate::user($request);
 
         $data = $request->validate([
             'decision' => 'required|string|in:'.implode(',', ApprovalDecision::VALUES),
@@ -321,6 +324,9 @@ class ApprovalController extends Controller
         $existing = ApprovalRequest::where('company_id', $user->company_id)->find($requestId);
         if (! $existing) {
             throw new ApiException(404, 'Approval request not found.');
+        }
+        if ($existing->entity_type === 'service_record') {
+            throw new ApiException(422, 'Approve or reject a Service Record on the Service Record Approval screen, where the hours to deduct are keyed in.');
         }
 
         try {
@@ -345,7 +351,8 @@ class ApprovalController extends Controller
 
     public function listPending(Request $request)
     {
-        $user = $this->at($request, GroupModuleAuthority::VIEW);
+        // Each person sees only what waits on their own authorities.
+        $user = Authenticate::user($request);
 
         return response()->json(
             ApprovalService::listPendingForUser($user->company_id, $user->id)
@@ -451,6 +458,7 @@ class ApprovalController extends Controller
             'authority_id' => $r->authority_id,
             'status' => $r->status,
             'requested_by_user_id' => $r->requested_by_user_id,
+            'summary' => $r->summary,
             'requested_at' => $r->requested_at?->toJSON(),
             'resolved_at' => $r->resolved_at?->toJSON(),
             'decisions' => $r->decisions->map(fn (ApprovalDecision $d) => [

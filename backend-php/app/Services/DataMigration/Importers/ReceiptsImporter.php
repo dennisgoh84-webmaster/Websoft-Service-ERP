@@ -81,6 +81,8 @@ class ReceiptsImporter extends EntityImporter
         if (! in_array($state, ['posted', 'paid', 'in_process', 'reconciled', 'sent'], true)) {
             throw new RowSkipped("{$number} is {$state} -- only posted receipts are migrated.");
         }
+        // History only, never open: before the cut-off date a receipt is left out.
+        $ctx->skipBeforeCutoff($ctx->date($row->get('date'), 'Payment date'), false, "Receipt {$number}");
 
         $ctx->requireSgd($row);
         $ctx->requireUnusedNumber(Payment::class, 'voucher_number', $number);

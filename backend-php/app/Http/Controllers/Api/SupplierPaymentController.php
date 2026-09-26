@@ -13,6 +13,7 @@ use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\SupplierInvoice;
 use App\Models\SupplierPayment;
+use App\Services\ApprovalService;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\DocxForms;
@@ -117,6 +118,10 @@ class SupplierPaymentController extends Controller
             'gl_status' => $glEntry ? 'posted' : 'not_posted',
             'gl_voucher_number' => $glEntry?->voucher_number,
             'bank_status' => $bankTxn ? 'banked' : null,
+            // Bank Authority (Backlog 2): above its amount a PV waits for
+            // the signatories before it can be banked.
+            'approval_status' => ApprovalService::stateOf($payment->company_id, 'payment_voucher', $payment->id),
+            'approval_note' => ApprovalService::describeState($payment->company_id, 'payment_voucher', $payment->id),
             'bank_transaction_number' => $bankTxn?->transaction_number,
         ];
     }
@@ -264,6 +269,15 @@ class SupplierPaymentController extends Controller
                     throw new PayablesRuleViolation($e->getMessage());
                 }
 
+                // Above the amount set on the paying account's Bank Authority,
+                // the signatories approve before it is banked (Backlog 2).
+                $payee = $payment->isOther() ? ($payment->glAccount?->name ?? 'GL account') : CompanyIndividual::whereKey($payment->supplier_id)->value('name');
+                ApprovalService::submitForApproval(
+                    $user->company_id, 'payment_voucher', $payment->id, $user->id, (string) $payment->amount_sgd,
+                    bankAccountId: $payment->bank_account_id,
+                    summary: "Payment Voucher {$payment->voucher_number}, SGD ".Money::of($payment->amount_sgd)->toString()." to {$payee}",
+                );
+
                 foreach ($data['allocations'] ?? [] as $entry) {
                     $bill = $this->billOrFail($user->company_id, $entry['supplier_invoice_id']);
                     PayablesService::allocateSupplierPayment($payment, $bill, Money::of($entry['amount_sgd']));
@@ -336,6 +350,11 @@ class SupplierPaymentController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'edit');
 
         $payment = $this->paymentOrFail($user->company_id, $paymentId);
+        $approval = ApprovalService::stateOf($payment->company_id, 'payment_voucher', $payment->id);
+        if ($approval === 'pending' || $approval === 'rejected') {
+            throw new ApiException(422, "{$payment->voucher_number} cannot be banked yet: ".
+                ApprovalService::describeState($payment->company_id, 'payment_voucher', $payment->id));
+        }
 
         try {
             $txn = Posting::bankSupplierPayment($payment, $user->id);

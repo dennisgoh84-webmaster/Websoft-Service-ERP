@@ -78,6 +78,11 @@ class JobOrdersImporter extends EntityImporter
         if ($number === null) {
             throw new RowFailed('Job order number is required.');
         }
+        // Before the cut-off date, only a job order not yet closed or void comes across.
+        $mapped = self::STATUSES[mb_strtolower((string) $row->get('status'))] ?? null;
+        $ctx->skipBeforeCutoff(
+            $ctx->date($row->get('opened_date'), 'Opened date', required: false) ?? $ctx->date($row->get('closed_date'), 'Closed date', required: false),
+            ! in_array($mapped, [JobOrder::STATUS_CLOSED, JobOrder::STATUS_VOID], true), "Job Order {$number}");
         $ctx->requireUnusedNumber(JobOrder::class, 'job_order_number', $number);
         $customer = $ctx->customer($row);
 

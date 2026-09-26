@@ -50,7 +50,7 @@ class DocumentAttachment extends Model
     ];
 
     protected $fillable = [
-        'company_id', 'entity_type', 'entity_id', 'uploaded_by_user_id',
+        'company_id', 'entity_type', 'entity_id', 'uploaded_by_user_id', 'uploaded_by_portal_user_id',
         'original_filename', 'stored_filename', 'content_type', 'file_size_bytes',
         'description', 'is_deleted',
     ];

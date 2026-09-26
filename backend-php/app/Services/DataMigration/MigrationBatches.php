@@ -99,14 +99,25 @@ class MigrationBatches
         return $batch;
     }
 
-    public static function startDryRun(MigrationBatch $batch, User $actor): MigrationBatch
+    /** Modules the cut-off date applies to: transactions only (Backlog 2, 2026-09-26). */
+    public const CUTOFF_ENTITIES = ['quotations', 'invoices', 'receipts', 'job_orders', 'service_records'];
+
+    /**
+     * @param  string|null  $cutoffDate  Y-m-d: transactions dated before it are left out
+     *                                   unless still open; null brings everything across
+     */
+    public static function startDryRun(MigrationBatch $batch, User $actor, ?string $cutoffDate = null): MigrationBatch
     {
         self::requireIdle($batch);
         if (! in_array($batch->status, [MigrationBatch::STATUS_UPLOADED, MigrationBatch::STATUS_DRY_RUN, MigrationBatch::STATUS_FAILED], true) || $batch->stored_path === null) {
             throw new \InvalidArgumentException('This batch cannot be dry run.');
         }
         $mapping = MigrationMappings::get($batch->company_id, $batch->source, $batch->entity);
-        $batch->fill(['mapping' => self::mappingFor($mapping, $batch->headers ?? [])])->save();
+        $batch->fill([
+            'mapping' => self::mappingFor($mapping, $batch->headers ?? []),
+            // The import that follows uses the cut-off the dry run was checked with.
+            'cutoff_date' => in_array($batch->entity, self::CUTOFF_ENTITIES, true) ? $cutoffDate : null,
+        ])->save();
 
         return self::start($batch, false, $actor);
     }
