@@ -45,7 +45,7 @@ class GoodsIssueNote extends Model
 
     public function lines(): HasMany
     {
-        return $this->hasMany(GoodsIssueNoteLine::class, 'gin_id');
+        return $this->hasMany(GoodsIssueNoteLine::class, 'gin_id')->orderBy('line_no')->orderBy('id');
     }
 
     public function company(): BelongsTo

@@ -140,6 +140,26 @@ gunzip -c backup-erp-*.sql.gz | docker compose exec -T db psql -U websoft_app we
 Uploaded files live in the `websoft-erp_uploads_data` volume; back it
 up with `docker run --rm -v websoft-erp_uploads_data:/data -v "$PWD":/out alpine tar czf /out/uploads-$(date +%F).tgz -C /data .`.
 
+## 6. Nightly self-test
+
+Every night at 02:30 Singapore time the test server can check itself.
+It builds a separate, throwaway copy of the app from the code checked
+out: its own in-memory database, no mailbox, nothing published on the
+host. It then walks every screen on a desktop and a phone, keys in the
+main forms, and emails a pass/fail result with screenshots of anything
+that failed ([docs/self-test.md](docs/self-test.md)):
+
+```bash
+sudo ./deploy/install-selftest.sh dennis@example.com
+```
+
+- The email is sent through **Maintenance → System Email**, so set that
+  mailbox up first.
+- Recipients are kept in `.env` as `SELFTEST_EMAIL_TO`
+  (comma-separated).
+- Run it now: `./selftest/run-server.sh`.
+- Reports: `selftest/results/latest/report.html`.
+
 ## What runs where
 
 ```

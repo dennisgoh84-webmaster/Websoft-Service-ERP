@@ -66,7 +66,7 @@ export default function PurchaseOrdersPage() {
       setMessage(
         po.status === 'pending_approval'
           ? `${po.po_number} needs the owner's approval (PUR-001).`
-          : `${po.po_number} created.`,
+          : `${po.po_number} created -- within the supplier's approval limit, so it can be approved without the owner (PUR-001).`,
       )
       refresh()
     } catch (err) {
@@ -194,6 +194,15 @@ export default function PurchaseOrdersPage() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        {/* PUR-001: within the supplier's limit anyone with authority
+                            approves (a draft); above it, or with no limit set, only the
+                            owner. A draft had no button until 2026-09-26, so it could
+                            never reach Accounts Payable (found writing the self-test). */}
+                        {po.status === 'draft' && (
+                          <button className="secondary" onClick={() => onApprovePO(po)}>
+                            Approve
+                          </button>
+                        )}
                         {po.status === 'pending_approval' && (
                           <button className="secondary" onClick={() => onApprovePO(po)}>
                             Approve (owner)

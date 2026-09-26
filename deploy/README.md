@@ -59,6 +59,14 @@ cannot undo. If the dump comes out empty the script stops before
 anything touches the schema. Backups land in `backups/`, last 10 kept,
 and the rollback commands are printed at the end.
 
+### Nightly self-test
+
+`sudo ./deploy/install-selftest.sh you@example.com` installs
+`websoft-selftest.timer`. At 02:30 Singapore time it runs
+`selftest/run-server.sh`: a throwaway copy of the app, every screen on
+a desktop and a phone, the main forms keyed in, then a pass/fail email
+through the System Email mailbox. See [../docs/self-test.md](../docs/self-test.md).
+
 ### Upgrades from Central Command (no SSH needed after the first deploy)
 
 `install.sh` and `upgrade.sh` both install a systemd timer,

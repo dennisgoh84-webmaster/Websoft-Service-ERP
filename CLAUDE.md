@@ -58,6 +58,10 @@ granted per group (VIEW / EDIT / FULL) under **Group Authority**.
   Authority, Document Control, Setup Lists, Announcements, System Email,
   Data Migration (ODOO / ZSOFT), AI Assistant (a paid add-on, hidden
   everywhere unless switched on), Event Logs.
+- **Self-test** — one command (`./selftest/run.sh`) walks every screen
+  on a desktop and a phone and keys in the main forms, checking what
+  the server stored; nightly on the test server with a pass/fail email
+  ([docs/self-test.md](docs/self-test.md)).
 
 Dropped from scope on 2026-09-26: Projects and Hardware Management as
 modules (PROJECT-type contracts stay part of Service Contracts), and the
@@ -162,7 +166,9 @@ explaining the reason first (see Development Rules below).
 - **Test every new or changed field by keying it in, on a desktop and
   on a phone-sized screen** (Playwright with a phone device profile):
   type into it, pick from its picker, submit, and check what was saved.
-  A screen is not done until that has passed.
+  A screen is not done until that has passed. That test is a key-in
+  flow in the self-test (`selftest/runner/flows/`, docs/self-test.md),
+  so it keeps being run; a new screen is swept automatically.
 - **Company / Individual ID and name are FULL CAPITALS**, tidied of
   stray spaces, whichever way they arrive (screen, paste, import,
   add-in) — enforced on the model (`CompanyIndividual::caps`).
@@ -170,9 +176,11 @@ explaining the reason first (see Development Rules below).
   A month's figures are produced once its period is locked, kept with
   the documents behind them, and recalculated only as a new version.
 - The test suite gates `main`, in both directions. Run the full suite
-  (`cd backend-php && php artisan test`), `./vendor/bin/pint --test`
-  and the frontend build (`cd frontend && npm run build`) before every
-  push to `main`:
+  (`cd backend-php && php artisan test`), `./vendor/bin/pint --test`,
+  the frontend build (`cd frontend && npm run build`) and the self-test
+  (`./selftest/run.sh`) before every push to `main` --
+  `./selftest/pre-push.sh` runs all four in order (and is the git
+  pre-push hook with `git config core.hooksPath .githooks`):
   - **Red — never push.** A failing suite is a blocker, never something
     to note in the commit message and push anyway.
   - **Green — push.** Finished, verified work goes to `main`; it is not
@@ -191,6 +199,7 @@ explaining the reason first (see Development Rules below).
 - [docs/walkthrough/index.html](docs/walkthrough/index.html) — a 47-step guided walkthrough of every built module (Operations → Stock → Accounts → Maintenance), with screenshots captured from the running application. Regenerate the screenshots by running the app and re-capturing; they are not auto-built.
 - [docs/ui-guidelines.md](docs/ui-guidelines.md) — screen label conventions and the Export (CSV/Excel) / Print (PDF/Word) pattern every screen follows
 - [docs/outlook-addin.md](docs/outlook-addin.md) — the Outlook Add-in and its Gmail twin (Log as Incident / Convert to Job Order from an email): served at `/outlook-addin/` and `/gmail-addon/`, Maintenance → Email Add-ins for the filled-in files, the Gmail add-on's one-time connect code (`/connect-addin`), how to switch each on
+- [docs/self-test.md](docs/self-test.md) — the self-test program: every screen on a desktop and a phone, the key-in flows, `./selftest/run.sh`, the before-push gate and the nightly run with its pass/fail email
 - [docs/data-migration.md](docs/data-migration.md) — Maintenance → Data Migration (ODOO / ZSOFT): decisions, the screens, modules in run order, Field Gap sign-off, roll back
 - [docs/php-conversion-plan.md](docs/php-conversion-plan.md) — the backend Python→PHP language conversion (complete; Python retired 2026-09-15): reason, approach, stack, findings
 - [docs/build-history.md](docs/build-history.md) — the module-by-module record of how everything was built and what was found along the way (formerly this file's Status section)

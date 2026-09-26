@@ -48,6 +48,10 @@ return [
     // volume so files persist across container restarts.
     'uploads_dir' => env('UPLOADS_DIR', storage_path('app/uploads')),
 
+    // Who gets the self-test's nightly pass/fail email (docs/self-test.md);
+    // comma-separated. selftest/run-server.sh reads it from .env.
+    'selftest_email_to' => env('SELFTEST_EMAIL_TO', ''),
+
     // Shared secret for the host-side upgrade agent (deploy/upgrade-agent.sh).
     // Generated into .env by deploy/install.sh / upgrade.sh. Empty = agent
     // endpoints disabled (503). See App\Http\Controllers\Api\UpgradeAgentController.

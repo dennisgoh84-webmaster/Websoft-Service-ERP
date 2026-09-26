@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasLineNumber;
 use App\Models\Concerns\HasUuidPrimaryKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -16,7 +17,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class GoodsReceiveNoteLine extends Model
 {
-    use HasFactory, HasUuidPrimaryKey;
+    use HasFactory, HasLineNumber, HasUuidPrimaryKey;
+
+    public const LINE_PARENT_KEY = 'grn_id';
 
     public $timestamps = false;
 

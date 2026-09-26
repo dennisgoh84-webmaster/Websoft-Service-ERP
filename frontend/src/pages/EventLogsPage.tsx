@@ -15,6 +15,22 @@ const ENTITY_TYPES = [
   'report',
 ]
 
+/**
+ * One recorded value, readably: a GL posting records its ledger lines
+ * as a list of {account, debit, credit}, which printed as "[object
+ * Object]" until 2026-09-26 (found by the self-test, docs/self-test.md).
+ */
+function formatValue(v: unknown): string {
+  if (v === null || v === undefined) return '—'
+  if (Array.isArray(v)) return `[${v.map(formatValue).join(', ')}]`
+  if (typeof v === 'object') {
+    return `{${Object.entries(v as Record<string, unknown>)
+      .map(([k, x]) => `${k}: ${formatValue(x)}`)
+      .join(', ')}}`
+  }
+  return String(v)
+}
+
 function formatChanges(oldJson: string | null, newJson: string | null): string {
   if (!oldJson && !newJson) return ''
   try {
@@ -22,7 +38,7 @@ function formatChanges(oldJson: string | null, newJson: string | null): string {
     const newObj = newJson ? JSON.parse(newJson) : {}
     const keys = new Set([...Object.keys(oldObj), ...Object.keys(newObj)])
     return [...keys]
-      .map((k) => `${k}: ${oldObj[k] ?? '—'} → ${newObj[k] ?? '—'}`)
+      .map((k) => `${k}: ${formatValue(oldObj[k])} → ${formatValue(newObj[k])}`)
       .join('; ')
   } catch {
     return [oldJson, newJson].filter(Boolean).join(' → ')

@@ -62,6 +62,6 @@ class StockAdjustment extends Model
 
     public function lines(): HasMany
     {
-        return $this->hasMany(StockAdjustmentLine::class, 'adjustment_id')->orderBy('id');
+        return $this->hasMany(StockAdjustmentLine::class, 'adjustment_id')->orderBy('line_no')->orderBy('id');
     }
 }

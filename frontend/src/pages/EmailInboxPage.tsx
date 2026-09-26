@@ -84,9 +84,14 @@ export default function EmailInboxPage() {
         Incident, convert it to a Job Order, or dismiss it with a reason. The mailbox itself is not changed — nothing is marked
         read, moved or deleted there.
       </p>
+      {/* Not set up yet is an instruction, not an error: a plain note, as
+          the other "nothing set up yet" messages are. A mailbox that
+          fails to read stays a red error below. */}
       {mailbox && !mailbox.configured && (
-        <div className="error-banner">
-          The helpdesk mailbox has no IMAP settings yet. Fill them in under Maintenance → System Email (Helpdesk), then come back.
+        <div className="card">
+          <p style={{ margin: 0 }}>
+            The helpdesk mailbox has no IMAP settings yet. Fill them in under Maintenance → System Email (Helpdesk), then come back.
+          </p>
         </div>
       )}
       {mailbox?.last_error && (

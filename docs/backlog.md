@@ -296,7 +296,7 @@ shipped and when.
 ## Confirmed scope, not yet built
 
 - [ ] **Answered 2026-09-26, to build** ([open-business-decisions.md #49](open-business-decisions.md#49-outstanding-questions-answered-by-pick-list-2026-09-26)):
-  - [ ] Self-testing program (every screen, desktop and phone) plus the nightly report on the test server.
+  - [x] Self-testing program (every screen, desktop and phone) plus the nightly report on the test server. **Built 2026-09-26** ([self-test.md](self-test.md)). To switch the nightly run on: `sudo ./deploy/install-selftest.sh <email>` on the test server (the email goes out through Maintenance → System Email). Its first runs found and fixed six bugs, listed in self-test.md.
   - [ ] Bank Book: no direct keying; bank charges and interest go through Receipt / Payment.
   - [ ] Credit Note document (GST and GL reversal, owner approval above the customer's limit).
   - [ ] Accepted quotation: product / stock lines to a Sales Invoice, hours to a contract.

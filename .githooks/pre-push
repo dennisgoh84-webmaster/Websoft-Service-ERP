@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Enabled with: git config core.hooksPath .githooks (docs/self-test.md).
+# Runs the whole before-push gate; any red step stops the push.
+exec "$(git rev-parse --show-toplevel)/selftest/pre-push.sh"

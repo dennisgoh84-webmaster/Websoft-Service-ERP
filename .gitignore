@@ -16,3 +16,6 @@ backups/
 # Server-specific Compose additions (e.g. publishing Postgres to Central
 # Command on another server). Never committed.
 docker-compose.override.yml
+
+# Self-test reports (selftest/run.sh, run-server.sh) -- regenerated every run.
+selftest/results/

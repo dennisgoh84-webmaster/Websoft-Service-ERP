@@ -113,7 +113,7 @@ class Quotation extends Model
 
     public function lines(): HasMany
     {
-        return $this->hasMany(QuotationLine::class)->orderBy('id');
+        return $this->hasMany(QuotationLine::class)->orderBy('line_no')->orderBy('id');
     }
 
     /** The contract this quotation was raised to renew, if any (SALES-006). */

@@ -1,0 +1,94 @@
+# The self-test's own throwaway stack, for the nightly run on the test
+# server (selftest/run-server.sh; docs/self-test.md). Separate project,
+# separate database, nothing published on the host, no mailbox: it can
+# never touch the real stack's data or email a real person.
+#
+# Built from the same Dockerfiles as the real stack, so it tests exactly
+# what is deployed. The database lives in memory (tmpfs) and is gone
+# when the run ends.
+name: websoft-selftest
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: websoft_app
+      POSTGRES_PASSWORD: selftest
+      POSTGRES_DB: websoft_selftest
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U websoft_app -d websoft_selftest"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  # Migrations + seeder into the empty database (it refuses any database
+  # not named *_selftest).
+  prepare:
+    build: ../backend-php
+    entrypoint: []
+    command: ["php", "artisan", "selftest:prepare-db"]
+    environment: &selftest_env
+      APP_ENV: selftest
+      APP_DEBUG: "false"
+      APP_KEY: ${SELFTEST_APP_KEY:?run through selftest/run-server.sh}
+      APP_TIMEZONE: Asia/Singapore
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: websoft_selftest
+      DB_USERNAME: websoft_app
+      DB_PASSWORD: selftest
+      JWT_SECRET: ${SELFTEST_JWT_SECRET:?run through selftest/run-server.sh}
+      UPLOADS_DIR: /var/www/html/storage/app/uploads
+      # No mailbox and no WhatsApp: nothing keyed in can reach anyone.
+      SMTP_HOST: ""
+      SMTP_USERNAME: ""
+      SMTP_PASSWORD: ""
+      SMTP_FROM_EMAIL: ""
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend-php:
+    build: ../backend-php
+    environment: *selftest_env
+    tmpfs:
+      - /var/www/html/storage/app/uploads
+    networks:
+      default:
+        aliases:
+          - backend
+    depends_on:
+      prepare:
+        condition: service_completed_successfully
+
+  frontend:
+    build: ../frontend
+    depends_on:
+      - backend-php
+
+  # Playwright's own image (browsers included), with the same Playwright
+  # version as the frontend. The runner code is read from the checkout.
+  runner:
+    build:
+      context: .
+      args:
+        PLAYWRIGHT_VERSION: ${SELFTEST_PLAYWRIGHT_VERSION:?run through selftest/run-server.sh}
+    working_dir: /repo
+    user: "${SELFTEST_UID:-1000}:${SELFTEST_GID:-1000}"
+    command: ["node", "selftest/runner/run.mjs", "--base", "http://frontend", "--out", "/out"]
+    environment:
+      SELFTEST_PLAYWRIGHT_DIR: /opt/selftest
+      HOME: /tmp
+      SELFTEST_COMMIT: ${SELFTEST_COMMIT:-}
+      SELFTEST_SERVER_NAME: ${SELFTEST_SERVER_NAME:-}
+      SELFTEST_REPORT_PATH: ${SELFTEST_OUT:-}
+    volumes:
+      - ..:/repo:ro
+      - ${SELFTEST_OUT:?run through selftest/run-server.sh}:/out
+    ipc: host
+    depends_on:
+      - frontend

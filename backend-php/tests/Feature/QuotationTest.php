@@ -61,7 +61,9 @@ class QuotationTest extends TestCase
         $this->assertStringStartsWith('QUO-', $create->json('quotation_number'));
         $this->assertCount(1, $create->json('lines'));
 
-        $this->getJson('/api/quotations', $this->headers($token))->assertOk()->assertJsonCount(1);
+        $this->getJson('/api/quotations', $this->headers($token))->assertOk()->assertJsonCount(1)
+            // The Mobile App's quotation cards show it (2026-09-26).
+            ->assertJsonPath('0.customer_name', $customer->name);
         $this->assertDatabaseHas('audit_log_entries', [
             'entity_type' => 'quotation', 'entity_id' => $create->json('id'), 'action' => 'created',
         ]);

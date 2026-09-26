@@ -51,6 +51,6 @@ class GoodsTransferNote extends Model
 
     public function lines(): HasMany
     {
-        return $this->hasMany(GoodsTransferNoteLine::class, 'gtn_id')->orderBy('id');
+        return $this->hasMany(GoodsTransferNoteLine::class, 'gtn_id')->orderBy('line_no')->orderBy('id');
     }
 }

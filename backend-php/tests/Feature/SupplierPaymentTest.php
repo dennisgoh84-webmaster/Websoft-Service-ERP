@@ -74,6 +74,8 @@ class SupplierPaymentTest extends TestCase
         $this->assertEqualsWithDelta(0.0, $create->json('unallocated_sgd'), 0.01);
         $this->assertSame('posted', $create->json('gl_status'));
         $this->assertSame('paid', $bill->fresh()->status);
+        // Each allocation names its bill (the screen showed "undefined" until 2026-09-26).
+        $this->assertSame($bill->bill_number, $create->json('allocations.0.bill_number'));
     }
 
     public function test_a_single_payment_can_allocate_across_two_bills_in_one_request(): void

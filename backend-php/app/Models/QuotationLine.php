@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasLineNumber;
 use App\Models\Concerns\HasUuidPrimaryKey;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,7 +16,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class QuotationLine extends Model
 {
-    use HasUuidPrimaryKey;
+    use HasLineNumber, HasUuidPrimaryKey;
+
+    public const LINE_PARENT_KEY = 'quotation_id';
 
     public $timestamps = false;
 

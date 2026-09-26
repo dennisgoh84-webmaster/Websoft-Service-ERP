@@ -1879,7 +1879,7 @@ decided; the build is tracked in backlog.md.
 
 | Item | Question | Answer |
 |---|---|---|
-| Self-test | Build a saved self-testing program? | **Build it, with a nightly report**: one command runs it, walking every screen on a desktop and a phone-sized screen, keying in fields, saving and checking what was stored. It runs before every push, and nightly on the test server with a pass/fail email and screenshots of failures. |
+| Self-test | Build a saved self-testing program? | **Build it, with a nightly report**: one command runs it, walking every screen on a desktop and a phone-sized screen, keying in fields, saving and checking what was stored. It runs before every push, and nightly on the test server with a pass/fail email and screenshots of failures. **Built 2026-09-26** (docs/self-test.md); nightly at 02:30 Singapore time, to the addresses given to `deploy/install-selftest.sh`. |
 | 47.5 | Who may Revise a submitted GST return? | **Same as Submit**: FULL on GST and Account Period. Built. |
 | 4b.5 | Currencies other than SGD? | **Full multi-currency**: sales and purchases in any currency, keeping the original and SGD amounts, with exchange gain/loss. Closes 4b.5. |
 | 2.7 / #38 | Build the Credit Note document? | **Build it now**: a Credit Note against an invoice reverses its GST and ledger entries and counts in the GST Calculation; above the customer's credit note limit it needs the owner's approval. |

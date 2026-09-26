@@ -320,6 +320,25 @@ class Mailer
     }
 
     /**
+     * The system mailbox with several attachments -- the self-test's
+     * nightly report (docs/self-test.md), which attaches a screenshot
+     * of each failure. Same mailbox, same refusal when unconfigured, as
+     * send().
+     *
+     * @param  list<array{filename: string, bytes: string, content_type: string}>  $attachments
+     */
+    public static function sendWithAttachments(string $toEmail, string $subject, string $bodyText, array $attachments): void
+    {
+        if (! self::isConfigured()) {
+            throw new MailerNotConfiguredException(
+                'The system mailbox is not configured. Set it under Maintenance -> System Email.'
+            );
+        }
+
+        self::dispatch(self::systemSettings(), $toEmail, $subject, $bodyText, null, null, 'application/pdf', $attachments);
+    }
+
+    /**
      * The one place a message is actually handed to a transport --
      * shared so the system and company paths cannot drift in how they
      * build or send a message, only in which settings they use.
@@ -334,6 +353,7 @@ class Mailer
         ?string $attachmentFilename,
         ?string $attachmentBytes,
         string $attachmentContentType,
+        array $moreAttachments = [],
     ): void {
         $email = (new Email)
             ->from(sprintf('%s <%s>', $settings['from_name'], $settings['from_email']))
@@ -344,6 +364,9 @@ class Mailer
         if ($attachmentBytes !== null && $attachmentFilename !== null) {
             $email->attach($attachmentBytes, $attachmentFilename, $attachmentContentType);
         }
+        foreach ($moreAttachments as $a) {
+            $email->attach($a['bytes'], $a['filename'], $a['content_type']);
+        }
 
         if (self::$sent !== null) {
             self::$sent[] = [
@@ -352,6 +375,7 @@ class Mailer
                 'subject' => $subject,
                 'body' => $bodyText,
                 'attachment' => $attachmentFilename,
+                'attachments' => array_map(fn ($a) => $a['filename'], $moreAttachments),
             ];
 
             return;

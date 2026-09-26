@@ -70,6 +70,8 @@ class QuotationController extends Controller
             'id' => $quotation->id,
             'quotation_number' => $quotation->quotation_number,
             'customer_id' => $quotation->customer_id,
+            // For the Mobile App's quotation cards, which have no customer list to look names up in.
+            'customer_name' => $quotation->customer?->name,
             'prospect_id' => $quotation->prospect_id,
             'prospect_number' => $quotation->prospect?->prospect_number,
             'prospect_title' => $quotation->prospect?->title,

@@ -51,11 +51,14 @@ const styles = {
   } as React.CSSProperties,
 }
 
+// The API's own field names (total_amount_sgd; customer_name since
+// 2026-09-26). This page read total_amount, which the API never sent, so
+// every card showed "$NaN" -- found by the self-test (docs/self-test.md).
 interface MobileQuotation {
   id: string
   quotation_number: string
-  customer_name: string
-  total_amount: number
+  customer_name: string | null
+  total_amount_sgd: number
   status: string
   valid_until: string | null
   created_at: string
@@ -81,8 +84,11 @@ export default function MobileQuotationsPage() {
     loadQuotations()
   }, [])
 
+  // "Pending" is waiting on the Sales Manager's approval (BILL-006); there
+  // is no status called just "pending".
   const filtered = quotations.filter(q => {
     if (filter === 'all') return true
+    if (filter === 'pending') return q.status === 'pending_approval'
     return q.status === filter
   })
 
@@ -92,7 +98,7 @@ export default function MobileQuotationsPage() {
         return { bg: '#eafaf1', text: '#27ae60' }
       case 'pending_approval':
         return { bg: '#fef9e7', text: '#f39c12' }
-      case 'pending_client_confirmation':
+      case 'sent':
         return { bg: '#eaf0fa', text: '#2c3e80' }
       default:
         return { bg: '#f0f0f0', text: '#555' }
@@ -166,7 +172,7 @@ export default function MobileQuotationsPage() {
               </div>
 
               <div style={{ marginTop: 8, fontSize: 16, fontWeight: 600, color: MAROON }}>
-                {formatAmount(quote.total_amount)}
+                {formatAmount(quote.total_amount_sgd)}
               </div>
 
               {quote.valid_until && (

@@ -502,3 +502,25 @@ the meantime are called out in code comments, not silently assumed.
   opens on phones, and every date box was tested on a desktop and an
   emulated phone; supplier bills, purchase orders, payment vouchers and
   the goods notes gained a date field.
+- **Self-test program** ([self-test.md](self-test.md)).
+  - One command, `./selftest/run.sh`, walks every screen on a desktop
+    and on a phone. It keys in 23 flows: masters, sales, service,
+    purchasing, stock, the ledger, staff and the Mobile App. For each
+    flow it checks field by field what the server stored.
+  - It runs against a throwaway `*_selftest` database with no mailbox.
+  - `selftest/pre-push.sh` is the whole before-push gate.
+  - Nightly on the test server (`deploy/install-selftest.sh`, 02:30
+    Singapore time), with a pass/fail email and failure screenshots
+    sent through System Email.
+  - Its first runs found and fixed six bugs:
+    - Quotation and stock note lines came back in random order (UUID
+      keys read "by id"). Now `line_no`, via migration
+      `2026_09_30_003500`.
+    - The supplier bill's Expense account was never stored, so every
+      bill posted to 5000.
+    - Payment Voucher allocations read "undefined: $ …".
+    - Mobile App → Quotations showed "$NaN", no customer, and a
+      "Pending" filter that matched nothing.
+    - A Purchase Order within the supplier's approval limit had no
+      Approve button, so it could never reach Accounts Payable.
+    - Event Logs showed a GL posting's lines as "[object Object]".

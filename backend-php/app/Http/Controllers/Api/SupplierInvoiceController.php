@@ -8,6 +8,7 @@ use App\Exceptions\PostingError;
 use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
+use App\Models\Account;
 use App\Models\CompanyIndividual;
 use App\Models\SupplierInvoice;
 use App\Models\TaxCode;
@@ -73,6 +74,7 @@ class SupplierInvoiceController extends Controller
             'supplier_invoice_no' => $bill->supplier_invoice_no,
             'supplier_id' => $bill->supplier_id,
             'purchase_order_id' => $bill->purchase_order_id,
+            'expense_account_id' => $bill->expense_account_id,
             'invoice_date' => optional($bill->invoice_date)->toDateString(),
             'due_date' => optional($bill->due_date)->toDateString(),
             'description' => $bill->description,
@@ -190,7 +192,17 @@ class SupplierInvoiceController extends Controller
             // GST is worked out from the tax code, as on a Sales Invoice
             // (Dennis, 2026-09-26) -- never keyed in.
             'tax_code' => 'sometimes|nullable|string|max:10',
+            // The screen's "Expense account (optional -- defaults to 5000
+            // Cost of services)". Until 2026-09-26 it was not read here,
+            // so every bill posted to 5000 whatever was picked -- found by
+            // the self-test (docs/self-test.md).
+            'expense_account_id' => 'sometimes|nullable|uuid',
         ]);
+        $expenseAccountId = $data['expense_account_id'] ?? null;
+        if ($expenseAccountId !== null && ! Account::where('id', $expenseAccountId)->where('company_id', $user->company_id)
+            ->where('account_type', Account::TYPE_EXPENSE)->where('is_active', true)->exists()) {
+            throw new ApiException(422, 'The expense account must be one of this company\'s active expense accounts.');
+        }
         $code = strtoupper($data['tax_code'] ?? TaxCode::DEFAULT_PURCHASE_CODE);
         $taxCode = TaxCode::where('company_id', $user->company_id)->where('code', $code)->where('is_active', true)->first();
         if ($taxCode === null || $taxCode->kind !== TaxCode::KIND_PURCHASE) {
@@ -199,7 +211,7 @@ class SupplierInvoiceController extends Controller
         $this->supplierOrFail($user->company_id, $data['supplier_id']);
 
         try {
-            $bill = DB::transaction(function () use ($user, $data, $taxCode) {
+            $bill = DB::transaction(function () use ($user, $data, $taxCode, $expenseAccountId) {
                 $net = Money::of($data['amount_sgd']);
                 $rate = Money::of($taxCode->rate_percent);
                 $gst = Tax::gstFor($net, $rate);
@@ -208,6 +220,7 @@ class SupplierInvoiceController extends Controller
                     'company_id' => $user->company_id,
                     'supplier_id' => $data['supplier_id'],
                     'purchase_order_id' => $data['purchase_order_id'] ?? null,
+                    'expense_account_id' => $expenseAccountId,
                     'bill_number' => Numbering::next($user->company_id, 'supplier_invoice'),
                     'supplier_invoice_no' => $data['supplier_invoice_no'] ?? null,
                     'invoice_date' => $data['invoice_date'],

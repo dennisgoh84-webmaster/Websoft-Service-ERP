@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Account;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\PurchaseOrder;
@@ -9,6 +10,7 @@ use App\Models\SupplierInvoice;
 use App\Models\TaxCode;
 use App\Models\User;
 use App\Services\PasswordPolicy;
+use App\Services\Posting;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -136,6 +138,40 @@ class PayablesTest extends TestCase
         $bill(['tax_code' => 'NR'])->assertOk()->assertJson(['tax_code' => 'NR', 'gst_amount_sgd' => 0]);
         // A sales code is not a purchase code.
         $bill(['tax_code' => 'SR'])->assertStatus(422);
+    }
+
+    /**
+     * The bill form's "Expense account" is kept and the bill posts to it.
+     * Until 2026-09-26 the field was not read, so every bill posted to
+     * 5000 whatever was picked -- found by the self-test.
+     */
+    public function test_a_bill_keeps_its_expense_account_and_posts_to_it(): void
+    {
+        $company = Company::factory()->create();
+        [, $token] = $this->ownerToken($company);
+        $supplier = $this->supplier($company);
+        $this->purchaseCodes($company);
+        $travel = Account::create(['company_id' => $company->id, 'code' => '6100', 'name' => 'Travel', 'account_type' => Account::TYPE_EXPENSE, 'is_active' => true]);
+        $po = PurchaseOrder::factory()->for($company)->create([
+            'supplier_id' => $supplier->id, 'status' => PurchaseOrder::STATUS_APPROVED, 'total_amount_sgd' => 109,
+        ]);
+
+        $response = $this->postJson('/api/accounts-payable/bills', [
+            'supplier_id' => $supplier->id, 'purchase_order_id' => $po->id, 'invoice_date' => now()->toDateString(),
+            'description' => 'Taxi fares', 'amount_sgd' => 100, 'tax_code' => 'TX', 'expense_account_id' => $travel->id,
+        ], $this->headers($token));
+
+        $response->assertOk()->assertJson(['expense_account_id' => $travel->id, 'status' => 'approved', 'gl_status' => 'posted']);
+        $entry = Posting::liveEntryFor(Posting::SOURCE_SUPPLIER_INVOICE, $response->json('id'));
+        $debited = $entry->lines()->where('debit_sgd', '>', 0)->pluck('account_id')->all();
+        $this->assertContains($travel->id, $debited);
+
+        // Anything but one of this company's active expense accounts is refused.
+        $revenue = Account::create(['company_id' => $company->id, 'code' => '4900', 'name' => 'Other income', 'account_type' => Account::TYPE_REVENUE, 'is_active' => true]);
+        $this->postJson('/api/accounts-payable/bills', [
+            'supplier_id' => $supplier->id, 'invoice_date' => now()->toDateString(),
+            'description' => 'x', 'amount_sgd' => 10, 'tax_code' => 'TX', 'expense_account_id' => $revenue->id,
+        ], $this->headers($token))->assertStatus(422);
     }
 
     private function purchaseCodes(Company $company): void

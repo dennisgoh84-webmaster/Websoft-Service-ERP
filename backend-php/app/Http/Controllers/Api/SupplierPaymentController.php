@@ -88,6 +88,7 @@ class SupplierPaymentController extends Controller
     {
         $glEntry = Posting::liveEntryFor(Posting::SOURCE_SUPPLIER_PAYMENT, $payment->id);
         $bankTxn = Posting::liveBankTransactionFor(Posting::SOURCE_SUPPLIER_PAYMENT, $payment->id);
+        $billNumbers = SupplierInvoice::whereIn('id', $payment->allocations->pluck('supplier_invoice_id'))->pluck('bill_number', 'id');
 
         return [
             'id' => $payment->id,
@@ -99,8 +100,12 @@ class SupplierPaymentController extends Controller
             'unallocated_sgd' => $payment->unallocatedSgd()->toFloat(),
             'method' => $payment->method,
             'reference' => $payment->reference,
+            // bill_number as well, as Receipts give invoice_number: the
+            // screen names each bill it was allocated to, and showed
+            // "undefined" until 2026-09-26 (found by the self-test).
             'allocations' => $payment->allocations->map(fn ($a) => [
-                'id' => $a->id, 'supplier_invoice_id' => $a->supplier_invoice_id, 'amount_sgd' => (float) $a->amount_sgd,
+                'id' => $a->id, 'supplier_invoice_id' => $a->supplier_invoice_id,
+                'bill_number' => $billNumbers->get($a->supplier_invoice_id), 'amount_sgd' => (float) $a->amount_sgd,
             ])->values(),
             'bank_account_id' => $payment->bank_account_id,
             'gl_status' => $glEntry ? 'posted' : 'not_posted',
