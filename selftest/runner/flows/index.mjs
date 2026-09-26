@@ -9,7 +9,7 @@
 // keying it in, on a desktop and a phone).
 
 import { companyIndividual, setupLists } from './masters.mjs'
-import { contract, creditNote, incident, jobOrder, product, prospect, quotation, quotationProductInvoice, receipt, salesInvoice, serviceRecord, softwareTask } from './sales.mjs'
+import { contract, creditNote, creditOnAccount, incident, jobOrder, product, prospect, quotation, quotationProductInvoice, receipt, salesInvoice, serviceRecord, softwareTask } from './sales.mjs'
 import { otherPayment, otherReceipt, paymentVoucher, purchaseOrder, purchaseOrderWithinLimit, supplierBill } from './purchasing.mjs'
 import { goodsReceive, stockAdjustment, stockItem, warehouse } from './stock.mjs'
 import { journalVoucher, staff } from './admin.mjs'
@@ -29,6 +29,7 @@ export const FLOWS = [
   salesInvoice,
   receipt,
   creditNote,
+  creditOnAccount,
   prospect,
   softwareTask,
   purchaseOrderWithinLimit,

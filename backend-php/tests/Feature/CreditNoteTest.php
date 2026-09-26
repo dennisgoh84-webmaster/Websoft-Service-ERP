@@ -11,12 +11,9 @@ use App\Models\Group;
 use App\Models\GroupModuleAuthority;
 use App\Models\Invoice;
 use App\Models\ModuleCatalog;
-use App\Models\Payment;
-use App\Models\PaymentAllocation;
 use App\Models\Prospect;
 use App\Models\User;
 use App\Models\UserCompanyAccess;
-use App\Services\AccountsReceivableService;
 use App\Services\PasswordPolicy;
 use App\Services\Posting;
 use App\Services\SalesDashboardService;
@@ -80,19 +77,15 @@ class CreditNoteTest extends TestCase
         $this->customer->forceFill(['credit_note_approval_limit_sgd' => $limit])->save();
     }
 
-    public function test_finance_approves_within_the_limit_and_it_is_issued_posted_and_taken_off_the_invoice(): void
+    public function test_within_the_limit_it_is_issued_straight_away_posted_and_taken_off_the_invoice(): void
     {
         $this->limit(500);
         $invoice = $this->invoice(1000); // 1,090.00
         $finance = $this->as(User::ROLE_FINANCE);
 
-        $cn = $this->raise($finance, $invoice, 200)->assertOk()
-            ->assertJson(['status' => 'pending_approval', 'credit_note_number' => null, 'amount_sgd' => 200, 'gst_amount_sgd' => 18, 'total_amount_sgd' => 218, 'needs_owner' => false, 'can_approve' => true]);
-        // Nothing moves while it waits.
-        $this->assertEqualsWithDelta(1090, $invoice->fresh()->outstandingSgd()->toFloat(), 0.001);
-
-        $issued = $this->postJson("/api/credit-notes/{$cn->json('id')}/approve", [], $finance)->assertOk()
-            ->assertJson(['status' => 'issued', 'gl_status' => 'posted']);
+        // Within the customer's limit nobody approves it (Dennis, 2026-09-26).
+        $issued = $this->raise($finance, $invoice, 200)->assertOk()
+            ->assertJson(['status' => 'issued', 'gl_status' => 'posted', 'amount_sgd' => 200, 'gst_amount_sgd' => 18, 'total_amount_sgd' => 218, 'needs_owner' => false]);
         $this->assertMatchesRegularExpression('/^CN-\d{4}-0001$/', $issued->json('credit_note_number'));
 
         $invoice->refresh();
@@ -102,11 +95,11 @@ class CreditNoteTest extends TestCase
 
         // The invoice's entry in reverse: Dr 4030 revenue 200 / Dr 2100 GST 18 / Cr 1100 AR 218.
         $lines = [];
-        foreach (Posting::liveEntryFor(Posting::SOURCE_CREDIT_NOTE, $cn->json('id'))->lines as $l) {
+        foreach (Posting::liveEntryFor(Posting::SOURCE_CREDIT_NOTE, $issued->json('id'))->lines as $l) {
             $lines[Account::find($l->account_id)->code] = [(float) $l->debit_sgd, (float) $l->credit_sgd];
         }
         $this->assertSame(['4030' => [200.0, 0.0], '2100' => [18.0, 0.0], '1100' => [0.0, 218.0]], $lines);
-        $this->assertDatabaseHas('audit_log_entries', ['entity_type' => 'credit_note', 'entity_id' => $cn->json('id'), 'action' => 'issued']);
+        $this->assertDatabaseHas('audit_log_entries', ['entity_type' => 'credit_note', 'entity_id' => $issued->json('id'), 'action' => 'issued']);
     }
 
     public function test_above_the_limit_or_with_none_set_only_the_owner_approves(): void
@@ -115,40 +108,32 @@ class CreditNoteTest extends TestCase
         $finance = $this->as(User::ROLE_FINANCE);
         $owner = $this->as(User::ROLE_OWNER);
 
-        // No limit set: the owner approves every credit note.
-        $cn = $this->raise($finance, $invoice, 100)->assertJson(['needs_owner' => true, 'can_approve' => false]);
+        // No limit set: it waits, and the owner approves every credit note.
+        $cn = $this->raise($finance, $invoice, 100)->assertJson(['status' => 'pending_approval', 'needs_owner' => true, 'can_approve' => false]);
+        $this->assertEqualsWithDelta(1090, $invoice->fresh()->outstandingSgd()->toFloat(), 0.001, 'nothing moves while it waits');
         $this->postJson("/api/credit-notes/{$cn->json('id')}/approve", [], $finance)->assertStatus(422);
+        $this->postJson("/api/credit-notes/{$cn->json('id')}/approve", [], $this->as(User::ROLE_SALES_MANAGER))->assertStatus(422);
 
-        // Within a limit: the Sales Manager may; a support engineer may not.
+        // Above a limit: only the owner.
         $this->limit(500);
-        $this->postJson("/api/credit-notes/{$cn->json('id')}/approve", [], $this->as(User::ROLE_SUPPORT_ENGINEER))->assertStatus(422);
-        $this->postJson("/api/credit-notes/{$cn->json('id')}/approve", [], $this->as(User::ROLE_SALES_MANAGER))->assertOk();
-
-        // Above it: only the owner.
-        $big = $this->raise($finance, $invoice, 600)->assertJson(['needs_owner' => true]); // 654 > 500
+        $big = $this->raise($finance, $invoice, 600)->assertJson(['status' => 'pending_approval', 'needs_owner' => true]); // 654 > 500
         $this->postJson("/api/credit-notes/{$big->json('id')}/approve", [], $this->as(User::ROLE_SALES_MANAGER))->assertStatus(422);
         $this->postJson("/api/credit-notes/{$big->json('id')}/approve", [], $owner)->assertOk()->assertJson(['status' => 'issued']);
-        $this->assertMatchesRegularExpression('/-0002$/', CreditNote::find($big->json('id'))->credit_note_number);
+        $this->postJson("/api/credit-notes/{$cn->json('id')}/approve", [], $owner)->assertOk();
     }
 
-    public function test_a_credit_note_takes_off_no_more_than_the_invoice_still_owes(): void
+    public function test_a_credit_note_takes_off_no_more_than_the_invoice_total_less_other_credit_notes(): void
     {
         $this->limit(10000);
         $invoice = $this->invoice(1000); // 1,090.00
         $finance = $this->as(User::ROLE_FINANCE);
 
         $this->raise($finance, $invoice, 1001)->assertStatus(422); // 1,091.09
-        $first = $this->raise($finance, $invoice, 600)->assertOk(); // 654, waiting
-        // What is already waiting counts: 1,090 - 654 = 436 left.
+        $this->raise($finance, $invoice, 600)->assertOk(); // 654, issued
+        // What is already credited counts: 1,090 - 654 = 436 left.
         $this->raise($finance, $invoice, 401)->assertStatus(422); // 437.09
         $this->raise($finance, $invoice, 400)->assertOk(); // 436.00
-
-        // Paid in part since: approving the first would go below zero, so it is refused.
-        $payment = Payment::create(['company_id' => $this->company->id, 'customer_id' => $this->customer->id, 'voucher_number' => 'RV-X',
-            'payment_date' => now()->toDateString(), 'amount_sgd' => 500]);
-        PaymentAllocation::create(['company_id' => $this->company->id, 'payment_id' => $payment->id, 'invoice_id' => $invoice->id, 'amount_sgd' => 500]);
-        AccountsReceivableService::recalculateInvoiceStatus($invoice);
-        $this->postJson("/api/credit-notes/{$first->json('id')}/approve", [], $finance)->assertStatus(422);
+        $this->raise($finance, $invoice, 1)->assertStatus(422);
 
         // A reason is always needed.
         $this->raise($finance, $this->invoice(100), 10, ' ')->assertStatus(422);
@@ -159,8 +144,7 @@ class CreditNoteTest extends TestCase
         $this->limit(10000);
         $invoice = $this->invoice(1000);
         $finance = $this->as(User::ROLE_FINANCE);
-        $cn = $this->raise($finance, $invoice, 1000)->assertOk();
-        $this->postJson("/api/credit-notes/{$cn->json('id')}/approve", [], $finance)->assertOk();
+        $this->raise($finance, $invoice, 1000)->assertOk()->assertJson(['status' => 'issued']);
 
         $invoice->refresh();
         $this->assertSame(Invoice::STATUS_CREDITED, $invoice->status);
@@ -170,12 +154,12 @@ class CreditNoteTest extends TestCase
 
     public function test_rejected_and_withdrawn_credit_notes_are_kept_and_change_nothing(): void
     {
-        $this->limit(10000);
-        $invoice = $this->invoice(1000);
+        $invoice = $this->invoice(1000); // no limit: each waits for the owner
         $finance = $this->as(User::ROLE_FINANCE);
+        $owner = $this->as(User::ROLE_OWNER);
 
         $a = $this->raise($finance, $invoice, 100)->assertOk();
-        $this->postJson("/api/credit-notes/{$a->json('id')}/reject", ['reason' => 'Not agreed with the customer'], $finance)->assertOk()
+        $this->postJson("/api/credit-notes/{$a->json('id')}/reject", ['reason' => 'Not agreed with the customer'], $owner)->assertOk()
             ->assertJson(['status' => 'rejected', 'decision_note' => 'Not agreed with the customer']);
         $b = $this->raise($finance, $invoice, 100)->assertOk();
         $this->postJson("/api/credit-notes/{$b->json('id')}/withdraw", [], $finance)->assertOk()->assertJson(['status' => 'withdrawn']);
@@ -183,7 +167,7 @@ class CreditNoteTest extends TestCase
         $this->assertEqualsWithDelta(1090, $invoice->fresh()->outstandingSgd()->toFloat(), 0.001);
         $this->assertNull(Posting::liveEntryFor(Posting::SOURCE_CREDIT_NOTE, $a->json('id')));
         $this->assertSame(2, CreditNote::count());
-        $this->postJson("/api/credit-notes/{$a->json('id')}/approve", [], $finance)->assertStatus(422);
+        $this->postJson("/api/credit-notes/{$a->json('id')}/approve", [], $owner)->assertStatus(422);
         $this->getJson('/api/credit-notes?status=rejected', $finance)->assertOk()->assertJsonCount(1);
     }
 
@@ -193,7 +177,7 @@ class CreditNoteTest extends TestCase
         $owner = $this->as(User::ROLE_OWNER);
         $invoice = $this->invoice(1000);
         $cn = $this->raise($owner, $invoice, 200)->assertOk();
-        $this->postJson("/api/credit-notes/{$cn->json('id')}/approve", [], $owner)->assertOk();
+        // Within the limit it was issued when raised (2026-09-26).
 
         $start = now()->startOfMonth()->toDateString();
         $end = now()->endOfMonth()->toDateString();
@@ -217,11 +201,14 @@ class CreditNoteTest extends TestCase
         $invoice = $this->invoice(1000, ['prospect_id' => $prospect->id]); // 1,090.00
         $finance = $this->as(User::ROLE_FINANCE);
         $this->limit(500);
-        $cn = $this->raise($finance, $invoice, 200)->assertOk(); // 218.00
         // A pending one takes nothing off.
+        $this->limit(100);
+        $pending = $this->raise($finance, $invoice, 200)->assertOk()->assertJson(['status' => 'pending_approval']);
         $this->assertEqualsWithDelta(1090, $prospect->amounts()['billed_amount_sgd'], 0.001);
-
-        $this->postJson("/api/credit-notes/{$cn->json('id')}/approve", [], $finance)->assertOk();
+        $this->postJson("/api/credit-notes/{$pending->json('id')}/withdraw", [], $finance)->assertOk();
+        // Within the limit it is issued when raised (2026-09-26).
+        $this->limit(500);
+        $this->raise($finance, $invoice, 200)->assertOk()->assertJson(['status' => 'issued']); // 218.00
         $amounts = $prospect->fresh()->amounts();
         $this->assertEqualsWithDelta(872, $amounts['billed_amount_sgd'], 0.001);
         $this->assertEqualsWithDelta(872, $amounts['outstanding_amount_sgd'], 0.001);
@@ -237,11 +224,12 @@ class CreditNoteTest extends TestCase
 
     public function test_only_an_issued_credit_note_prints_and_another_companys_is_not_found(): void
     {
-        $this->limit(10000);
         $finance = $this->as(User::ROLE_FINANCE);
+        $pending = $this->raise($finance, $this->invoice(100), 50)->assertOk(); // no limit: waits for the owner
+        $this->get("/api/credit-notes/{$pending->json('id')}/export.docx", $finance)->assertStatus(409);
+        // Within the limit it is issued when raised (2026-09-26), and prints.
+        $this->limit(10000);
         $cn = $this->raise($finance, $this->invoice(100), 50)->assertOk();
-        $this->get("/api/credit-notes/{$cn->json('id')}/export.docx", $finance)->assertStatus(409);
-        $this->postJson("/api/credit-notes/{$cn->json('id')}/approve", [], $finance)->assertOk();
         $this->get("/api/credit-notes/{$cn->json('id')}/export.docx", $finance)->assertOk();
 
         $other = Company::factory()->create();

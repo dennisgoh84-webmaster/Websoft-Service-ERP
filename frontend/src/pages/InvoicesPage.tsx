@@ -71,6 +71,8 @@ export default function InvoicesPage() {
   const [creditFor, setCreditFor] = useState<string | null>(null)
   const [cnAmount, setCnAmount] = useState('')
   const [cnReason, setCnReason] = useState('')
+  // Whole lines or part quantities, with goods returned (2026-09-26).
+  const [cnLines, setCnLines] = useState<Record<string, { qty: string; returns: boolean; warehouseId: string }>>({})
   const [cnSaving, setCnSaving] = useState(false)
 
   // Raise Sales Invoice form
@@ -261,15 +263,22 @@ export default function InvoicesPage() {
     setMessage(null)
     setCnSaving(true)
     try {
-      const cn = await api.raiseCreditNote({ invoice_id: invoice.id, amount: parseFloat(cnAmount), reason: cnReason })
+      const lines = Object.entries(cnLines)
+        .filter(([, l]) => (parseInt(l.qty, 10) || 0) > 0)
+        .map(([id, l]) => ({ invoice_line_id: id, quantity: parseInt(l.qty, 10), return_to_stock: l.returns, warehouse_id: l.returns ? l.warehouseId || null : null }))
+      const cn = await api.raiseCreditNote(
+        lines.length ? { invoice_id: invoice.id, lines, reason: cnReason } : { invoice_id: invoice.id, amount: parseFloat(cnAmount), reason: cnReason },
+      )
       setMessage(
-        `Credit note for ${money(cn.total_amount_sgd)} on ${invoice.invoice_number} raised -- waiting for approval by ` +
-          (cn.needs_owner ? 'the owner' : 'Finance, the Sales Manager or the owner') +
-          ' under Credit Notes. It changes nothing until it is approved.',
+        cn.status === 'issued'
+          ? `${cn.credit_note_number} issued for ${money(cn.total_amount_sgd)} on ${invoice.invoice_number}` +
+              ((cn.unapplied_sgd ?? 0) > 0 ? `; ${money(cn.unapplied_sgd ?? 0)} is on the customer's account (Credit Notes → Use credit).` : '.')
+          : `Credit note for ${money(cn.total_amount_sgd)} on ${invoice.invoice_number} raised -- above the customer's credit note limit, so it waits for the owner under Credit Notes.`,
       )
       setCreditFor(null)
       setCnAmount('')
       setCnReason('')
+      setCnLines({})
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to raise the credit note')
     } finally {
@@ -912,7 +921,9 @@ export default function InvoicesPage() {
                   <button className="secondary" onClick={() => onToggleDispute(inv)}>
                     {inv.is_disputed ? 'Clear dispute' : 'Flag dispute'}
                   </button>
-                  {inv.outstanding_sgd > 0 && inv.status !== 'written_off' && (
+                  {/* A paid invoice can be credited too -- the credit goes on the
+                      customer's account (BILL-003, Backlog 2). */}
+                  {inv.status !== 'written_off' && inv.status !== 'credited' && (
                     <button
                       className="secondary"
                       onClick={() => {
@@ -936,9 +947,74 @@ export default function InvoicesPage() {
                   <td colSpan={10} style={{ padding: 16, background: 'var(--bg-muted, #f9f9f9)' }}>
                     <form className="credit-note-form" onSubmit={(e) => onRaiseCreditNote(e, inv)}>
                       <h3 style={{ marginTop: 0 }}>Credit note on {inv.invoice_number}</h3>
+                      {inv.lines.length > 0 && (
+                        <div style={{ overflowX: 'auto', marginBottom: 8 }}>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Line</th>
+                                <th>Sold</th>
+                                <th>Qty to credit</th>
+                                <th>Goods returned</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {inv.lines.map((l) => {
+                                const c = cnLines[l.id] ?? { qty: '', returns: false, warehouseId: l.warehouse_id ?? '' }
+                                const set = (patchLine: Partial<typeof c>) => setCnLines((p) => ({ ...p, [l.id]: { ...c, ...patchLine } }))
+                                return (
+                                  <tr key={l.id}>
+                                    <td>{l.description}</td>
+                                    <td>{l.quantity}</td>
+                                    <td>
+                                      <input
+                                        aria-label={`Quantity to credit: ${l.description}`}
+                                        type="number"
+                                        min="0"
+                                        max={l.quantity}
+                                        step="1"
+                                        style={{ width: 70 }}
+                                        value={c.qty}
+                                        onChange={(e) => set({ qty: e.target.value })}
+                                      />
+                                    </td>
+                                    <td>
+                                      {l.stock_item_id ? (
+                                        <>
+                                          <label>
+                                            <input type="checkbox" checked={c.returns} onChange={(e) => set({ returns: e.target.checked })} /> back into
+                                          </label>{' '}
+                                          <select aria-label={`Warehouse for ${l.description}`} value={c.warehouseId} onChange={(e) => set({ warehouseId: e.target.value })} disabled={!c.returns}>
+                                            {warehouses.map((w) => (
+                                              <option key={w.id} value={w.id}>
+                                                {w.name}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </>
+                                      ) : (
+                                        <span className="muted">service</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                          <p className="muted small">Key the quantities to credit whole or part lines -- or leave them blank and credit an amount below.</p>
+                        </div>
+                      )}
                       <div className="form-row">
                         <label>Amount to credit, net of GST ({inv.currency_code ?? 'SGD'})</label>
-                        <input type="number" min="0.01" step="0.01" value={cnAmount} onChange={(e) => setCnAmount(e.target.value)} required />
+                        <input
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          value={cnAmount}
+                          onChange={(e) => setCnAmount(e.target.value)}
+                          required={!Object.values(cnLines).some((l) => (parseInt(l.qty, 10) || 0) > 0)}
+                          disabled={Object.values(cnLines).some((l) => (parseInt(l.qty, 10) || 0) > 0)}
+                        />
                       </div>
                       <div className="form-row">
                         <label>Reason</label>
@@ -946,8 +1022,9 @@ export default function InvoicesPage() {
                       </div>
                       <p className="muted">
                         GST {inv.tax_code} {inv.gst_rate}%: {money(((parseFloat(cnAmount) || 0) * inv.gst_rate) / 100)} &middot; total credit{' '}
-                        <strong>{money((parseFloat(cnAmount) || 0) * (1 + inv.gst_rate / 100))}</strong>, of {money(inv.outstanding_sgd)} still owed.
-                        It needs approval (BILL-003) before it changes anything.
+                        <strong>{money((parseFloat(cnAmount) || 0) * (1 + inv.gst_rate / 100))}</strong>, of {money(inv.outstanding_sgd)} still owed
+                        (a paid invoice can be credited too: the credit then stays on the customer&rsquo;s account). Within the
+                        customer&rsquo;s credit note limit it is issued straight away; above it, the owner approves it.
                       </p>
                       <div className="button-row">
                         <button type="submit" disabled={cnSaving}>

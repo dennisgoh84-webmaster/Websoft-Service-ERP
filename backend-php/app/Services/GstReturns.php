@@ -8,6 +8,7 @@ use App\Models\CreditNote;
 use App\Models\GstReturn;
 use App\Models\GstReturnLine;
 use App\Models\Invoice;
+use App\Models\Payment;
 use App\Models\SupplierInvoice;
 use App\Models\TaxCode;
 use App\Models\User;
@@ -111,7 +112,7 @@ class GstReturns
         self::$boxSettings = []; // read the settings fresh for each calculation
 
         return DB::transaction(function () use ($period, $actor) {
-            $lines = [...self::outputLines($period), ...self::creditNoteLines($period), ...self::inputLines($period)];
+            $lines = [...self::outputLines($period), ...self::creditNoteLines($period), ...self::otherReceiptLines($period), ...self::inputLines($period)];
 
             $sum = function (string $direction, ?array $boxes, string $field) use ($lines): Money {
                 $total = Money::of(0);
@@ -344,6 +345,40 @@ class GstReturns
                     'gst_sgd' => Money::of(0)->minus($gst)->toString(),
                 ];
             })->all();
+    }
+
+    /**
+     * Other receipts marked exempt (ES) -- bank interest (Dennis,
+     * 2026-09-26: "Yes, as an exempt supply"): counted in the exempt
+     * supplies box in the month received. Nothing changes the tax
+     * payable. Other receipts with no tax code stay out.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function otherReceiptLines(AccountingPeriod $period): array
+    {
+        return Payment::with('glAccount')
+            ->where('company_id', $period->company_id)
+            ->whereNotNull('gl_account_id')
+            ->whereNotNull('tax_code')
+            ->whereNull('migrated_at')
+            ->whereDate('payment_date', '>=', $period->period_start->toDateString())
+            ->whereDate('payment_date', '<=', $period->period_end->toDateString())
+            ->orderBy('payment_date')->orderBy('voucher_number')
+            ->get()
+            ->map(fn (Payment $p) => [
+                'direction' => GstReturnLine::OUTPUT,
+                'document_type' => 'receipt',
+                'document_id' => $p->id,
+                'document_number' => $p->voucher_number,
+                'document_date' => Carbon::parse($p->payment_date)->toDateString(),
+                'party_id' => null,
+                'party_name' => trim(($p->glAccount ? "{$p->glAccount->code} {$p->glAccount->name}" : '').($p->notes ? " ({$p->notes})" : '')),
+                'tax_code' => $p->tax_code,
+                'box' => self::supplyBox($p->company_id, strtoupper((string) $p->tax_code), Money::of(0)),
+                'net_sgd' => Money::of($p->amount_sgd)->toString(),
+                'gst_sgd' => '0.00',
+            ])->all();
     }
 
     /** @return list<array<string, mixed>> */

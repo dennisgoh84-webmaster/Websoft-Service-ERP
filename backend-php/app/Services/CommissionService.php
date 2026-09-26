@@ -244,6 +244,7 @@ class CommissionService
         Invoice $invoice,
         string $userId,
         string $reason,
+        ?Money $share = null,
     ): ?CommissionPayout {
         $rate = Money::of(self::ratePercent($companyId));
         if ($rate->toFloat() == 0.0) {
@@ -265,6 +266,10 @@ class CommissionService
         $total = Money::of(0);
         foreach ($allocations as $allocation) {
             $total = $total->plus(self::commissionFor($allocation, $invoice, $rate));
+        }
+        // Only part of it, e.g. the paid part a credit note takes back (2026-09-26).
+        if ($share !== null) {
+            $total = $total->multipliedByMoney($share)->quantize();
         }
         if ($total->toFloat() == 0.0) {
             return null;

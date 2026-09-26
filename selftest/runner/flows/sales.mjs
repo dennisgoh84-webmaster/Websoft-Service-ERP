@@ -312,6 +312,71 @@ export const creditNote = {
   },
 }
 
+// Backlog 2 (2026-09-26): a paid invoice can be credited -- by line,
+// here one of its three hours -- and the credit then sits on the
+// customer's account: part is set against the contract's annual
+// invoice, the rest refunded with a Payment Voucher.
+export const creditOnAccount = {
+  name: 'Credit Note: one line of a paid invoice, credit on account, set against another invoice, rest refunded',
+  screen: '/credit-notes',
+  needs: ['invoice', 'contract'],
+  async run({ page, profileName, shared }) {
+    const t = tag(profileName)
+    const paid = await apiGet(page, `/invoices/${shared.invoice.id}`)
+    if (paid.status !== 'paid') throw new Error(`The sales invoice is "${paid.status}", not paid -- the receipt flow did not settle it.`)
+    const annual = rows(await apiGet(page, `/invoices?contract_id=${shared.contract.id}`)).find((i) => i.invoice_type === 'contract_annual')
+    if (!annual) throw new Error('The contract has no annual invoice to set the credit against.')
+
+    await open(page, '/invoices')
+    await button(page.locator('tr', { hasText: paid.invoice_number }), 'Credit note').click()
+    const f = page.locator('form.credit-note-form')
+    // The quantity boxes sit in a table, named by aria-label per line.
+    const qty = f.getByLabel(`Quantity to credit: ${paid.lines[0].description}`)
+    await qty.click()
+    await qty.pressSequentially('1')
+    await keyIn(f, 'Reason', `One hour not used ${t}`)
+    const created = await submit(page, button(f, 'Raise credit note'), '/api/credit-notes')
+
+    let cn = await apiGet(page, `/credit-notes/${created.id}`)
+    expectStored('Lines credited', cn.lines.length, '1')
+    expectStored('Quantity credited', Number(cn.lines[0].quantity), '1')
+    expectStored('Net (1 x 150)', money(cn.amount_sgd), '150.00')
+    expectStored('Total with GST', money(cn.total_amount_sgd), '163.50')
+    expectStored('Owner approves (no credit note limit set)', cn.status, 'pending_approval')
+    await open(page, '/credit-notes')
+    await submit(page, button(page.locator('tr', { hasText: `One hour not used ${t}` }), 'Approve'), `/api/credit-notes/${cn.id}/approve`)
+    cn = await apiGet(page, `/credit-notes/${cn.id}`)
+    expectStored('Status after Approve', cn.status, 'issued')
+    expectStored('On the customer\'s account', money(cn.unapplied_sgd), '163.50')
+    const stillPaid = await apiGet(page, `/invoices/${paid.id}`)
+    expectStored('Paid invoice stays paid', stillPaid.status, 'paid')
+
+    // Set 63.50 against the annual invoice.
+    const row = page.locator('tr', { hasText: cn.credit_note_number })
+    await button(row, 'Use credit').click()
+    const use = page.getByTestId('credit-on-account')
+    await keyIn(use, 'Set against invoice', annual.invoice_number)
+    await keyIn(use, 'Amount (SGD)', '63.50')
+    await submit(page, button(use, 'Apply credit'), `/api/credit-notes/${cn.id}/apply`)
+    cn = await apiGet(page, `/credit-notes/${cn.id}`)
+    expectStored('Left on account after applying', money(cn.unapplied_sgd), '100.00')
+    const annualAfter = await apiGet(page, `/invoices/${annual.id}`)
+    expectStored('Annual invoice owes less', money(annualAfter.outstanding_sgd), money(annual.outstanding_sgd - 63.5))
+
+    // Refund the 100.00 left, dated today, keyed in.
+    const day = sgDate(0)
+    await use.getByText(`SGD 100.00 of ${cn.credit_note_number}`).waitFor({ timeout: 10000 })
+    await keyIn(use, 'Payment date', day.dmy)
+    const refunded = await submit(page, button(use, 'Refund with a Payment Voucher'), `/api/credit-notes/${cn.id}/refund`)
+    if (!refunded.refund_voucher_number) throw new Error('The refund raised no Payment Voucher.')
+    cn = await apiGet(page, `/credit-notes/${cn.id}`)
+    expectStored('Left on account after the refund', money(cn.unapplied_sgd), '0.00')
+    const pv = cn.applications.find((a) => a.kind === 'refund')
+    if (!pv) throw new Error('The refund is not recorded against the credit note.')
+    expectStored('Refunded', money(pv.amount_fx), '100.00')
+  },
+}
+
 export const prospect = {
   name: 'Prospect: add, then log a meeting on it',
   screen: '/prospects',

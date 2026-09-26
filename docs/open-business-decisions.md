@@ -2074,6 +2074,15 @@ Small details nobody foresaw, built with the recommended default
   foreign-currency document the line price is keyed in that currency.
 - **Multi-currency, limits**: credit limits, PO and credit note
   approval limits and the Bank Authority amount compare SGD figures.
+- **Credit note on a paid invoice, commission**: the share taken back
+  is the credit left on the customer's account over the invoice
+  total, applied to the commission earned on the invoice's receipts.
+- **Credit note lines**: priced at the invoice line's unit price;
+  goods returned only on stock lines, into the line's own warehouse
+  unless another is picked.
+- **Credit on account in another currency**: set only against the
+  customer's invoices in the credit note's currency; a refund can go
+  from an SGD account or one in that currency.
 - **Approval Center**: shown to everyone signed in, listing only what
   waits on their own authorities; approvers need no Core Administration
   access to decide.

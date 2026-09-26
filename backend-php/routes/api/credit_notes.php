@@ -14,6 +14,8 @@ Route::middleware('auth.jwt')->prefix('credit-notes')->group(function () {
     Route::get('/{creditNote}', [CreditNoteController::class, 'show']);
     Route::get('/{creditNote}/export.docx', [CreditNoteController::class, 'exportDocx']);
     Route::post('/{creditNote}/approve', [CreditNoteController::class, 'approve']);
+    Route::post('/{creditNote}/apply', [CreditNoteController::class, 'apply']);
+    Route::post('/{creditNote}/refund', [CreditNoteController::class, 'refund']);
     Route::post('/{creditNote}/reject', [CreditNoteController::class, 'reject']);
     Route::post('/{creditNote}/withdraw', [CreditNoteController::class, 'withdraw']);
 });

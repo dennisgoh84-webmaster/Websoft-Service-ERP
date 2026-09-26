@@ -110,6 +110,7 @@ class PaymentController extends Controller
             'exchange_rate' => (float) $payment->rate(),
             'amount_fx' => $payment->fx('amount')->toFloat(),
             'unallocated_fx' => $payment->unallocatedFx()->toFloat(),
+            'tax_code' => $payment->tax_code,
             'method' => $payment->method,
             'reference' => $payment->reference,
             'notes' => $payment->notes,
@@ -228,6 +229,9 @@ class PaymentController extends Controller
             'method' => 'sometimes|in:bank_transfer,paynow,cheque,cash,credit_card,other',
             'reference' => 'sometimes|nullable|string',
             'notes' => 'sometimes|nullable|string',
+            // An Other receipt such as bank interest can be an exempt supply
+            // (ES), counted in the GST Calculation (Dennis, 2026-09-26).
+            'tax_code' => 'sometimes|nullable|in:ES',
             'bank_account_id' => 'required|uuid',
             'allocations' => 'sometimes|array',
             'allocations.*.invoice_id' => 'required_with:allocations|uuid',
@@ -282,6 +286,7 @@ class PaymentController extends Controller
                     'currency_code' => $currency,
                     'exchange_rate' => $rate,
                     'amount_fx' => $amountFx->toString(),
+                    'tax_code' => ! empty($data['gl_account_id']) ? ($data['tax_code'] ?? null) : null,
                     'method' => $data['method'] ?? Payment::METHOD_BANK_TRANSFER,
                     'reference' => $data['reference'] ?? null,
                     'notes' => $data['notes'] ?? null,

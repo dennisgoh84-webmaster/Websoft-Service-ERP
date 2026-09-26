@@ -384,7 +384,9 @@ class Posting
     {
         $cid = $payment->company_id;
         $bank = self::bankGlAccount($cid, $payment->bank_account_id);
-        $ap = $payment->isOther() ? self::otherAccount($cid, $payment->gl_account_id) : self::accountByCode($cid, self::AP_CONTROL);
+        // A refund of a customer's credit (2026-09-26) clears AR, not AP.
+        $ap = $payment->isOther() ? self::otherAccount($cid, $payment->gl_account_id)
+            : self::accountByCode($cid, $payment->refund_credit_note_id ? self::AR_CONTROL : self::AP_CONTROL);
         $amount = Money::of($payment->amount_sgd);
         $supplierName = $payment->isOther() ? (string) $payment->notes : ($payment->supplier?->name ?? '');
         $ref = $payment->reference ? " ref {$payment->reference}" : '';

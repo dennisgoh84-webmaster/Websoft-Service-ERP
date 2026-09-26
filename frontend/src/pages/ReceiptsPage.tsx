@@ -35,6 +35,8 @@ export default function ReceiptsPage() {
   const [kind, setKind] = useState<'customer' | 'other'>('customer')
   const [glAccountId, setGlAccountId] = useState('')
   const [description, setDescription] = useState('')
+  // Bank interest is an exempt supply (ES) for GST (Dennis, 2026-09-26).
+  const [exempt, setExempt] = useState(false)
   const [customerId, setCustomerId] = useState('')
   const [paymentDate, setPaymentDate] = useState(todayIso())
   // Multi-currency: the customer's own currency, at the rate table's rate.
@@ -73,7 +75,7 @@ export default function ReceiptsPage() {
     setSaving(true)
     try {
       const rv = await api.recordPayment({
-        ...(kind === 'other' ? { gl_account_id: glAccountId, notes: description } : { customer_id: customerId }),
+        ...(kind === 'other' ? { gl_account_id: glAccountId, notes: description, tax_code: exempt ? 'ES' : null } : { customer_id: customerId }),
         payment_date: paymentDate,
         amount: parseFloat(amount),
         ...currencyPayload(cur),
@@ -231,6 +233,14 @@ export default function ReceiptsPage() {
               onDescription={setDescription}
               placeholder="e.g. DBS interest for September"
             />
+          )}
+          {kind === 'other' && (
+            <div className="form-row">
+              <label>
+                <input type="checkbox" checked={exempt} onChange={(e) => setExempt(e.target.checked)} /> Exempt supply (ES) for GST
+              </label>
+              <span className="muted">Tick for bank interest: it then counts in the GST Calculation&rsquo;s exempt supplies box.</span>
+            </div>
           )}
           <div className="form-row">
             <label>Payment date</label>

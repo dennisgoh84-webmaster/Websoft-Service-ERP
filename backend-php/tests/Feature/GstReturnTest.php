@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Account;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\CompanyModule;
@@ -10,6 +11,7 @@ use App\Models\GroupModuleAuthority;
 use App\Models\GstReturn;
 use App\Models\Invoice;
 use App\Models\ModuleCatalog;
+use App\Models\Payment;
 use App\Models\SupplierInvoice;
 use App\Models\TaxCode;
 use App\Models\User;
@@ -272,6 +274,23 @@ class GstReturnTest extends TestCase
         $zx = TaxCode::where('code', 'ZX')->first();
         $this->patchJson("/api/tax-codes/{$zx->id}", ['form5_box' => '5'], $this->h)->assertStatus(422);
         $this->patchJson("/api/tax-codes/{$zx->id}", ['form5_box' => '3'], $this->h)->assertOk()->assertJsonPath('form5_box', '3');
+    }
+
+    public function test_bank_interest_marked_exempt_counts_in_the_exempt_supplies_box(): void
+    {
+        $id = $this->september();
+        $interest = Account::where('company_id', $this->company->id)->where('code', '4030')->value('id');
+        foreach ([['2026-09-30', 'ES', 12.34], ['2026-09-29', null, 50]] as [$date, $code, $amount]) {
+            Payment::create([
+                'company_id' => $this->company->id, 'gl_account_id' => $interest, 'voucher_number' => 'RV-'.fake()->unique()->numerify('####'),
+                'payment_date' => $date, 'amount_sgd' => $amount, 'notes' => 'Bank interest', 'tax_code' => $code,
+            ]);
+        }
+        $this->postJson("/api/accounting-periods/{$id}/close", [], $this->h)->assertOk();
+        $r = $this->postJson("/api/accounting-periods/{$id}/gst-calculate", [], $this->h)->assertOk()->json();
+        $box = collect($r['boxes'])->pluck('amount_sgd', 'box');
+        $this->assertEquals(212.34, $box[3], 'the ES invoice 200 + interest 12.34; the unmarked receipt stays out');
+        $this->assertEquals(108, $box[8], 'nothing changes the tax payable');
     }
 
     public function test_a_view_only_group_can_read_but_not_calculate(): void

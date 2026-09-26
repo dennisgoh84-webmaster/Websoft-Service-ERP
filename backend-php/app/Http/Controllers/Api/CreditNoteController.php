@@ -11,11 +11,13 @@ use App\Http\Middleware\Authenticate;
 use App\Models\Company;
 use App\Models\CreditNote;
 use App\Models\Invoice;
+use App\Models\SupplierPayment;
 use App\Models\User;
 use App\Services\Authority;
 use App\Services\CreditNotes;
 use App\Services\DocxForms;
 use App\Services\Posting;
+use App\Support\Money;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
@@ -82,6 +84,20 @@ class CreditNoteController extends Controller
             'can_approve' => $n->status === CreditNote::STATUS_PENDING && CreditNotes::canApprove($n, $viewer),
             'gl_status' => $gl ? 'posted' : 'not_posted',
             'gl_voucher_number' => $gl?->voucher_number,
+            // 2026-09-26: the lines it credits, and credit left on the customer's account.
+            'lines' => $n->lines->map(fn ($l) => [
+                'invoice_line_id' => $l->invoice_line_id, 'description' => $l->description, 'quantity' => $l->quantity,
+                'amount_fx' => (float) $l->amount_fx, 'amount_sgd' => (float) $l->amount_sgd,
+                'return_to_stock' => $l->return_to_stock, 'warehouse_id' => $l->warehouse_id,
+            ])->values(),
+            'unapplied_fx' => $n->unappliedFx()->toFloat(),
+            'unapplied_sgd' => $n->unappliedSgd()->toFloat(),
+            'applications' => $n->applications->map(fn ($a) => [
+                'kind' => $a->kind, 'invoice_id' => $a->invoice_id, 'invoice_number' => $a->invoice?->invoice_number,
+                'supplier_payment_id' => $a->supplier_payment_id,
+                'voucher_number' => $a->supplier_payment_id ? SupplierPayment::whereKey($a->supplier_payment_id)->value('voucher_number') : null,
+                'amount_fx' => (float) $a->amount_fx, 'applied_at' => $a->applied_at?->toIso8601String(),
+            ])->values(),
         ];
     }
 
@@ -121,22 +137,75 @@ class CreditNoteController extends Controller
             'invoice_id' => 'required|uuid',
             // Net of GST, in the invoice's own currency (multi-currency);
             // `amount_sgd` is kept for an SGD invoice.
-            'amount' => 'required_without:amount_sgd|nullable|numeric|gt:0',
-            'amount_sgd' => 'required_without:amount|nullable|numeric|gt:0',
+            'amount' => 'nullable|numeric|gt:0',
+            'amount_sgd' => 'nullable|numeric|gt:0',
             'reason' => 'required|string|max:1000',
+            // Or whole lines / part quantities, with goods returned (2026-09-26).
+            'lines' => 'sometimes|array',
+            'lines.*.invoice_line_id' => 'required_with:lines|uuid',
+            'lines.*.quantity' => 'required_with:lines|integer|min:0',
+            'lines.*.return_to_stock' => 'sometimes|boolean',
+            'lines.*.warehouse_id' => 'sometimes|nullable|uuid',
         ]);
+        if (empty($data['lines']) && empty($data['amount']) && empty($data['amount_sgd'])) {
+            throw new ApiException(422, 'Give an amount to credit, or the lines and quantities.');
+        }
         $invoice = Invoice::find($data['invoice_id']);
         if (! $invoice || $invoice->company_id !== $user->company_id) {
             throw new ApiException(404, 'Invoice not found');
         }
 
         try {
-            $note = CreditNotes::raise($invoice, $user, (string) ($data['amount'] ?? $data['amount_sgd']), $data['reason']);
+            $amount = $data['amount'] ?? $data['amount_sgd'] ?? null;
+            $note = CreditNotes::raise($invoice, $user, $amount === null ? null : (string) $amount, $data['reason'], $data['lines'] ?? []);
         } catch (ARRuleViolation $e) {
             throw new ApiException(422, $e->getMessage());
         }
 
         return response()->json($this->present($note->fresh(['invoice', 'customer']), $user));
+    }
+
+    /** Set credit left on the customer's account against another of their invoices. */
+    public function apply(Request $request, string $id)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+        $data = $request->validate(['invoice_id' => 'required|uuid', 'amount' => 'required|numeric|gt:0']);
+        $note = $this->noteOrFail($user->company_id, $id);
+        $invoice = Invoice::where('company_id', $user->company_id)->find($data['invoice_id']);
+        if (! $invoice) {
+            throw new ApiException(404, 'Invoice not found');
+        }
+        try {
+            CreditNotes::apply($note, $invoice, Money::of($data['amount']), $user);
+        } catch (ARRuleViolation $e) {
+            throw new ApiException(422, $e->getMessage());
+        }
+
+        return response()->json($this->present($note->fresh(), $user));
+    }
+
+    /** Refund credit left on the customer's account with a Payment Voucher. */
+    public function refund(Request $request, string $id)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+        Authority::requireModuleAccess($user, 'accounts_payable', 'edit');
+        $data = $request->validate([
+            'bank_account_id' => 'required|uuid',
+            'payment_date' => 'required|date',
+            'amount' => 'sometimes|nullable|numeric|gt:0',
+            'reference' => 'sometimes|nullable|string|max:200',
+        ]);
+        $note = $this->noteOrFail($user->company_id, $id);
+        try {
+            $pv = CreditNotes::refund($note, $data['bank_account_id'], $data['payment_date'],
+                isset($data['amount']) ? Money::of($data['amount']) : null, $user, $data['reference'] ?? null);
+        } catch (ARRuleViolation $e) {
+            throw new ApiException(422, $e->getMessage());
+        }
+
+        return response()->json($this->present($note->fresh(), $user) + ['refund_voucher_number' => $pv->voucher_number]);
     }
 
     public function approve(Request $request, string $id)

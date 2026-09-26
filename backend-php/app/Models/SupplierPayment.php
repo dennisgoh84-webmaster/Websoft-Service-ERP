@@ -36,7 +36,7 @@ class SupplierPayment extends Model
     protected $fillable = [
         'company_id', 'supplier_id', 'gl_account_id', 'voucher_number', 'payment_date', 'amount_sgd',
         'method', 'reference', 'notes', 'bank_account_id', 'paid_by_user_id',
-        'currency_code', 'exchange_rate', 'amount_fx',
+        'currency_code', 'exchange_rate', 'amount_fx', 'refund_credit_note_id',
     ];
 
     protected $attributes = ['method' => self::METHOD_BANK_TRANSFER];
@@ -86,7 +86,7 @@ class SupplierPayment extends Model
     /** An Other voucher settles no bills, so it never has anything left to allocate. */
     public function unallocatedSgd(): Money
     {
-        if ($this->isOther()) {
+        if ($this->isOther() || $this->refund_credit_note_id) {
             return Money::of(0);
         }
 
@@ -96,7 +96,7 @@ class SupplierPayment extends Model
     /** What is still unallocated in the payment's own currency. */
     public function unallocatedFx(): Money
     {
-        if ($this->isOther()) {
+        if ($this->isOther() || $this->refund_credit_note_id) {
             return Money::of(0);
         }
         $allocated = $this->allocations->reduce(

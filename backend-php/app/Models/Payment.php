@@ -41,7 +41,7 @@ class Payment extends Model
         // Data Migration (docs/data-migration.md) -- zero/null on every
         // receipt recorded in this system.
         'pre_migration_allocated_sgd', 'migrated_at',
-        'currency_code', 'exchange_rate', 'amount_fx',
+        'currency_code', 'exchange_rate', 'amount_fx', 'tax_code',
     ];
 
     protected $attributes = ['method' => self::METHOD_BANK_TRANSFER, 'pre_migration_allocated_sgd' => '0.00'];

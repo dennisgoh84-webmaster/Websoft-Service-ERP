@@ -39,6 +39,7 @@ app treats it exactly as it treats a real phone).
    | Sales Invoice | a catalog line, GST, due date from the 30-day terms, posted to the GL |
    | Receipt | recorded, allocated to the invoice, invoice paid |
    | Credit Note | raised from the contract's annual invoice row (100 + 9% GST); changes nothing while pending; the owner approves (no limit set, BILL-003); issued with a CN number, posted to the GL, the invoice owes 109 less |
+   | Credit on account | one line (1 of 3 hours) credited on the receipt's now-paid Sales Invoice; the owner approves; SGD 163.50 stays on the customer's account and the paid invoice stays paid; 63.50 is set against the contract's annual invoice (which owes that much less) and the 100.00 left is refunded with a Payment Voucher dated as keyed (Backlog 2) |
    | Prospect | added, then a meeting logged on it |
    | Software Task | programmer, tester, target date, hours |
    | Purchase Order within the limit | 200 (218 with GST) against the 500 limit: a draft anyone with authority approves (PUR-001) |

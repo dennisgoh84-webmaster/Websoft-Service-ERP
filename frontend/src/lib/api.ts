@@ -1140,6 +1140,12 @@ export interface CreditNote {
   can_approve: boolean
   gl_status: 'posted' | 'not_posted'
   gl_voucher_number: string | null
+  /** 2026-09-26: the invoice lines it credits (none when it credits an amount). */
+  lines?: { invoice_line_id: string; description: string; quantity: number; amount_fx: number; amount_sgd: number; return_to_stock: boolean; warehouse_id: string | null }[]
+  /** Credit still on the customer's account (a paid invoice credited). */
+  unapplied_fx?: number
+  unapplied_sgd?: number
+  applications?: { kind: 'invoice' | 'refund'; invoice_id: string | null; invoice_number: string | null; voucher_number: string | null; amount_fx: number; applied_at: string | null }[]
 }
 
 export interface Invoice {
@@ -3575,8 +3581,18 @@ export const api = {
     request<CreditNote[]>(`/credit-notes${qs(filters)}`),
   getCreditNote: (id: string) => request<CreditNote>(`/credit-notes/${id}`),
   /** The amount is net of GST, in the invoice's own currency (multi-currency). */
-  raiseCreditNote: (payload: { invoice_id: string; amount?: number; amount_sgd?: number; reason: string }) =>
-    request<CreditNote>('/credit-notes', { method: 'POST', body: JSON.stringify(payload) }),
+  raiseCreditNote: (payload: {
+    invoice_id: string
+    amount?: number
+    amount_sgd?: number
+    reason: string
+    /** Or whole lines / part quantities, with goods returned (2026-09-26). */
+    lines?: { invoice_line_id: string; quantity: number; return_to_stock?: boolean; warehouse_id?: string | null }[]
+  }) => request<CreditNote>('/credit-notes', { method: 'POST', body: JSON.stringify(payload) }),
+  applyCreditNote: (id: string, invoice_id: string, amount: number) =>
+    request<CreditNote>(`/credit-notes/${id}/apply`, { method: 'POST', body: JSON.stringify({ invoice_id, amount }) }),
+  refundCreditNote: (id: string, payload: { bank_account_id: string; payment_date: string; amount?: number; reference?: string }) =>
+    request<CreditNote & { refund_voucher_number: string }>(`/credit-notes/${id}/refund`, { method: 'POST', body: JSON.stringify(payload) }),
   approveCreditNote: (id: string) => request<CreditNote>(`/credit-notes/${id}/approve`, { method: 'POST' }),
   rejectCreditNote: (id: string, reason: string) =>
     request<CreditNote>(`/credit-notes/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
@@ -3609,6 +3625,8 @@ export const api = {
     method?: string
     reference?: string
     notes?: string
+    /** An Other receipt such as bank interest: 'ES' counts it as an exempt supply. */
+    tax_code?: string | null
     allocations?: { invoice_id: string; amount_sgd?: number; amount?: number }[]
   }) =>
     request<Payment>('/accounts-receivable/payments', {

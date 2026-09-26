@@ -6,6 +6,7 @@ use App\Exceptions\ApiException;
 use App\Exceptions\BillingRuleViolation;
 use App\Exceptions\CurrencyRuleViolation;
 use App\Exceptions\InventoryRuleViolation;
+use App\Exceptions\PostingError;
 use App\Http\Controllers\Api\Concerns\SendsDocuments;
 use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
@@ -249,7 +250,8 @@ class InvoiceController extends Controller
                 currency: $currency,
                 rate: $rate,
             ));
-        } catch (BillingRuleViolation|InventoryRuleViolation $e) {
+        } catch (BillingRuleViolation|InventoryRuleViolation|PostingError $e) {
+            // A locked period refuses the posting: a message, not a server error.
             throw new ApiException(422, $e->getMessage());
         }
 

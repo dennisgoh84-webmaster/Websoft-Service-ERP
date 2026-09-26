@@ -416,6 +416,24 @@ in [open-business-decisions.md](open-business-decisions.md).
   full reads "Credited". Word and PDF print, CSV / Excel export.
   Defaults taken are in
   [open-business-decisions.md #52](open-business-decisions.md#52-credit-note-defaults-taken-raised-and-built-2026-09-26).
+- **Follow-ups answered and built 2026-09-26** (decision page):
+  - **Always against one Sales Invoice**, for **whole lines, part
+    quantities or an amount**. A line's quantity is limited to what
+    was sold less what other credit notes already took.
+  - **Goods returned**: tick it per stock line and pick the warehouse;
+    issuing the credit note puts them back **at the cost they left
+    at**.
+  - **Approval**: within the customer's credit note limit it is
+    **issued straight away** by whoever raises it (EDIT on Billing);
+    above the limit, or with none set, it waits for the **owner**.
+    (This replaces "approved by Finance or Cherish" above.)
+  - **A paid invoice can be credited**: what the invoice no longer
+    owes stays on the customer's account as credit. **Finance
+    chooses**: set it against another of their invoices (same
+    currency), or **refund it with a Payment Voucher** (Dr AR / Cr
+    bank; Bank Authority approval and the Bank step as for any PV).
+    Commission already earned on the paid part is taken back, as on
+    a write-off.
 - **Separate from the customer's credit limit** (Dennis, 2026-09-26:
   "2 separate matter and settings, all in company/individual file"):
   the **credit limit** is the most a customer may owe at once, also on
@@ -680,6 +698,11 @@ payment." Built 2026-09-26.
   (a gain credits it, a loss debits it), dated the receipt or payment
   date. The last allocation of a document takes exactly what is left in
   SGD, so no cent is stranded.
+- **Bank interest and GST** (Dennis, 2026-09-26, decision page): an
+  Other Receipt can be ticked **exempt supply (ES)**; bank interest so
+  marked counts in the GST Calculation's exempt supplies box (box 3)
+  in the month received. Nothing changes the tax payable; unticked
+  Other receipts stay out.
 - **Foreign-currency bank accounts**: a bank account's currency (e.g.
   USD) runs its Bank Book in that currency with the SGD value beside
   each line, and takes only vouchers in that currency; a foreign-

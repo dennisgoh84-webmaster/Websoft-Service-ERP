@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Exceptions\ARRuleViolation;
 use App\Exceptions\PostingError;
 use App\Models\CompanyIndividual;
-use App\Models\CreditNote;
+use App\Models\CreditNoteApplication;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentAllocation;
@@ -129,10 +129,12 @@ class AccountsReceivableService
         $paidFx = $allocations->reduce(fn (Money $carry, PaymentAllocation $a) => $carry->plus(Money::of($a->amount_fx ?? $a->amount_sgd)), $pre);
         $invoice->amount_paid_sgd = $paid->toString();
         $invoice->amount_paid_fx = $paidFx->toString();
-        // Issued credit notes take their total off too (BILL-003).
-        $notes = CreditNote::where('invoice_id', $invoice->id)->where('status', CreditNote::STATUS_ISSUED)->get();
-        $credited = $notes->reduce(fn (Money $carry, CreditNote $c) => $carry->plus(Money::of($c->total_amount_sgd)), Money::of(0));
-        $creditedFx = $notes->reduce(fn (Money $carry, CreditNote $c) => $carry->plus($c->fx('total_amount')), Money::of(0));
+        // Credit notes take off what was applied to this invoice (BILL-003):
+        // its own credit notes up to what it owed, and credit on the
+        // customer's account set against it (2026-09-26).
+        $applied = CreditNoteApplication::where('invoice_id', $invoice->id)->get();
+        $credited = $applied->reduce(fn (Money $carry, CreditNoteApplication $a) => $carry->plus(Money::of($a->amount_sgd)), Money::of(0));
+        $creditedFx = $applied->reduce(fn (Money $carry, CreditNoteApplication $a) => $carry->plus(Money::of($a->amount_fx)), Money::of(0));
         $invoice->credited_sgd = $credited->toString();
         $invoice->credited_fx = $creditedFx->toString();
 
