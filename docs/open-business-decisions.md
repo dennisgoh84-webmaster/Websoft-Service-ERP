@@ -1902,6 +1902,26 @@ decided; the build is tracked in backlog.md.
 | 19.3 | Urgent / after-hours multiplier | **Minutes only.** The excess rate stays the same. Confirmed. |
 | 4b.6 | Sales Invoice number format | **Keep INV-YYYY-0001.** Closed. |
 | 26.3 | Reference sub-codes in the GL | Dennis (Other): **"Reference Monitoring already linked to COA."** The Reference Monitor module (#26) already holds the sub-codes under their Chart of Accounts rows, so nothing more is needed. Closed. |
+| #43 | AI declaration for Helpdesk Portal customers | **Yes, a one-time tick** before using the portal chat, recorded on the portal login. |
+| Planned-work #4 | eApproval scope | **PV + PO + Service Records**: Payment Voucher (with Bank Authority), Purchase Order and Service Record approval move onto the eApproval framework. |
+| Planned-work #5 | Stock vs the Stock Distribution ERP | **Keep our own.** This system's Stock Master is the reference. Closed. |
+| #44 | AI spending cap | **Per company**: each company gets its own monthly token cap. |
+| Bank Portal | Where vehicle and driving details live | **On the application.** Vehicle and driver fields sit on each HP / insurance application. |
+| #39 | Deferred portal features | **Attachments first**: customers can attach screenshots and files when raising an incident. Multi-customer contacts and SSO stay deferred. |
+| 36.6 | Incident routing | **Keep the buttons.** Confirmed as built. |
+| 12.2 | Sales monitoring | **Per-salesperson cards**: prospects by stage, quoted, billed and paid, for each salesperson. |
+| #42 | AI model | **Add a fallback**: if the main model fails, the request is retried on a second model set on the AI settings screen. |
+| 28.1 | Access to the signed PDPA document | **Same as the record.** Confirmed as built. |
+| 28.2 | Archiving before PDPA expiry | **Owner only**, with a reason, enforced on the server as well as on screen. |
+| 19.6 | Relationship direction | **Keep neutral.** Confirmed as built. |
+| 14.1 | Event Logs date filter | **Add a day filter**: From / To dates on Event Logs only. |
+| 15.2 | Staff photos | **Crop on upload**: a square crop box when a photo is uploaded on Staff Master. |
+
+With this round, every open question in this document has an answer. What
+is left is building the answers (backlog.md) and the things only Dennis
+can supply: DBS / UOB and insurer page sources, the Odoo / ZSOFT exports,
+an HTTPS address, Twilio credentials, the advert videos, and values to
+key in (commission rate, per-customer limits, accounting periods).
 
 ## How to use this document
 

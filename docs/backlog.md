@@ -306,6 +306,15 @@ shipped and when.
   - [ ] AI Assistant: Service Record drafting from the technician's notes.
   - [ ] Email Inbox: the server reads the helpdesk mailbox over IMAP (no HTTPS needed), with Log as Incident / Convert to Job Order.
   - [ ] Tax Types: a Form 5 box setting per sales tax code, used by the GST Calculation (47.4).
+  - [ ] Helpdesk Portal: one-time AI declaration tick before the portal chat.
+  - [ ] eApproval: move Payment Voucher (with Bank Authority), PO and Service Record approval onto it.
+  - [ ] AI spending cap per company instead of one for the installation.
+  - [ ] Helpdesk Portal: customer attachments when raising an incident.
+  - [ ] Sales Dashboard: per-salesperson cards (prospects by stage, quoted, billed, paid).
+  - [ ] AI Assistant: a fallback model, set on the AI settings screen.
+  - [ ] PDPA: archive before expiry for the owner only, with a reason, enforced on the server.
+  - [ ] Event Logs: From / To day filter.
+  - [ ] Staff Master: square crop when uploading a photo.
   - [ ] Software Task statuses (Open → Programming → For Testing → Tested → Released) and a per-programmer Dev dashboard.
 
 - [x] **Prospect / Leads + Sales Supervisor / Sales Staff roles** --
