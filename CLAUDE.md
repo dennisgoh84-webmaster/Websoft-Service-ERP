@@ -130,6 +130,15 @@ explaining the reason first (see Development Rules below).
   The multiple-choice tool
   (`AskUserQuestion`, at most 4 questions) is only for one to four quick
   questions that block the work in hand.
+- **Work in rounds: all questions first, then build the round
+  straight through** (Dennis, 2026-09-26: "prepare all the questions
+  then BACKLOG 2 go execute them"). Before a batch of backlog work,
+  go through every item in it and put every question it raises on the
+  decision page at once. After he submits, build the whole batch without
+  stopping to ask, pushing each finished item as it goes green. A small
+  detail nobody foresaw is built with the recommended option, named in
+  a code comment and in open-business-decisions.md, and listed for him
+  in the round's report, never held for a new question.
 - When he answers, build it, record it where the rule lives
   (business-requirements.md / open-business-decisions.md), and don't
   ask the same thing again.

@@ -296,12 +296,14 @@ class SalesDashboardService
             }
         }
 
-        $names = User::whereIn('id', array_filter(array_keys($cards), fn ($k) => $k !== 'none' && $k !== 'no_prospect'))->pluck('full_name', 'id');
+        $people = User::whereIn('id', array_filter(array_keys($cards), fn ($k) => $k !== 'none' && $k !== 'no_prospect'))->get(['id', 'full_name', 'role'])->keyBy('id');
+        $names = $people->map(fn (User $u) => $u->full_name);
         $out = [];
         foreach ($cards as $k => $c) {
             $out[] = [
                 'salesperson_user_id' => in_array($k, ['none', 'no_prospect'], true) ? null : $k,
                 'kind' => $k === 'none' ? 'no_salesperson' : ($k === 'no_prospect' ? 'no_prospect' : 'salesperson'),
+                'role' => $people[$k]->role ?? null,
                 'name' => match ($k) {
                     'none' => 'No salesperson', 'no_prospect' => 'No prospect', default => $names[$k] ?? 'Unknown'
                 },

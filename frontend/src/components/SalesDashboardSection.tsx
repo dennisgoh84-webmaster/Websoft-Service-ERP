@@ -168,7 +168,7 @@ export default function SalesDashboardSection() {
             Prospects by stage as they stand today; quoted, billed and paid for {people.month_label} and for FY
             {summary?.financial_year ?? ''} to date. Work counts on its prospect's salesperson.
           </p>
-          <div className="salesperson-grid">
+          <div className="sp-grid">
             {people.cards.map((c) => (
               <SalespersonCardView key={c.salesperson_user_id ?? c.kind} card={c} monthLabel={people.month_label} year={summary?.financial_year} />
             ))}
@@ -276,53 +276,116 @@ const STAGES: { key: ProspectStatus; label: string }[] = [
   { key: 'lost', label: 'Lost' },
 ]
 
+const ROLE_LABEL: Record<string, string> = {
+  sales_manager: 'Sales Manager',
+  sales_supervisor: 'Sales Supervisor',
+  sales_staff: 'Sales Staff',
+  owner: 'Owner',
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() || '?'
+}
+
+/** Compact money for the big figures: $12.3k, $1.2M; the exact amount is in the tooltip. */
+function compact(n: number): string {
+  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
+  if (Math.abs(n) >= 10_000) return `$${(n / 1_000).toFixed(1).replace(/\.0$/, '')}k`
+  return `$${Math.round(n).toLocaleString('en-SG')}`
+}
+
 function SalespersonCardView({ card: c, monthLabel, year }: { card: SalespersonCard; monthLabel: string; year?: number }) {
   const prospectsLink = c.salesperson_user_id ? `/prospects?salesperson_user_id=${c.salesperson_user_id}` : '/prospects'
+  const stages = STAGES.map((st) => ({ ...st, n: c.prospects_by_stage[st.key] ?? 0 }))
+  const total = stages.reduce((sum, st) => sum + st.n, 0)
+  const won = c.prospects_by_stage.won ?? 0
+  const lost = c.prospects_by_stage.lost ?? 0
+  const winRate = won + lost > 0 ? Math.round((won / (won + lost)) * 100) : null
+  const collected = c.billed_sgd > 0 ? Math.min(100, Math.round((c.paid_sgd / c.billed_sgd) * 100)) : null
+  const person = c.kind === 'salesperson'
+  const figures: { label: string; month: number; year: number }[] = [
+    { label: 'Quoted', month: c.quoted_month_sgd, year: c.quoted_sgd },
+    { label: 'Billed', month: c.billed_month_sgd, year: c.billed_sgd },
+    { label: 'Paid', month: c.paid_month_sgd, year: c.paid_sgd },
+  ]
   return (
-    <div className="salesperson-card" data-testid="salesperson-card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
-        <strong>{c.name}</strong>
-        {c.kind !== 'no_prospect' && (
-          <Link to={prospectsLink} className="muted" style={{ fontSize: '0.85em' }}>
-            {c.open_prospects} open
-          </Link>
-        )}
-      </div>
-      {c.kind !== 'no_prospect' && (
-        <div className="stage-row">
-          {STAGES.map((st) => (
-            <span key={st.key} className={`stage-chip${c.prospects_by_stage[st.key] ? '' : ' empty'}`}>
-              {st.label} <b>{c.prospects_by_stage[st.key] ?? 0}</b>
-            </span>
-          ))}
+    <article className={`sp-card${person ? '' : ' sp-card--other'}`} data-testid="salesperson-card">
+      <header className="sp-head">
+        <span className="sp-avatar" aria-hidden="true">
+          {person ? initials(c.name) : c.kind === 'no_prospect' ? '—' : '?'}
+        </span>
+        <div className="sp-who">
+          <strong className="sp-name">{c.name}</strong>
+          <span className="sp-role">
+            {person ? ROLE_LABEL[c.role ?? ''] ?? 'Salesperson' : c.kind === 'no_prospect' ? 'Quotations and invoices with no prospect' : 'Prospects with no salesperson'}
+          </span>
         </div>
+        {winRate !== null && (
+          <span className={`sp-pill ${winRate >= 50 ? 'sp-pill--good' : ''}`} title={`${won} won, ${lost} lost`}>
+            {winRate}% win
+          </span>
+        )}
+      </header>
+
+      {c.kind !== 'no_prospect' && (
+        <section className="sp-pipeline" aria-label="Prospects by stage">
+          <div className="sp-bar" role="img" aria-label={stages.map((st) => `${st.label} ${st.n}`).join(', ')}>
+            {total === 0 ? (
+              <span className="sp-bar-empty" />
+            ) : (
+              stages
+                .filter((st) => st.n > 0)
+                .map((st) => <span key={st.key} className={`sp-seg sp-seg--${st.key}`} style={{ flexGrow: st.n }} title={`${st.label}: ${st.n}`} />)
+            )}
+          </div>
+          <ul className="sp-legend">
+            {stages.map((st) => (
+              <li key={st.key} className={st.n ? '' : 'is-zero'}>
+                <i className={`sp-dot sp-seg--${st.key}`} />
+                {st.label} <b>{st.n}</b>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
-      <table className="salesperson-figures">
-        <thead>
-          <tr>
-            <th></th>
-            <th>{monthLabel}</th>
-            <th>FY{year ?? ''}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <th>Quoted</th>
-            <td>{money(c.quoted_month_sgd)}</td>
-            <td>{money(c.quoted_sgd)}</td>
-          </tr>
-          <tr>
-            <th>Billed</th>
-            <td>{money(c.billed_month_sgd)}</td>
-            <td>{money(c.billed_sgd)}</td>
-          </tr>
-          <tr>
-            <th>Paid</th>
-            <td>{money(c.paid_month_sgd)}</td>
-            <td>{money(c.paid_sgd)}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+
+      <section className="sp-figures">
+        {figures.map((f) => (
+          <div key={f.label} className="sp-figure">
+            <span className="sp-figure-label">{f.label}</span>
+            <span className="sp-figure-month" title={`${monthLabel}: ${money(f.month)}`}>
+              {compact(f.month)}
+            </span>
+            <span className="sp-figure-year" title={`FY${year ?? ''} to date: ${money(f.year)}`}>
+              FY {compact(f.year)}
+            </span>
+          </div>
+        ))}
+      </section>
+      <p className="sp-period">
+        {monthLabel} · FY{year ?? ''} to date underneath
+      </p>
+
+      {collected !== null && (
+        <section className="sp-collect" aria-label="Collected">
+          <div className="sp-collect-top">
+            <span>Collected this FY</span>
+            <b>{collected}%</b>
+          </div>
+          <div className="sp-meter">
+            <span style={{ width: `${collected}%` }} />
+          </div>
+        </section>
+      )}
+
+      {c.kind !== 'no_prospect' && (
+        <footer className="sp-foot">
+          <Link to={prospectsLink}>
+            {c.open_prospects} open prospect{c.open_prospects === 1 ? '' : 's'} →
+          </Link>
+        </footer>
+      )}
+    </article>
   )
 }

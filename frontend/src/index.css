@@ -1695,26 +1695,245 @@ button.date-input-calendar {
   margin: 0;
   text-align: right;
 }
-/* The salesperson card's month-and-year figures (a table, not the dl above). */
-table.salesperson-figures {
-  display: table;
-  width: 100%;
-  border-collapse: collapse;
+
+
+/* Sales Dashboard salesperson cards (redesigned 2026-09-26). Stage
+   colours follow the pipeline: cool early stages, warm late ones, green
+   won, grey lost -- all from the theme tokens, so both themes work. */
+:root,
+:root[data-theme='light'] {
+  --stage-new: #9fb3f0;
+  --stage-qualified: #7f8ff0;
+  --stage-proposal: #e6a64a;
+  --stage-negotiation: #c9603e;
+  --stage-won: #3f9a55;
+  --stage-lost: #c9c1c3;
 }
-table.salesperson-figures th,
-table.salesperson-figures td {
-  padding: 2px 0 2px 8px;
-  border: 0;
-  text-align: right;
-  font-weight: normal;
-  white-space: nowrap;
+:root[data-theme='dark'] {
+  --stage-new: #4d64b8;
+  --stage-qualified: #6c63d9;
+  --stage-proposal: #c98a2e;
+  --stage-negotiation: #d36b4a;
+  --stage-won: #43b86a;
+  --stage-lost: #3a4260;
 }
-table.salesperson-figures th:first-child {
-  text-align: left;
-  padding-left: 0;
+.sp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr));
+  gap: 16px;
+}
+.sp-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(26, 19, 21, 0.04), 0 6px 18px -12px rgba(122, 31, 46, 0.25);
+  overflow: hidden;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.sp-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent), var(--stage-proposal));
+}
+.sp-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(26, 19, 21, 0.05), 0 14px 28px -14px rgba(122, 31, 46, 0.35);
+}
+.sp-card--other {
+  border-style: dashed;
+  box-shadow: none;
+}
+.sp-card--other::before {
+  background: var(--border);
+}
+.sp-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sp-avatar {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent-contrast);
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+}
+.sp-card--other .sp-avatar {
   color: var(--text-muted);
+  background: var(--neutral-bg);
 }
-table.salesperson-figures thead th {
+.sp-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.sp-name {
+  font-size: 1.05em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.sp-role {
   font-size: 0.8em;
   color: var(--text-muted);
+}
+.sp-pill {
+  flex: none;
+  font-size: 0.75em;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--neutral-bg);
+  color: var(--neutral-text);
+  white-space: nowrap;
+}
+.sp-pill--good {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+.sp-bar {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--neutral-bg);
+}
+.sp-bar-empty {
+  flex: 1;
+}
+.sp-seg {
+  min-width: 6px;
+}
+.sp-seg--new { background: var(--stage-new); }
+.sp-seg--qualified { background: var(--stage-qualified); }
+.sp-seg--proposal { background: var(--stage-proposal); }
+.sp-seg--negotiation { background: var(--stage-negotiation); }
+.sp-seg--won { background: var(--stage-won); }
+.sp-seg--lost { background: var(--stage-lost); }
+.sp-legend {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 0.78em;
+  color: var(--text-muted);
+}
+.sp-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.sp-legend li b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.sp-legend li.is-zero {
+  opacity: 0.5;
+}
+.sp-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.sp-figures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.sp-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--bg);
+  min-width: 0;
+}
+.sp-figure-label {
+  font-size: 0.7em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.sp-figure-month {
+  font-size: 1.15em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sp-figure-year {
+  font-size: 0.75em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sp-period {
+  margin: -8px 0 0;
+  font-size: 0.72em;
+  color: var(--text-muted);
+}
+.sp-collect-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8em;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+.sp-collect-top b {
+  color: var(--text);
+}
+.sp-meter {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--neutral-bg);
+  overflow: hidden;
+}
+.sp-meter span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--stage-won), var(--ok-border));
+}
+.sp-foot {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 0.85em;
+}
+.sp-foot a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+.sp-foot a:hover {
+  text-decoration: underline;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-card {
+    transition: none;
+  }
+  .sp-card:hover {
+    transform: none;
+  }
 }

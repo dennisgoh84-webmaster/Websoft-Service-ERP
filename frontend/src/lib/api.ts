@@ -2657,6 +2657,7 @@ export interface SalespersonCard {
   salesperson_user_id: string | null
   kind: 'salesperson' | 'no_salesperson' | 'no_prospect'
   name: string
+  role: string | null
   prospects_by_stage: Record<ProspectStatus, number>
   open_prospects: number
   /** Financial year to date. */
