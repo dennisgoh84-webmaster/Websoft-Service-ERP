@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import CreditLimitWarning from '../components/CreditLimitWarning'
 import { EmailIcon, PrintIcon, WhatsAppIcon } from '../components/DocActionIcons'
 import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
@@ -355,6 +356,7 @@ export default function QuotationsPage() {
               ))}
             </select>
           </div>
+          <CreditLimitWarning customerId={customerId} />
           {customerId && customerProspects.length > 0 && (
             <div className="form-row">
               <label>Prospect (optional)</label>

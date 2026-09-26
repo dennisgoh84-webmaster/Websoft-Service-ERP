@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
+import CreditLimitWarning from '../components/CreditLimitWarning'
 import { EmailIcon, PrintIcon, WhatsAppIcon } from '../components/DocActionIcons'
 import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
@@ -312,7 +313,7 @@ export default function InvoicesPage() {
         recognized on invoice. GST is charged at the company's standard rate; the net column is the
         revenue figure, since GST collected is owed to IRAS rather than earned -- taken in full when
         invoiced, never spread over the contract term. AR-002: write-offs
-        are the owner's alone and need a reason; they post the
+        are for the owner or Finance, need a reason, and post the
         bad debt to 6700 Bad debts written off (an expense account). AR-003: a
         disputed invoice is flagged but keeps aging normally -- nothing is put on hold.
       </p>
@@ -366,6 +367,7 @@ export default function InvoicesPage() {
                 />
               </label>
             </div>
+          <CreditLimitWarning customerId={raiseCustomerId} addingSgd={draftNet} />
 
             <div className="report-table-wrap" style={{ overflowX: 'auto' }}>
               <table>

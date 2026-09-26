@@ -391,8 +391,12 @@ in [open-business-decisions.md](open-business-decisions.md).
   "2 separate matter and settings, all in company/individual file"):
   the **credit limit** is the most a customer may owe at once, also on
   the Company / Individual file, shown there against what it owes now
-  with an "Over credit limit" flag. What happens when it is exceeded is
-  not decided yet, so nothing is blocked.
+  with an "Over credit limit" flag. **Exceeding it only warns**
+  (Dennis, 2026-09-26, decision #48): picking a customer that owes more
+  than its limit -- or that a new Sales Invoice would take over it,
+  counting the lines before GST -- on the quotation, Sales Invoice or
+  Job Order form shows a warning, and staff can carry on. Nothing is
+  blocked and no approval is needed.
 
 ### BILL-004 — Project Billing Method — CONFIRMED
 
@@ -433,8 +437,10 @@ in [open-business-decisions.md](open-business-decisions.md).
 - ~~**Finance can write off small amounts directly.** Write-offs above
   a threshold require Dennis's approval.~~ **Changed 2026-09-26:** "I
   think can totally remove this write off approval amount." There is no
-  amount; **only the owner writes off**, always with a reason. The
-  Company Setup threshold is removed.
+  amount. **The owner and Finance write off, Finance without the
+  owner's approval** (confirmed the same day: "Yes that's what I
+  meant"); anyone else is refused. Always with a reason. The Company
+  Setup threshold is removed.
 - **Posting, settled 2026-09-26** ("It has to be expenses account"): a
   write-off posts Dr **6700 Bad debts written off** (an Expense account)
   / Cr 1100 Accounts receivable for the outstanding amount, as a journal

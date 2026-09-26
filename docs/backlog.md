@@ -307,11 +307,12 @@ shipped and when.
   tax code (TX / ZP / EP / OP / NR) with GST worked out like a Sales
   Invoice; boxes 9–12 stay zero; **Submit to IRAS** records who and when
   and locks the month for good. #47 fully settled.
-- [x] **Write-off approval amount removed** (2026-09-26): only the owner
-  writes off. **Customer credit limit** added to the Company /
+- [x] **Write-off approval amount removed** (2026-09-26): the owner and
+  Finance write off, Finance without the owner. **Customer credit limit** added to the Company /
   Individual file, separate from the credit note limit; shown against
-  what is owed. Still open: what happens when it is exceeded
-  ([open-business-decisions.md #48](open-business-decisions.md#48-customer-credit-limit-what-happens-when-it-is-exceeded-raised-2026-09-26)).
+  what is owed. Exceeding it **warns only** on the quotation, Sales
+  Invoice and Job Order forms; nothing is blocked
+  ([open-business-decisions.md #48](open-business-decisions.md#48-customer-credit-limit-what-happens-when-it-is-exceeded-raised-and-decided-2026-09-26)).
 - [x] **GST F5 workflow built 2026-09-26** (4b.4, GST-001): GST
   Calculation on each locked period keeps the Form 5 boxes and their
   documents; the GST Return (Form 5) and GST Supporting Listing read

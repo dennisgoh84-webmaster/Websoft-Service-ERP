@@ -33,14 +33,15 @@ granted per group (VIEW / EDIT / FULL) under **Group Authority**.
   Dashboard. Roles: Sales Manager, Sales Supervisor, Sales Staff.
 - **Company / Individual** — customers and suppliers in one file, with
   Contacts, Branches, Relationships, PDPA consent, a customer credit
-  limit, and per-party PO and credit note approval limits (all separate
+  limit (going over it warns on quotations, Sales Invoices and Job
+  Orders, never blocks), and per-party PO and credit note approval limits (all separate
   settings on the file).
 - **Service Operations** — Service Contracts (hours, renewal, project
   milestones), Job Orders, Service Records (approval, contract-hour
   deduction, excess usage), Incidents (Helpdesk, Outlook / Gmail
   add-ins), Software Tasks, Ops Dashboard, Mobile App.
 - **Accounts** — Billing / Invoices, Accounts Receivable (receipts;
-  write-offs by the owner only, posted to 6700 Bad debts written off), Accounts Payable (purchase
+  write-offs by the owner or Finance, no amount limit, posted to 6700 Bad debts written off), Accounts Payable (purchase
   orders, 2-way matching, payment vouchers), General Ledger (automatic
   posting, journal vouchers, trial balance), Bank Book, GST and Account
   Period (lock matrix, Year-End Closing, **GST Calculation** — the saved
@@ -99,6 +100,20 @@ explaining the reason first (see Development Rules below).
    - Financial audit trails
    - Role-based access control
    - Data backup and recovery
+
+## Working with Dennis
+
+- **Every question to Dennis is a pick-list, never free text** —
+  whenever a decision is his, ask it with the multiple-choice question
+  tool (`AskUserQuestion`): 2–4 short options, the recommended one
+  first and marked "(Recommended)", each with a one-line description
+  of what it means; he can still type "Other". Several open decisions
+  go in one call (up to 4 questions). Do not end a reply with questions
+  he has to answer by retyping. Set by Dennis 2026-09-26: "don't keep
+  making me repeat".
+- When he answers, build it, record it where the rule lives
+  (business-requirements.md / open-business-decisions.md), and don't
+  ask the same thing again.
 
 ## Development Rules
 

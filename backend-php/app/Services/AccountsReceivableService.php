@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Exceptions\ARRuleViolation;
 use App\Exceptions\PostingError;
-use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -58,14 +57,14 @@ class AccountsReceivableService
     }
 
     /**
-     * AR-002: only the owner writes off. There is no amount below which
-     * anyone else may (Dennis, 2026-09-26: "I think can totally remove
-     * this write off approval amount") -- the Company Setup threshold is
-     * gone.
+     * AR-002: the owner and Finance write off, with no amount limit
+     * (Dennis, 2026-09-26: the write-off approval amount "can totally
+     * remove", and Finance "should be able to write off without" the
+     * owner). Everyone else is refused. A reason is always required.
      */
     public static function canWriteOff(User $actor): bool
     {
-        return $actor->role === User::ROLE_OWNER;
+        return in_array($actor->role, [User::ROLE_OWNER, User::ROLE_FINANCE], true);
     }
 
     /**
@@ -88,7 +87,7 @@ class AccountsReceivableService
 
         $outstanding = $invoice->outstandingSgd();
         if (! self::canWriteOff($actor)) {
-            throw new ARRuleViolation('Only the owner can write off an invoice (AR-002).');
+            throw new ARRuleViolation('Only the owner or Finance can write off an invoice (AR-002).');
         }
 
         // The bad debt reaches the General Ledger as an expense (Dennis,

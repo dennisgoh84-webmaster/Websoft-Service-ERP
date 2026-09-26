@@ -97,20 +97,32 @@ class AccountsReceivableServiceTest extends TestCase
         AccountsReceivableService::writeOffInvoice($invoice, $staff, 'Small balance');
     }
 
-    public function test_only_the_owner_writes_off_whatever_the_amount(): void
+    public function test_finance_writes_off_without_the_owner_whatever_the_amount(): void
     {
-        // Dennis, 2026-09-26: no write-off approval amount at all.
+        // Dennis, 2026-09-26: no write-off approval amount, and Finance
+        // writes off without the owner.
         $company = Company::factory()->create();
-        $staff = User::factory()->for($company)->create(['role' => User::ROLE_FINANCE]);
-        $invoice = $this->invoice($company, 1);
+        $finance = User::factory()->for($company)->create(['role' => User::ROLE_FINANCE]);
+        $invoice = $this->invoice($company, 100000);
 
-        try {
-            AccountsReceivableService::writeOffInvoice($invoice, $staff, 'One dollar');
-            $this->fail('A non-owner wrote off an invoice');
-        } catch (ARRuleViolation $e) {
-            $this->assertSame('Only the owner can write off an invoice (AR-002).', $e->getMessage());
+        AccountsReceivableService::writeOffInvoice($invoice, $finance, 'Customer wound up');
+
+        $this->assertSame(Invoice::STATUS_WRITTEN_OFF, $invoice->fresh()->status);
+    }
+
+    public function test_nobody_but_the_owner_and_finance_writes_off(): void
+    {
+        $company = Company::factory()->create();
+        foreach ([User::ROLE_SALES_MANAGER, User::ROLE_SERVICE_LEAD, User::ROLE_SALES_STAFF] as $role) {
+            $invoice = $this->invoice($company, 1);
+            try {
+                AccountsReceivableService::writeOffInvoice($invoice, User::factory()->for($company)->create(['role' => $role]), 'One dollar');
+                $this->fail("{$role} wrote off an invoice");
+            } catch (ARRuleViolation $e) {
+                $this->assertSame('Only the owner or Finance can write off an invoice (AR-002).', $e->getMessage());
+            }
+            $this->assertNotSame(Invoice::STATUS_WRITTEN_OFF, $invoice->fresh()->status);
         }
-        $this->assertNotSame(Invoice::STATUS_WRITTEN_OFF, $invoice->fresh()->status);
     }
 
     public function test_a_reason_is_required(): void

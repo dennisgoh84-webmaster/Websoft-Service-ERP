@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import ExportControl from '../components/ExportControl'
+import CreditLimitWarning from '../components/CreditLimitWarning'
 import { api, downloadBlob, type Contract, type CompanyIndividual, type JobOrder, type JobOrderBillingClassification, type JobOrderPriority, type JobOrderType, type Product } from '../lib/api'
 import { formatDate, todayIso } from '../lib/format'
 import DateInput from '../components/DateInput'
@@ -132,6 +133,7 @@ export default function JobOrdersPage() {
               ))}
             </select>
           </div>
+          <CreditLimitWarning customerId={customerId} />
           <div className="form-row">
             <label>Contract</label>
             <select value={contractId} onChange={(e) => setContractId(e.target.value)} required>

@@ -221,7 +221,8 @@ sub-detail is called out explicitly).
    Until Dennis sets one, the system requires the **owner's approval for
    every write-off** — the safe reading of an undecided rule.
    **DECIDED 2026-09-26: no amount at all** ("I think can totally
-   remove this write off approval amount") -- only the owner writes off;
+   remove this write off approval amount") -- the owner and Finance
+   write off, Finance without the owner (confirmed the same day);
    the Company Setup threshold is removed (any value set was recorded in
    Event Logs first).
    (2026-09-26, Dennis asked "Write off meaning bad debts?" -- yes:
@@ -2285,14 +2286,19 @@ each is a small change if Dennis or the accountant wants it otherwise.
    IRAS records who and when; the month is then locked for good — no
    recalculation, no reopening, no lock lifted, no undo.
 
-## 48. Customer credit limit: what happens when it is exceeded (raised 2026-09-26)
+## 48. Customer credit limit: what happens when it is exceeded (raised and decided 2026-09-26)
 
 Dennis: the credit note approval limit and the customer credit limit
 are "2 separate matter and settings, all in company/individual file".
 Both are now fields on the file. The credit limit is **shown** against
-what the customer owes now, with an "Over credit limit" flag, but
-nothing is enforced, because no rule was given. *Open: when a customer
-is over (or would go over) its limit, should the system warn, block a
-new invoice or quotation, block a Job Order, or need the owner's
-approval?*
+what the customer owes now, with an "Over credit limit" flag.
+
+**Status: DECIDED 2026-09-26 — warn only** (Dennis picked "Warn only"
+from the choices: warn, block new invoices/quotations, block Job
+Orders, or need the owner's approval). When a customer already owes more
+than its limit, or a new Sales Invoice would take it over (lines before
+GST), a warning shows as soon as the customer is picked on the
+quotation, Sales Invoice and Job Order forms. Staff can still carry on;
+nothing is blocked and no approval is needed. Contract activation stays
+free of any credit check (SRV-017). Recorded in BILL-003.
 
