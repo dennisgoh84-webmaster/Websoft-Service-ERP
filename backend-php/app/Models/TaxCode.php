@@ -22,7 +22,19 @@ class TaxCode extends Model
 
     public const DEFAULT_CODE = 'SR';
 
-    protected $fillable = ['company_id', 'code', 'name', 'rate_percent', 'is_active'];
+    // A supply code (on sales: SR / ZR / ES / OS) or a purchase code (on
+    // supplier bills: TX / ZP / EP / OP / NR) -- 2026-09-26, when bills
+    // started carrying a tax code "like Sales Invoice Logic".
+    public const KIND_SUPPLY = 'supply';
+
+    public const KIND_PURCHASE = 'purchase';
+
+    public const KINDS = [self::KIND_SUPPLY, self::KIND_PURCHASE];
+
+    /** The purchase code a bill gets when none is chosen: standard-rated. */
+    public const DEFAULT_PURCHASE_CODE = 'TX';
+
+    protected $fillable = ['company_id', 'code', 'name', 'rate_percent', 'is_active', 'kind'];
 
     protected $casts = [
         'rate_percent' => 'decimal:2',

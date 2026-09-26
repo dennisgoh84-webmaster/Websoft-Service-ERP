@@ -44,6 +44,7 @@ class GstReturn extends Model
         'box_1_sgd', 'box_2_sgd', 'box_3_sgd', 'box_4_sgd', 'box_5_sgd', 'box_6_sgd', 'box_7_sgd',
         'box_8_sgd', 'box_9_sgd', 'box_10_sgd', 'box_11_sgd', 'box_12_sgd', 'box_13_sgd',
         'output_document_count', 'input_document_count', 'calculated_by_user_id', 'superseded_at',
+        'submitted_by_user_id', 'submitted_at',
     ];
 
     protected $casts = [
@@ -51,6 +52,7 @@ class GstReturn extends Model
         'period_end' => 'date',
         'calculated_at' => 'datetime',
         'superseded_at' => 'datetime',
+        'submitted_at' => 'datetime',
     ];
 
     public function period(): BelongsTo
@@ -61,6 +63,11 @@ class GstReturn extends Model
     public function calculatedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'calculated_by_user_id');
+    }
+
+    public function submittedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'submitted_by_user_id');
     }
 
     public function lines(): HasMany

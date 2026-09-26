@@ -79,6 +79,8 @@ class PeriodController extends Controller
             'output_tax_sgd' => (float) $gst->box_6_sgd,
             'input_tax_sgd' => (float) $gst->box_7_sgd,
             'net_gst_sgd' => (float) $gst->box_8_sgd,
+            'submitted_at' => optional($gst->submitted_at)->toIso8601String(),
+            'submitted_by_name' => $gst->submittedBy?->full_name,
         ];
     }
 
@@ -100,6 +102,8 @@ class PeriodController extends Controller
             'status' => $gst->status,
             'calculated_at' => $gst->calculated_at->toIso8601String(),
             'calculated_by_name' => $gst->calculatedBy?->full_name,
+            'submitted_at' => optional($gst->submitted_at)->toIso8601String(),
+            'submitted_by_name' => $gst->submittedBy?->full_name,
             'boxes' => $boxes,
             'output_document_count' => $gst->output_document_count,
             'input_document_count' => $gst->input_document_count,
@@ -134,6 +138,16 @@ class PeriodController extends Controller
             'history' => GstReturn::where('accounting_period_id', $period->id)->orderByDesc('version')->get()
                 ->map(fn (GstReturn $g) => self::presentGstReturn($g, withLines: false))->values(),
         ]);
+    }
+
+    /** Mark the current GST Calculation submitted to IRAS; the month is locked from then on. */
+    public function submitGst(Request $request, string $periodId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'full');
+        $period = $this->periodOrFail($user->company_id, $periodId);
+
+        return response()->json(self::presentGstReturn(GstReturns::submit($period, $user)->load('period')));
     }
 
     /**

@@ -42,7 +42,7 @@ class SupplierInvoice extends Model
     protected $fillable = [
         'company_id', 'supplier_id', 'purchase_order_id', 'expense_account_id', 'bill_number',
         'supplier_invoice_no', 'invoice_date', 'due_date', 'description',
-        'amount_sgd', 'gst_amount_sgd', 'total_amount_sgd', 'amount_paid_sgd',
+        'amount_sgd', 'tax_code', 'gst_rate', 'gst_amount_sgd', 'total_amount_sgd', 'amount_paid_sgd',
         'match_status', 'match_note', 'status',
     ];
 

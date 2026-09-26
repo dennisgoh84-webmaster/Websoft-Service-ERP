@@ -492,6 +492,8 @@ class ReportController extends Controller
                 'version' => $g->version,
                 'calculated_at' => $g->calculated_at->toIso8601String(),
                 'period_reopened' => $g->period?->status !== AccountingPeriod::STATUS_CLOSED,
+                'submitted_at' => optional($g->submitted_at)->toIso8601String(),
+                'submitted_by_name' => $g->submittedBy?->full_name,
                 'net_gst_sgd' => (float) $g->box_8_sgd,
             ])->values(),
             'missing_periods' => $this->gstMissing($scope, $start, $end),

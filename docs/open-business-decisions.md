@@ -2256,12 +2256,13 @@ Dennis described the workflow (business-requirements.md GST-001) but
 not how each document maps to a Form 5 box. These defaults were taken;
 each is a small change if Dennis or the accountant wants it otherwise.
 
-47.1. **Supplier bills carry no tax code**, so one charging GST counts
-   as a taxable purchase (box 5) and its GST as input tax (box 7); one
-   charging none is listed as "no GST" and left out of box 5 (it may be
-   from a supplier not registered for GST, or exempt). *Open: should
-   bills carry a purchase tax code (TX / ZP / EP / OP …) so zero-rated
-   and exempt purchases land in the right place?*
+47.1. ~~Supplier bills carry no tax code.~~ **Settled 2026-09-26:**
+   "Must have GST taken care of like Sales Invoice Logic." Bills carry a
+   purchase tax code (TX / ZP / EP / OP / NR, seeded for every company;
+   TX at the company's SR rate) and their GST is worked out from it.
+   TX and ZP → box 5; EP / OP / NR → listed, not in box 5. A bill from
+   before this that charged GST was set to TX at the rate it charged; one
+   that charged none keeps no code and is read as before.
 
 47.2. **Invoices brought in by Data Migration are left out** — they
    are history already filed from ODOO / ZSOFT.
@@ -2269,8 +2270,8 @@ each is a small change if Dennis or the accountant wants it otherwise.
 47.3. **A written-off invoice still counts as a supply** in the month
    it was issued. Bad-debt relief (box 11) is a separate claim not made
    here; boxes 9, 10 and 12 are also zero, since no document here
-   produces them. *Open: does Dennis want manual entries for boxes
-   9–12?*
+   produces them. **Settled 2026-09-26:** "All these are non relevant…
+   it's okay leave it." — no manual entry for boxes 9–12.
 
 47.4. **Any tax code other than SR / ZR / ES / OS** counts as
    standard-rated when it carries GST and out of scope when it carries
@@ -2279,9 +2280,10 @@ each is a small change if Dennis or the accountant wants it otherwise.
 47.5. **Recalculation is allowed** while the period is locked, as a new
    version (the earlier one kept). A month reopened after its
    calculation is flagged on the period and in the GST Return until it
-   is locked and recalculated. There is no "filed" lock yet. *Open:
-   should a month be marked as filed with IRAS, after which it can no
-   longer be recalculated?*
+   is locked and recalculated. **Settled 2026-09-26:** "we add in
+   submitted by who… date time stamp… after that must lock." Submit to
+   IRAS records who and when; the month is then locked for good — no
+   recalculation, no reopening, no lock lifted, no undo.
 
 ## 48. Customer credit limit: what happens when it is exceeded (raised 2026-09-26)
 

@@ -238,7 +238,20 @@ class DatabaseSeeder extends Seeder
         ] as [$code, $name, $rate]) {
             TaxCode::updateOrCreate(
                 ['company_id' => $company->id, 'code' => $code],
-                ['name' => $name, 'rate_percent' => $rate, 'is_active' => true],
+                ['name' => $name, 'rate_percent' => $rate, 'is_active' => true, 'kind' => TaxCode::KIND_SUPPLY],
+            );
+        }
+        // IRAS purchase codes, for supplier bills (2026-09-26).
+        foreach ([
+            ['TX', 'Standard-rated purchase', '9.00'],
+            ['ZP', 'Zero-rated purchase', '0.00'],
+            ['EP', 'Exempt purchase', '0.00'],
+            ['OP', 'Out-of-scope purchase', '0.00'],
+            ['NR', 'Purchase from a supplier not registered for GST', '0.00'],
+        ] as [$code, $name, $rate]) {
+            TaxCode::updateOrCreate(
+                ['company_id' => $company->id, 'code' => $code],
+                ['name' => $name, 'rate_percent' => $rate, 'is_active' => true, 'kind' => TaxCode::KIND_PURCHASE],
             );
         }
 

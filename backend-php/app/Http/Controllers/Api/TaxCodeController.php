@@ -32,7 +32,7 @@ class TaxCodeController extends Controller
     private const MODULE = 'finance_accounting';
 
     /** @var array<int, string> */
-    private const EXPORT_FIELDS = ['code', 'name', 'rate_percent', 'is_active'];
+    private const EXPORT_FIELDS = ['code', 'name', 'kind', 'rate_percent', 'is_active'];
 
     public function index(Request $request)
     {
@@ -86,6 +86,7 @@ class TaxCodeController extends Controller
             'code' => 'required|string|min:1|max:10',
             'name' => 'required|string|min:1|max:100',
             'rate_percent' => 'required|numeric|min:0|max:100',
+            'kind' => 'sometimes|in:'.implode(',', TaxCode::KINDS),
         ]);
 
         $exists = TaxCode::where('company_id', $user->company_id)->where('code', $data['code'])->first();
@@ -125,6 +126,7 @@ class TaxCodeController extends Controller
             'name' => 'sometimes|string|max:100',
             'rate_percent' => 'sometimes|numeric|min:0|max:100',
             'is_active' => 'sometimes|boolean',
+            'kind' => 'sometimes|in:'.implode(',', TaxCode::KINDS),
         ]);
 
         $taxCode = TaxCode::where('company_id', $user->company_id)->find($taxCodeId);
@@ -137,7 +139,7 @@ class TaxCodeController extends Controller
             // actually changed, stringifying both sides.
             $oldValue = [];
             $newValue = [];
-            foreach (['code', 'name', 'rate_percent', 'is_active'] as $field) {
+            foreach (['code', 'name', 'rate_percent', 'is_active', 'kind'] as $field) {
                 if (! array_key_exists($field, $data)) {
                     continue;
                 }
@@ -174,6 +176,10 @@ class TaxCodeController extends Controller
             $query->where('is_active', true);
         }
 
+        if (in_array($request->query('kind'), TaxCode::KINDS, true)) {
+            $query->where('kind', $request->query('kind'));
+        }
+
         return $query->orderBy('code')->get();
     }
 
@@ -183,6 +189,7 @@ class TaxCodeController extends Controller
         return $this->filtered($companyId, $request)->map(fn (TaxCode $t) => [
             'code' => $t->code,
             'name' => $t->name,
+            'kind' => $t->kind,
             'rate_percent' => (string) $t->rate_percent,
             'is_active' => $t->is_active,
         ])->all();
@@ -199,6 +206,7 @@ class TaxCodeController extends Controller
             // wire format is a bare number, not a numeric string.
             'rate_percent' => (float) $t->rate_percent,
             'is_active' => $t->is_active,
+            'kind' => $t->kind,
         ];
     }
 }

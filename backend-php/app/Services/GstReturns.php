@@ -38,10 +38,16 @@ use Illuminate\Support\Facades\DB;
  * - Input: every supplier bill dated in the period that reached the
  *   books -- approved, partly paid or paid; one still awaiting a match
  *   or held as an exception is not in Accounts Payable and is left out.
- *   A bill carries no tax code, so one charging GST counts in box 5
- *   (taxable purchases) and box 7; one charging none is listed as "no
- *   GST" and left out of box 5 (it may be from a supplier who is not
- *   GST-registered).
+ *   Its purchase tax code decides the box, as a sales invoice's does
+ *   (Dennis, 2026-09-26: "like Sales Invoice Logic"): TX (standard-rated)
+ *   and ZP (zero-rated) are taxable purchases, box 5, with TX's GST in
+ *   box 7; EP (exempt), OP (out of scope) and NR (supplier not registered
+ *   for GST) are listed but left out of box 5. A bill from before bills
+ *   carried a code counts in box 5 when it charged GST.
+ *
+ * Once a calculation is marked submitted to IRAS -- by whom and when --
+ * the month is locked: it cannot be recalculated and its period cannot
+ * be reopened or have any lock lifted.
  *
  * The result -- the boxes and every document line behind them -- is
  * kept in gst_returns / gst_return_lines. Recalculating adds the next
@@ -50,6 +56,8 @@ use Illuminate\Support\Facades\DB;
 class GstReturns
 {
     private const BOX_BY_TAX_CODE = ['SR' => '1', 'ZR' => '2', 'ES' => '3', 'OS' => 'out_of_scope'];
+
+    private const BOX_BY_PURCHASE_CODE = ['TX' => '5', 'ZP' => '5', 'EP' => 'not_taxable', 'OP' => 'not_taxable', 'NR' => 'not_taxable'];
 
     private const BOOKED_BILL_STATUSES = [
         SupplierInvoice::STATUS_APPROVED, SupplierInvoice::STATUS_PARTIALLY_PAID, SupplierInvoice::STATUS_PAID,
@@ -65,6 +73,7 @@ class GstReturns
         if ($period->status !== AccountingPeriod::STATUS_CLOSED) {
             throw new ApiException(409, "Lock the period first: {$period->name} is still open, so its figures can still change. Close All, then run the GST Calculation.");
         }
+        self::assertNotSubmitted($period);
 
         return DB::transaction(function () use ($period, $actor) {
             $lines = [...self::outputLines($period), ...self::inputLines($period)];
@@ -138,6 +147,51 @@ class GstReturns
         });
     }
 
+    /**
+     * Mark the period's current GST Calculation as submitted to IRAS --
+     * who and when -- after which the month is locked for good.
+     */
+    public static function submit(AccountingPeriod $period, User $actor): GstReturn
+    {
+        $current = self::current($period);
+        if ($current === null) {
+            throw new ApiException(409, "Run the GST Calculation for {$period->name} before submitting it.");
+        }
+        self::assertNotSubmitted($period);
+        if ($period->status !== AccountingPeriod::STATUS_CLOSED) {
+            throw new ApiException(409, "{$period->name} was reopened after its GST Calculation. Lock it and recalculate before submitting.");
+        }
+
+        $current->submitted_by_user_id = $actor->id;
+        $current->submitted_at = Carbon::now();
+        $current->save();
+
+        Audit::record(
+            entityType: 'gst_return',
+            entityId: $current->id,
+            action: 'submitted_to_iras',
+            actorUserId: $actor->id,
+            companyId: $period->company_id,
+            details: sprintf('GST Calculation v%d for %s submitted to IRAS (net GST SGD %s); the month is now locked',
+                $current->version, $period->name, Money::of($current->box_8_sgd)->toString()),
+            newValue: ['submitted_at' => $current->submitted_at->toIso8601String()],
+        );
+
+        return $current->fresh();
+    }
+
+    /** Refuses anything that would change a month already submitted to IRAS. */
+    public static function assertNotSubmitted(AccountingPeriod $period): void
+    {
+        $current = self::current($period);
+        if ($current?->submitted_at !== null) {
+            throw new ApiException(409, sprintf(
+                '%s was submitted to IRAS on %s by %s and is locked.',
+                $period->name, $current->submitted_at->format('d/m/Y H:i'), $current->submittedBy?->full_name ?? 'someone',
+            ));
+        }
+    }
+
     /** @return list<array<string, mixed>> */
     private static function outputLines(AccountingPeriod $period): array
     {
@@ -180,6 +234,10 @@ class GstReturns
             ->get()
             ->map(function (SupplierInvoice $b) {
                 $gst = Money::of($b->gst_amount_sgd ?? 0);
+                $code = strtoupper((string) $b->tax_code);
+                $box = self::BOX_BY_PURCHASE_CODE[$code] ?? ($b->tax_code === null
+                    ? ($gst->toFloat() > 0 ? '5' : 'no_gst')
+                    : ($gst->toFloat() > 0 ? '5' : 'not_taxable'));
 
                 return [
                     'direction' => GstReturnLine::INPUT,
@@ -189,8 +247,8 @@ class GstReturns
                     'document_date' => Carbon::parse($b->invoice_date)->toDateString(),
                     'party_id' => $b->supplier_id,
                     'party_name' => $b->supplier?->name,
-                    'tax_code' => null,
-                    'box' => $gst->toFloat() > 0 ? '5' : 'no_gst',
+                    'tax_code' => $b->tax_code,
+                    'box' => $box,
                     'net_sgd' => Money::of($b->amount_sgd ?? 0)->toString(),
                     'gst_sgd' => $gst->toString(),
                 ];

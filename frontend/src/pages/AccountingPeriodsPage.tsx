@@ -127,6 +127,26 @@ export default function AccountingPeriodsPage() {
     }
   }
 
+  async function onSubmitGst(period: AccountingPeriod) {
+    if (
+      !window.confirm(
+        `Mark ${period.name}'s GST return as submitted to IRAS?\n\nYour name and the time are recorded, and the month is then locked for good: no recalculation, no reopening.`,
+      )
+    )
+      return
+    setError(null)
+    setMessage(null)
+    try {
+      const r = await api.submitPeriodGst(period.id)
+      setMessage(`${period.name} — GST return marked submitted to IRAS; the month is now locked.`)
+      setGst(r)
+      setGstFor(period.id)
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to mark as submitted')
+    }
+  }
+
   async function onShowGst(period: AccountingPeriod) {
     if (gstFor === period.id) {
       setGstFor(null)
@@ -250,6 +270,12 @@ export default function AccountingPeriodsPage() {
                       ) : (
                         <span className="muted">Not calculated</span>
                       )}
+                      {p.gst?.submitted_at && (
+                        <div style={{ fontSize: '0.8em' }}>
+                          <span className="badge active">Submitted to IRAS</span> {formatDateTime(p.gst.submitted_at)}
+                          {p.gst.submitted_by_name ? ` by ${p.gst.submitted_by_name}` : ''} — locked
+                        </div>
+                      )}
                       {p.gst && summary !== 'closed' && (
                         <div className="muted" style={{ fontSize: '0.8em' }}>
                           Reopened since — lock and recalculate
@@ -257,20 +283,27 @@ export default function AccountingPeriodsPage() {
                       )}
                     </td>
                     <td style={{ display: 'flex', gap: 6 }}>
-                      <button
-                        onClick={() => onCalculateGst(p)}
-                        disabled={summary !== 'closed' || calculating === p.id}
-                        title={summary !== 'closed' ? 'Lock the period (Close All) first' : 'Sum this period into the Form 5 boxes and keep them'}
-                        style={{ fontSize: '0.85em' }}
-                      >
-                        {calculating === p.id ? 'Calculating...' : 'GST Calculation'}
-                      </button>
+                      {!p.gst?.submitted_at && (
+                        <button
+                          onClick={() => onCalculateGst(p)}
+                          disabled={summary !== 'closed' || calculating === p.id}
+                          title={summary !== 'closed' ? 'Lock the period (Close All) first' : 'Sum this period into the Form 5 boxes and keep them'}
+                          style={{ fontSize: '0.85em' }}
+                        >
+                          {calculating === p.id ? 'Calculating...' : 'GST Calculation'}
+                        </button>
+                      )}
+                      {p.gst && !p.gst.submitted_at && summary === 'closed' && (
+                        <button className="secondary" onClick={() => onSubmitGst(p)} style={{ fontSize: '0.85em' }} title="Record that this return was submitted to IRAS; the month is then locked">
+                          Submit to IRAS
+                        </button>
+                      )}
                       {summary !== 'closed' && (
                         <button className="secondary" onClick={() => onCloseAll(p)} style={{ fontSize: '0.85em' }}>
                           Close All
                         </button>
                       )}
-                      {summary !== 'open' && (
+                      {summary !== 'open' && !p.gst?.submitted_at && (
                         <button className="secondary" onClick={() => onOpenAll(p)} style={{ fontSize: '0.85em' }}>
                           Open All
                         </button>
@@ -419,7 +452,15 @@ function LockMatrix({
 /** A saved GST Calculation: the Form 5 boxes, then every document behind them, as kept. */
 function GstPanel({ gst }: { gst: GstReturnSaved }) {
   const [showLines, setShowLines] = useState(false)
-  const BOX_LABEL: Record<string, string> = { '1': 'Box 1', '2': 'Box 2', '3': 'Box 3', out_of_scope: 'Out of scope', '5': 'Box 5', no_gst: 'No GST' }
+  const BOX_LABEL: Record<string, string> = {
+    '1': 'Box 1',
+    '2': 'Box 2',
+    '3': 'Box 3',
+    out_of_scope: 'Out of scope',
+    '5': 'Box 5',
+    not_taxable: 'Not a taxable purchase',
+    no_gst: 'No GST',
+  }
   return (
     <div>
       <p className="muted" style={{ marginTop: 0 }}>
@@ -427,6 +468,15 @@ function GstPanel({ gst }: { gst: GstReturnSaved }) {
         {formatDateTime(gst.calculated_at)}
         {gst.calculated_by_name ? ` by ${gst.calculated_by_name}` : ''} — {gst.output_document_count} sales and{' '}
         {gst.input_document_count} purchase documents.
+        {gst.submitted_at && (
+          <>
+            {' '}
+            <strong>
+              Submitted to IRAS {formatDateTime(gst.submitted_at)}
+              {gst.submitted_by_name ? ` by ${gst.submitted_by_name}` : ''} — locked.
+            </strong>
+          </>
+        )}
       </p>
       <table>
         <thead>

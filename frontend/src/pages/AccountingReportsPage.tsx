@@ -184,7 +184,7 @@ function today(): string {
   return isoLocal(new Date())
 }
 
-const GST_BOX_LABEL: Record<string, string> = { '1': 'Box 1', '2': 'Box 2', '3': 'Box 3', out_of_scope: 'Out of scope (revenue only)', '5': 'Box 5', no_gst: 'No GST charged' }
+const GST_BOX_LABEL: Record<string, string> = { '1': 'Box 1', '2': 'Box 2', '3': 'Box 3', out_of_scope: 'Out of scope (revenue only)', '5': 'Box 5', not_taxable: 'Not a taxable purchase (EP / OP / NR)', no_gst: 'No GST charged' }
 
 const USES_COMPANIES: ReportType[] = ['ar-aging', 'ap-aging', 'trial-balance', 'gst-return', 'gst-supporting', 'sales-gp', 'commission']
 const USES_AS_AT: ReportType[] = ['ar-aging', 'ap-aging', 'trial-balance']
@@ -937,6 +937,7 @@ export default function AccountingReportsPage() {
                     <th>Period</th>
                     <th>Calculation</th>
                     <th>Saved</th>
+                    <th>Submitted to IRAS</th>
                     <th style={{ textAlign: 'right' }}>Net GST (SGD)</th>
                   </tr>
                 </thead>
@@ -947,12 +948,13 @@ export default function AccountingReportsPage() {
                       <td>{p.period_name}</td>
                       <td>v{p.version}</td>
                       <td>{formatDateTime(p.calculated_at)}</td>
+                      <td>{p.submitted_at ? `${formatDateTime(p.submitted_at)}${p.submitted_by_name ? ` by ${p.submitted_by_name}` : ''}` : 'Not yet'}</td>
                       <td style={{ textAlign: 'right' }}>{money(p.net_gst_sgd)}</td>
                     </tr>
                   ))}
                   {gstReturn.periods.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="muted">
+                      <td colSpan={6} className="muted">
                         No saved GST Calculation in this range.
                       </td>
                     </tr>

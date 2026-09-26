@@ -10,11 +10,14 @@ use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\CompanyIndividual;
 use App\Models\SupplierInvoice;
+use App\Models\TaxCode;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\Numbering;
 use App\Services\PayablesService;
 use App\Services\Posting;
+use App\Services\Tax;
+use App\Support\Money;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -74,6 +77,8 @@ class SupplierInvoiceController extends Controller
             'due_date' => optional($bill->due_date)->toDateString(),
             'description' => $bill->description,
             'amount_sgd' => (float) $bill->amount_sgd,
+            'tax_code' => $bill->tax_code,
+            'gst_rate' => $bill->gst_rate === null ? null : (float) $bill->gst_rate,
             'gst_amount_sgd' => (float) $bill->gst_amount_sgd,
             'total_amount_sgd' => (float) $bill->total_amount_sgd,
             'amount_paid_sgd' => (float) $bill->amount_paid_sgd,
@@ -182,14 +187,22 @@ class SupplierInvoiceController extends Controller
             'invoice_date' => 'required|date',
             'description' => 'required|string|min:1',
             'amount_sgd' => 'required|numeric|gt:0',
-            'gst_amount_sgd' => 'sometimes|numeric|min:0',
+            // GST is worked out from the tax code, as on a Sales Invoice
+            // (Dennis, 2026-09-26) -- never keyed in.
+            'tax_code' => 'sometimes|nullable|string|max:10',
         ]);
+        $code = strtoupper($data['tax_code'] ?? TaxCode::DEFAULT_PURCHASE_CODE);
+        $taxCode = TaxCode::where('company_id', $user->company_id)->where('code', $code)->where('is_active', true)->first();
+        if ($taxCode === null || $taxCode->kind !== TaxCode::KIND_PURCHASE) {
+            throw new ApiException(422, "{$code} is not an active purchase tax code. Pick one of the purchase codes under Maintenance -> Tax Types.");
+        }
         $this->supplierOrFail($user->company_id, $data['supplier_id']);
 
         try {
-            $bill = DB::transaction(function () use ($user, $data) {
-                $net = (float) $data['amount_sgd'];
-                $gst = (float) ($data['gst_amount_sgd'] ?? 0);
+            $bill = DB::transaction(function () use ($user, $data, $taxCode) {
+                $net = Money::of($data['amount_sgd']);
+                $rate = Money::of($taxCode->rate_percent);
+                $gst = Tax::gstFor($net, $rate);
 
                 $bill = SupplierInvoice::create([
                     'company_id' => $user->company_id,
@@ -200,9 +213,11 @@ class SupplierInvoiceController extends Controller
                     'invoice_date' => $data['invoice_date'],
                     'due_date' => PayablesService::dueDateForBill($data['supplier_id'], Carbon::parse($data['invoice_date']))?->toDateString(),
                     'description' => $data['description'],
-                    'amount_sgd' => $net,
-                    'gst_amount_sgd' => $gst,
-                    'total_amount_sgd' => $net + $gst,
+                    'amount_sgd' => $net->toString(),
+                    'tax_code' => $taxCode->code,
+                    'gst_rate' => $rate->toString(),
+                    'gst_amount_sgd' => $gst->toString(),
+                    'total_amount_sgd' => $net->plus($gst)->toString(),
                 ]);
 
                 PayablesService::matchBillToPo($bill, $user->id);

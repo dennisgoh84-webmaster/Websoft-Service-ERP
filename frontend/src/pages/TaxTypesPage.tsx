@@ -14,6 +14,7 @@ export default function TaxTypesPage() {
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
   const [ratePercent, setRatePercent] = useState('')
+  const [kind, setKind] = useState<'supply' | 'purchase'>('supply')
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Record<string, string>>({})
 
@@ -28,7 +29,7 @@ export default function TaxTypesPage() {
     setError(null)
     setCreating(true)
     try {
-      await api.createTaxCode({ code, name, rate_percent: Number(ratePercent) })
+      await api.createTaxCode({ code, name, rate_percent: Number(ratePercent), kind })
       setCode('')
       setName('')
       setRatePercent('')
@@ -93,6 +94,7 @@ export default function TaxTypesPage() {
             <tr>
               <th>Code</th>
               <th>Name</th>
+              <th>Used on</th>
               <th>Rate %</th>
               <th>Status</th>
               <th></th>
@@ -110,6 +112,7 @@ export default function TaxTypesPage() {
                     style={{ width: '100%', minWidth: 220 }}
                   />
                 </td>
+                <td>{t.kind === 'purchase' ? 'Supplier bills' : 'Sales'}</td>
                 <td>{t.rate_percent}%</td>
                 <td>
                   <span className={`badge ${t.is_active ? 'active' : 'draft'}`}>
@@ -125,7 +128,7 @@ export default function TaxTypesPage() {
             ))}
             {taxCodes.length === 0 && (
               <tr>
-                <td colSpan={5} className="muted">
+                <td colSpan={6} className="muted">
                   No tax types yet.
                 </td>
               </tr>
@@ -144,6 +147,13 @@ export default function TaxTypesPage() {
           <div className="form-row">
             <label>Name</label>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Zero-Rated" required />
+          </div>
+          <div className="form-row">
+            <label>Used on</label>
+            <select value={kind} onChange={(e) => setKind(e.target.value as 'supply' | 'purchase')}>
+              <option value="supply">Sales (supply codes: SR, ZR, ES, OS)</option>
+              <option value="purchase">Supplier bills (purchase codes: TX, ZP, EP, OP, NR)</option>
+            </select>
           </div>
           <div className="form-row">
             <label>Rate %</label>

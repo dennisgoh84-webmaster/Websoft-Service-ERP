@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\PurchaseOrder;
 use App\Models\SupplierInvoice;
+use App\Models\TaxCode;
 use App\Models\User;
 use App\Services\PasswordPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -108,13 +109,41 @@ class PayablesTest extends TestCase
         [, $token] = $this->ownerToken($company);
         $supplier = $this->supplier($company);
 
+        $this->purchaseCodes($company);
+
         $response = $this->postJson('/api/accounts-payable/bills', [
             'supplier_id' => $supplier->id, 'invoice_date' => now()->toDateString(),
-            'description' => 'Ad-hoc consulting', 'amount_sgd' => 500, 'gst_amount_sgd' => 45,
+            'description' => 'Ad-hoc consulting', 'amount_sgd' => 500,
         ], $this->headers($token));
 
-        $response->assertOk()->assertJson(['match_status' => 'not_matched', 'status' => 'awaiting_match']);
+        $response->assertOk()->assertJson(['match_status' => 'not_matched', 'status' => 'awaiting_match', 'tax_code' => 'TX', 'gst_rate' => 9]);
         $this->assertEqualsWithDelta(545.0, $response->json('total_amount_sgd'), 0.01);
+    }
+
+    public function test_a_bills_gst_is_worked_out_from_its_purchase_tax_code_like_a_sales_invoice(): void
+    {
+        $company = Company::factory()->create();
+        [, $token] = $this->ownerToken($company);
+        $supplier = $this->supplier($company);
+        $this->purchaseCodes($company);
+        $bill = fn (array $extra) => $this->postJson('/api/accounts-payable/bills', [
+            'supplier_id' => $supplier->id, 'invoice_date' => now()->toDateString(), 'description' => 'x', 'amount_sgd' => 333.33,
+        ] + $extra, $this->headers($token));
+
+        // Standard-rated: 9% of 333.33 = 30.00 (half up), whatever GST is typed.
+        $bill(['tax_code' => 'tx', 'gst_amount_sgd' => 1])->assertOk()
+            ->assertJson(['tax_code' => 'TX', 'gst_amount_sgd' => 30, 'total_amount_sgd' => 363.33]);
+        $bill(['tax_code' => 'NR'])->assertOk()->assertJson(['tax_code' => 'NR', 'gst_amount_sgd' => 0]);
+        // A sales code is not a purchase code.
+        $bill(['tax_code' => 'SR'])->assertStatus(422);
+    }
+
+    private function purchaseCodes(Company $company): void
+    {
+        TaxCode::create(['company_id' => $company->id, 'code' => 'SR', 'name' => 'Standard-rated supply', 'rate_percent' => 9, 'kind' => TaxCode::KIND_SUPPLY]);
+        foreach (['TX' => 9, 'ZP' => 0, 'EP' => 0, 'OP' => 0, 'NR' => 0] as $code => $rate) {
+            TaxCode::create(['company_id' => $company->id, 'code' => $code, 'name' => $code, 'rate_percent' => $rate, 'kind' => TaxCode::KIND_PURCHASE]);
+        }
     }
 
     public function test_an_old_amount_exception_can_be_matched_again_and_becomes_payable(): void
@@ -162,10 +191,11 @@ class PayablesTest extends TestCase
         $company = Company::factory()->create();
         [, $token] = $this->ownerToken($company);
         $supplier = $this->supplier($company);
+        $this->purchaseCodes($company);
         $this->postJson('/api/accounts-payable/bills', [
             'supplier_id' => $supplier->id, 'invoice_date' => now()->toDateString(),
-            'description' => 'x', 'amount_sgd' => 1000,
-        ], $this->headers($token));
+            'description' => 'x', 'amount_sgd' => 1000, 'tax_code' => 'NR',
+        ], $this->headers($token))->assertOk();
 
         $response = $this->getJson('/api/accounts-payable/aging', $this->headers($token));
 

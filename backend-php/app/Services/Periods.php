@@ -190,6 +190,9 @@ class Periods
     /** Lock or unlock a single doc-type x operation cell. */
     public static function toggleLock(AccountingPeriod $period, string $docType, string $operation, bool $locked, string $actorUserId): PeriodLock
     {
+        if (! $locked) {
+            GstReturns::assertNotSubmitted($period);
+        }
         if (! in_array($operation, self::VALID_DOC_OPERATIONS[$docType] ?? [], true)) {
             throw new \InvalidArgumentException("{$operation} is not a valid operation for {$docType}");
         }
@@ -220,6 +223,8 @@ class Periods
     /** Unlock every operation (Open All). */
     public static function reopenPeriod(AccountingPeriod $period): void
     {
+        // A month whose GST return went to IRAS stays locked (2026-09-26).
+        GstReturns::assertNotSubmitted($period);
         $now = Carbon::now();
         $locks = PeriodLock::where('period_id', $period->id)->get();
         foreach ($locks as $lk) {

@@ -303,6 +303,10 @@ shipped and when.
   and (answered the same day) the customer accepting a quotation marks
   its prospect Won:
   [open-business-decisions.md #46](open-business-decisions.md#46-prospect--leads-defaults-taken-raised-and-built-2026-09-26).
+- [x] **GST answers built 2026-09-26**: supplier bills carry a purchase
+  tax code (TX / ZP / EP / OP / NR) with GST worked out like a Sales
+  Invoice; boxes 9–12 stay zero; **Submit to IRAS** records who and when
+  and locks the month for good. #47 fully settled.
 - [x] **Write-off approval amount removed** (2026-09-26): only the owner
   writes off. **Customer credit limit** added to the Company /
   Individual file, separate from the credit note limit; shown against

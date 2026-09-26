@@ -1333,6 +1333,8 @@ export interface TaxCode {
   name: string
   rate_percent: number
   is_active: boolean
+  /** A supply code (sales: SR / ZR / ES / OS) or a purchase code (supplier bills: TX / ZP / EP / OP / NR). */
+  kind: 'supply' | 'purchase'
 }
 
 // ---- Document Control ----
@@ -1399,6 +1401,9 @@ export interface GstSummary {
   output_tax_sgd: number
   input_tax_sgd: number
   net_gst_sgd: number
+  /** Set once the return was submitted to IRAS -- the month is locked from then on. */
+  submitted_at: string | null
+  submitted_by_name: string | null
 }
 
 export interface GstBox {
@@ -1432,6 +1437,8 @@ export interface GstReturnSaved {
   status: 'current' | 'superseded'
   calculated_at: string
   calculated_by_name: string | null
+  submitted_at: string | null
+  submitted_by_name: string | null
   boxes: GstBox[]
   output_document_count: number
   input_document_count: number
@@ -1468,6 +1475,8 @@ export interface GSTReturn {
     version: number
     calculated_at: string
     period_reopened: boolean
+    submitted_at: string | null
+    submitted_by_name: string | null
     net_gst_sgd: number
   }[]
   /** Periods in the range with no GST Calculation saved yet -- not summed. */
@@ -1737,6 +1746,8 @@ export interface SupplierInvoice {
   due_date: string | null
   description: string
   amount_sgd: number
+  tax_code: string | null
+  gst_rate: number | null
   gst_amount_sgd: number
   total_amount_sgd: number
   amount_paid_sgd: number
@@ -3430,7 +3441,8 @@ export const api = {
     invoice_date: string
     description: string
     amount_sgd: number
-    gst_amount_sgd?: number
+    /** A purchase tax code; GST is worked out from its rate, never keyed in. Default TX. */
+    tax_code?: string
     expense_account_id?: string | null
   }) => request<SupplierInvoice>('/accounts-payable/bills', { method: 'POST', body: JSON.stringify(payload) }),
 
@@ -3906,11 +3918,11 @@ export const api = {
     }),
 
   // ---- Tax Type (Tax Code maintenance) ----
-  listTaxCodes: (includeInactive = false) =>
-    request<TaxCode[]>(`/tax-codes${includeInactive ? '?include_inactive=true' : ''}`),
-  createTaxCode: (payload: { code: string; name: string; rate_percent: number }) =>
+  listTaxCodes: (includeInactive = false, kind?: 'supply' | 'purchase') =>
+    request<TaxCode[]>(`/tax-codes${qs({ include_inactive: includeInactive ? 'true' : undefined, kind })}`),
+  createTaxCode: (payload: { code: string; name: string; rate_percent: number; kind?: 'supply' | 'purchase' }) =>
     request<TaxCode>('/tax-codes', { method: 'POST', body: JSON.stringify(payload) }),
-  updateTaxCode: (id: string, payload: Partial<{ code: string; name: string; rate_percent: number; is_active: boolean }>) =>
+  updateTaxCode: (id: string, payload: Partial<{ code: string; name: string; rate_percent: number; is_active: boolean; kind: 'supply' | 'purchase' }>) =>
     request<TaxCode>(`/tax-codes/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   exportTaxCodesCsv: (includeInactive = false) =>
     requestBlob(`/tax-codes/export.csv${includeInactive ? '?include_inactive=true' : ''}`),
@@ -3943,6 +3955,7 @@ export const api = {
   periodGst: (id: string) =>
     request<{ period: AccountingPeriod; current: GstReturnSaved | null; history: GstReturnSaved[] }>(`/accounting-periods/${id}/gst`),
   calculatePeriodGst: (id: string) => request<GstReturnSaved>(`/accounting-periods/${id}/gst-calculate`, { method: 'POST' }),
+  submitPeriodGst: (id: string) => request<GstReturnSaved>(`/accounting-periods/${id}/gst-submit`, { method: 'POST' }),
   reopenAccountingPeriod: (id: string) =>
     request<AccountingPeriod>(`/accounting-periods/${id}/reopen`, { method: 'POST' }),
   listFiscalYearClosures: () => request<FiscalYearClosure[]>('/accounting-periods/closures'),

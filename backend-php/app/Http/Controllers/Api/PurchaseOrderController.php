@@ -12,6 +12,7 @@ use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\PurchaseOrder;
 use App\Models\SupplierInvoice;
+use App\Models\TaxCode;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\DocxForms;
@@ -263,6 +264,11 @@ class PurchaseOrderController extends Controller
                     'due_date' => PayablesService::dueDateForBill($po->supplier_id, Carbon::today())?->toDateString(),
                     'description' => $po->description,
                     'amount_sgd' => $po->amount_sgd,
+                    // A PO is raised at the standard rate, so its bill is a
+                    // standard-rated purchase at the rate the PO charged.
+                    'tax_code' => Money::of($po->gst_amount_sgd ?? 0)->toFloat() > 0 ? TaxCode::DEFAULT_PURCHASE_CODE : null,
+                    'gst_rate' => Money::of($po->amount_sgd)->toFloat() > 0
+                        ? round((float) $po->gst_amount_sgd * 100 / (float) $po->amount_sgd, 2) : null,
                     'gst_amount_sgd' => $po->gst_amount_sgd,
                     'total_amount_sgd' => $po->total_amount_sgd,
                 ]);

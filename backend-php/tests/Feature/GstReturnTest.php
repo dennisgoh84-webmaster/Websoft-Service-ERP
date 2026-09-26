@@ -66,11 +66,12 @@ class GstReturnTest extends TestCase
         return $invoice;
     }
 
-    private function bill(string $date, float $net, float $gst, string $status = SupplierInvoice::STATUS_APPROVED): SupplierInvoice
+    private function bill(string $date, float $net, float $gst, string $status = SupplierInvoice::STATUS_APPROVED, ?string $code = null): SupplierInvoice
     {
         return SupplierInvoice::factory()->create([
             'company_id' => $this->company->id, 'supplier_id' => $this->supplier->id, 'invoice_date' => $date,
             'amount_sgd' => $net, 'gst_amount_sgd' => $gst, 'total_amount_sgd' => $net + $gst, 'status' => $status,
+            'tax_code' => $code ?? ($gst > 0 ? 'TX' : 'NR'),
         ]);
     }
 
@@ -87,7 +88,8 @@ class GstReturnTest extends TestCase
         $this->invoice('2026-10-01 00:30:00+08', 'SR', 7000, 630); // next month in Singapore
         $this->invoice('2026-09-20 10:00:00+08', 'SR', 9999, 899.91, ['migrated_at' => now()]); // old system's, already filed there
         $this->bill('2026-09-08', 400, 36);
-        $this->bill('2026-09-09', 50, 0); // no GST charged
+        $this->bill('2026-09-09', 50, 0); // NR: a supplier not registered for GST
+        $this->bill('2026-09-10', 70, 0, code: 'ZP'); // zero-rated purchase: taxable, box 5
         $this->bill('2026-09-11', 800, 72, SupplierInvoice::STATUS_EXCEPTION); // not in the books
         $this->bill('2026-10-02', 600, 54); // next month
 
@@ -114,14 +116,14 @@ class GstReturnTest extends TestCase
         $this->assertEquals(300, $box[2]);
         $this->assertEquals(200, $box[3]);
         $this->assertEquals(2100, $box[4]);
-        $this->assertEquals(400, $box[5], 'only bills that charged GST are taxable purchases');
+        $this->assertEquals(470, $box[5], 'TX 400 + ZP 70; NR is not a taxable purchase');
         $this->assertEquals(144, $box[6]);
         $this->assertEquals(36, $box[7]);
         $this->assertEquals(108, $box[8]);
         $this->assertEquals(2200, $box[13], 'revenue includes out-of-scope');
         $this->assertSame(6, $r['output_document_count']);
-        $this->assertSame(2, $r['input_document_count']);
-        $this->assertCount(8, $r['lines']);
+        $this->assertSame(3, $r['input_document_count']);
+        $this->assertCount(9, $r['lines']);
         $this->assertDatabaseHas('audit_log_entries', ['entity_type' => 'gst_return', 'entity_id' => $r['id'], 'action' => 'calculated']);
 
         // The period list shows it.
@@ -162,14 +164,36 @@ class GstReturnTest extends TestCase
         $report->assertJsonPath('missing_periods.0.period_name', 'Oct 2026');
 
         $supporting = $this->getJson("/api/reports/accounting/gst-supporting{$q}&direction=input", $this->h)->assertOk();
-        $this->assertCount(2, $supporting->json('rows'));
-        $this->assertSame(['5', 'no_gst'], collect($supporting->json('rows'))->pluck('box')->sort()->values()->all());
+        $this->assertCount(3, $supporting->json('rows'));
+        $this->assertSame(['5', '5', 'not_taxable'], collect($supporting->json('rows'))->pluck('box')->sort()->values()->all());
         $this->assertSame('PARTS CO', $supporting->json('rows.0.party_name'));
 
         $csv = $this->get("/api/reports/accounting/gst-supporting/export.csv{$q}", $this->h)->assertOk()->getContent();
         $this->assertStringContainsString('period,direction,document_number,document_date,party_name,tax_code,box,net_sgd,gst_sgd', $csv);
         $this->assertStringContainsString('Sep 2026,output', $csv);
-        $this->assertDatabaseHas('audit_log_entries', ['action' => 'report_generated', 'details' => 'Accounting Report: GST Supporting Listing exported as CSV (8 rows)']);
+        $this->assertDatabaseHas('audit_log_entries', ['action' => 'report_generated', 'details' => 'Accounting Report: GST Supporting Listing exported as CSV (9 rows)']);
+    }
+
+    public function test_once_submitted_to_iras_the_month_is_locked(): void
+    {
+        $id = $this->september();
+        $this->postJson("/api/accounting-periods/{$id}/gst-submit", [], $this->h)->assertStatus(409); // nothing calculated yet
+        $this->postJson("/api/accounting-periods/{$id}/close", [], $this->h)->assertOk();
+        $this->postJson("/api/accounting-periods/{$id}/gst-calculate", [], $this->h)->assertOk();
+
+        $r = $this->postJson("/api/accounting-periods/{$id}/gst-submit", [], $this->h)->assertOk()->json();
+        $this->assertNotNull($r['submitted_at']);
+        $this->assertNotNull($r['submitted_by_name']);
+        $this->assertDatabaseHas('audit_log_entries', ['entity_type' => 'gst_return', 'entity_id' => $r['id'], 'action' => 'submitted_to_iras']);
+        $this->getJson('/api/accounting-periods', $this->h)->assertJsonPath('0.gst.submitted_by_name', $r['submitted_by_name']);
+
+        // Locked: no recalculation, no second submission, no reopening, no lifting any lock.
+        $this->postJson("/api/accounting-periods/{$id}/gst-calculate", [], $this->h)->assertStatus(409);
+        $this->postJson("/api/accounting-periods/{$id}/gst-submit", [], $this->h)->assertStatus(409);
+        $this->postJson("/api/accounting-periods/{$id}/reopen", [], $this->h)->assertStatus(409);
+        $this->postJson("/api/accounting-periods/{$id}/toggle-lock", ['doc_type' => 'sales_invoice', 'operation' => 'update', 'locked' => false], $this->h)
+            ->assertStatus(409);
+        $this->assertSame('closed', DB::table('accounting_periods')->where('id', $id)->value('status'));
     }
 
     public function test_a_view_only_group_can_read_but_not_calculate(): void

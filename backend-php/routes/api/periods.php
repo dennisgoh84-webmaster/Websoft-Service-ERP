@@ -17,4 +17,5 @@ Route::middleware('auth.jwt')->prefix('accounting-periods')->group(function () {
     // GST F5 workflow (open item 4b.4): calculate on a locked period, and read what was kept.
     Route::get('/{period}/gst', [PeriodController::class, 'gst']);
     Route::post('/{period}/gst-calculate', [PeriodController::class, 'calculateGst']);
+    Route::post('/{period}/gst-submit', [PeriodController::class, 'submitGst']);
 });

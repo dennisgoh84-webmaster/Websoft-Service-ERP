@@ -910,17 +910,27 @@ supporting reports also… all use the data that is kept inside."
   the month that reached Accounts Payable (approved, partly paid or
   paid — not one awaiting a match or held as an exception).
 - **Boxes**: tax code SR → box 1, ZR → box 2, ES → box 3, OS → revenue
-  (box 13) only; output tax → box 6. A bill charging GST → box 5
-  (taxable purchases) and box 7; a bill charging none is listed as "no
-  GST" and left out of box 5. Box 8 = 6 − 7. Boxes 9–12 stay zero (no
-  document produces them yet). Defaults behind this mapping:
+  (box 13) only; output tax → box 6. **Supplier bills carry a purchase
+  tax code "like Sales Invoice Logic"** (confirmed 2026-09-26): the bill
+  picks TX (standard-rated), ZP (zero-rated), EP (exempt), OP (out of
+  scope) or NR (supplier not registered for GST), and its GST is worked
+  out from that code's rate — never keyed in. TX and ZP are taxable
+  purchases (box 5), TX's GST is box 7; EP / OP / NR are listed but not
+  in box 5. Box 8 = 6 − 7. **Boxes 9–12 stay zero** — confirmed
+  2026-09-26 as not relevant to Webmaster. Defaults behind this mapping:
   [open-business-decisions.md #47](open-business-decisions.md#47-gst-f5-workflow-defaults-taken-raised-and-built-2026-09-26).
 - **Reports read only what was kept**: Accounting Reports → **GST
   Return (Form 5)** adds up the saved months in the chosen range (a
   quarter is its three months) and names any month not yet calculated
   or reopened since; **GST Supporting Listing** lists the kept
   documents (sales, purchases or both), with CSV / Excel / PDF.
-  Nothing is filed with IRAS and nothing posts to the ledger.
+  Nothing is filed with IRAS from here and nothing posts to the ledger.
+- **Submitted to IRAS — then locked** (confirmed 2026-09-26: "we add in
+  submitted by who… date time stamp… after that must lock"): once the
+  return is filed, **Submit to IRAS** on the period records who and
+  when (in Event Logs too). From then on the month cannot be
+  recalculated, its period cannot be reopened, and no lock in it can be
+  lifted. There is no undo.
 
 ## Conceptual Business Entities
 

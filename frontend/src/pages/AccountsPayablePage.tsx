@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
-import { api, downloadBlob, type Account, type APAgingReport, type CompanyIndividual, type PurchaseOrder, type SupplierInvoice } from '../lib/api'
+import { api, downloadBlob, type Account, type APAgingReport, type CompanyIndividual, type PurchaseOrder, type SupplierInvoice, type TaxCode } from '../lib/api'
 import DateInput from '../components/DateInput'
 import { formatMoney as money, formatDate, todayIso } from '../lib/format'
 
@@ -29,7 +29,10 @@ export default function AccountsPayablePage() {
   const [billPo, setBillPo] = useState('')
   const [billDesc, setBillDesc] = useState('')
   const [billAmount, setBillAmount] = useState('')
-  const [billGst, setBillGst] = useState('')
+  // GST is worked out from the bill's purchase tax code, as on a Sales
+  // Invoice (Dennis, 2026-09-26) -- never keyed in.
+  const [billTaxCode, setBillTaxCode] = useState('TX')
+  const [purchaseCodes, setPurchaseCodes] = useState<TaxCode[]>([])
   // GL posting (ACC-001): optional expense account per bill; the posting
   // service defaults to 5000 Cost of services when left blank.
   const [expenseAccounts, setExpenseAccounts] = useState<Account[]>([])
@@ -72,10 +75,14 @@ export default function AccountsPayablePage() {
     api.apAging().then(setAging).catch((e) => setError(e.message))
     // AccountType is sent as its lowercase value, not the enum name.
     api.listAccounts({ account_type: 'expense' }).then(setExpenseAccounts).catch((e) => setError(e.message))
+    api.listTaxCodes(false, 'purchase').then(setPurchaseCodes).catch((e) => setError(e.message))
   }
 
   useEffect(refresh, [])
 
+  const billRate = purchaseCodes.find((t) => t.code === billTaxCode)?.rate_percent ?? 0
+  // Half-up to cents, the rounding the server applies.
+  const gstPreview = Math.round((parseFloat(billAmount) || 0) * billRate) / 100
   const supplierName = (id: string) => suppliers.find((s) => s.id === id)?.name ?? id.slice(0, 8)
 
   async function onCreateBill(e: FormEvent) {
@@ -90,12 +97,11 @@ export default function AccountsPayablePage() {
         invoice_date: billDate || todayIso(),
         description: billDesc,
         amount_sgd: parseFloat(billAmount),
-        gst_amount_sgd: billGst === '' ? 0 : parseFloat(billGst),
+        tax_code: billTaxCode,
         expense_account_id: billExpenseAccountId || null,
       })
       setBillDesc('')
       setBillAmount('')
-      setBillGst('')
       setBillRef('')
       setBillPo('')
       setMessage(`${bill.bill_number}: ${bill.match_note ?? ''}`)
@@ -277,6 +283,7 @@ export default function AccountsPayablePage() {
                   <td>{supplierName(b.supplier_id)}</td>
                   <td>
                     {b.description}
+                    {b.tax_code && <div className="muted">Tax code {b.tax_code}{b.gst_rate !== null ? ` (${b.gst_rate}%)` : ''}</div>}
                     {b.match_note && <div className="muted">{b.match_note}</div>}
                   </td>
                   <td>{money(b.total_amount_sgd)}</td>
@@ -396,15 +403,20 @@ export default function AccountsPayablePage() {
             />
           </div>
           <div className="form-row">
-            <label>GST charged (SGD)</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={billGst}
-              onChange={(e) => setBillGst(e.target.value)}
-              placeholder="0.00"
-            />
+            <label>Tax code</label>
+            <select value={billTaxCode} onChange={(e) => setBillTaxCode(e.target.value)} required>
+              {purchaseCodes.map((t) => (
+                <option key={t.id} value={t.code}>
+                  {t.code} — {t.name} ({t.rate_percent}%)
+                </option>
+              ))}
+            </select>
+            {billAmount !== '' && (
+              <p className="muted" style={{ margin: '4px 0 0' }}>
+                GST {money(gstPreview)} · total {money((parseFloat(billAmount) || 0) + gstPreview)} — worked out from the tax code, as on a
+                Sales Invoice.
+              </p>
+            )}
           </div>
           <button type="submit" disabled={!billSupplier}>
             Record bill
