@@ -271,7 +271,6 @@ export interface Company {
   website: string | null
   uen: string | null
   /** Null means "always require owner approval" -- no threshold set yet. */
-  write_off_approval_threshold_sgd: number | null
   /** 1-12. Labelled by the year it ENDS in: 7 means FY2027 = Jul 2026 - Jun 2027. */
   financial_year_start_month: number
   // This company's own outbound mailbox, for the customer-facing "Email
@@ -415,6 +414,11 @@ export interface CompanyIndividual {
   /** Approval limits for this party (2026-09-26). Null = the owner approves every one. */
   po_approval_limit_sgd: number | null
   credit_note_approval_limit_sgd: number | null
+  /** The most this customer may owe at once -- a separate setting from the credit note limit. */
+  credit_limit_sgd: number | null
+  /** On the single-record read only: what it owes now, and whether that is over its credit limit. */
+  outstanding_sgd?: number
+  over_credit_limit?: boolean
   /** Role flags (2026-09-12): a record can be a customer, a supplier, or
    * both -- Purchase Order/Accounts Payable pick from is_supplier=true
    * records here rather than a separate supplier file. */
@@ -565,6 +569,7 @@ export type CompanyIndividualFields = Partial<{
   payment_terms_days: number | null
   po_approval_limit_sgd: number | null
   credit_note_approval_limit_sgd: number | null
+  credit_limit_sgd: number | null
   is_customer: boolean
   is_supplier: boolean
   data_expiry_date: string | null
@@ -2657,7 +2662,6 @@ export const api = {
       phone?: string | null
       website?: string | null
       uen?: string | null
-      write_off_approval_threshold_sgd?: number | null
       financial_year_start_month?: number
       smtp_host?: string | null
       smtp_port?: number

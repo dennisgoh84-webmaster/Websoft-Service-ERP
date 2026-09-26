@@ -387,6 +387,12 @@ in [open-business-decisions.md](open-business-decisions.md).
   company/individual file"); with none set, the owner approves every
   credit note. Stored now; credit notes themselves are not built yet, so
   it applies once they are.
+- **Separate from the customer's credit limit** (Dennis, 2026-09-26:
+  "2 separate matter and settings, all in company/individual file"):
+  the **credit limit** is the most a customer may owe at once, also on
+  the Company / Individual file, shown there against what it owes now
+  with an "Over credit limit" flag. What happens when it is exceeded is
+  not decided yet, so nothing is blocked.
 
 ### BILL-004 — Project Billing Method — CONFIRMED
 
@@ -424,9 +430,11 @@ in [open-business-decisions.md](open-business-decisions.md).
 
 ### AR-002 — Write-off / Bad Debt Process — CONFIRMED
 
-- **Finance can write off small amounts directly.**
-- Write-offs above a threshold require **Dennis's approval**. The exact
-  threshold is not yet specified (tracked as a new open item).
+- ~~**Finance can write off small amounts directly.** Write-offs above
+  a threshold require Dennis's approval.~~ **Changed 2026-09-26:** "I
+  think can totally remove this write off approval amount." There is no
+  amount; **only the owner writes off**, always with a reason. The
+  Company Setup threshold is removed.
 - **Posting, settled 2026-09-26** ("It has to be expenses account"): a
   write-off posts Dr **6700 Bad debts written off** (an Expense account)
   / Cr 1100 Accounts receivable for the outstanding amount, as a journal

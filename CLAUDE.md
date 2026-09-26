@@ -32,14 +32,15 @@ granted per group (VIEW / EDIT / FULL) under **Group Authority**.
   (Sales Manager approval, accept → contract), Product Catalog, Sales
   Dashboard. Roles: Sales Manager, Sales Supervisor, Sales Staff.
 - **Company / Individual** — customers and suppliers in one file, with
-  Contacts, Branches, Relationships, PDPA consent, and per-party PO and
-  credit note approval limits.
+  Contacts, Branches, Relationships, PDPA consent, a customer credit
+  limit, and per-party PO and credit note approval limits (all separate
+  settings on the file).
 - **Service Operations** — Service Contracts (hours, renewal, project
   milestones), Job Orders, Service Records (approval, contract-hour
   deduction, excess usage), Incidents (Helpdesk, Outlook / Gmail
   add-ins), Software Tasks, Ops Dashboard, Mobile App.
-- **Accounts** — Billing / Invoices, Accounts Receivable (receipts,
-  write-offs to 6700 Bad debts written off), Accounts Payable (purchase
+- **Accounts** — Billing / Invoices, Accounts Receivable (receipts;
+  write-offs by the owner only, posted to 6700 Bad debts written off), Accounts Payable (purchase
   orders, 2-way matching, payment vouchers), General Ledger (automatic
   posting, journal vouchers, trial balance), Bank Book, GST and Account
   Period (lock matrix, Year-End Closing, **GST Calculation** — the saved

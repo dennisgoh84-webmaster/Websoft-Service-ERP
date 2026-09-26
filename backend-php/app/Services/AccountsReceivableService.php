@@ -58,22 +58,14 @@ class AccountsReceivableService
     }
 
     /**
-     * AR-002. The owner can always write off. Anyone else can only do
-     * so below the configured threshold -- and while no threshold is
-     * set (it was never decided, open item 3.4), nobody else can.
+     * AR-002: only the owner writes off. There is no amount below which
+     * anyone else may (Dennis, 2026-09-26: "I think can totally remove
+     * this write off approval amount") -- the Company Setup threshold is
+     * gone.
      */
-    public static function canWriteOff(string $companyId, User $actor, Money $amount): bool
+    public static function canWriteOff(User $actor): bool
     {
-        if ($actor->role === User::ROLE_OWNER) {
-            return true;
-        }
-        $company = Company::find($companyId);
-        $threshold = $company?->write_off_approval_threshold_sgd;
-        if ($threshold === null) {
-            return false;
-        }
-
-        return $amount->toFloat() <= Money::of($threshold)->toFloat();
+        return $actor->role === User::ROLE_OWNER;
     }
 
     /**
@@ -95,20 +87,8 @@ class AccountsReceivableService
         }
 
         $outstanding = $invoice->outstandingSgd();
-        if (! self::canWriteOff($invoice->company_id, $actor, $outstanding)) {
-            $company = Company::find($invoice->company_id);
-            $threshold = $company?->write_off_approval_threshold_sgd;
-            if ($threshold === null) {
-                throw new ARRuleViolation(
-                    'No write-off approval threshold has been set, so every write-off needs '.
-                    "the owner's approval (AR-002). Set a threshold in Company Setup, or ask ".
-                    'the owner to action this.'
-                );
-            }
-            throw new ARRuleViolation(sprintf(
-                'SGD %s is above the SGD %s write-off threshold -- the owner must approve this (AR-002).',
-                $outstanding->toString(), Money::of($threshold)->toString(),
-            ));
+        if (! self::canWriteOff($actor)) {
+            throw new ARRuleViolation('Only the owner can write off an invoice (AR-002).');
         }
 
         // The bad debt reaches the General Ledger as an expense (Dennis,

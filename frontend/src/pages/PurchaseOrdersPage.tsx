@@ -139,8 +139,8 @@ export default function PurchaseOrdersPage() {
     <div>
       <h1>Purchase Order</h1>
       <p className="muted">
-        PUR-001: purchase orders above the threshold set in Company Setup need the owner's
-        approval -- with none set, every PO does. Once approved, "Import to AP" turns a PO
+        PUR-001: a purchase order above the approval limit on the supplier's Company / Individual
+        file needs the owner's approval -- with no limit set, every PO does. Once approved, "Import to AP" turns a PO
         straight into its matching bill (2-way matched, PUR-002/003) instead of re-typing it on
         the <Link to="/accounts-payable">Accounts Payable</Link> page. A supplier is a{' '}
         <Link to="/company-individuals">Company / Individual</Link> record ticked "Is Supplier" there --

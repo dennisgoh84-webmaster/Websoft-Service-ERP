@@ -159,7 +159,6 @@ class CompanyController extends Controller
             'phone' => 'sometimes|nullable|string',
             'website' => 'sometimes|nullable|string',
             'uen' => 'sometimes|nullable|string',
-            'write_off_approval_threshold_sgd' => 'sometimes|nullable|numeric',
             // Financial year: 1-12. Labelled by the calendar year it
             // ENDS in, so 7 (July) means FY2027 = Jul 2026 - Jun 2027.
             'financial_year_start_month' => 'sometimes|integer|min:1|max:12',

@@ -36,7 +36,7 @@ class CompanyIndividual extends Model
         'address_postal_code', 'address_country', 'tags', 'industry_code',
         'exclude_auto_sent', 'terms_and_conditions', 'memo', 'billing_notes',
         'payment_terms_days', 'is_customer', 'is_supplier',
-        'po_approval_limit_sgd', 'credit_note_approval_limit_sgd',
+        'po_approval_limit_sgd', 'credit_note_approval_limit_sgd', 'credit_limit_sgd',
         'pdpa_consent_given', 'pdpa_consent_at', 'pdpa_agreement_document',
         'data_expiry_date', 'is_archived', 'archived_at', 'is_active',
     ];
@@ -56,6 +56,10 @@ class CompanyIndividual extends Model
         // Per-party approval limits (Dennis, 2026-09-26); null = owner approves.
         'po_approval_limit_sgd' => 'float',
         'credit_note_approval_limit_sgd' => 'float',
+        // The most this customer may owe at once -- separate from the credit
+        // note approval limit (Dennis, 2026-09-26). What happens when it is
+        // exceeded is not decided yet: it is shown, not enforced.
+        'credit_limit_sgd' => 'float',
     ];
 
     /**

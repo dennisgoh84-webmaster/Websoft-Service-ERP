@@ -88,9 +88,6 @@ function CompanyCard({ company, onSaved }: { company: Company; onSaved: () => vo
   const [phone, setPhone] = useState(company.phone ?? '')
   const [website, setWebsite] = useState(company.website ?? '')
   const [uen, setUen] = useState(company.uen ?? '')
-  const [writeOffThreshold, setWriteOffThreshold] = useState(
-    company.write_off_approval_threshold_sgd?.toString() ?? '',
-  )
   const [fyStartMonth, setFyStartMonth] = useState(company.financial_year_start_month)
   const [logo, setLogo] = useState<string | null>(company.logo)
   const [error, setError] = useState<string | null>(null)
@@ -134,8 +131,6 @@ function CompanyCard({ company, onSaved }: { company: Company; onSaved: () => vo
         phone: phone || null,
         website: website || null,
         uen: uen || null,
-        write_off_approval_threshold_sgd:
-          writeOffThreshold === '' ? null : parseFloat(writeOffThreshold),
         financial_year_start_month: fyStartMonth,
       })
       setSaved(true)
@@ -253,21 +248,6 @@ function CompanyCard({ company, onSaved }: { company: Company; onSaved: () => vo
             <div className="form-row">
               <label>Business Reg. No. / UEN (shown on printed forms)</label>
               <input value={uen} onChange={(e) => setUen(e.target.value)} />
-            </div>
-            <div className="form-row">
-              <label>Write-off approval threshold (SGD)</label>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={writeOffThreshold}
-                onChange={(e) => setWriteOffThreshold(e.target.value)}
-                placeholder="Blank = every write-off needs owner approval"
-              />
-              <span className="muted">
-                AR-002: Finance may write off below this; above it, the owner approves. Blank means
-                the threshold has not been decided, so the owner approves every write-off.
-              </span>
             </div>
             <div className="form-row">
               <label>Financial year starts in</label>

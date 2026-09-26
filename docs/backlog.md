@@ -303,6 +303,11 @@ shipped and when.
   and (answered the same day) the customer accepting a quotation marks
   its prospect Won:
   [open-business-decisions.md #46](open-business-decisions.md#46-prospect--leads-defaults-taken-raised-and-built-2026-09-26).
+- [x] **Write-off approval amount removed** (2026-09-26): only the owner
+  writes off. **Customer credit limit** added to the Company /
+  Individual file, separate from the credit note limit; shown against
+  what is owed. Still open: what happens when it is exceeded
+  ([open-business-decisions.md #48](open-business-decisions.md#48-customer-credit-limit-what-happens-when-it-is-exceeded-raised-2026-09-26)).
 - [x] **GST F5 workflow built 2026-09-26** (4b.4, GST-001): GST
   Calculation on each locked period keeps the Form 5 boxes and their
   documents; the GST Return (Form 5) and GST Supporting Listing read

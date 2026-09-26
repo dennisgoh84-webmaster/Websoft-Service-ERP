@@ -220,6 +220,10 @@ sub-detail is called out explicitly).
    configurable field in Company Setup rather than a hard-coded number.
    Until Dennis sets one, the system requires the **owner's approval for
    every write-off** — the safe reading of an undecided rule.
+   **DECIDED 2026-09-26: no amount at all** ("I think can totally
+   remove this write off approval amount") -- only the owner writes off;
+   the Company Setup threshold is removed (any value set was recorded in
+   Event Logs first).
    (2026-09-26, Dennis asked "Write off meaning bad debts?" -- yes:
    writing an unpaid invoice's balance off as a bad debt. The amount is
    still to be given. The account it posts to was settled the same day
@@ -2278,4 +2282,15 @@ each is a small change if Dennis or the accountant wants it otherwise.
    is locked and recalculated. There is no "filed" lock yet. *Open:
    should a month be marked as filed with IRAS, after which it can no
    longer be recalculated?*
+
+## 48. Customer credit limit: what happens when it is exceeded (raised 2026-09-26)
+
+Dennis: the credit note approval limit and the customer credit limit
+are "2 separate matter and settings, all in company/individual file".
+Both are now fields on the file. The credit limit is **shown** against
+what the customer owes now, with an "Over credit limit" flag, but
+nothing is enforced, because no rule was given. *Open: when a customer
+is over (or would go over) its limit, should the system warn, block a
+new invoice or quotation, block a Job Order, or need the owner's
+approval?*
 

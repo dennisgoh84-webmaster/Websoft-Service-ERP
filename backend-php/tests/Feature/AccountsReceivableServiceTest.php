@@ -97,25 +97,20 @@ class AccountsReceivableServiceTest extends TestCase
         AccountsReceivableService::writeOffInvoice($invoice, $staff, 'Small balance');
     }
 
-    public function test_non_owner_can_write_off_below_the_configured_threshold(): void
+    public function test_only_the_owner_writes_off_whatever_the_amount(): void
     {
-        $company = Company::factory()->create(['write_off_approval_threshold_sgd' => 50]);
-        $staff = User::factory()->for($company)->create(['role' => User::ROLE_SUPPORT_ENGINEER]);
-        $invoice = $this->invoice($company, 10);
+        // Dennis, 2026-09-26: no write-off approval amount at all.
+        $company = Company::factory()->create();
+        $staff = User::factory()->for($company)->create(['role' => User::ROLE_FINANCE]);
+        $invoice = $this->invoice($company, 1);
 
-        AccountsReceivableService::writeOffInvoice($invoice, $staff, 'Small balance');
-
-        $this->assertSame(Invoice::STATUS_WRITTEN_OFF, $invoice->fresh()->status);
-    }
-
-    public function test_non_owner_cannot_write_off_above_the_configured_threshold(): void
-    {
-        $company = Company::factory()->create(['write_off_approval_threshold_sgd' => 50]);
-        $staff = User::factory()->for($company)->create(['role' => User::ROLE_SUPPORT_ENGINEER]);
-        $invoice = $this->invoice($company, 1000);
-
-        $this->expectException(ARRuleViolation::class);
-        AccountsReceivableService::writeOffInvoice($invoice, $staff, 'Big balance');
+        try {
+            AccountsReceivableService::writeOffInvoice($invoice, $staff, 'One dollar');
+            $this->fail('A non-owner wrote off an invoice');
+        } catch (ARRuleViolation $e) {
+            $this->assertSame('Only the owner can write off an invoice (AR-002).', $e->getMessage());
+        }
+        $this->assertNotSame(Invoice::STATUS_WRITTEN_OFF, $invoice->fresh()->status);
     }
 
     public function test_a_reason_is_required(): void

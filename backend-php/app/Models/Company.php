@@ -92,7 +92,7 @@ class Company extends Model
     protected $fillable = [
         'name', 'country', 'currency', 'timezone', 'logo', 'address',
         'gst_registration_no', 'phone', 'website', 'uen',
-        'write_off_approval_threshold_sgd', 'is_active',
+        'is_active',
         // Financial year + this company's own outbound mailbox
         // (2026-09-15) -- see the migration for why the company mailbox
         // is separate from the system one with no fallback.
@@ -140,6 +140,5 @@ class Company extends Model
         // the mail account.
         'smtp_password' => 'encrypted',
         'created_at' => 'datetime',
-        'write_off_approval_threshold_sgd' => 'float',
     ];
 }

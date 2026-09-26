@@ -16,7 +16,7 @@ import {
   type PortalAccess,
   type SetupListItem,
 } from '../lib/api'
-import { formatDate, formatDateTime } from '../lib/format'
+import { formatDate, formatDateTime, formatMoney as money } from '../lib/format'
 import DateInput from '../components/DateInput'
 
 const ACTION_LABELS: Record<string, string> = {
@@ -57,6 +57,7 @@ function emptyForm() {
     payment_terms_days: '',
     po_approval_limit_sgd: '',
     credit_note_approval_limit_sgd: '',
+    credit_limit_sgd: '',
     data_expiry_date: '',
   }
 }
@@ -172,6 +173,7 @@ export default function CompanyIndividualDetailPage() {
           payment_terms_days: c.payment_terms_days === null ? '' : String(c.payment_terms_days),
           po_approval_limit_sgd: c.po_approval_limit_sgd === null ? '' : String(c.po_approval_limit_sgd),
           credit_note_approval_limit_sgd: c.credit_note_approval_limit_sgd === null ? '' : String(c.credit_note_approval_limit_sgd),
+          credit_limit_sgd: c.credit_limit_sgd === null ? '' : String(c.credit_limit_sgd),
           data_expiry_date: c.data_expiry_date ?? '',
         })
         setDataExpiryDraft(c.data_expiry_date ?? '')
@@ -284,6 +286,7 @@ export default function CompanyIndividualDetailPage() {
         po_approval_limit_sgd: form.po_approval_limit_sgd === '' ? null : parseFloat(form.po_approval_limit_sgd),
         credit_note_approval_limit_sgd:
           form.credit_note_approval_limit_sgd === '' ? null : parseFloat(form.credit_note_approval_limit_sgd),
+        credit_limit_sgd: form.credit_limit_sgd === '' ? null : parseFloat(form.credit_limit_sgd),
       })
       refresh()
     } catch (err) {
@@ -578,6 +581,17 @@ export default function CompanyIndividualDetailPage() {
           {customer.legacy_customer_code && <> &middot; Odoo ID {customer.legacy_customer_code}</>}
         </span>
       </p>
+      {customer.is_customer && (
+        <p>
+          <span className="muted">Owing now </span>
+          <strong>{money(customer.outstanding_sgd ?? 0)}</strong>
+          <span className="muted">
+            {' '}
+            &middot; credit limit {customer.credit_limit_sgd === null ? 'not set' : money(customer.credit_limit_sgd)}
+          </span>{' '}
+          {customer.over_credit_limit && <span className="badge exceeded">Over credit limit</span>}
+        </p>
+      )}
       {error && <div className="error-banner">{error}</div>}
       <AiChatPanel context={{ type: 'customer', id: customer.id, label: customer.name }} />
 
@@ -801,6 +815,20 @@ export default function CompanyIndividualDetailPage() {
             <p className="muted" style={{ margin: '4px 0 0' }}>
               A purchase order to this supplier up to this amount (incl. GST) can be approved by staff with authority; above it,
               only the owner.
+            </p>
+          </div>
+          <div className="form-row">
+            <label>Credit limit (SGD)</label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.credit_limit_sgd}
+              onChange={(e) => setForm((p) => ({ ...p, credit_limit_sgd: e.target.value }))}
+              placeholder="Blank: no credit limit set"
+            />
+            <p className="muted" style={{ margin: '4px 0 0' }}>
+              The most this customer may owe at once. Shown against what it owes now; nothing is blocked yet.
             </p>
           </div>
           <div className="form-row">

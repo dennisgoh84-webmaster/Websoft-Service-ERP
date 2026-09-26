@@ -12,6 +12,7 @@ use App\Models\CompanyIndividual;
 use App\Models\CompanyIndividualGroup;
 use App\Models\CompanyIndividualRelationship;
 use App\Models\Contact;
+use App\Models\Invoice;
 use App\Models\PortalUser;
 use App\Models\SetupListItem;
 use App\Models\User;
@@ -21,6 +22,7 @@ use App\Services\Mailer;
 use App\Services\MailerException;
 use App\Services\MailerNotConfiguredException;
 use App\Services\PasswordPolicy;
+use App\Support\Money;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -61,7 +63,7 @@ class CompanyIndividualController extends Controller
         'address_state', 'address_postal_code', 'address_country', 'tags',
         'industry_code', 'exclude_auto_sent', 'terms_and_conditions', 'memo',
         'billing_notes', 'payment_terms_days', 'data_expiry_date',
-        'is_customer', 'is_supplier', 'po_approval_limit_sgd', 'credit_note_approval_limit_sgd',
+        'is_customer', 'is_supplier', 'po_approval_limit_sgd', 'credit_note_approval_limit_sgd', 'credit_limit_sgd',
     ];
 
     private function customerOrFail(User $user, string $customerId): CompanyIndividual
@@ -434,7 +436,17 @@ class CompanyIndividualController extends Controller
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, 'view');
 
-        return response()->json($this->customerOrFail($user, $customerId));
+        $customer = $this->customerOrFail($user, $customerId);
+
+        // What it owes now, shown beside its credit limit on the file.
+        $outstanding = Invoice::where('customer_id', $customer->id)
+            ->whereNotIn('status', [Invoice::STATUS_PAID, Invoice::STATUS_WRITTEN_OFF])->get()
+            ->reduce(fn (Money $carry, Invoice $i) => $carry->plus($i->outstandingSgd()), Money::of(0));
+
+        return response()->json($customer->toArray() + [
+            'outstanding_sgd' => $outstanding->toFloat(),
+            'over_credit_limit' => $customer->credit_limit_sgd !== null && $outstanding->toFloat() > $customer->credit_limit_sgd,
+        ]);
     }
 
     public function auditLog(Request $request, string $customerId)
@@ -996,6 +1008,7 @@ class CompanyIndividualController extends Controller
             // means the owner approves every PO / credit note.
             'po_approval_limit_sgd' => 'sometimes|nullable|numeric|min:0',
             'credit_note_approval_limit_sgd' => 'sometimes|nullable|numeric|min:0',
+            'credit_limit_sgd' => 'sometimes|nullable|numeric|min:0',
             // A record can be a customer, a supplier, or both -- see
             // CompanyIndividual's model docstring (2026-09-12: folded
             // the former standalone Supplier table into this one as a

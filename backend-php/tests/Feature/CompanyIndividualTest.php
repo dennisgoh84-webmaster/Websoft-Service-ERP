@@ -7,6 +7,7 @@ use App\Models\CompanyIndividual;
 use App\Models\CompanyModule;
 use App\Models\Group;
 use App\Models\GroupModuleAuthority;
+use App\Models\Invoice;
 use App\Models\ModuleCatalog;
 use App\Models\User;
 use App\Models\UserCompanyAccess;
@@ -82,6 +83,24 @@ class CompanyIndividualTest extends TestCase
         $this->patchJson("/api/company-individuals/{$id}", ['po_approval_limit_sgd' => -1], $h)->assertStatus(422);
 
         $this->assertDatabaseHas('audit_log_entries', ['entity_type' => 'customer', 'entity_id' => $id, 'action' => 'updated']);
+    }
+
+    public function test_the_customer_credit_limit_is_its_own_setting_shown_against_what_is_owed(): void
+    {
+        $company = Company::factory()->create();
+        $h = $this->authHeaders($this->ownerToken($company));
+        $id = $this->postJson('/api/company-individuals', ['name' => 'Credit Co', 'credit_limit_sgd' => 1000, 'credit_note_approval_limit_sgd' => 200], $h)
+            ->assertOk()->assertJson(['credit_limit_sgd' => 1000, 'credit_note_approval_limit_sgd' => 200])->json('id');
+
+        Invoice::create([
+            'company_id' => $company->id, 'customer_id' => $id, 'invoice_number' => 'INV-CL-1', 'invoice_type' => Invoice::TYPE_SALES,
+            'description' => 'x', 'amount_sgd' => 1100, 'tax_code' => 'SR', 'gst_rate' => 9, 'gst_amount_sgd' => 99, 'total_amount_sgd' => 1199,
+        ]);
+
+        $this->getJson("/api/company-individuals/{$id}", $h)->assertOk()
+            ->assertJson(['outstanding_sgd' => 1199, 'over_credit_limit' => true]);
+        $this->patchJson("/api/company-individuals/{$id}", ['credit_limit_sgd' => 5000], $h)->assertOk();
+        $this->getJson("/api/company-individuals/{$id}", $h)->assertJson(['over_credit_limit' => false]);
     }
 
     public function test_the_id_and_name_are_always_full_capitals(): void
