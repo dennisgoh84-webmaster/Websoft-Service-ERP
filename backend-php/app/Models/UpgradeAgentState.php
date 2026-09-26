@@ -16,8 +16,8 @@ class UpgradeAgentState extends Model
     protected $table = 'upgrade_agent_state';
 
     protected $fillable = [
-        'id', 'current_sha', 'current_subject', 'current_committed_at',
-        'remote_sha', 'remote_subject', 'remote_committed_at', 'commits_behind',
+        'id', 'current_sha', 'current_subject', 'current_committed_at', 'current_version',
+        'remote_sha', 'remote_subject', 'remote_committed_at', 'remote_version', 'commits_behind',
         'agent_host', 'last_heartbeat_at',
     ];
 

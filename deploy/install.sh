@@ -73,6 +73,8 @@ echo "    .env written (mode 600)"
 # ---- build and start ------------------------------------------------
 
 say "Building images (first run pulls PHP, Postgres, nginx and LibreOffice -- expect several minutes)"
+. deploy/version.sh
+echo "    version $APP_VERSION ($APP_VERSION_DATE) -- shown on the login screen"
 $COMPOSE build
 
 say "Starting the database"

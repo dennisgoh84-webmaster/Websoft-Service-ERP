@@ -59,6 +59,15 @@ cannot undo. If the dump comes out empty the script stops before
 anything touches the schema. Backups land in `backups/`, last 10 kept,
 and the rollback commands are printed at the end.
 
+The login screen shows the version the build came from, e.g.
+**Version 1.0.291 · 27/09/2026**: the major.minor in the repo's
+`VERSION` file (changed by hand only for a big release), then the number
+of changes in the code's history -- so it goes up by itself with every
+release -- and that change's date (Singapore time). `deploy/version.sh`
+stamps it in on every install and upgrade, and the upgrade agent reports
+it to Central Command's Client Upgrades, which shows the same wording
+for this server, so the two can be tallied.
+
 ### Nightly self-test
 
 `sudo ./deploy/install-selftest.sh you@example.com` installs

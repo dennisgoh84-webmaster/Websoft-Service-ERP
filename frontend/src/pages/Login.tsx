@@ -201,10 +201,7 @@ export default function Login() {
           {branding?.logo && (
             <img className="login-logo" src={branding.logo} alt={`${branding.name} logo`} />
           )}
-          <h1>Websoft Service ERP</h1>
-          <p className="muted" style={{ marginBottom: 18 }}>
-            Service Operations core -- demo build
-          </p>
+          <h1 style={{ marginBottom: 18 }}>Websoft Service ERP</h1>
 
           {step === 'credentials' && (
             <form onSubmit={onSubmitCredentials}>
@@ -415,6 +412,15 @@ export default function Login() {
                 Back to sign in
               </button>
             </form>
+          )}
+
+          {/* Tallies with this server's version in Central Command's
+              Client Upgrades -- see vite.config.ts. */}
+          {__APP_VERSION__ && (
+            <p className="login-version">
+              Version {__APP_VERSION__}
+              {__APP_VERSION_DATE__ && ` \u00b7 ${__APP_VERSION_DATE__}`}
+            </p>
           )}
         </div>
 

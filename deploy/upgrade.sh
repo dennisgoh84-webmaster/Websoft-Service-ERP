@@ -90,6 +90,8 @@ fi
 echo "    now at $(git rev-parse --short HEAD) -- $(git log -1 --pretty=%s)"
 
 say "Building images (the running site is still up and serving)"
+. deploy/version.sh
+echo "    version $APP_VERSION ($APP_VERSION_DATE) -- shown on the login screen"
 $COMPOSE build
 
 # ---- 3. migrate and restart -----------------------------------------

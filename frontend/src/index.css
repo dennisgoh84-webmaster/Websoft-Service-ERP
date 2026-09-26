@@ -698,6 +698,12 @@ a.icon-button:hover {
   flex-wrap: wrap;
   justify-content: center;
 }
+.login-version {
+  margin: 18px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
 .login-card {
   width: 340px;
   /* Opts out of .login-layout's align-items: stretch -- the form stays

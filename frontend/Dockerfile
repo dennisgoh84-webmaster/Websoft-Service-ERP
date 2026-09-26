@@ -7,6 +7,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+# The version shown on the login screen (deploy/version.sh -> compose).
+ARG APP_VERSION=
+ARG APP_VERSION_DATE=
 RUN npm run build
 
 FROM nginx:1.27-alpine

@@ -52,9 +52,11 @@ class UpgradeAgentController extends Controller
             'current_sha' => 'nullable|string|max:40',
             'current_subject' => 'nullable|string|max:2000',
             'current_committed_at' => 'nullable|date',
+            'current_version' => 'nullable|string|max:40',
             'remote_sha' => 'nullable|string|max:40',
             'remote_subject' => 'nullable|string|max:2000',
             'remote_committed_at' => 'nullable|date',
+            'remote_version' => 'nullable|string|max:40',
             'commits_behind' => 'nullable|integer|min:0',
             'agent_host' => 'nullable|string|max:200',
         ]);

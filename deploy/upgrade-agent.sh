@@ -78,20 +78,25 @@ git fetch -q origin main 2>>"$AGENT_LOG" || log "git fetch failed (offline?) -- 
 CUR_SHA=$(git rev-parse HEAD)
 CUR_SUB=$(git log -1 --pretty=%s HEAD)
 CUR_DATE=$(git log -1 --pretty=%cI HEAD)
-REM_SHA=""; REM_SUB=""; REM_DATE=""; BEHIND=0
+. deploy/version.sh   # erp_version; also unshallows a shallow clone once
+CUR_VER=$(erp_version HEAD)
+REM_SHA=""; REM_SUB=""; REM_DATE=""; REM_VER=""; BEHIND=0
 if git rev-parse -q --verify origin/main >/dev/null 2>&1; then
   REM_SHA=$(git rev-parse origin/main)
   REM_SUB=$(git log -1 --pretty=%s origin/main)
   REM_DATE=$(git log -1 --pretty=%cI origin/main)
+  REM_VER=$(erp_version origin/main)
   BEHIND=$(git rev-list --count HEAD..origin/main)
 fi
 
-HEARTBEAT=$(CUR_SHA="$CUR_SHA" CUR_SUB="$CUR_SUB" CUR_DATE="$CUR_DATE" REM_SHA="$REM_SHA" REM_SUB="$REM_SUB" REM_DATE="$REM_DATE" BEHIND="$BEHIND" HOST="$(hostname)" python3 - <<'PY'
+HEARTBEAT=$(CUR_SHA="$CUR_SHA" CUR_SUB="$CUR_SUB" CUR_DATE="$CUR_DATE" CUR_VER="$CUR_VER" REM_SHA="$REM_SHA" REM_SUB="$REM_SUB" REM_DATE="$REM_DATE" REM_VER="$REM_VER" BEHIND="$BEHIND" HOST="$(hostname)" python3 - <<'PY'
 import json, os
 s = lambda k: (os.environ.get(k) or None)
 print(json.dumps({
     "current_sha": s("CUR_SHA"), "current_subject": s("CUR_SUB"), "current_committed_at": s("CUR_DATE"),
+    "current_version": s("CUR_VER"),
     "remote_sha": s("REM_SHA"), "remote_subject": s("REM_SUB"), "remote_committed_at": s("REM_DATE"),
+    "remote_version": s("REM_VER"),
     "commits_behind": int(os.environ.get("BEHIND") or 0), "agent_host": s("HOST"),
 }))
 PY

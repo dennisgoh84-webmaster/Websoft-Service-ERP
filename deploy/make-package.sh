@@ -56,6 +56,8 @@ cat > "$STAGE/$NAME/PACKAGE.txt" <<META
 Websoft Service ERP Solution
 Package  $NAME
 Commit   $(git rev-parse HEAD)
+Committed $(TZ=Asia/Singapore git log -1 --format=%cd --date=format-local:%d/%m/%Y)
+Version  $(. deploy/version.sh && echo "$APP_VERSION")
 Subject  $(git log -1 --pretty=%s)
 Built    $(date -u '+%Y-%m-%d %H:%M:%S UTC')
 
