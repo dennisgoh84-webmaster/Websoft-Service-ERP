@@ -196,6 +196,58 @@ class GstReturnTest extends TestCase
         $this->assertSame('closed', DB::table('accounting_periods')->where('id', $id)->value('status'));
     }
 
+    public function test_a_submitted_return_can_be_revised_and_resubmitted_keeping_the_old_one(): void
+    {
+        $id = $this->september();
+        $this->postJson("/api/accounting-periods/{$id}/close", [], $this->h)->assertOk();
+        $v1 = $this->postJson("/api/accounting-periods/{$id}/gst-calculate", [], $this->h)->assertOk()->json();
+        $this->postJson("/api/accounting-periods/{$id}/gst-submit", [], $this->h)->assertOk();
+
+        // A reason is required, and only a submitted return can be revised.
+        $this->postJson("/api/accounting-periods/{$id}/gst-revise", ['reason' => '  '], $this->h)->assertStatus(422);
+        $opened = $this->postJson("/api/accounting-periods/{$id}/gst-revise", ['reason' => 'Missed a supplier bill'], $this->h)->assertOk()->json();
+        $this->assertSame('Missed a supplier bill', $opened['revision_reason']);
+        $this->assertNotNull($opened['revision_opened_by_name']);
+        $this->assertNotNull($opened['submitted_at'], 'the submitted return keeps its submission');
+        $this->assertDatabaseHas('audit_log_entries', ['entity_type' => 'gst_return', 'entity_id' => $v1['id'], 'action' => 'revision_opened']);
+        $this->postJson("/api/accounting-periods/{$id}/gst-revise", ['reason' => 'again'], $this->h)->assertStatus(409);
+        // The submitted version itself cannot be submitted again.
+        $this->postJson("/api/accounting-periods/{$id}/gst-submit", [], $this->h)->assertStatus(409);
+
+        // The month opens for the correction, the missed bill goes in, and it is locked again.
+        $this->postJson("/api/accounting-periods/{$id}/reopen", [], $this->h)->assertOk();
+        $this->bill('2026-09-25', 1000, 90);
+        $this->postJson("/api/accounting-periods/{$id}/close", [], $this->h)->assertOk();
+
+        $v2 = $this->postJson("/api/accounting-periods/{$id}/gst-calculate", [], $this->h)->assertOk()->json();
+        $this->assertSame(2, $v2['version']);
+        $this->assertSame(1, $v2['revises_version']);
+        $box7 = fn (array $r) => collect($r['boxes'])->firstWhere('box', 7)['amount_sgd'];
+        $this->assertEqualsWithDelta($box7($v1) + 90, $box7($v2), 0.001);
+
+        $resubmitted = $this->postJson("/api/accounting-periods/{$id}/gst-submit", [], $this->h)->assertOk()->json();
+        $this->assertNotNull($resubmitted['submitted_at']);
+
+        // Locked again, and the first submission is still on file as it was.
+        $this->postJson("/api/accounting-periods/{$id}/reopen", [], $this->h)->assertStatus(409);
+        $history = collect($this->getJson("/api/accounting-periods/{$id}/gst", $this->h)->assertOk()->json('history'));
+        $old = $history->firstWhere('version', 1);
+        $this->assertSame('superseded', $old['status']);
+        $this->assertNotNull($old['submitted_at']);
+        $this->assertSame('Missed a supplier bill', $old['revision_reason']);
+        $this->assertEqualsWithDelta($box7($v1), $box7($old), 0.001);
+        $this->assertSame(1, $history->firstWhere('version', 2)['revises_version']);
+    }
+
+    public function test_only_a_submitted_return_can_be_revised(): void
+    {
+        $id = $this->september();
+        $this->postJson("/api/accounting-periods/{$id}/gst-revise", ['reason' => 'x'], $this->h)->assertStatus(409);
+        $this->postJson("/api/accounting-periods/{$id}/close", [], $this->h)->assertOk();
+        $this->postJson("/api/accounting-periods/{$id}/gst-calculate", [], $this->h)->assertOk();
+        $this->postJson("/api/accounting-periods/{$id}/gst-revise", ['reason' => 'x'], $this->h)->assertStatus(409);
+    }
+
     public function test_a_view_only_group_can_read_but_not_calculate(): void
     {
         $id = $this->september();
@@ -210,6 +262,7 @@ class GstReturnTest extends TestCase
         $h = ['Authorization' => 'Bearer '.$this->post('/api/auth/login', ['username' => $clerk->email, 'password' => 'demo1234'])->json('access_token')];
 
         $this->postJson("/api/accounting-periods/{$id}/gst-calculate", [], $h)->assertStatus(403);
+        $this->postJson("/api/accounting-periods/{$id}/gst-revise", ['reason' => 'x'], $h)->assertStatus(403);
         $this->getJson("/api/accounting-periods/{$id}/gst", $h)->assertOk()->assertJsonPath('current', null);
     }
 }

@@ -306,7 +306,13 @@ shipped and when.
 - [x] **GST answers built 2026-09-26**: supplier bills carry a purchase
   tax code (TX / ZP / EP / OP / NR) with GST worked out like a Sales
   Invoice; boxes 9–12 stay zero; **Submit to IRAS** records who and when
-  and locks the month for good. #47 fully settled.
+  and locks the month. #47 fully settled.
+- [x] **GST revision and resubmission** (2026-09-26): **Revise** on a
+  submitted month, with a reason, keeps the submitted return as it was
+  and lets the month be corrected, recalculated as a new version
+  ("revision of vN") and submitted again, which locks it again. Every
+  version is listed on the period. Revise is for whoever may submit
+  (confirmed, #47.5).
 - [x] **Write-off approval amount removed** (2026-09-26): the owner and
   Finance write off, Finance without the owner. **Customer credit limit** added to the Company /
   Individual file, separate from the credit note limit; shown against
@@ -316,9 +322,8 @@ shipped and when.
 - [x] **GST F5 workflow built 2026-09-26** (4b.4, GST-001): GST
   Calculation on each locked period keeps the Form 5 boxes and their
   documents; the GST Return (Form 5) and GST Supporting Listing read
-  only what is kept. Defaults awaiting Dennis in
-  [open-business-decisions.md #47](open-business-decisions.md#47-gst-f5-workflow-defaults-taken-raised-and-built-2026-09-26)
-  (purchase tax codes, boxes 9–12, a "filed" lock).
+  only what is kept. Its defaults were answered the same day
+  ([open-business-decisions.md #47](open-business-decisions.md#47-gst-f5-workflow-defaults-taken-raised-and-built-2026-09-26)).
 - [x] **Company / Individual ID and name in FULL CAPITALS** (2026-09-26),
   however they arrive; existing records converted, each change logged.
 - [x] **Date boxes fixed and tested on a phone** (2026-09-26): slashes
@@ -333,7 +338,8 @@ shipped and when.
   journal instead); write-offs post Dr 6700 Bad debts written off / Cr
   1100 AR; sales invoice vouchers the old UTC clock dated a day early
   moved to their Singapore date (migration 2026_09_30_002800, each in
-  Event Logs). Still open: the write-off approval amount (3.4).
+  Event Logs). The write-off approval amount (3.4) was later removed
+  altogether: the owner and Finance write off.
 - [x] **Times stored eight hours ahead -- fixed 2026-09-26, including
   the stored data.** With `APP_TIMEZONE=Asia/Singapore` and a UTC
   database session, every time the app wrote itself (Eloquent's

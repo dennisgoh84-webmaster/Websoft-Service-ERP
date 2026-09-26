@@ -46,7 +46,8 @@ granted per group (VIEW / EDIT / FULL) under **Group Authority**.
   posting, journal vouchers, trial balance), Bank Book, GST and Account
   Period (lock matrix, Year-End Closing, **GST Calculation** — the saved
   Form 5 every GST report reads — and **Submit to IRAS**, which records
-  who and when and locks the month for good; supplier bills carry a
+  who and when and locks the month — **Revise** reopens it for a
+  corrected return, keeping the submitted one; supplier bills carry a
   purchase tax code and GST is worked out from it, as on sales), Commission Management, Accounting and
   Operations Reports.
 - **Stock** — Stock Master, Goods Receive / Transfer / Return / Issue

@@ -936,7 +936,19 @@ supporting reports also… all use the data that is kept inside."
   return is filed, **Submit to IRAS** on the period records who and
   when (in Event Logs too). From then on the month cannot be
   recalculated, its period cannot be reopened, and no lock in it can be
-  lifted. There is no undo.
+  lifted.
+- **Revised and resubmitted, keeping the old record** (Dennis,
+  2026-09-26: "Have to allow resubmission like revision but have to
+  keep the old record"): **Revise** on a submitted month, with a reason,
+  records who, when and why on the submitted return; its figures,
+  documents and submission stay exactly as they were. The month can
+  then be unlocked and corrected, locked again and recalculated -- the
+  new version says which submitted version it revises -- and submitted
+  in its turn, which locks the month again. Every version, submitted or
+  not, stays on file and is listed on the period. (IRAS takes a
+  correction to a return already filed as a GST F7; this records the
+  corrected figures, it does not file anything.) Revise is for whoever
+  may submit -- FULL on GST and Account Period (confirmed 2026-09-26).
 
 ## Conceptual Business Entities
 

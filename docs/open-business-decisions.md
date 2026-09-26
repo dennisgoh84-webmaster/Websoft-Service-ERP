@@ -216,18 +216,16 @@ sub-detail is called out explicitly).
 
 3.4. **What is the value threshold above which a write-off requires
    Dennis's approval** (per AR-002)?
-   **Status: STILL OPEN**, but no longer blocking: the threshold is a
-   configurable field in Company Setup rather than a hard-coded number.
-   Until Dennis sets one, the system requires the **owner's approval for
-   every write-off** — the safe reading of an undecided rule.
+   (Until 2026-09-26 this was open, with a configurable Company Setup
+   threshold and the owner approving every write-off meanwhile.)
    **DECIDED 2026-09-26: no amount at all** ("I think can totally
    remove this write off approval amount") -- the owner and Finance
    write off, Finance without the owner (confirmed the same day);
    the Company Setup threshold is removed (any value set was recorded in
    Event Logs first).
    (2026-09-26, Dennis asked "Write off meaning bad debts?" -- yes:
-   writing an unpaid invoice's balance off as a bad debt. The amount is
-   still to be given. The account it posts to was settled the same day
+   writing an unpaid invoice's balance off as a bad debt. The account it
+   posts to was settled the same day
    -- 6700, an Expense account; see 4b.2.)
    *Arises in:* Accounts Receivable.
 
@@ -838,7 +836,7 @@ records, contract hours) plus several features/terms not yet built.
      PO page/route was not built.
    - **"GST and Account Period"** -> `/accounting-periods` (relabeled).
      The GST F5-style return itself was NOT moved -- it stays a report
-     under Accounting Reports (#48), since it's a report output, not a
+     under Accounting Reports, since it's a report output, not a
      period-setup screen.
 
 17.2. **GL Types, Tax Types, Currency Rate Table moved to Maintenance.**
@@ -2283,8 +2281,15 @@ each is a small change if Dennis or the accountant wants it otherwise.
    calculation is flagged on the period and in the GST Return until it
    is locked and recalculated. **Settled 2026-09-26:** "we add in
    submitted by who… date time stamp… after that must lock." Submit to
-   IRAS records who and when; the month is then locked for good — no
-   recalculation, no reopening, no lock lifted, no undo.
+   IRAS records who and when; the month is then locked — no
+   recalculation, no reopening, no lock lifted.
+   **Revision added 2026-09-26:** "Have to allow resubmission like
+   revision but have to keep the old record." Revise (with a reason)
+   opens a submitted month for correction; the submitted return is kept
+   as it was, the corrected one is recalculated as a new version marked
+   as revising it, and submitting that locks the month again (GST-001).
+   **Confirmed 2026-09-26:** Revise is for the same people who may
+   submit (FULL on GST and Account Period).
 
 ## 48. Customer credit limit: what happens when it is exceeded (raised and decided 2026-09-26)
 

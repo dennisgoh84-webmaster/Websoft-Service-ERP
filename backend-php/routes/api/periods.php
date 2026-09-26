@@ -18,4 +18,5 @@ Route::middleware('auth.jwt')->prefix('accounting-periods')->group(function () {
     Route::get('/{period}/gst', [PeriodController::class, 'gst']);
     Route::post('/{period}/gst-calculate', [PeriodController::class, 'calculateGst']);
     Route::post('/{period}/gst-submit', [PeriodController::class, 'submitGst']);
+    Route::post('/{period}/gst-revise', [PeriodController::class, 'reviseGst']);
 });

@@ -75,6 +75,9 @@ export default function AccountingPeriodsPage() {
   const [busy, setBusy] = useState<string | null>(null) // lock cell being toggled
   const [gstFor, setGstFor] = useState<string | null>(null) // period whose saved GST is shown
   const [gst, setGst] = useState<GstReturnSaved | null>(null)
+  const [gstHistory, setGstHistory] = useState<GstReturnSaved[]>([])
+  const [reviseFor, setReviseFor] = useState<string | null>(null) // period whose Revise reason box is open
+  const [reviseReason, setReviseReason] = useState('')
   const [calculating, setCalculating] = useState<string | null>(null)
 
   const now = new Date()
@@ -116,9 +119,8 @@ export default function AccountingPeriodsPage() {
     setCalculating(period.id)
     try {
       const r = await api.calculatePeriodGst(period.id)
-      setMessage(`${period.name} — GST Calculation v${r.version} saved.`)
-      setGst(r)
-      setGstFor(period.id)
+      setMessage(`${period.name} — GST Calculation v${r.version}${r.revises_version ? ` (revision of v${r.revises_version})` : ''} saved.`)
+      await loadGst(period.id)
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'GST Calculation failed')
@@ -130,7 +132,7 @@ export default function AccountingPeriodsPage() {
   async function onSubmitGst(period: AccountingPeriod) {
     if (
       !window.confirm(
-        `Mark ${period.name}'s GST return as submitted to IRAS?\n\nYour name and the time are recorded, and the month is then locked for good: no recalculation, no reopening.`,
+        `Mark ${period.name}'s GST return as submitted to IRAS?\n\nYour name and the time are recorded, and the month is then locked: no recalculation, no reopening. To correct it later, use Revise — this submission is kept.`,
       )
     )
       return
@@ -138,9 +140,8 @@ export default function AccountingPeriodsPage() {
     setMessage(null)
     try {
       const r = await api.submitPeriodGst(period.id)
-      setMessage(`${period.name} — GST return marked submitted to IRAS; the month is now locked.`)
-      setGst(r)
-      setGstFor(period.id)
+      setMessage(`${period.name} — GST return v${r.version}${r.revises_version ? ` (revision of v${r.revises_version})` : ''} marked submitted to IRAS; the month is now locked.`)
+      await loadGst(period.id)
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to mark as submitted')
@@ -154,11 +155,38 @@ export default function AccountingPeriodsPage() {
     }
     setError(null)
     try {
-      const r = await api.periodGst(period.id)
-      setGst(r.current)
-      setGstFor(period.id)
+      await loadGst(period.id)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load the GST Calculation')
+    }
+  }
+
+  async function loadGst(periodId: string) {
+    const r = await api.periodGst(periodId)
+    setGst(r.current)
+    setGstHistory(r.history)
+    setGstFor(periodId)
+  }
+
+  async function onReviseGst(e: FormEvent, period: AccountingPeriod) {
+    e.preventDefault()
+    if (!reviseReason.trim()) {
+      setError('Give the reason for revising the submitted GST return.')
+      return
+    }
+    setError(null)
+    setMessage(null)
+    try {
+      await api.revisePeriodGst(period.id, reviseReason.trim())
+      setMessage(
+        `${period.name} — revision opened. The submitted return is kept. Unlock what needs correcting, lock the month again, run the GST Calculation and submit the revision.`,
+      )
+      setReviseFor(null)
+      setReviseReason('')
+      await loadGst(period.id)
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to open the revision')
     }
   }
 
@@ -213,6 +241,8 @@ export default function AccountingPeriodsPage() {
         GST: once a month is fully keyed in, lock it (Close All), then press <strong>GST Calculation</strong>. It sums the
         period's sales invoices and booked supplier bills into the IRAS Form 5 boxes and keeps them, with every document
         behind them. The GST Return and GST Supporting Listing under Accounting Reports read only what is kept here.
+        Submit to IRAS records who and when and locks the month. To correct a submitted month, press <strong>Revise</strong>{' '}
+        and give the reason: the submitted return is kept, and the corrected one is calculated and submitted as a revision.
       </p>
       {error && <div className="error-banner">{error}</div>}
       {message && (
@@ -239,6 +269,9 @@ export default function AccountingPeriodsPage() {
             {periods.map((p) => {
               const summary = periodLockSummary(p.locks)
               const isExpanded = expandedId === p.id
+              // Submitted to IRAS and not under revision: the month is locked for good.
+              const irasLocked = !!p.gst?.submitted_at && !p.gst.revision_opened_at
+              const underRevision = !!p.gst?.revision_opened_at
               return (
                 <>
                   <tr key={p.id}>
@@ -273,17 +306,30 @@ export default function AccountingPeriodsPage() {
                       {p.gst?.submitted_at && (
                         <div style={{ fontSize: '0.8em' }}>
                           <span className="badge active">Submitted to IRAS</span> {formatDateTime(p.gst.submitted_at)}
-                          {p.gst.submitted_by_name ? ` by ${p.gst.submitted_by_name}` : ''} — locked
+                          {p.gst.submitted_by_name ? ` by ${p.gst.submitted_by_name}` : ''}
+                          {irasLocked ? ' — locked' : ''}
                         </div>
                       )}
-                      {p.gst && summary !== 'closed' && (
+                      {p.gst?.revises_version && !p.gst.submitted_at && (
+                        <div style={{ fontSize: '0.8em' }}>
+                          <span className="badge">Revision of v{p.gst.revises_version}</span> not yet submitted
+                        </div>
+                      )}
+                      {underRevision && (
+                        <div style={{ fontSize: '0.8em' }}>
+                          <span className="badge" style={{ background: '#e67e22', color: '#fff' }}>Under revision</span>{' '}
+                          opened {formatDateTime(p.gst!.revision_opened_at!)}
+                          {p.gst!.revision_opened_by_name ? ` by ${p.gst!.revision_opened_by_name}` : ''}: {p.gst!.revision_reason}
+                        </div>
+                      )}
+                      {p.gst && !irasLocked && summary !== 'closed' && (
                         <div className="muted" style={{ fontSize: '0.8em' }}>
                           Reopened since — lock and recalculate
                         </div>
                       )}
                     </td>
                     <td style={{ display: 'flex', gap: 6 }}>
-                      {!p.gst?.submitted_at && (
+                      {!irasLocked && (
                         <button
                           onClick={() => onCalculateGst(p)}
                           disabled={summary !== 'closed' || calculating === p.id}
@@ -303,17 +349,59 @@ export default function AccountingPeriodsPage() {
                           Close All
                         </button>
                       )}
-                      {summary !== 'open' && !p.gst?.submitted_at && (
+                      {summary !== 'open' && !irasLocked && (
                         <button className="secondary" onClick={() => onOpenAll(p)} style={{ fontSize: '0.85em' }}>
                           Open All
                         </button>
                       )}
+                      {irasLocked && (
+                        <button
+                          className="secondary"
+                          onClick={() => {
+                            setReviseFor(reviseFor === p.id ? null : p.id)
+                            setReviseReason('')
+                          }}
+                          style={{ fontSize: '0.85em' }}
+                          title="Correct a return already submitted: the submitted one is kept, and the revision is submitted in its turn"
+                        >
+                          Revise
+                        </button>
+                      )}
                     </td>
                   </tr>
+                  {reviseFor === p.id && irasLocked && (
+                    <tr key={`${p.id}-revise`}>
+                      <td colSpan={7} style={{ padding: '8px 12px' }}>
+                        <form onSubmit={(e) => onReviseGst(e, p)}>
+                          <p className="muted" style={{ marginTop: 0 }}>
+                            Revise {p.name}'s submitted GST return (v{p.gst!.version}). It stays on file exactly as submitted. The month
+                            can then be unlocked and corrected; lock it again, run the GST Calculation and submit the revision, which
+                            locks the month again. IRAS takes a correction to a filed return as a GST F7.
+                          </p>
+                          <div className="form-row">
+                            <label htmlFor={`revise-${p.id}`}>Reason for the revision</label>
+                            <textarea
+                              id={`revise-${p.id}`}
+                              value={reviseReason}
+                              onChange={(e) => setReviseReason(e.target.value)}
+                              rows={2}
+                              required
+                            />
+                          </div>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button type="submit">Open revision</button>
+                            <button type="button" className="secondary" onClick={() => setReviseFor(null)}>
+                              Cancel
+                            </button>
+                          </div>
+                        </form>
+                      </td>
+                    </tr>
+                  )}
                   {gstFor === p.id && (
                     <tr key={`${p.id}-gst`}>
                       <td colSpan={7} style={{ padding: '8px 12px' }}>
-                        {gst ? <GstPanel gst={gst} /> : <p className="muted">No GST Calculation saved for this period yet.</p>}
+                        {gst ? <GstPanel gst={gst} history={gstHistory} /> : <p className="muted">No GST Calculation saved for this period yet.</p>}
                       </td>
                     </tr>
                   )}
@@ -450,7 +538,7 @@ function LockMatrix({
 }
 
 /** A saved GST Calculation: the Form 5 boxes, then every document behind them, as kept. */
-function GstPanel({ gst }: { gst: GstReturnSaved }) {
+function GstPanel({ gst, history }: { gst: GstReturnSaved; history: GstReturnSaved[] }) {
   const [showLines, setShowLines] = useState(false)
   const BOX_LABEL: Record<string, string> = {
     '1': 'Box 1',
@@ -473,8 +561,17 @@ function GstPanel({ gst }: { gst: GstReturnSaved }) {
             {' '}
             <strong>
               Submitted to IRAS {formatDateTime(gst.submitted_at)}
-              {gst.submitted_by_name ? ` by ${gst.submitted_by_name}` : ''} — locked.
+              {gst.submitted_by_name ? ` by ${gst.submitted_by_name}` : ''}
+              {gst.revision_opened_at ? '' : ' — locked'}.
             </strong>
+          </>
+        )}
+        {gst.revises_version && <> Revision of submitted v{gst.revises_version}.</>}
+        {gst.revision_opened_at && (
+          <>
+            {' '}
+            Revision opened {formatDateTime(gst.revision_opened_at)}
+            {gst.revision_opened_by_name ? ` by ${gst.revision_opened_by_name}` : ''}: {gst.revision_reason}.
           </>
         )}
       </p>
@@ -496,6 +593,48 @@ function GstPanel({ gst }: { gst: GstReturnSaved }) {
           ))}
         </tbody>
       </table>
+      {history.length > 1 && (
+        <div style={{ overflowX: 'auto', marginTop: 8 }}>
+          <strong>Every version kept</strong>
+          <table>
+            <thead>
+              <tr>
+                <th>Version</th>
+                <th>Calculated</th>
+                <th style={{ textAlign: 'right' }}>Net GST</th>
+                <th>Submitted to IRAS</th>
+                <th>Revision</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.map((h) => (
+                <tr key={h.id}>
+                  <td>
+                    v{h.version}
+                    {h.status === 'current' ? ' (current)' : ' (superseded)'}
+                  </td>
+                  <td>
+                    {formatDateTime(h.calculated_at)}
+                    {h.calculated_by_name ? ` by ${h.calculated_by_name}` : ''}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>{money(h.boxes.find((b) => b.box === 8)?.amount_sgd ?? 0)}</td>
+                  <td>
+                    {h.submitted_at
+                      ? `${formatDateTime(h.submitted_at)}${h.submitted_by_name ? ` by ${h.submitted_by_name}` : ''}`
+                      : '—'}
+                  </td>
+                  <td>
+                    {h.revises_version ? `Revises v${h.revises_version}. ` : ''}
+                    {h.revision_opened_at
+                      ? `Revised ${formatDateTime(h.revision_opened_at)}${h.revision_opened_by_name ? ` by ${h.revision_opened_by_name}` : ''}: ${h.revision_reason}`
+                      : ''}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       <button type="button" className="secondary" onClick={() => setShowLines(!showLines)} style={{ marginTop: 8 }}>
         {showLines ? 'Hide documents' : `Show the ${gst.lines.length} documents behind it`}
       </button>

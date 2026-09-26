@@ -10,7 +10,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * One saved GST Calculation (IRAS Form 5) for a locked accounting
  * period -- see App\Services\GstReturns. Never edited after it is made;
- * a recalculation adds the next version and supersedes this one.
+ * a recalculation adds the next version and supersedes this one. The
+ * only later marks are its submission to IRAS and, if that submission is
+ * revised, who opened the revision, when and why.
  */
 class GstReturn extends Model
 {
@@ -45,6 +47,7 @@ class GstReturn extends Model
         'box_8_sgd', 'box_9_sgd', 'box_10_sgd', 'box_11_sgd', 'box_12_sgd', 'box_13_sgd',
         'output_document_count', 'input_document_count', 'calculated_by_user_id', 'superseded_at',
         'submitted_by_user_id', 'submitted_at',
+        'revision_opened_by_user_id', 'revision_opened_at', 'revision_reason', 'revises_gst_return_id',
     ];
 
     protected $casts = [
@@ -53,6 +56,7 @@ class GstReturn extends Model
         'calculated_at' => 'datetime',
         'superseded_at' => 'datetime',
         'submitted_at' => 'datetime',
+        'revision_opened_at' => 'datetime',
     ];
 
     public function period(): BelongsTo
@@ -68,6 +72,17 @@ class GstReturn extends Model
     public function submittedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'submitted_by_user_id');
+    }
+
+    public function revisionOpenedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'revision_opened_by_user_id');
+    }
+
+    /** The submitted return this version revises, if it is a revision. */
+    public function revises(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'revises_gst_return_id');
     }
 
     public function lines(): HasMany

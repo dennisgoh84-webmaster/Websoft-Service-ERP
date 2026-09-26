@@ -1404,6 +1404,12 @@ export interface GstSummary {
   /** Set once the return was submitted to IRAS -- the month is locked from then on. */
   submitted_at: string | null
   submitted_by_name: string | null
+  /** Set when a submitted return is being revised: who opened the revision, when and why. */
+  revision_opened_at: string | null
+  revision_opened_by_name: string | null
+  revision_reason: string | null
+  /** On a revision: the version number of the submitted return it revises. */
+  revises_version: number | null
 }
 
 export interface GstBox {
@@ -1439,6 +1445,12 @@ export interface GstReturnSaved {
   calculated_by_name: string | null
   submitted_at: string | null
   submitted_by_name: string | null
+  /** Set when a submitted return is being revised: who opened the revision, when and why. */
+  revision_opened_at: string | null
+  revision_opened_by_name: string | null
+  revision_reason: string | null
+  /** On a revision: the version number of the submitted return it revises. */
+  revises_version: number | null
   boxes: GstBox[]
   output_document_count: number
   input_document_count: number
@@ -3956,6 +3968,8 @@ export const api = {
     request<{ period: AccountingPeriod; current: GstReturnSaved | null; history: GstReturnSaved[] }>(`/accounting-periods/${id}/gst`),
   calculatePeriodGst: (id: string) => request<GstReturnSaved>(`/accounting-periods/${id}/gst-calculate`, { method: 'POST' }),
   submitPeriodGst: (id: string) => request<GstReturnSaved>(`/accounting-periods/${id}/gst-submit`, { method: 'POST' }),
+  revisePeriodGst: (id: string, reason: string) =>
+    request<GstReturnSaved>(`/accounting-periods/${id}/gst-revise`, { method: 'POST', body: JSON.stringify({ reason }) }),
   reopenAccountingPeriod: (id: string) =>
     request<AccountingPeriod>(`/accounting-periods/${id}/reopen`, { method: 'POST' }),
   listFiscalYearClosures: () => request<FiscalYearClosure[]>('/accounting-periods/closures'),

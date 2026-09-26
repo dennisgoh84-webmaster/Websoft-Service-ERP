@@ -81,6 +81,10 @@ class PeriodController extends Controller
             'net_gst_sgd' => (float) $gst->box_8_sgd,
             'submitted_at' => optional($gst->submitted_at)->toIso8601String(),
             'submitted_by_name' => $gst->submittedBy?->full_name,
+            'revision_opened_at' => optional($gst->revision_opened_at)->toIso8601String(),
+            'revision_opened_by_name' => $gst->revisionOpenedBy?->full_name,
+            'revision_reason' => $gst->revision_reason,
+            'revises_version' => $gst->revises?->version,
         ];
     }
 
@@ -104,6 +108,10 @@ class PeriodController extends Controller
             'calculated_by_name' => $gst->calculatedBy?->full_name,
             'submitted_at' => optional($gst->submitted_at)->toIso8601String(),
             'submitted_by_name' => $gst->submittedBy?->full_name,
+            'revision_opened_at' => optional($gst->revision_opened_at)->toIso8601String(),
+            'revision_opened_by_name' => $gst->revisionOpenedBy?->full_name,
+            'revision_reason' => $gst->revision_reason,
+            'revises_version' => $gst->revises?->version,
             'boxes' => $boxes,
             'output_document_count' => $gst->output_document_count,
             'input_document_count' => $gst->input_document_count,
@@ -148,6 +156,21 @@ class PeriodController extends Controller
         $period = $this->periodOrFail($user->company_id, $periodId);
 
         return response()->json(self::presentGstReturn(GstReturns::submit($period, $user)->load('period')));
+    }
+
+    /**
+     * Revise a return already submitted to IRAS (Dennis, 2026-09-26):
+     * needs a reason; the submitted return is kept, and the month can be
+     * corrected, recalculated and submitted again.
+     */
+    public function reviseGst(Request $request, string $periodId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'full');
+        $period = $this->periodOrFail($user->company_id, $periodId);
+        $reason = $request->validate(['reason' => ['required', 'string', 'max:2000']])['reason'];
+
+        return response()->json(self::presentGstReturn(GstReturns::openRevision($period, $user, $reason)->load('period')));
     }
 
     /**

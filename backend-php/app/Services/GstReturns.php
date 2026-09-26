@@ -49,6 +49,16 @@ use Illuminate\Support\Facades\DB;
  * the month is locked: it cannot be recalculated and its period cannot
  * be reopened or have any lock lifted.
  *
+ * Until it is revised (Dennis, 2026-09-26: "Have to allow resubmission
+ * like revision but have to keep the old record"). Revise, with a
+ * reason, marks the submitted return as under revision -- who, when,
+ * why -- and nothing else about it changes. The month can then be
+ * unlocked and corrected, locked again and recalculated: the new
+ * version records which submitted return it revises, and is submitted
+ * in its turn, which locks the month again. Every submitted version
+ * stays on file with its figures, documents and who submitted it.
+ * (IRAS takes a correction to a return already filed as a GST F7.)
+ *
  * The result -- the boxes and every document line behind them -- is
  * kept in gst_returns / gst_return_lines. Recalculating adds the next
  * version and marks the previous one superseded; nothing is deleted.
@@ -97,6 +107,9 @@ class GstReturns
             $b13 = $sum(GstReturnLine::OUTPUT, null, 'net_sgd');
 
             $previous = self::current($period);
+            // A version made after a submission revises the latest submitted one.
+            $revises = GstReturn::where('accounting_period_id', $period->id)->whereNotNull('submitted_at')
+                ->orderByDesc('version')->first();
             if ($previous !== null) {
                 $previous->status = GstReturn::STATUS_SUPERSEDED;
                 $previous->superseded_at = Carbon::now();
@@ -123,6 +136,7 @@ class GstReturns
                 'output_document_count' => count(array_filter($lines, fn ($l) => $l['direction'] === GstReturnLine::OUTPUT)),
                 'input_document_count' => count(array_filter($lines, fn ($l) => $l['direction'] === GstReturnLine::INPUT)),
                 'calculated_by_user_id' => $actor->id,
+                'revises_gst_return_id' => $revises?->id,
             ]);
             foreach ($lines as $l) {
                 GstReturnLine::create($l + ['gst_return_id' => $return->id]);
@@ -135,8 +149,8 @@ class GstReturns
                 actorUserId: $actor->id,
                 companyId: $period->company_id,
                 details: sprintf(
-                    'GST Calculation v%d for %s: output tax SGD %s, input tax SGD %s, net SGD %s (%d sales, %d purchase documents)',
-                    $version, $period->name, $b6->toString(), $b7->toString(), $b6->minus($b7)->toString(),
+                    'GST Calculation v%d%s for %s: output tax SGD %s, input tax SGD %s, net SGD %s (%d sales, %d purchase documents)',
+                    $version, $revises ? " (revision of submitted v{$revises->version})" : '', $period->name, $b6->toString(), $b7->toString(), $b6->minus($b7)->toString(),
                     $return->output_document_count, $return->input_document_count,
                 ),
                 oldValue: $previous ? ['version' => $previous->version, 'box_8_sgd' => (string) $previous->box_8_sgd] : null,
@@ -158,6 +172,9 @@ class GstReturns
             throw new ApiException(409, "Run the GST Calculation for {$period->name} before submitting it.");
         }
         self::assertNotSubmitted($period);
+        if ($current->submitted_at !== null) {
+            throw new ApiException(409, "GST Calculation v{$current->version} for {$period->name} is the return already submitted. Lock the month and run the GST Calculation for the revision, then submit that.");
+        }
         if ($period->status !== AccountingPeriod::STATUS_CLOSED) {
             throw new ApiException(409, "{$period->name} was reopened after its GST Calculation. Lock it and recalculate before submitting.");
         }
@@ -172,21 +189,65 @@ class GstReturns
             action: 'submitted_to_iras',
             actorUserId: $actor->id,
             companyId: $period->company_id,
-            details: sprintf('GST Calculation v%d for %s submitted to IRAS (net GST SGD %s); the month is now locked',
-                $current->version, $period->name, Money::of($current->box_8_sgd)->toString()),
+            details: sprintf('GST Calculation v%d for %s submitted to IRAS%s (net GST SGD %s); the month is now locked',
+                $current->version, $period->name,
+                $current->revises ? " as a revision of v{$current->revises->version}" : '',
+                Money::of($current->box_8_sgd)->toString()),
             newValue: ['submitted_at' => $current->submitted_at->toIso8601String()],
         );
 
         return $current->fresh();
     }
 
-    /** Refuses anything that would change a month already submitted to IRAS. */
+    /**
+     * Open a revision of the month's submitted return: records who, when
+     * and why on that return, and lets the month be unlocked, corrected
+     * and recalculated. The submitted return itself is kept as it was.
+     */
+    public static function openRevision(AccountingPeriod $period, User $actor, string $reason): GstReturn
+    {
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw new ApiException(422, 'Give the reason for revising the submitted GST return.');
+        }
+        $current = self::current($period);
+        if ($current?->submitted_at === null) {
+            throw new ApiException(409, "{$period->name} has no GST return submitted to IRAS, so there is nothing to revise.");
+        }
+        if ($current->revision_opened_at !== null) {
+            throw new ApiException(409, sprintf('A revision of %s was already opened on %s by %s.',
+                $period->name, $current->revision_opened_at->format('d/m/Y H:i'), $current->revisionOpenedBy?->full_name ?? 'someone'));
+        }
+
+        $current->revision_opened_by_user_id = $actor->id;
+        $current->revision_opened_at = Carbon::now();
+        $current->revision_reason = $reason;
+        $current->save();
+
+        Audit::record(
+            entityType: 'gst_return',
+            entityId: $current->id,
+            action: 'revision_opened',
+            actorUserId: $actor->id,
+            companyId: $period->company_id,
+            details: sprintf('Revision opened on %s\'s submitted GST return v%d: %s. The submitted return is kept; the month can be corrected, recalculated and submitted again.',
+                $period->name, $current->version, $reason),
+            newValue: ['revision_reason' => $reason],
+        );
+
+        return $current->fresh();
+    }
+
+    /**
+     * Refuses anything that would change a month already submitted to
+     * IRAS, unless a revision of that submission has been opened.
+     */
     public static function assertNotSubmitted(AccountingPeriod $period): void
     {
         $current = self::current($period);
-        if ($current?->submitted_at !== null) {
+        if ($current?->submitted_at !== null && $current->revision_opened_at === null) {
             throw new ApiException(409, sprintf(
-                '%s was submitted to IRAS on %s by %s and is locked.',
+                '%s was submitted to IRAS on %s by %s and is locked. To correct it, Revise the submitted return (the submitted one is kept).',
                 $period->name, $current->submitted_at->format('d/m/Y H:i'), $current->submittedBy?->full_name ?? 'someone',
             ));
         }
