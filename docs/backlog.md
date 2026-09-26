@@ -304,7 +304,7 @@ shipped and when.
   - [ ] Full multi-currency on sales and purchases (original + SGD, exchange gain/loss).
   - [ ] Data Migration: bring across everything since a cut-off date picked at run time (10.1).
   - [ ] AI Assistant: Service Record drafting from the technician's notes.
-  - [ ] Email Inbox: the server reads the helpdesk mailbox over IMAP (no HTTPS needed), with Log as Incident / Convert to Job Order.
+  - [x] Email Inbox: the server reads the helpdesk mailbox over IMAP (no HTTPS needed), with Log as Incident / Convert to Job Order. Built 2026-09-26 (Operations → Email Inbox).
   - [ ] Tax Types: a Form 5 box setting per sales tax code, used by the GST Calculation (47.4).
   - [ ] Helpdesk Portal: one-time AI declaration tick before the portal chat.
   - [ ] eApproval: move Payment Voucher (with Bank Authority), PO and Service Record approval onto it.

@@ -39,7 +39,8 @@ granted per group (VIEW / EDIT / FULL) under **Group Authority**.
 - **Service Operations** — Service Contracts (hours, renewal, project
   milestones), Job Orders, Service Records (approval, contract-hour
   deduction, excess usage), Incidents (Helpdesk, Outlook / Gmail
-  add-ins), Software Tasks, Ops Dashboard, Mobile App.
+  add-ins, and the **Email Inbox**, where the server reads the helpdesk
+  mailbox over IMAP with no HTTPS needed), Software Tasks, Ops Dashboard, Mobile App.
 - **Accounts** — Billing / Invoices, Accounts Receivable (receipts;
   write-offs by the owner or Finance, no amount limit, posted to 6700 Bad debts written off), Accounts Payable (purchase
   orders, 2-way matching, payment vouchers), General Ledger (automatic

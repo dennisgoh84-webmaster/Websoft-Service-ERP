@@ -142,6 +142,78 @@ class IncidentService
      * trail records the send only when it happened. The add-in shows
      * the result either way.
      */
+    /**
+     * An email logged as an Incident -- the Outlook / Gmail add-ins'
+     * "Log as Incident" and the Email Inbox's. The sender's address is
+     * matched to a Company / Individual contact when it can be, and the
+     * sender gets the acknowledgement email.
+     *
+     * @return array{incident: Incident, acknowledgement_sent: bool}
+     */
+    public static function logEmail(string $companyId, string $actorUserId, ?string $senderName, string $senderEmail, string $subject, ?string $body): array
+    {
+        $incident = self::createIncident(
+            companyId: $companyId,
+            customerId: self::tryMatchCustomerByEmail($companyId, $senderEmail),
+            source: Incident::SOURCE_EMAIL,
+            subject: $subject,
+            description: $body,
+            senderName: $senderName,
+            senderEmail: $senderEmail,
+            senderPhone: null,
+            createdByUserId: $actorUserId,
+        );
+
+        return ['incident' => $incident, 'acknowledgement_sent' => self::sendAcknowledgement($incident, null, $actorUserId)];
+    }
+
+    /**
+     * An email converted straight to a Job Order -- the add-ins' and the
+     * Email Inbox's "Convert to Job Order". Confirmed 2026-09-12: if the
+     * sender matches no Company / Individual, or it has no valid
+     * contract, this falls back to a plain Incident rather than failing,
+     * and says why.
+     *
+     * @return array{incident: Incident, job_order: ?JobOrder, fallback_reason: ?string, acknowledgement_sent: bool}
+     */
+    public static function convertEmailToJobOrder(string $companyId, string $actorUserId, ?string $senderName, string $senderEmail, string $subject, ?string $body): array
+    {
+        $customerId = self::tryMatchCustomerByEmail($companyId, $senderEmail);
+        $fallbackReason = null;
+        $contract = null;
+        if ($customerId === null) {
+            $fallbackReason = "No Company/Individual matches sender email {$senderEmail}.";
+        } else {
+            $contract = self::findValidContract($companyId, $customerId);
+            if ($contract === null) {
+                $fallbackReason = 'No active contract found for this customer.';
+            }
+        }
+
+        $incident = self::createIncident(
+            companyId: $companyId,
+            customerId: $customerId,
+            source: Incident::SOURCE_EMAIL,
+            subject: $subject,
+            description: $body,
+            senderName: $senderName,
+            senderEmail: $senderEmail,
+            senderPhone: null,
+            createdByUserId: $actorUserId,
+        );
+
+        $jobOrder = $contract !== null
+            ? self::convertToJobOrder($incident, $contract->id, JobOrder::PRIORITY_NORMAL, $actorUserId)
+            : null;
+
+        return [
+            'incident' => $incident,
+            'job_order' => $jobOrder,
+            'fallback_reason' => $fallbackReason,
+            'acknowledgement_sent' => self::sendAcknowledgement($incident, $jobOrder, $actorUserId),
+        ];
+    }
+
     public static function sendAcknowledgement(Incident $incident, ?JobOrder $jobOrder, ?string $actorUserId): bool
     {
         $to = trim((string) $incident->sender_email);

@@ -48,6 +48,7 @@ import InvoicesPage from './pages/InvoicesPage'
 import JobOrderDetailPage from './pages/JobOrderDetailPage'
 import JobOrderPrintPage from './pages/JobOrderPrintPage'
 import IncidentsPage from './pages/IncidentsPage'
+import EmailInboxPage from './pages/EmailInboxPage'
 import JobOrdersPage from './pages/JobOrdersPage'
 import Login from './pages/Login'
 import MobileApp from './pages/MobileApp'
@@ -156,6 +157,7 @@ function AppRoutes() {
         <Route path="/contracts" element={<ContractsPage />} />
         <Route path="/contracts/:id" element={<ContractDetailPage />} />
         <Route path="/incidents" element={<IncidentsPage />} />
+        <Route path="/email-inbox" element={<EmailInboxPage />} />
         <Route path="/job-orders" element={<JobOrdersPage />} />
         <Route path="/job-orders/:id" element={<JobOrderDetailPage />} />
         <Route path="/job-orders/:id/print" element={<JobOrderPrintPage />} />

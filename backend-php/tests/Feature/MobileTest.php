@@ -153,10 +153,13 @@ class MobileTest extends TestCase
         $jo = $this->jobOrder();
         $started = $this->postJson("/api/mobile/job-orders/{$jo->id}/time-in", [], $this->headers())->assertOk()->json();
 
-        // Backdate the time-in by 20 minutes so the elapsed time is
-        // deterministic rather than however fast the test runs.
+        // Backdate the time-in by 20 minutes and hold the clock still, so
+        // the elapsed time is exactly 20 minutes however slowly the test
+        // runs (unfrozen, a tick past the second made it 21).
+        $now = Carbon::now()->startOfSecond();
+        Carbon::setTestNow($now);
         $record = ServiceRecord::findOrFail($started['id']);
-        $record->forceFill(['time_in' => Carbon::now()->subMinutes(20)])->save();
+        $record->forceFill(['time_in' => $now->copy()->subMinutes(20)])->save();
 
         $body = $this->postJson("/api/mobile/service-records/{$record->id}/time-out", [
             'completion_status' => 'C', 'is_after_hours' => true, 'work_description' => '  Replaced the PSU  ',

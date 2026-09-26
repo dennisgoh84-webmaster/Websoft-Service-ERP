@@ -225,20 +225,9 @@ class IncidentController extends Controller
             'body' => 'sometimes|nullable|string',
         ]);
 
-        $customerId = IncidentService::tryMatchCustomerByEmail($user->company_id, $data['sender_email']);
-        $incident = IncidentService::createIncident(
-            companyId: $user->company_id,
-            customerId: $customerId,
-            source: Incident::SOURCE_EMAIL,
-            subject: $data['subject'],
-            description: $data['body'] ?? null,
-            senderName: $data['sender_name'] ?? null,
-            senderEmail: $data['sender_email'],
-            senderPhone: null,
-            createdByUserId: $user->id,
-        );
-
-        $acknowledged = IncidentService::sendAcknowledgement($incident, null, $user->id);
+        $r = IncidentService::logEmail($user->company_id, $user->id, $data['sender_name'] ?? null, $data['sender_email'], $data['subject'], $data['body'] ?? null);
+        $incident = $r['incident'];
+        $acknowledged = $r['acknowledgement_sent'];
 
         return response()->json($this->present($incident->fresh()) + ['acknowledgement_sent' => $acknowledged]);
     }
@@ -262,52 +251,17 @@ class IncidentController extends Controller
             'body' => 'sometimes|nullable|string',
         ]);
 
-        $customerId = IncidentService::tryMatchCustomerByEmail($user->company_id, $data['sender_email']);
-        $fallbackReason = null;
-        $contract = null;
-        if ($customerId === null) {
-            $fallbackReason = "No Company/Individual matches sender email {$data['sender_email']}.";
-        } else {
-            $contract = IncidentService::findValidContract($user->company_id, $customerId);
-            if ($contract === null) {
-                $fallbackReason = 'No active contract found for this customer.';
-            }
-        }
-
-        $incident = IncidentService::createIncident(
-            companyId: $user->company_id,
-            customerId: $customerId,
-            source: Incident::SOURCE_EMAIL,
-            subject: $data['subject'],
-            description: $data['body'] ?? null,
-            senderName: $data['sender_name'] ?? null,
-            senderEmail: $data['sender_email'],
-            senderPhone: null,
-            createdByUserId: $user->id,
-        );
-
-        if ($fallbackReason !== null) {
-            $acknowledged = IncidentService::sendAcknowledgement($incident, null, $user->id);
-
-            return response()->json([
-                'incident' => $this->present($incident->fresh()),
-                'job_order_created' => false,
-                'fallback_reason' => $fallbackReason,
-                'acknowledgement_sent' => $acknowledged,
-            ]);
-        }
-
-        $jobOrder = IncidentService::convertToJobOrder($incident, $contract->id, JobOrder::PRIORITY_NORMAL, $user->id);
-        $acknowledged = IncidentService::sendAcknowledgement($incident, $jobOrder, $user->id);
+        $r = IncidentService::convertEmailToJobOrder($user->company_id, $user->id, $data['sender_name'] ?? null, $data['sender_email'], $data['subject'], $data['body'] ?? null);
+        $jobOrder = $r['job_order'];
 
         return response()->json([
-            'incident' => $this->present($incident->fresh()),
-            'job_order_created' => true,
+            'incident' => $this->present($r['incident']->fresh()),
+            'job_order_created' => $jobOrder !== null,
             // So the Outlook Add-in can say which Job Order it opened.
-            'job_order_id' => $jobOrder->id,
-            'job_order_number' => $jobOrder->job_order_number,
-            'fallback_reason' => null,
-            'acknowledgement_sent' => $acknowledged,
+            'job_order_id' => $jobOrder?->id,
+            'job_order_number' => $jobOrder?->job_order_number,
+            'fallback_reason' => $r['fallback_reason'],
+            'acknowledgement_sent' => $r['acknowledgement_sent'],
         ]);
     }
 

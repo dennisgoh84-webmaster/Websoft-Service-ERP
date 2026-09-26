@@ -2585,6 +2585,39 @@ async function requestWithBody<T>(path: string, options: RequestInit = {}): Prom
   return body as T
 }
 
+// ---- Email Inbox: the helpdesk mailbox read by the server ----
+export type InboxEmailStatus = 'new' | 'logged' | 'dismissed'
+
+export interface InboxEmail {
+  id: string
+  from_name: string | null
+  from_email: string
+  subject: string
+  received_at: string
+  body_text: string | null
+  attachment_names: string[]
+  status: InboxEmailStatus
+  /** The Company / Individual the sender's address matches, if any (new emails only). */
+  matched_company_individual: string | null
+  incident_id: string | null
+  incident_number: string | null
+  job_order_id: string | null
+  job_order_number: string | null
+  handled_by_name: string | null
+  handled_at: string | null
+  dismiss_reason: string | null
+  /** Set on Convert to Job Order when no Job Order could be opened. */
+  fallback_reason?: string | null
+}
+
+export interface InboxMailbox {
+  configured: boolean
+  address: string | null
+  last_checked_at: string | null
+  last_error: string | null
+  added: number
+}
+
 export const api = {
   me: () => request<CurrentUser>('/auth/me'),
   acknowledgeAiDataConsent: () => request<{ ai_data_consent_at: string; ai_data_consent_required: boolean }>('/auth/ai-consent', { method: 'POST', body: JSON.stringify({ accepted: true }) }),
@@ -3220,6 +3253,14 @@ export const api = {
     request<SoftwareTask>(`/software-tasks/${id}/reopen-testing`, { method: 'POST' }),
 
   // ---- Incident Module ----
+  emailInbox: (status: InboxEmailStatus = 'new') =>
+    request<{ mailbox: InboxMailbox; counts: { new: number }; emails: InboxEmail[] }>(`/email-inbox${qs({ status })}`),
+  checkEmailInbox: () => request<{ mailbox: InboxMailbox }>('/email-inbox/check', { method: 'POST' }),
+  logInboxEmail: (id: string) => request<InboxEmail>(`/email-inbox/${id}/log-incident`, { method: 'POST' }),
+  convertInboxEmail: (id: string) => request<InboxEmail>(`/email-inbox/${id}/convert-to-job-order`, { method: 'POST' }),
+  dismissInboxEmail: (id: string, reason: string) =>
+    request<InboxEmail>(`/email-inbox/${id}/dismiss`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  restoreInboxEmail: (id: string) => request<InboxEmail>(`/email-inbox/${id}/restore`, { method: 'POST' }),
   listIncidents: (filters: { status?: IncidentStatus; customer_id?: string } = {}) =>
     request<Incident[]>(`/incidents${qs(filters)}`),
   getIncident: (id: string) => request<Incident>(`/incidents/${id}`),

@@ -16,6 +16,27 @@ use whichever mail client its inbox is read in. Both are set up from
 **Maintenance → Email Add-ins** (`/maintenance/email-addins`; the old
 `/maintenance/outlook-addin` address redirects there).
 
+## Without HTTPS: the Email Inbox (2026-09-26)
+
+Both add-ins need a public HTTPS address. Until the server has one,
+**Operations → Email Inbox** does the same job from inside the app. The
+server signs in to the helpdesk mailbox over IMAP, using the IMAP
+settings under Maintenance → System Email (Helpdesk), and lists each new
+email. Staff press **Log as Incident** or **Convert to Job Order**, the
+same logic and acknowledgement email as the add-ins, or **Dismiss** it
+with a reason.
+
+- **Checking:** the mailbox is checked when the screen is opened, at
+  most once a minute, and on **Check now**.
+  `php artisan email-inbox:check` does the same from a cron.
+- **The mailbox itself is never changed:** nothing is marked read,
+  moved or deleted there.
+- **First read:** it goes back 7 days, then carries on from the last
+  email read.
+- **Attachments** stay in the mailbox and are named on the Incident.
+
+See `App\Services\EmailInbox`, tested in `tests/Feature/EmailInboxTest.php`.
+
 ## Status (2026-09-25)
 
 **Built and tested, apart from the final step: loading it into a real
