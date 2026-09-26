@@ -61,7 +61,7 @@ class CompanyIndividualController extends Controller
         'address_state', 'address_postal_code', 'address_country', 'tags',
         'industry_code', 'exclude_auto_sent', 'terms_and_conditions', 'memo',
         'billing_notes', 'payment_terms_days', 'data_expiry_date',
-        'is_customer', 'is_supplier',
+        'is_customer', 'is_supplier', 'po_approval_limit_sgd', 'credit_note_approval_limit_sgd',
     ];
 
     private function customerOrFail(User $user, string $customerId): CompanyIndividual
@@ -992,6 +992,10 @@ class CompanyIndividualController extends Controller
             'billing_notes' => 'sometimes|nullable|string',
             'payment_terms_days' => 'sometimes|nullable|integer',
             'data_expiry_date' => 'sometimes|nullable|date',
+            // Approval limits for this party (Dennis, 2026-09-26): empty
+            // means the owner approves every PO / credit note.
+            'po_approval_limit_sgd' => 'sometimes|nullable|numeric|min:0',
+            'credit_note_approval_limit_sgd' => 'sometimes|nullable|numeric|min:0',
             // A record can be a customer, a supplier, or both -- see
             // CompanyIndividual's model docstring (2026-09-12: folded
             // the former standalone Supplier table into this one as a

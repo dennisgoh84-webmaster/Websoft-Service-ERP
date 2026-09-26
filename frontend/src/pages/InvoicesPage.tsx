@@ -247,7 +247,8 @@ export default function InvoicesPage() {
   async function onWriteOff(invoice: Invoice) {
     const reason = window.prompt(
       `Write off ${money(invoice.outstanding_sgd)} on ${invoice.invoice_number}?\n\n` +
-        'A reason is required and is recorded in the Event Logs (AR-002).',
+        'A reason is required and is recorded in the Event Logs (AR-002). The amount is posted to the\n' +
+        'General Ledger as a bad debt: Dr 6700 Bad debts written off / Cr 1100 Accounts receivable.',
     )
     if (reason === null) return
     setError(null)
@@ -309,8 +310,10 @@ export default function InvoicesPage() {
       <p className="muted">
         Tax invoices. BILL-002: no approval required, issued directly. BILL-005: revenue
         recognized on invoice. GST is charged at the company's standard rate; the net column is the
-        revenue figure, since GST collected is owed to IRAS rather than earned. AR-002: write-offs
-        need a reason, and the owner's approval above the threshold set in Company Setup. AR-003: a
+        revenue figure, since GST collected is owed to IRAS rather than earned -- taken in full when
+        invoiced, never spread over the contract term. AR-002: write-offs
+        need a reason, and the owner's approval above the threshold set in Company Setup, and post the
+        bad debt to 6700 Bad debts written off (an expense account). AR-003: a
         disputed invoice is flagged but keeps aging normally -- nothing is put on hold.
       </p>
       {error && <div className="error-banner">{error}</div>}

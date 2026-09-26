@@ -48,6 +48,10 @@ class Posting
 
     public const EXPENSE_DEFAULT = '5000';
 
+    // Bad-debt write-offs (AR-002). Dennis, 2026-09-26: "It has to be an
+    // expenses account" -- the seeded 6700 "Bad debts written off".
+    public const BAD_DEBT_EXPENSE = '6700';
+
     private const REVENUE_BY_INVOICE_TYPE = [
         Invoice::TYPE_CONTRACT_ANNUAL => '4000',
         Invoice::TYPE_EXCESS_USAGE => '4010',
@@ -66,6 +70,8 @@ class Posting
     public const SOURCE_RECEIPT = 'payment'; // the receipt model is `Payment` (not yet converted)
 
     public const SOURCE_SUPPLIER_PAYMENT = 'supplier_payment';
+
+    public const SOURCE_WRITE_OFF = 'invoice_write_off';
 
     public static function accountByCode(string $companyId, string $code): Account
     {
@@ -192,12 +198,49 @@ class Posting
             $lines[] = self::line(self::accountByCode($cid, self::GST_OUTPUT), Money::of(0), $gst, "GST {$invoice->tax_code}");
         }
 
-        $entryDate = $invoice->issued_at ? Carbon::parse($invoice->issued_at) : Carbon::today();
+        // The Singapore date of the issue time -- not whatever zone the
+        // value happens to carry (before 2026-09-26 it came back in UTC,
+        // dating early-morning invoices a day early).
+        $entryDate = $invoice->issued_at
+            ? Carbon::parse($invoice->issued_at)->setTimezone(config('app.timezone'))
+            : Carbon::today();
 
         return self::post(
             companyId: $cid, voucherType: JournalEntry::TYPE_SALES_INVOICE, voucherNumber: $invoice->invoice_number,
             entryDate: $entryDate, narration: trim("Sales invoice {$invoice->invoice_number} — {$customerName}", ' —'),
             lines: $lines, sourceType: self::SOURCE_INVOICE, sourceId: $invoice->id,
+            actorUserId: $actorUserId, auditEntityType: 'invoice',
+        );
+    }
+
+    /**
+     * AR-002 write-off -- when an invoice's outstanding balance is
+     * written off as bad debt. Dr 6700 bad debts (an Expense account) /
+     * Cr 1100 AR, for the outstanding amount including its GST: GST
+     * bad-debt relief is a separate IRAS claim this does not make.
+     * A journal voucher dated the day of the write-off, linked to the
+     * invoice.
+     */
+    public static function postWriteOff(Invoice $invoice, Money $amount, ?string $actorUserId, string $reason): JournalEntry
+    {
+        $cid = $invoice->company_id;
+        $badDebt = self::accountByCode($cid, self::BAD_DEBT_EXPENSE);
+        if ($badDebt->account_type !== Account::TYPE_EXPENSE) {
+            throw new PostingError("GL account {$badDebt->code} {$badDebt->name} must be an Expense account to take bad-debt write-offs.");
+        }
+        $ar = self::accountByCode($cid, self::AR_CONTROL);
+        $today = Carbon::today();
+        $customerName = $invoice->customer?->name ?? '';
+
+        return self::post(
+            companyId: $cid, voucherType: JournalEntry::TYPE_JOURNAL,
+            voucherNumber: Numbering::next($cid, 'journal', $today),
+            entryDate: $today, narration: trim("Bad debt written off: {$invoice->invoice_number} {$customerName} — {$reason}"),
+            lines: [
+                self::line($badDebt, $amount, Money::of(0), "{$invoice->invoice_number} written off"),
+                self::line($ar, Money::of(0), $amount, trim("{$invoice->invoice_number} {$customerName}")),
+            ],
+            sourceType: self::SOURCE_WRITE_OFF, sourceId: $invoice->id,
             actorUserId: $actorUserId, auditEntityType: 'invoice',
         );
     }

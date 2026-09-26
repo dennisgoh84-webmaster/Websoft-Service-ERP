@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\PurchaseOrder;
+use App\Models\SupplierInvoice;
 use App\Models\User;
 use App\Services\PasswordPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -114,6 +115,27 @@ class PayablesTest extends TestCase
 
         $response->assertOk()->assertJson(['match_status' => 'not_matched', 'status' => 'awaiting_match']);
         $this->assertEqualsWithDelta(545.0, $response->json('total_amount_sgd'), 0.01);
+    }
+
+    public function test_an_old_amount_exception_can_be_matched_again_and_becomes_payable(): void
+    {
+        $company = Company::factory()->create();
+        [, $token] = $this->ownerToken($company);
+        $po = PurchaseOrder::factory()->for($company)->create(['status' => PurchaseOrder::STATUS_APPROVED, 'total_amount_sgd' => 1090]);
+        // Flagged under the rule before 4.5 was settled.
+        $bill = SupplierInvoice::factory()->for($company)->create([
+            'purchase_order_id' => $po->id, 'supplier_id' => $po->supplier_id,
+            'amount_sgd' => 2000, 'gst_amount_sgd' => 180, 'total_amount_sgd' => 2180,
+            'match_status' => SupplierInvoice::MATCH_EXCEPTION, 'status' => SupplierInvoice::STATUS_EXCEPTION,
+            'match_note' => 'PO total is SGD 1090.00 but the bill is SGD 2180.00.',
+        ]);
+
+        $this->postJson("/api/accounts-payable/bills/{$bill->id}/rematch", [], $this->headers($token))
+            ->assertOk()->assertJson(['status' => 'approved', 'match_status' => 'matched']);
+        $this->assertDatabaseHas('audit_log_entries', ['entity_type' => 'supplier_invoice', 'entity_id' => $bill->id, 'action' => 'rematched']);
+
+        // Only an exception can be matched again.
+        $this->postJson("/api/accounts-payable/bills/{$bill->id}/rematch", [], $this->headers($token))->assertStatus(409);
     }
 
     public function test_user_with_no_group_is_denied(): void

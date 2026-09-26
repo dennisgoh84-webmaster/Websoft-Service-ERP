@@ -25,21 +25,22 @@ use Illuminate\Support\Carbon;
 class PayablesService
 {
     /**
-     * PUR-001. With no threshold set (open item 4.4), everything needs
-     * the owner -- the safe reading of an undecided rule.
+     * PUR-001, with the limit set on the supplier's own Company /
+     * Individual file (Dennis, 2026-09-26). Up to the limit, anyone with
+     * authority may approve; above it -- or while the supplier has no
+     * limit set -- only the owner.
      */
-    public static function poNeedsOwnerApproval(string $companyId, Money $amount): bool
+    public static function poNeedsOwnerApproval(string $supplierId, Money $amount): bool
     {
-        $company = Company::find($companyId);
-        $threshold = $company?->po_approval_threshold_sgd;
-        if ($threshold === null) {
+        $limit = CompanyIndividual::find($supplierId)?->po_approval_limit_sgd;
+        if ($limit === null) {
             return true;
         }
 
-        return $amount->toFloat() > Money::of($threshold)->toFloat();
+        return $amount->toFloat() > Money::of($limit)->toFloat();
     }
 
-    /** PUR-001: approve a PO, respecting the value threshold. */
+    /** PUR-001: approve a PO, respecting the supplier's approval limit. */
     public static function approvePurchaseOrder(PurchaseOrder $po, User $actor): PurchaseOrder
     {
         if ($po->status === PurchaseOrder::STATUS_APPROVED) {
@@ -49,22 +50,20 @@ class PayablesService
             throw new PayablesRuleViolation('That purchase order was cancelled.');
         }
 
-        if (self::poNeedsOwnerApproval($po->company_id, Money::of($po->total_amount_sgd))) {
-            if ($actor->role !== User::ROLE_OWNER) {
-                $company = Company::find($po->company_id);
-                $threshold = $company?->po_approval_threshold_sgd;
-                if ($threshold === null) {
-                    throw new PayablesRuleViolation(
-                        'No purchase order approval threshold has been set, so every PO needs '.
-                        "the owner's approval (PUR-001). Set a threshold in Company Setup, or ".
-                        'ask the owner to approve this.'
-                    );
-                }
-                throw new PayablesRuleViolation(sprintf(
-                    'SGD %s is above the SGD %s approval threshold -- the owner must approve this purchase order (PUR-001).',
-                    Money::of($po->total_amount_sgd)->toString(), Money::of($threshold)->toString(),
-                ));
+        if (self::poNeedsOwnerApproval($po->supplier_id, Money::of($po->total_amount_sgd)) && $actor->role !== User::ROLE_OWNER) {
+            $supplier = CompanyIndividual::find($po->supplier_id);
+            $name = $supplier?->name ?? 'this supplier';
+            $limit = $supplier?->po_approval_limit_sgd;
+            if ($limit === null) {
+                throw new PayablesRuleViolation(
+                    "No purchase order approval limit is set for {$name}, so the owner must approve this PO (PUR-001). ".
+                    'Set a limit on its Company / Individual file, or ask the owner to approve it.'
+                );
             }
+            throw new PayablesRuleViolation(sprintf(
+                'SGD %s is above %s\'s SGD %s purchase order approval limit -- the owner must approve this purchase order (PUR-001).',
+                Money::of($po->total_amount_sgd)->toString(), $name, Money::of($limit)->toString(),
+            ));
         }
 
         $po->status = PurchaseOrder::STATUS_APPROVED;
@@ -100,9 +99,14 @@ class PayablesService
 
     /**
      * PUR-002 2-way match, and PUR-003's consequence. Compares the bill
-     * to its purchase order. Agreement auto-approves it for payment;
-     * disagreement records exactly what differs and leaves it as an
-     * exception for a human -- resolution is open item 4.5.
+     * to its purchase order.
+     *
+     * A different amount is NOT an exception (Dennis, 2026-09-26, open
+     * item 4.5): "I order 10, but delivery came 20... the bill is based
+     * on 20... pay based on 20 is ok." The bill is approved and paid on
+     * what it says, and the difference is written into its match note.
+     * Only a bill from a different supplier, or against a purchase order
+     * that is not approved, stays an exception for a person.
      */
     public static function matchBillToPo(SupplierInvoice $bill, ?string $actorUserId = null): SupplierInvoice
     {
@@ -128,16 +132,9 @@ class PayablesService
         if ($po->supplier_id !== $bill->supplier_id) {
             $problems[] = 'the bill is from a different supplier than the purchase order';
         }
-        if (Money::of($po->total_amount_sgd)->toFloat() !== Money::of($bill->total_amount_sgd)->toFloat()) {
-            $problems[] = sprintf(
-                'PO total is SGD %s but the bill is SGD %s',
-                Money::of($po->total_amount_sgd)->toString(), Money::of($bill->total_amount_sgd)->toString(),
-            );
-        }
         if ($po->status !== PurchaseOrder::STATUS_APPROVED) {
             $problems[] = "the purchase order is {$po->status}, not approved";
         }
-
         if ($problems !== []) {
             $note = implode('; ', $problems);
             $bill->match_status = SupplierInvoice::MATCH_EXCEPTION;
@@ -148,9 +145,16 @@ class PayablesService
             return $bill;
         }
 
+        $poTotal = Money::of($po->total_amount_sgd);
+        $billTotal = Money::of($bill->total_amount_sgd);
+        $variance = $poTotal->toFloat() === $billTotal->toFloat() ? '' : sprintf(
+            ' The bill (SGD %s) differs from the purchase order (SGD %s); it is approved and paid on the billed amount (open item 4.5).',
+            $billTotal->toString(), $poTotal->toString(),
+        );
+
         // PUR-002 satisfied -> PUR-003 auto-approves it for payment.
         $bill->match_status = SupplierInvoice::MATCH_MATCHED;
-        $bill->match_note = "Matched to {$po->po_number} (2-way, PUR-002); auto-approved (PUR-003).";
+        $bill->match_note = "Matched to {$po->po_number} (2-way, PUR-002); auto-approved (PUR-003).".$variance;
         $bill->status = SupplierInvoice::STATUS_APPROVED;
         $bill->save();
 

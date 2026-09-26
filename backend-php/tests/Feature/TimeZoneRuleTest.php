@@ -2,11 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Models\Account;
 use App\Models\BankAccount;
 use App\Models\Company;
+use App\Models\CompanyIndividual;
+use App\Models\Invoice;
 use App\Models\Prospect;
 use App\Models\ProspectActivity;
 use App\Models\Warehouse;
+use App\Services\Ledger;
+use App\Services\Posting;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -103,6 +108,52 @@ class TimeZoneRuleTest extends TestCase
         $this->assertSame($at, $epoch('SELECT created_at FROM prospect_activities WHERE id = ?', [$old->id]));
         $this->assertSame($at, $epoch('SELECT created_at FROM prospect_activities WHERE id = ?', [$new->id]), 'a right time is left alone');
         $this->assertDatabaseHas('audit_log_entries', ['entity_type' => 'system', 'action' => 'times_corrected']);
+    }
+
+    public function test_an_early_morning_invoice_posts_on_its_singapore_date(): void
+    {
+        [$invoice] = $this->earlyMorningInvoice();
+
+        $entry = Posting::postInvoice($invoice->fresh(), null);
+
+        $this->assertSame('2026-09-27', $entry->fresh()->entry_date->toDateString());
+    }
+
+    public function test_the_correction_moves_only_vouchers_dated_a_day_early(): void
+    {
+        [$invoice, $company] = $this->earlyMorningInvoice();
+        $early = Posting::postInvoice($invoice->fresh(), null);
+        DB::table('journal_entries')->where('id', $early->id)->update(['entry_date' => '2026-09-26']); // as the old clock dated it
+
+        // A manual voucher on the same day is not the invoice's and stays.
+        $manual = Ledger::createJournalEntry(
+            companyId: $company->id, entryDate: Carbon::parse('2026-09-26'), narration: 'Manual',
+            lines: [
+                ['account_id' => Account::where('company_id', $company->id)->where('code', '1000')->value('id'), 'debit_sgd' => 10],
+                ['account_id' => Account::where('company_id', $company->id)->where('code', '5000')->value('id'), 'credit_sgd' => 10],
+            ],
+        );
+
+        (require database_path('migrations/2026_09_30_002800_correct_early_sales_invoice_journal_dates.php'))->up();
+
+        $this->assertSame('2026-09-27', $early->fresh()->entry_date->toDateString());
+        $this->assertSame('2026-09-26', $manual->fresh()->entry_date->toDateString());
+        $this->assertDatabaseHas('audit_log_entries', ['entity_type' => 'journal_entry', 'entity_id' => $early->id, 'action' => 'entry_date_corrected']);
+    }
+
+    /** @return array{0: Invoice, 1: Company} issued 01:30 on 27 Sep in Singapore -- still the 26th in UTC */
+    private function earlyMorningInvoice(): array
+    {
+        $company = Company::factory()->create();
+        $customer = CompanyIndividual::factory()->for($company)->create();
+        $invoice = Invoice::create([
+            'company_id' => $company->id, 'customer_id' => $customer->id, 'invoice_number' => 'INV-TZ-1',
+            'invoice_type' => Invoice::TYPE_SALES, 'description' => 'Early bird',
+            'amount_sgd' => 100, 'tax_code' => 'SR', 'gst_rate' => 9, 'gst_amount_sgd' => 9, 'total_amount_sgd' => 109,
+        ]);
+        DB::table('invoices')->where('id', $invoice->id)->update(['issued_at' => '2026-09-27 01:30:00+08']);
+
+        return [$invoice, $company];
     }
 
     public function test_app_code_never_writes_times_in_utc(): void

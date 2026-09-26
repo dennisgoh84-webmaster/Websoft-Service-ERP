@@ -67,6 +67,22 @@ class CompanyIndividualTest extends TestCase
         $create->assertOk()->assertJson(['is_customer' => true, 'is_supplier' => true]);
     }
 
+    public function test_po_and_credit_note_approval_limits_are_kept_on_the_file_and_audited(): void
+    {
+        $company = Company::factory()->create();
+        $h = $this->authHeaders($this->ownerToken($company));
+
+        $id = $this->postJson('/api/company-individuals', [
+            'name' => 'Best Office Supplies Pte Ltd', 'is_supplier' => true, 'po_approval_limit_sgd' => 5000,
+        ], $h)->assertOk()->assertJson(['po_approval_limit_sgd' => 5000, 'credit_note_approval_limit_sgd' => null])->json('id');
+
+        $this->patchJson("/api/company-individuals/{$id}", ['credit_note_approval_limit_sgd' => 800, 'po_approval_limit_sgd' => null], $h)
+            ->assertOk()->assertJson(['po_approval_limit_sgd' => null, 'credit_note_approval_limit_sgd' => 800]);
+        $this->patchJson("/api/company-individuals/{$id}", ['po_approval_limit_sgd' => -1], $h)->assertStatus(422);
+
+        $this->assertDatabaseHas('audit_log_entries', ['entity_type' => 'customer', 'entity_id' => $id, 'action' => 'updated']);
+    }
+
     public function test_user_with_no_group_is_denied(): void
     {
         $company = Company::factory()->create();

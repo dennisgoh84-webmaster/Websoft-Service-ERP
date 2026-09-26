@@ -150,8 +150,11 @@ allowed because the prior one is marked reversed).
 
 ### 4.8 Out of scope for this iteration (recorded, not built)
 
-- **Write-off (AR-002) posting** — needs a bad-debt expense account;
-  none is seeded. Proposed `5100 Bad debts`. Open item.
+- ~~**Write-off (AR-002) posting**~~ — **built 2026-09-26:** Dr 6700
+  Bad debts written off (must be an Expense account) / Cr 1100 AR, a
+  journal voucher dated the write-off day (`Posting::postWriteOff`).
+- **Stock movements** — confirmed 2026-09-26 not to post; Finance makes
+  a month-end Journal Voucher instead.
 - **Credit notes** — no model exists yet (BILL-003 is a rule without a
   document). Out of scope.
 - **Project / hardware invoice types** — accounts mapped, no issuing

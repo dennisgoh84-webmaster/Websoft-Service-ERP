@@ -272,8 +272,6 @@ export interface Company {
   uen: string | null
   /** Null means "always require owner approval" -- no threshold set yet. */
   write_off_approval_threshold_sgd: number | null
-  credit_note_approval_threshold_sgd: number | null
-  po_approval_threshold_sgd: number | null
   /** 1-12. Labelled by the year it ENDS in: 7 means FY2027 = Jul 2026 - Jun 2027. */
   financial_year_start_month: number
   // This company's own outbound mailbox, for the customer-facing "Email
@@ -414,6 +412,9 @@ export interface CompanyIndividual {
   billing_notes: string | null
   /** Days from invoice date. Terms vary per customer; null = not agreed yet. */
   payment_terms_days: number | null
+  /** Approval limits for this party (2026-09-26). Null = the owner approves every one. */
+  po_approval_limit_sgd: number | null
+  credit_note_approval_limit_sgd: number | null
   /** Role flags (2026-09-12): a record can be a customer, a supplier, or
    * both -- Purchase Order/Accounts Payable pick from is_supplier=true
    * records here rather than a separate supplier file. */
@@ -562,6 +563,8 @@ export type CompanyIndividualFields = Partial<{
   memo: string | null
   billing_notes: string | null
   payment_terms_days: number | null
+  po_approval_limit_sgd: number | null
+  credit_note_approval_limit_sgd: number | null
   is_customer: boolean
   is_supplier: boolean
   data_expiry_date: string | null
@@ -2578,8 +2581,6 @@ export const api = {
       website?: string | null
       uen?: string | null
       write_off_approval_threshold_sgd?: number | null
-      credit_note_approval_threshold_sgd?: number | null
-      po_approval_threshold_sgd?: number | null
       financial_year_start_month?: number
       smtp_host?: string | null
       smtp_port?: number
@@ -3463,6 +3464,8 @@ export const api = {
     request<{ status: string; reversal_voucher: string }>(`/accounts-receivable/payments/${paymentId}/ungl`, {
       method: 'POST', body: JSON.stringify({ reason }),
     }),
+  /** Re-check a bill flagged as a matching exception against its PO (open item 4.5). */
+  rematchBill: (billId: string) => request<SupplierInvoice>(`/accounts-payable/bills/${billId}/rematch`, { method: 'POST' }),
   unglBill: (billId: string, reason: string) =>
     request<{ status: string; reversal_voucher: string }>(`/accounts-payable/bills/${billId}/ungl`, {
       method: 'POST', body: JSON.stringify({ reason }),

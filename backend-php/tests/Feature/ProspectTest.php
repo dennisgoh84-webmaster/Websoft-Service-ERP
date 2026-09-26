@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AuditLogEntry;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\CompanyModule;
@@ -170,6 +171,7 @@ class ProspectTest extends TestCase
         $this->getJson("/api/prospects/{$p['id']}", $h)->assertJson(['quoted_amount_sgd' => 3000]);
 
         $contractId = $this->postJson("/api/quotations/{$q['id']}/accept", [], $h)->assertOk()->json('quotation.converted_contract_id');
+        $this->getJson("/api/prospects/{$p['id']}", $h)->assertJson(['status' => 'won']);
         $this->postJson("/api/contracts/{$contractId}/activate", [], $h)->assertOk();
 
         $invoice = Invoice::where('contract_id', $contractId)->firstOrFail();
@@ -183,6 +185,36 @@ class ProspectTest extends TestCase
             'paid_amount_sgd' => 1000,
             'outstanding_amount_sgd' => (float) $invoice->total_amount_sgd - 1000,
         ])->assertJsonCount(1, 'invoices');
+    }
+
+    public function test_the_customer_accepting_a_quotation_wins_the_prospect(): void
+    {
+        [, $h] = $this->login(User::ROLE_OWNER);
+        $p = $this->newProspect($h);
+        $this->patchJson("/api/prospects/{$p['id']}", ['status' => 'lost', 'lost_reason' => 'Went quiet'], $h)->assertOk();
+        $q = $this->postJson('/api/quotations', [
+            'customer_id' => $this->customer->id, 'prospect_id' => $p['id'], 'quotation_date' => now()->toDateString(),
+            'lines' => [['description' => 'Hardware', 'quantity' => 1, 'unit_price_sgd' => 700]],
+        ], $h)->assertOk()->json();
+        foreach (['submit', 'approve', 'send'] as $step) {
+            $this->postJson("/api/quotations/{$q['id']}/{$step}", [], $h)->assertOk();
+        }
+        $this->getJson("/api/prospects/{$p['id']}", $h)->assertJson(['status' => 'lost']);
+
+        $this->postJson("/api/quotations/{$q['id']}/accept", [], $h)->assertOk();
+
+        $this->getJson("/api/prospects/{$p['id']}", $h)->assertJson(['status' => 'won', 'lost_reason' => null]);
+        $this->assertDatabaseHas('audit_log_entries', ['entity_type' => 'prospect', 'entity_id' => $p['id'], 'action' => 'won']);
+
+        // A quotation with no prospect accepts exactly as before.
+        $plain = $this->postJson('/api/quotations', [
+            'customer_id' => $this->customer->id, 'quotation_date' => now()->toDateString(),
+            'lines' => [['description' => 'Hardware', 'quantity' => 1, 'unit_price_sgd' => 100]],
+        ], $h)->assertOk()->json();
+        foreach (['submit', 'approve', 'send', 'accept'] as $step) {
+            $this->postJson("/api/quotations/{$plain['id']}/{$step}", [], $h)->assertOk();
+        }
+        $this->assertSame(1, AuditLogEntry::where('entity_type', 'prospect')->where('action', 'won')->count());
     }
 
     public function test_a_quotation_prospect_must_be_for_the_same_company_individual(): void

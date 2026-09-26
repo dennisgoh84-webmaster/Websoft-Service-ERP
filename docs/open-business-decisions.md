@@ -179,9 +179,11 @@ sub-detail is called out explicitly).
 
 2.7. **What is the value threshold above which a credit note requires
    Dennis's approval** (per BILL-003)?
-   **Status: STILL OPEN**, but not blocking: like the write-off
-   threshold, this is a configurable field in Company Setup, unset by
-   default, and while unset the owner approves.
+   **Status: DECIDED 2026-09-26.** "Credit Note limit should be set in
+   the company/individual file": each customer carries its own limit
+   on its Company / Individual file; blank means the owner approves.
+   Stored now -- credit notes have no document yet, so it applies once
+   they are built.
    *Arises in:* Billing.
 
 ## 3. Payments & Accounts Receivable
@@ -218,6 +220,10 @@ sub-detail is called out explicitly).
    configurable field in Company Setup rather than a hard-coded number.
    Until Dennis sets one, the system requires the **owner's approval for
    every write-off** — the safe reading of an undecided rule.
+   (2026-09-26, Dennis asked "Write off meaning bad debts?" -- yes:
+   writing an unpaid invoice's balance off as a bad debt. The amount is
+   still to be given. The account it posts to was settled the same day
+   -- 6700, an Expense account; see 4b.2.)
    *Arises in:* Accounts Receivable.
 
 ## 4. Purchasing & Accounts Payable
@@ -225,7 +231,8 @@ sub-detail is called out explicitly).
 4.1. **What purchase order approval thresholds apply?**
    **Status: PARTIALLY DECIDED — PUR-001.** Value-based: below a
    threshold, procurement/finance approve directly; above it, Dennis
-   approves. **Still OPEN:** the exact threshold (see item 4.4).
+   approves. **Settled 2026-09-26:** the threshold is per supplier (see
+   item 4.4).
    *Arises in:* Purchasing; Workflow F.
 
 4.2. **Is 2-way or 3-way matching required** for supplier invoices?
@@ -242,18 +249,22 @@ sub-detail is called out explicitly).
 
 4.4. **What is the value threshold above which a purchase order requires
    Dennis's approval** (per PUR-001)?
-   **Status: STILL OPEN**, but not blocking: a configurable field in
-   Company Setup, unset by default, owner approves while unset.
+   **Status: DECIDED 2026-09-26.** "Purchase Order Limit ... should be set
+   in the company/individual file": each supplier carries its own PO
+   approval limit on its Company / Individual file, replacing the
+   Company Setup threshold (a value already set there was copied onto
+   every Company / Individual). Blank means the owner approves.
    *Arises in:* Purchasing.
 
 4.5. **How are PO/invoice matching mismatches handled** under the PUR-002
    2-way match (e.g. price or quantity discrepancy)?
-   **Status: STILL OPEN, not blocking.** A mismatch (different supplier,
-   amount, or an unapproved PO) is recorded as an **exception** with the
-   specific discrepancy spelled out, and a bill in that state cannot be
-   paid. What happens next — who resolves it, whether it needs a revised
-   PO or a credit note — is not decided, so nothing beyond flagging it is
-   automated.
+   **Status: DECIDED 2026-09-26.** "It can be I order 10, but delivery
+   came 20... So the bill is based on 20... pay based on 20 is ok." A bill
+   whose amount differs from its PO is approved and paid on the billed
+   amount, with the difference noted on it. Only a bill from a different
+   supplier, or against a PO that is not approved, stays an exception;
+   Accounts Payable's **Match again** re-checks a bill flagged before
+   this rule.
    *Arises in:* Accounts Payable, Purchasing; Workflow F.
 
 ## 4b. Accounting & Finance (raised 2026-09-10 while building AR)
@@ -276,6 +287,10 @@ sub-detail is called out explicitly).
    so nothing posts on its own yet. Today the JV is manual: whoever
    raises it picks the accounts. Automatic posting from AR/AP/Billing
    is future work once this is confirmed.
+   **Update 2026-09-26:** the account map was fixed with GL posting (see
+   #38); the last piece, the **bad-debt write-off**, posts to **6700 Bad
+   debts written off**, an Expense account (Dennis: "It has to be
+   expenses account").
    *Arises in:* Finance / Accounting, Billing, Accounts Receivable.
 
 4b.3. **Is annual-upfront contract revenue deferred and released monthly,
@@ -284,6 +299,9 @@ sub-detail is called out explicitly).
    upfront is the classic deferred-revenue case and the two readings give
    very different monthly figures. A "Deferred revenue" account has been
    seeded but is unused pending this decision.
+   **Status: DECIDED 2026-09-26.** "When invoiced, take the revenue
+   accordingly, don't need spread." Revenue is taken in full on invoice
+   (BILL-005); nothing is deferred.
    *Arises in:* Finance / Accounting, Billing.
 
 4b.4. **How are GST returns (F5) prepared and filed**, and over what
@@ -1880,8 +1898,10 @@ Settled with Dennis the same day, all recommended options taken:
 
 This also resolves the long-standing open item **4b.2 (auto-posting accounts)** — the account map is fixed in `app/services/posting.py`; multi-currency (4b.5) stays open, posting is SGD-only.
 
-Still open, recorded in the design: bad-debt account for write-off
-posting (proposed `5100`); credit notes have no document yet; project and
+Still open, recorded in the design: ~~bad-debt account for write-off
+posting (proposed `5100`)~~ -- settled 2026-09-26 as 6700 Bad debts
+written off, an Expense account, and built; stock movements confirmed
+not to post (Finance's own month-end journal); credit notes have no document yet; project and
 hardware invoice types not issued yet. Design:
 [gl-posting-design.md](gl-posting-design.md).
 
@@ -2180,10 +2200,10 @@ each is one small change if Dennis wants it otherwise.
    Dennis: "Pipeline stages is good." A prospect moves New →
    Qualified → Proposal → Negotiation and closes as Won or Lost; the
    salesperson moves it by hand, Lost needs a reason, and every prospect
-   that was "Open" under the earlier default started at New. It still
-   does **not** turn Won by itself when a quotation is accepted — that
-   half of the question was not answered. *Still open: should accepting
-   a quotation mark the prospect Won?*
+   that was "Open" under the earlier default started at New. It also
+   turns **Won by itself when the customer accepts one of its
+   quotations** (settled the same day: "Yes") -- from any stage, even
+   Lost, recorded in Event Logs against the prospect.
 
 46.2. **Sales Supervisor sees what the Sales Manager sees — settled
    2026-09-26 ("No need").** The Supervisor sees every prospect and

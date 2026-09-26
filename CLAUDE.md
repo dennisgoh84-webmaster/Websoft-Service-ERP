@@ -588,15 +588,13 @@ Main Menu opens with a Sales section (Prospect / Leads, Prospect
 Activities); Module Control's `crm` key became `prospects`, carrying
 every company's and group's setting across. Two new roles, Sales
 Supervisor and Sales Staff: staff see their own prospects, the owner /
-Sales Manager / Supervisor all of them. Defaults taken where no rule
-was given (Open/Won/Lost, the Supervisor's reach, what counts as
-"quoted") are in docs/open-business-decisions.md #46. Two timestamp
-traps were closed on the way: `prospect_activities.activity_date` has
-no time zone and is read in Singapore time, so it takes `now()`, while
-the new models set `$timestamps = false` like most here, since
-Eloquent's own timestamps write the Singapore clock into UTC columns
-(eight hours ahead) -- the remaining models that still do are a known
-follow-up.
+Sales Manager / Supervisor all of them. Dennis settled the defaults
+the same day (docs/open-business-decisions.md #46): pipeline stages New
+-> Qualified -> Proposal -> Negotiation -> Won / Lost, the customer
+accepting a quotation marks its prospect Won, and an activity is never
+deleted, only voided with a reason. The eight-hours-ahead timestamp
+trap found while building it was then fixed at the root for the whole
+system -- see the time rule under Development Rules.
 
 **Data Migration landed 2026-09-25**
 ([docs/data-migration.md](docs/data-migration.md)): Maintenance → Data

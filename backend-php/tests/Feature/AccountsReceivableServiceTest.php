@@ -3,14 +3,17 @@
 namespace Tests\Feature;
 
 use App\Exceptions\ARRuleViolation;
+use App\Models\Account;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\Invoice;
+use App\Models\JournalEntry;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\AccountsReceivableService;
 use App\Services\BillingService;
 use App\Services\ContractService;
+use App\Services\Posting;
 use App\Support\Money;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -49,6 +52,39 @@ class AccountsReceivableServiceTest extends TestCase
         AccountsReceivableService::writeOffInvoice($invoice, $owner, 'Customer insolvent');
 
         $this->assertSame(Invoice::STATUS_WRITTEN_OFF, $invoice->fresh()->status);
+    }
+
+    public function test_a_write_off_posts_the_bad_debt_to_an_expense_account(): void
+    {
+        $company = Company::factory()->create();
+        $owner = User::factory()->for($company)->create(['role' => User::ROLE_OWNER]);
+        $invoice = $this->invoice($company, 1000);
+        $outstanding = $invoice->outstandingSgd()->toString();
+
+        AccountsReceivableService::writeOffInvoice($invoice, $owner, 'Customer insolvent');
+
+        $entry = JournalEntry::where('source_type', Posting::SOURCE_WRITE_OFF)->where('source_id', $invoice->id)->firstOrFail();
+        $this->assertSame(JournalEntry::STATUS_POSTED, $entry->status);
+        $lines = $entry->lines()->with('account')->get()->keyBy(fn ($l) => $l->account->code);
+        $this->assertSame(Account::TYPE_EXPENSE, $lines['6700']->account->account_type);
+        $this->assertSame($outstanding, Money::of($lines['6700']->debit_sgd)->toString(), 'Dr bad debts expense');
+        $this->assertSame($outstanding, Money::of($lines['1100']->credit_sgd)->toString(), 'Cr accounts receivable');
+    }
+
+    public function test_a_write_off_is_refused_whole_when_the_bad_debt_account_is_not_an_expense(): void
+    {
+        $company = Company::factory()->create();
+        Account::where('company_id', $company->id)->where('code', '6700')->update(['account_type' => Account::TYPE_ASSET]);
+        $owner = User::factory()->for($company)->create(['role' => User::ROLE_OWNER]);
+        $invoice = $this->invoice($company, 1000);
+
+        try {
+            AccountsReceivableService::writeOffInvoice($invoice, $owner, 'Customer insolvent');
+            $this->fail('Wrote off into a non-expense account');
+        } catch (ARRuleViolation $e) {
+            $this->assertStringContainsString('must be an Expense account', $e->getMessage());
+        }
+        $this->assertNotSame(Invoice::STATUS_WRITTEN_OFF, $invoice->fresh()->status, 'nothing half-done');
     }
 
     public function test_non_owner_cannot_write_off_when_no_threshold_is_set(): void

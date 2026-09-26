@@ -382,8 +382,11 @@ in [open-business-decisions.md](open-business-decisions.md).
 - Credit notes are approved by **finance or Cherish (Sales Manager)** for
   routine cases.
 - Credit notes above a value threshold are **escalated to Dennis** for
-  approval. The exact threshold is not yet specified (tracked as a new
-  open item).
+  approval. **Settled 2026-09-26:** the limit is set per customer, on
+  its Company / Individual file ("Credit Note limit should be set in the
+  company/individual file"); with none set, the owner approves every
+  credit note. Stored now; credit notes themselves are not built yet, so
+  it applies once they are.
 
 ### BILL-004 — Project Billing Method — CONFIRMED
 
@@ -394,10 +397,11 @@ in [open-business-decisions.md](open-business-decisions.md).
 ### BILL-005 — Revenue Recognition — CONFIRMED
 
 - Revenue is recognized **on invoice** — i.e. when the invoice is issued
-  — for contracts, projects, and hardware sales alike. This is the
-  simplest approach and may be revisited later for formal accounting
-  standards (e.g. spreading contract revenue over its term), but is the
-  confirmed starting rule.
+  — for contracts, projects, and hardware sales alike. **Confirmed again
+  2026-09-26 for annual upfront contracts** ("When invoiced, take the
+  revenue accordingly, don't need spread"): nothing is deferred or
+  released monthly, so the seeded 2300 Deferred revenue account stays
+  unused.
 
 ### BILL-006 — Quotation Approval — CONFIRMED
 
@@ -423,6 +427,11 @@ in [open-business-decisions.md](open-business-decisions.md).
 - **Finance can write off small amounts directly.**
 - Write-offs above a threshold require **Dennis's approval**. The exact
   threshold is not yet specified (tracked as a new open item).
+- **Posting, settled 2026-09-26** ("It has to be expenses account"): a
+  write-off posts Dr **6700 Bad debts written off** (an Expense account)
+  / Cr 1100 Accounts receivable for the outstanding amount, as a journal
+  voucher dated the day of the write-off. GST bad-debt relief is a
+  separate IRAS claim this does not make.
 
 ### AR-003 — Disputed Invoice Handling — CONFIRMED
 
@@ -439,8 +448,11 @@ in [open-business-decisions.md](open-business-decisions.md).
 
 - PO approval is **value-based**: purchase orders below a threshold can
   be approved by procurement/finance staff directly; above the threshold,
-  Dennis's approval is required. The exact threshold is not yet specified
-  (tracked as a new open item).
+  Dennis's approval is required. **Settled 2026-09-26:** the limit is set
+  per supplier, on its Company / Individual file ("Purchase Order Limit
+  … should be set in the company/individual file"), replacing the single
+  Company Setup threshold. With no limit set on a supplier, the owner
+  approves every PO to it.
 
 ### PUR-002 — Supplier Invoice Matching — CONFIRMED
 
@@ -452,8 +464,22 @@ in [open-business-decisions.md](open-business-decisions.md).
 
 - A supplier invoice is **auto-approved for payment once it matches** the
   PO (per PUR-002) — no separate manual approval step is required beyond
-  that match succeeding. A mismatch is handled as an exception (process
-  not yet decided — see [open-business-decisions.md](open-business-decisions.md)).
+  that match succeeding.
+- **A different amount is not an exception — settled 2026-09-26** ("I
+  order 10, but delivery came 20… the bill is based on 20… pay based on
+  20 is ok"). The bill is approved and paid on the billed amount, and
+  the difference is written into its match note. Only a bill from a
+  different supplier, or against a purchase order that is not approved,
+  is held as an exception; a bill flagged before this rule can be
+  matched again from Accounts Payable.
+
+### PUR-004 / INV-003 — Stock movements do not post to the General Ledger — CONFIRMED (2026-09-26)
+
+- Dennis: "No movements don't go the GL. They will do their own journal
+  adjustment on a monthly closing basis." Goods receipts, issues,
+  transfers, returns and adjustments move stock quantities and average
+  cost only; the inventory / cost-of-goods figures are brought into the
+  General Ledger by Finance's own month-end Journal Voucher.
 
 ## Inventory & Hardware Business Rules (CONFIRMED)
 
@@ -815,7 +841,9 @@ Outstanding." And: "There should not be any CRM from here."
 - **Pipeline stages** (confirmed 2026-09-26, "Pipeline stages is
   good"): New → Qualified → Proposal → Negotiation, closing as **Won**
   or **Lost** (Lost needs a reason). The salesperson moves the prospect
-  along by hand.
+  along by hand, except that **the customer accepting one of its
+  quotations marks it Won** (confirmed 2026-09-26: "Yes"), from any
+  stage, recorded in Event Logs.
 - **Activities are never deleted** (confirmed 2026-09-26: "should not
   allow them to delete, only can change status to VOID"). A mistaken
   activity is voided with a reason -- who voided it and when are kept,

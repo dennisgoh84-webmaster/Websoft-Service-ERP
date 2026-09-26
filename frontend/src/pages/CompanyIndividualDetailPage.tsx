@@ -55,6 +55,8 @@ function emptyForm() {
     memo: '',
     billing_notes: '',
     payment_terms_days: '',
+    po_approval_limit_sgd: '',
+    credit_note_approval_limit_sgd: '',
     data_expiry_date: '',
   }
 }
@@ -168,6 +170,8 @@ export default function CompanyIndividualDetailPage() {
           memo: c.memo ?? '',
           billing_notes: c.billing_notes ?? '',
           payment_terms_days: c.payment_terms_days === null ? '' : String(c.payment_terms_days),
+          po_approval_limit_sgd: c.po_approval_limit_sgd === null ? '' : String(c.po_approval_limit_sgd),
+          credit_note_approval_limit_sgd: c.credit_note_approval_limit_sgd === null ? '' : String(c.credit_note_approval_limit_sgd),
           data_expiry_date: c.data_expiry_date ?? '',
         })
         setDataExpiryDraft(c.data_expiry_date ?? '')
@@ -277,6 +281,9 @@ export default function CompanyIndividualDetailPage() {
         memo: form.memo || null,
         billing_notes: form.billing_notes || null,
         payment_terms_days: form.payment_terms_days === '' ? null : parseInt(form.payment_terms_days, 10),
+        po_approval_limit_sgd: form.po_approval_limit_sgd === '' ? null : parseFloat(form.po_approval_limit_sgd),
+        credit_note_approval_limit_sgd:
+          form.credit_note_approval_limit_sgd === '' ? null : parseFloat(form.credit_note_approval_limit_sgd),
       })
       refresh()
     } catch (err) {
@@ -770,6 +777,35 @@ export default function CompanyIndividualDetailPage() {
               onChange={(e) => setForm((p) => ({ ...p, payment_terms_days: e.target.value }))}
               placeholder="Leave blank if not yet agreed"
             />
+          </div>
+          <div className="form-row">
+            <label>Purchase order approval limit (SGD)</label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.po_approval_limit_sgd}
+              onChange={(e) => setForm((p) => ({ ...p, po_approval_limit_sgd: e.target.value }))}
+              placeholder="Blank: the owner approves every purchase order"
+            />
+            <p className="muted" style={{ margin: '4px 0 0' }}>
+              A purchase order to this supplier up to this amount (incl. GST) can be approved by staff with authority; above it,
+              only the owner.
+            </p>
+          </div>
+          <div className="form-row">
+            <label>Credit note approval limit (SGD)</label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.credit_note_approval_limit_sgd}
+              onChange={(e) => setForm((p) => ({ ...p, credit_note_approval_limit_sgd: e.target.value }))}
+              placeholder="Blank: the owner approves every credit note"
+            />
+            <p className="muted" style={{ margin: '4px 0 0' }}>
+              Recorded now; it applies once credit notes are built.
+            </p>
           </div>
           <div className="form-row">
             <label>Terms &amp; conditions (shown on orders)</label>

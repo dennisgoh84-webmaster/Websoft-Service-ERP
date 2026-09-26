@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\ARRuleViolation;
+use App\Exceptions\PostingError;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\Invoice;
@@ -11,6 +12,7 @@ use App\Models\PaymentAllocation;
 use App\Models\User;
 use App\Support\Money;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Accounts Receivable business logic. Mirrors
@@ -109,8 +111,18 @@ class AccountsReceivableService
             ));
         }
 
-        $invoice->status = Invoice::STATUS_WRITTEN_OFF;
-        $invoice->save();
+        // The bad debt reaches the General Ledger as an expense (Dennis,
+        // 2026-09-26): Dr 6700 / Cr 1100 for what was still owed. Both or
+        // neither: an invoice is never left written off without its entry.
+        DB::transaction(function () use ($invoice, $outstanding, $actor, $reason) {
+            $invoice->status = Invoice::STATUS_WRITTEN_OFF;
+            $invoice->save();
+            try {
+                Posting::postWriteOff($invoice, $outstanding, $actor->id, trim($reason));
+            } catch (PostingError $e) {
+                throw new ARRuleViolation($e->getMessage());
+            }
+        });
 
         return $invoice;
     }

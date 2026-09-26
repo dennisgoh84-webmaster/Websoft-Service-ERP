@@ -230,6 +230,43 @@ class SupplierInvoiceController extends Controller
         return response()->json($this->present($bill->fresh()));
     }
 
+    /**
+     * Match a bill that is still an exception against its purchase
+     * order again -- for the bills flagged before open item 4.5 was
+     * settled (a different amount alone no longer holds a bill back).
+     * A bill still from the wrong supplier, or against an unapproved
+     * PO, stays an exception.
+     */
+    public function rematch(Request $request, string $billId)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'edit');
+        $bill = $this->billOrFail($user->company_id, $billId);
+        if ($bill->status !== SupplierInvoice::STATUS_EXCEPTION) {
+            throw new ApiException(409, "{$bill->bill_number} is not a matching exception, so there is nothing to match again.");
+        }
+
+        try {
+            DB::transaction(function () use ($bill, $user) {
+                $oldNote = $bill->match_note;
+                PayablesService::matchBillToPo($bill, $user->id);
+                Audit::record(
+                    entityType: 'supplier_invoice',
+                    entityId: $bill->id,
+                    action: 'rematched',
+                    actorUserId: $user->id,
+                    details: "{$bill->bill_number}: {$bill->match_note}",
+                    oldValue: ['status' => SupplierInvoice::STATUS_EXCEPTION, 'match_note' => $oldNote],
+                    newValue: ['status' => $bill->status, 'match_status' => $bill->match_status],
+                );
+            });
+        } catch (PayablesRuleViolation $e) {
+            throw new ApiException(422, $e->getMessage());
+        }
+
+        return response()->json($this->present($bill->fresh()));
+    }
+
     /** ACC-004: UNGL -- reverse this bill's GL posting. */
     public function ungl(Request $request, string $billId)
     {

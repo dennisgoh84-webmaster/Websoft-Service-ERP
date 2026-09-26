@@ -50,6 +50,16 @@ export default function AccountsPayablePage() {
     finally { setBusyBillId(null) }
   }
 
+  async function onRematchBill(b: SupplierInvoice) {
+    setBusyBillId(b.id); setError(null); setMessage(null)
+    try {
+      const r = await api.rematchBill(b.id)
+      setMessage(r.status === 'exception' ? `${b.bill_number} is still an exception: ${r.match_note}` : `${b.bill_number} matched and approved for payment.`)
+      refresh()
+    } catch (err) { setError(err instanceof Error ? err.message : 'Match again failed') }
+    finally { setBusyBillId(null) }
+  }
+
   function refresh() {
     // 2026-09-12: a supplier is a Company/Individual record flagged
     // is_supplier=true -- managed on that page, just read here.
@@ -116,10 +126,12 @@ export default function AccountsPayablePage() {
     <div>
       <h1>Accounts Payable</h1>
       <p className="muted">
-        Money owed to suppliers. PUR-001: purchase orders above the threshold set in Company Setup
-        need the owner's approval -- with none set, every PO does. PUR-002: a bill is matched to its
-        purchase order only (2-way, no goods receipt). PUR-003: a match auto-approves it for
-        payment; a mismatch becomes an exception that a person must resolve.
+        Money owed to suppliers. PUR-001: a purchase order above the approval limit on the supplier's
+        Company / Individual file needs the owner's approval -- with no limit set, every PO does. PUR-002:
+        a bill is matched to its purchase order only (2-way, no goods receipt). PUR-003: a match
+        auto-approves it for payment, and is paid on the billed amount even when that differs from the
+        PO (e.g. more was delivered than ordered); only a bill from another supplier, or against an
+        unapproved PO, is held as an exception.
       </p>
       {error && <div className="error-banner">{error}</div>}
       {message && (
@@ -281,6 +293,9 @@ export default function AccountsPayablePage() {
                     </span>
                     {b.gl_status === 'posted' && (
                       <>{' '}<button className="secondary" disabled={busyBillId === b.id} onClick={() => onUnglBill(b)} title="Reverse the GL posting (needs a reason)">UNGL</button></>
+                    )}
+                    {b.status === 'exception' && (
+                      <>{' '}<button className="secondary" disabled={busyBillId === b.id} onClick={() => onRematchBill(b)} title="Check this bill against its purchase order again">Match again</button></>
                     )}
                   </td>
                   <td>

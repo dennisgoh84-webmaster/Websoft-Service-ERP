@@ -25,6 +25,7 @@ Route::middleware('auth.jwt')->prefix('accounts-payable')->group(function () {
     Route::post('/bills', [SupplierInvoiceController::class, 'store']);
     Route::get('/bills/{bill}', [SupplierInvoiceController::class, 'show']);
     Route::post('/bills/{bill}/ungl', [SupplierInvoiceController::class, 'ungl']);
+    Route::post('/bills/{bill}/rematch', [SupplierInvoiceController::class, 'rematch']);
 
     Route::get('/payments', [SupplierPaymentController::class, 'index']);
     Route::get('/payments/export.csv', [SupplierPaymentController::class, 'exportCsv']);

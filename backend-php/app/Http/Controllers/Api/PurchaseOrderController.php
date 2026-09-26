@@ -179,7 +179,7 @@ class PurchaseOrderController extends Controller
 
         $po = DB::transaction(function () use ($user, $data) {
             [$_taxCode, $_rate, $gst, $total] = Tax::applyGst($user->company_id, Money::of($data['amount_sgd']));
-            $needsOwner = PayablesService::poNeedsOwnerApproval($user->company_id, $total);
+            $needsOwner = PayablesService::poNeedsOwnerApproval($data['supplier_id'], $total);
 
             $po = PurchaseOrder::create([
                 'company_id' => $user->company_id,

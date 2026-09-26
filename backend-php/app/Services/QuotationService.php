@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Exceptions\ContractRuleViolation;
 use App\Exceptions\QuotationRuleViolation;
 use App\Models\Contract;
+use App\Models\Prospect;
 use App\Models\Quotation;
 use App\Models\QuotationLine;
 use App\Models\User;
@@ -232,6 +233,7 @@ class QuotationService
         // put approval before sending; this keeps acceptance after it).
         self::requireStatus($quotation, [Quotation::STATUS_SENT], 'accepted');
         $quotation->status = Quotation::STATUS_ACCEPTED;
+        self::markProspectWon($quotation, $actorUserId);
 
         $hourlyLines = $quotation->lines->filter(fn ($line) => self::isHourly($line->unit_of_measure));
         $otherLines = $quotation->lines->reject(fn ($line) => self::isHourly($line->unit_of_measure));
@@ -290,6 +292,38 @@ class QuotationService
         Audit::record('quotation', $quotation->id, 'accepted', $actorUserId, details: $message);
 
         return $message;
+    }
+
+    /**
+     * The customer accepting a quotation wins its prospect (Dennis,
+     * 2026-09-26, decision 46.1: "Yes"). Whatever stage it was at --
+     * even Lost -- it becomes Won; an already-Won prospect is left as it
+     * is. Audited on the prospect with the quotation that won it.
+     */
+    private static function markProspectWon(Quotation $quotation, string $actorUserId): void
+    {
+        if ($quotation->prospect_id === null) {
+            return;
+        }
+        $prospect = Prospect::find($quotation->prospect_id);
+        if ($prospect === null || $prospect->status === Prospect::STATUS_WON) {
+            return;
+        }
+
+        $old = ['status' => $prospect->status, 'lost_reason' => $prospect->lost_reason];
+        $prospect->status = Prospect::STATUS_WON;
+        $prospect->lost_reason = null;
+        $prospect->last_edited_by_user_id = $actorUserId;
+        $prospect->updated_at = Carbon::now();
+        $prospect->save();
+
+        Audit::record(
+            'prospect', $prospect->id, 'won', $actorUserId,
+            companyId: $prospect->company_id,
+            details: "Quotation {$quotation->quotation_number} accepted by the customer",
+            oldValue: $old,
+            newValue: ['status' => Prospect::STATUS_WON],
+        );
     }
 
     /**

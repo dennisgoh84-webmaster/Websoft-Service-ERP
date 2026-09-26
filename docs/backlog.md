@@ -299,9 +299,20 @@ shipped and when.
   built 2026-09-26 (SALES-009 / SALES-010 in business-requirements.md).
   Replaces the "CRM" activities. Dennis confirmed the defaults
   2026-09-26 -- pipeline stages, the Supervisor sees everything,
-  "quoted" = sent to the customer, activities voided never deleted --
-  except whether an accepted quotation marks the prospect Won:
+  "quoted" = sent to the customer, activities voided never deleted,
+  and (answered the same day) the customer accepting a quotation marks
+  its prospect Won:
   [open-business-decisions.md #46](open-business-decisions.md#46-prospect--leads-defaults-taken-raised-and-built-2026-09-26).
+- [x] **Accounting answers built 2026-09-26** -- PO and credit note
+  approval limits now live on each Company / Individual file (4.4, 2.7;
+  credit notes themselves still unbuilt); a bill for a different amount
+  than its PO is approved and paid on the billed amount, with a Match
+  again action for bills flagged before (4.5); revenue on invoice, no
+  deferral (4b.3); stock movements never post to the GL (month-end
+  journal instead); write-offs post Dr 6700 Bad debts written off / Cr
+  1100 AR; sales invoice vouchers the old UTC clock dated a day early
+  moved to their Singapore date (migration 2026_09_30_002800, each in
+  Event Logs). Still open: the write-off approval amount (3.4).
 - [x] **Times stored eight hours ahead -- fixed 2026-09-26, including
   the stored data.** With `APP_TIMEZONE=Asia/Singapore` and a UTC
   database session, every time the app wrote itself (Eloquent's
@@ -531,8 +542,8 @@ shipped and when.
   `cost_sgd`, so Sales GP shows a measured margin on them.
   Verified end to end against the running app, not only by tests.
   **Deliberately NOT done:** no COGS/inventory journal is posted --
-  whether stock movements post to the GL is still an open question
-  below, and this was not the place to answer it quietly.
+  confirmed as the rule 2026-09-26: stock movements never post to the
+  GL; Finance makes its own month-end journal adjustment.
   → [php-conversion-plan.md](php-conversion-plan.md)
 
 - [x] **Maintenance / Company-Individual batch** -- built 2026-09-15

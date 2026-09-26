@@ -34,6 +34,7 @@ class CompanyFactory extends Factory
         ['4010', 'Excess usage revenue', Account::TYPE_REVENUE],
         ['4030', 'Hardware sales', Account::TYPE_REVENUE],
         ['5000', 'Cost of services', Account::TYPE_EXPENSE],
+        ['6700', 'Bad debts written off', Account::TYPE_EXPENSE],
     ];
 
     public function definition(): array
