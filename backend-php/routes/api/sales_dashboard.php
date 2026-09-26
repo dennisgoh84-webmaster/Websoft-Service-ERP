@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth.jwt')->prefix('sales-dashboard')->group(function () {
     Route::get('/summary', [SalesDashboardController::class, 'summary']);
+    Route::get('/salespeople', [SalesDashboardController::class, 'salespeople']);
 
     Route::get('/ar-breakdown', [SalesDashboardController::class, 'arBreakdown']);
     Route::get('/ar-breakdown/export.csv', [SalesDashboardController::class, 'exportArBreakdownCsv']);

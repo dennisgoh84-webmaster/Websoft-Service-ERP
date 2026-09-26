@@ -171,6 +171,8 @@ sudo ./deploy/install-selftest.sh dennis@example.com
 │             ├── /portal    → React SPA (customer portal)    │
 │             └── /api/*     → backend-php :8000              │
 │    :8000  backend-php (Laravel; internal only)              │
+│           scheduler (same image, `schedule:work`): 08:45    │
+│             overdue-approval email, Email Inbox every 5 min │
 │    :5432  PostgreSQL websoft_service_erp (internal only)    │
 │                                                             │
 │  Central Command stack (separate repo)                      │

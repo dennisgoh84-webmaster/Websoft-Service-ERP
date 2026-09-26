@@ -1923,7 +1923,7 @@ can supply: DBS / UOB and insurer page sources, the Odoo / ZSOFT exports,
 an HTTPS address, Twilio credentials, the advert videos, and values to
 key in (commission rate, per-customer limits, accounting periods).
 
-## 50. Sales / Service batch: questions on the decision page (raised 2026-09-26)
+## 50. Sales / Service batch: questions on the decision page (raised and answered 2026-09-26)
 
 From 2026-09-26, open questions go on one page, **Websoft Decisions**
 (https://claude.ai/artifact/Rk2LsEp9qDcqggjqstJeTv), with the
@@ -1939,7 +1939,20 @@ Raised there for the Sales / Service batch:
 - 12.1: where existing Software Tasks land in the new statuses, and who
   may mark one Released.
 
-The answers are recorded here once submitted.
+**Answered 2026-09-26** (Dennis kept the recommendation on seven and
+changed one):
+
+| Question | Answer |
+|---|---|
+| 11.2: when is the Sales Invoice for product lines raised? | **Straight away on acceptance** (changed from the recommendation). The Sales Invoice is issued the moment the quotation is accepted, and stock leaves the warehouse picked on Accept. |
+| 11.2: which lines are product lines? | **Lines whose catalog product is a Product.** Service-type items and free-text lines stay with the contract. |
+| SRV-019: how is the daily overdue email sent? | **A timer added to the server**: a scheduler service in the server setup, added by the upgrade script. |
+| SRV-019: at what time? | **8:45 am**, only on days when at least one Service Record is overdue. |
+| 12.2: who sees which salesperson cards? | **Managers see all, staff see their own** (owner, Sales Manager and Sales Supervisor see all). |
+| 12.2: whose card does work count on? | **The prospect's salesperson.** Work with no prospect goes on a "No prospect" card. |
+| (default taken) What period do the salesperson cards cover? | Prospects by stage show the pipeline as it stands; quoted, billed and paid cover the dashboard's financial year, like its other figures. A sales-role user with no work yet still gets an empty card. *To confirm.* |
+| 12.1: where do existing Software Tasks land? | **By what they show today**: tested ones become Tested; untested ones past their finish date become For Testing; the rest become Open. Each move is logged in Event Logs. |
+| 12.1: who may mark Released? | **Anyone with EDIT on Software Development**, and only from Tested. |
 
 ## How to use this document
 

@@ -94,6 +94,55 @@ class SoftwareTaskTest extends TestCase
         $this->assertNull($task->fresh()->tested_at);
     }
 
+    public function test_a_task_moves_through_the_statuses_and_released_is_final(): void
+    {
+        $company = Company::factory()->create();
+        $h = $this->headers($this->ownerToken($company));
+        $task = SoftwareTask::create(['company_id' => $company->id, 'title' => 'Aging report fix']);
+        $this->assertSame(SoftwareTask::STATUS_OPEN, $task->fresh()->status);
+        $move = fn (string $to) => $this->postJson("/api/software-tasks/{$task->id}/status", ['status' => $to], $h);
+
+        // Released only from Tested.
+        $move('released')->assertStatus(409);
+        $move('programming')->assertOk()->assertJsonPath('status', 'programming')->assertJsonPath('next_statuses', ['for_testing', 'open']);
+        $move('for_testing')->assertOk();
+        $move('programming')->assertOk(); // failed its test
+        $move('for_testing')->assertOk();
+        $move('tested')->assertOk()->assertJsonPath('is_tested', true);
+        $released = $move('released')->assertOk()->assertJsonPath('status', 'released')->assertJsonPath('is_tested', true)->json();
+        $this->assertNotNull($released['released_at']);
+        $this->assertNotNull($task->fresh()->released_by_user_id);
+
+        $move('for_testing')->assertStatus(409);
+        $this->postJson("/api/software-tasks/{$task->id}/reopen-testing", [], $h)->assertStatus(409);
+        $this->assertDatabaseHas('audit_log_entries', ['entity_type' => 'software_task', 'entity_id' => $task->id, 'action' => 'status_changed']);
+        $this->getJson('/api/software-tasks?status=released', $h)->assertOk()->assertJsonCount(1);
+    }
+
+    public function test_programmer_cards_count_open_overdue_and_awaiting_test(): void
+    {
+        $company = Company::factory()->create();
+        $h = $this->headers($this->ownerToken($company));
+        $bob = User::factory()->for($company)->create(['full_name' => 'Bob Lim']);
+        $make = fn (string $status, ?string $finish = null, ?string $who = null) => SoftwareTask::create([
+            'company_id' => $company->id, 'title' => 't', 'status' => $status, 'assigned_programmer_id' => $who ?? $bob->id,
+            'programming_finish_date' => $finish, 'programming_hours' => 2,
+        ]);
+        $make('open');
+        $make('programming', now()->subDay()->toDateString()); // overdue
+        $make('for_testing');
+        $make('tested');   // done: not counted
+        $make('released');
+        SoftwareTask::create(['company_id' => $company->id, 'title' => 'nobody', 'status' => 'open']);
+
+        $cards = collect($this->getJson('/api/software-tasks/programmers', $h)->assertOk()->json())->keyBy('name');
+        $this->assertSame(2, $cards['Bob Lim']['open']);
+        $this->assertSame(1, $cards['Bob Lim']['overdue']);
+        $this->assertSame(1, $cards['Bob Lim']['awaiting_test']);
+        $this->assertEquals(6, $cards['Bob Lim']['hours']);
+        $this->assertSame(1, $cards['No programmer']['open']);
+    }
+
     public function test_update_records_only_changed_fields(): void
     {
         $company = Company::factory()->create();

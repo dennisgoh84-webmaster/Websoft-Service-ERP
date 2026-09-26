@@ -310,8 +310,72 @@ export const prospect = {
   },
 }
 
+/** PATCH as the signed-in user -- setup a flow needs that is not what it tests. */
+async function apiPatch(page, apiPath, body) {
+  const token = await page.evaluate(() => localStorage.getItem('websoft_token') || localStorage.getItem('token'))
+  const res = await page.request.patch(`/api${apiPath}`, { headers: { Authorization: `Bearer ${token}` }, data: body })
+  if (!res.ok()) throw new Error(`PATCH ${apiPath} -> ${res.status()}`)
+  return res.json()
+}
+
+// Decision 11.2 (2026-09-26): accepting issues a Sales Invoice for the
+// product lines straight away, taking stock from the warehouse picked.
+export const quotationProductInvoice = {
+  name: 'Quotation with a stock product: Accept picks the warehouse and issues the Sales Invoice',
+  screen: '/quotations',
+  needs: ['customer', 'warehouse', 'stockItem'],
+  async run({ page, profileName, shared }) {
+    const t = tag(profileName)
+    // A Product-type catalog item, kept in stock as the self-test's stock item.
+    await open(page, '/product-catalog')
+    const pf = card(page, 'Add catalog item')
+    await keyIn(pf, 'Type', 'Product')
+    await keyIn(pf, 'Product name', `Selftest router ${t}`)
+    await keyIn(pf, 'Internal reference', `RT-${t}`)
+    await keyIn(pf, 'Sales price (SGD, net of GST)', '80')
+    await keyIn(pf, 'Unit of measure', 'Unit')
+    await submit(page, button(pf, 'Add item'), '/api/catalog')
+    const product = rows(await apiGet(page, '/catalog')).find((x) => x.name === `Selftest router ${t}`)
+    expectStored('Catalog type', product?.product_type, 'product')
+    await apiPatch(page, `/stock/items/${shared.stockItem.id}`, { product_id: product.id })
+    const levelBefore = rows(await apiGet(page, `/stock/levels?warehouse_id=${shared.warehouse.id}`)).find((x) => x.stock_item_id === shared.stockItem.id)
+    const before = Number(levelBefore?.quantity ?? 0)
+
+    await open(page, '/quotations')
+    const f = card(page, 'New quotation')
+    await keyIn(f, 'Company / Individual', shared.customer.name)
+    await keyIn(f, 'Notes', `Selftest product quotation ${t}`)
+    const line = f.locator('tbody tr').filter({ has: page.locator('input') }).nth(0).locator('td')
+    await selectByText(line.nth(0).locator('select'), product.name)
+    await line.nth(3).locator('input').fill('2')
+    const created = await submit(page, button(f, 'Create quotation (Draft)'), '/api/quotations')
+    let q = await apiGet(page, `/quotations/${created.id}`)
+    const row = () => page.locator('tr', { hasText: q.quotation_number })
+    for (const label of ['Submit for approval', 'Approve', 'Send to customer']) {
+      await submit(page, button(row(), label), `/api/quotations/${q.id}/`)
+    }
+    q = await apiGet(page, `/quotations/${q.id}`)
+    expectStored('Line is a product line', q.lines[0].is_product_line, 'true')
+    expectStored('Line takes stock', q.lines[0].is_stock_line, 'true')
+
+    // Accept asks which warehouse the stock leaves from, then issues the invoice.
+    await button(row(), 'Accept').click()
+    const panel = card(page, `Accept ${q.quotation_number}`)
+    await keyIn(panel, 'Stock leaves from', shared.warehouse.code)
+    await submit(page, button(panel, 'Accept and issue invoice'), `/api/quotations/${q.id}/accept`)
+    q = await apiGet(page, `/quotations/${q.id}`)
+    expectStored('Status', q.status, 'accepted')
+    if (!q.converted_invoice_id) throw new Error('Accepting did not issue the Sales Invoice for the product line.')
+    expectStored('No Annual contract for a product-only quotation', q.converted_annual_contract_id, '')
+    const inv = await apiGet(page, `/invoices/${q.converted_invoice_id}`)
+    expectStored('Invoice net (2 x 80)', Number(inv.amount_sgd).toFixed(2), '160.00')
+    const after = rows(await apiGet(page, `/stock/levels?warehouse_id=${shared.warehouse.id}`)).find((x) => x.stock_item_id === shared.stockItem.id)
+    expectStored('Stock after acceptance', Number(after?.quantity ?? 0), String(before - 2))
+  },
+}
+
 export const softwareTask = {
-  name: 'Software Task: add with programmer, tester, date and hours',
+  name: 'Software Task: add with programmer, tester, date and hours; move it to Released',
   screen: '/software-tasks',
   async run({ page, profileName }) {
     const t = tag(profileName)
@@ -333,5 +397,14 @@ export const softwareTask = {
     expectStored('Target finish date', sgDateOf(task.programming_finish_date), finish.iso)
     expectStored('Programming hours', Number(task.programming_hours), '3.5')
     if (!task.assigned_programmer_id || !task.tester_user_id) throw new Error('Programmer or tester was not stored.')
+    expectStored('Status of a new task', task.status, 'open')
+
+    // Decision 12.1: Open -> Programming -> For Testing -> Tested -> Released, from the row's buttons.
+    const row = () => page.locator('tr', { hasText: `Selftest export fix ${t}` })
+    for (const [label, status] of [['Start programming', 'programming'], ['Send for testing', 'for_testing'], ['Mark tested', 'tested'], ['Release', 'released']]) {
+      await submit(page, button(row(), label), `/api/software-tasks/${task.id}/status`)
+      const now = rows(await apiGet(page, '/software-tasks')).find((x) => x.id === task.id)
+      expectStored(`Status after "${label}"`, now.status, status)
+    }
   },
 }

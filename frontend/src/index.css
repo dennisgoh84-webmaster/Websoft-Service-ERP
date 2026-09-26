@@ -1650,3 +1650,48 @@ button.date-input-calendar {
   border-radius: 6px;
   background: var(--surface);
 }
+
+/* Sales Dashboard: per-salesperson cards (decision 12.2). */
+.salesperson-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.salesperson-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface);
+}
+.stage-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.stage-chip {
+  font-size: 0.78em;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--neutral-bg);
+  color: var(--text);
+}
+.stage-chip.empty {
+  opacity: 0.45;
+}
+.salesperson-figures {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.salesperson-figures dt {
+  color: var(--text-muted);
+}
+.salesperson-figures dd {
+  margin: 0;
+  text-align: right;
+}

@@ -10,9 +10,12 @@ Route::middleware('auth.jwt')->prefix('software-tasks')->group(function () {
     Route::get('/export.csv', [SoftwareTaskController::class, 'exportCsv']);
     Route::get('/export.xlsx', [SoftwareTaskController::class, 'exportExcel']);
 
+    Route::get('/programmers', [SoftwareTaskController::class, 'programmers']);
+
     Route::get('', [SoftwareTaskController::class, 'index']);
     Route::post('', [SoftwareTaskController::class, 'store']);
     Route::patch('/{taskId}', [SoftwareTaskController::class, 'update']);
     Route::post('/{taskId}/mark-tested', [SoftwareTaskController::class, 'markTested']);
     Route::post('/{taskId}/reopen-testing', [SoftwareTaskController::class, 'reopenTesting']);
+    Route::post('/{taskId}/status', [SoftwareTaskController::class, 'changeStatus']);
 });

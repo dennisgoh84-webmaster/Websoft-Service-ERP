@@ -20,8 +20,9 @@ use Illuminate\Support\Facades\DB;
  * Software Tasks. Mirrors backend/app/routers/software_tasks.py 1:1.
  *
  * Gated on `software_development`. Confirmed 2026-09-10 as a minimal
- * first slice: no status workflow beyond is_tested / mark-tested /
- * reopen-testing.
+ * first slice (is_tested / mark-tested / reopen-testing); statuses added
+ * 2026-09-26 (decision 12.1) -- see SoftwareTask::TRANSITIONS and
+ * changeStatus(), plus the per-programmer cards in programmers().
  *
  * Converting this module closes three things recorded elsewhere as
  * gaps: Support Monitoring's "Un-Test S/T" placeholder zero, the
@@ -36,7 +37,7 @@ class SoftwareTaskController extends Controller
     /** @var array<int, string> */
     private const EXPORT_FIELDS = [
         'title', 'modules_affected', 'assigned_programmer', 'programming_finish_date',
-        'programming_hours', 'tester', 'is_tested',
+        'programming_hours', 'tester', 'is_tested', 'status',
     ];
 
     public function index(Request $request)
@@ -167,26 +168,60 @@ class SoftwareTaskController extends Controller
         return response()->json($this->out($task->refresh()));
     }
 
+    /** Mark tested -- from Open, Programming or For Testing (the button that predates statuses). */
     public function markTested(Request $request, string $taskId)
     {
-        return $this->setTested($request, $taskId, true, 'marked_tested');
+        return $this->moveTo($request, $taskId, SoftwareTask::STATUS_TESTED,
+            [SoftwareTask::STATUS_OPEN, SoftwareTask::STATUS_PROGRAMMING, SoftwareTask::STATUS_FOR_TESTING], 'marked_tested');
     }
 
+    /** Reopen testing -- Tested back to For Testing. */
     public function reopenTesting(Request $request, string $taskId)
     {
-        return $this->setTested($request, $taskId, false, 'testing_reopened');
+        return $this->moveTo($request, $taskId, SoftwareTask::STATUS_FOR_TESTING, [SoftwareTask::STATUS_TESTED], 'testing_reopened');
     }
 
-    private function setTested(Request $request, string $taskId, bool $tested, string $action)
+    /**
+     * Move a task to another status along SoftwareTask::TRANSITIONS
+     * (decision 12.1). Released is final and needs EDIT, like every move.
+     */
+    public function changeStatus(Request $request, string $taskId)
+    {
+        $status = $request->validate(['status' => ['required', 'string', 'in:'.implode(',', SoftwareTask::STATUSES)]])['status'];
+
+        return $this->moveTo($request, $taskId, $status, array_keys(array_filter(
+            SoftwareTask::TRANSITIONS, fn ($to) => in_array($status, $to, true),
+        )), 'status_changed');
+    }
+
+    /** @param list<string> $allowedFrom */
+    private function moveTo(Request $request, string $taskId, string $status, array $allowedFrom, string $action)
     {
         $user = Authenticate::user($request);
         Authority::requireModuleAccess($user, self::MODULE, GroupModuleAuthority::EDIT);
-
         $task = $this->taskOrFail($user->company_id, $taskId);
 
-        DB::transaction(function () use ($task, $user, $tested, $action) {
+        $from = $task->status;
+        if (! in_array($from, $allowedFrom, true)) {
+            throw new ApiException(409, sprintf('A task that is %s cannot move to %s.', self::STATUS_LABELS[$from] ?? $from, self::STATUS_LABELS[$status] ?? $status));
+        }
+
+        DB::transaction(function () use ($task, $user, $status, $from, $action) {
+            $now = Carbon::now();
+            $task->status = $status;
+            $task->status_changed_at = $now;
+            $tested = in_array($status, [SoftwareTask::STATUS_TESTED, SoftwareTask::STATUS_RELEASED], true);
+            if ($tested && ! $task->is_tested) {
+                $task->tested_at = $now;
+            }
+            if (! $tested) {
+                $task->tested_at = null;
+            }
             $task->is_tested = $tested;
-            $task->tested_at = $tested ? Carbon::now() : null;
+            if ($status === SoftwareTask::STATUS_RELEASED) {
+                $task->released_at = $now;
+                $task->released_by_user_id = $user->id;
+            }
             $task->save();
 
             Audit::record(
@@ -194,10 +229,49 @@ class SoftwareTaskController extends Controller
                 entityId: $task->id,
                 action: $action,
                 actorUserId: $user->id,
+                companyId: $task->company_id,
+                details: sprintf('"%s": %s -> %s', $task->title, self::STATUS_LABELS[$from] ?? $from, self::STATUS_LABELS[$status]),
+                oldValue: ['status' => $from],
+                newValue: ['status' => $status],
             );
         });
 
         return response()->json($this->out($task->refresh()));
+    }
+
+    private const STATUS_LABELS = [
+        SoftwareTask::STATUS_OPEN => 'Open',
+        SoftwareTask::STATUS_PROGRAMMING => 'Programming',
+        SoftwareTask::STATUS_FOR_TESTING => 'For Testing',
+        SoftwareTask::STATUS_TESTED => 'Tested',
+        SoftwareTask::STATUS_RELEASED => 'Released',
+    ];
+
+    /**
+     * Per-programmer cards (decision 12.1 / 12.3): each programmer's
+     * open tasks (Open or Programming), the overdue ones among every
+     * task not yet Tested (finish date passed), and those awaiting test.
+     */
+    public function programmers(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, GroupModuleAuthority::VIEW);
+
+        $today = Carbon::today();
+        $tasks = SoftwareTask::where('company_id', $user->company_id)
+            ->whereNotIn('status', [SoftwareTask::STATUS_TESTED, SoftwareTask::STATUS_RELEASED])->get();
+        $names = User::whereIn('id', $tasks->pluck('assigned_programmer_id')->filter()->unique())->pluck('full_name', 'id');
+
+        $cards = $tasks->groupBy(fn (SoftwareTask $t) => $t->assigned_programmer_id ?? 'none')->map(fn ($group, $id) => [
+            'programmer_id' => $id === 'none' ? null : $id,
+            'name' => $id === 'none' ? 'No programmer' : ($names[$id] ?? 'Unknown'),
+            'open' => $group->whereIn('status', [SoftwareTask::STATUS_OPEN, SoftwareTask::STATUS_PROGRAMMING])->count(),
+            'awaiting_test' => $group->where('status', SoftwareTask::STATUS_FOR_TESTING)->count(),
+            'overdue' => $group->filter(fn (SoftwareTask $t) => $t->programming_finish_date !== null && $t->programming_finish_date->lt($today))->count(),
+            'hours' => (float) $group->sum(fn (SoftwareTask $t) => (float) ($t->programming_hours ?? 0)),
+        ])->sortBy(fn ($c) => [$c['programmer_id'] === null, $c['name']])->values();
+
+        return response()->json($cards);
     }
 
     private function taskOrFail(string $companyId, string $taskId): SoftwareTask
@@ -244,6 +318,9 @@ class SoftwareTaskController extends Controller
         if ($request->boolean('untested_only')) {
             $query->where('is_tested', false);
         }
+        if (($status = $request->query('status')) && in_array($status, SoftwareTask::STATUSES, true)) {
+            $query->where('status', $status);
+        }
 
         return $query->orderByDesc('created_at')->get();
     }
@@ -266,6 +343,7 @@ class SoftwareTaskController extends Controller
             'programming_hours' => $t->programming_hours === null ? '' : (string) $t->programming_hours,
             'tester' => $names[$t->tester_user_id] ?? '',
             'is_tested' => $t->is_tested,
+            'status' => self::STATUS_LABELS[$t->status] ?? $t->status,
         ])->all();
     }
 
@@ -283,6 +361,9 @@ class SoftwareTaskController extends Controller
             'programming_hours' => $t->programming_hours === null ? null : (float) $t->programming_hours,
             'tester_user_id' => $t->tester_user_id,
             'is_tested' => $t->is_tested,
+            'status' => $t->status,
+            'next_statuses' => SoftwareTask::TRANSITIONS[$t->status] ?? [],
+            'released_at' => $t->released_at?->toJSON(),
             'tested_at' => $t->tested_at?->toJSON(),
             'created_at' => $t->created_at?->toJSON(),
         ];

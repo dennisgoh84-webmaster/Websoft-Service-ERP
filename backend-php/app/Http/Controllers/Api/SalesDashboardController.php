@@ -58,6 +58,20 @@ class SalesDashboardController extends Controller
         ]);
     }
 
+    /** Per-salesperson cards (decision 12.2): managers see every card, anyone else only their own. */
+    public function salespeople(Request $request)
+    {
+        $user = Authenticate::user($request);
+        Authority::requireModuleAccess($user, self::MODULE, 'view');
+        $year = $request->filled('year') ? (int) $request->query('year') : null;
+
+        return response()->json([
+            'financial_year' => $year ?? SalesDashboardService::currentFinancialYear($user->company_id),
+            'sees_all' => $user->seesAllProspects(),
+            'cards' => SalesDashboardService::salespersonCards($user, $year),
+        ]);
+    }
+
     private const AR_HEADERS = ['Invoice Number', 'Company / Individual', 'Due Date', 'Outstanding (SGD)', 'Aging Bucket'];
 
     public function arBreakdown(Request $request)

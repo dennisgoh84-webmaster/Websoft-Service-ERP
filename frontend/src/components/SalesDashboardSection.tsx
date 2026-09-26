@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom'
 import {
   api,
   downloadBlob,
+  type ProspectStatus,
   type SalesDashboardArRow,
+  type SalespersonCard,
   type SalesDashboardBottomCustomerRow,
   type SalesDashboardSummary,
   type SalesDashboardTopCustomerRow,
@@ -32,11 +34,13 @@ export default function SalesDashboardSection() {
   const [drillDownBucket, setDrillDownBucket] = useState<string | null>(null)
   const [drillDownRows, setDrillDownRows] = useState<SalesDashboardArRow[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [people, setPeople] = useState<{ sees_all: boolean; cards: SalespersonCard[] } | null>(null)
 
   function refresh() {
     api.salesDashboardSummary().then(setSummary).catch((e) => setSummaryError(e instanceof Error ? e.message : 'Failed to load'))
     api.salesDashboardTopBillingCustomers().then(setTopCustomers).catch(() => setTopCustomers([]))
     api.salesDashboardBottomNonActiveCustomers().then(setBottomCustomers).catch(() => setBottomCustomers([]))
+    api.salesDashboardSalespeople().then(setPeople).catch(() => setPeople(null))
   }
 
   useEffect(refresh, [])
@@ -157,6 +161,21 @@ export default function SalesDashboardSection() {
         </div>
       )}
 
+      {people && people.cards.length > 0 && (
+        <div className="card">
+          <h2 style={{ marginTop: 0 }}>{people.sees_all ? 'By salesperson' : 'My figures'}</h2>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Prospects by stage as they stand today; quoted, billed and paid for FY{summary?.financial_year ?? ''}. Work counts on
+            its prospect's salesperson.
+          </p>
+          <div className="salesperson-grid">
+            {people.cards.map((c) => (
+              <SalespersonCardView key={c.salesperson_user_id ?? c.kind} card={c} />
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2>Top 10 Sales Billing Customer ({summary?.financial_year ?? new Date().getFullYear()})</h2>
@@ -244,6 +263,48 @@ export default function SalesDashboardSection() {
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+const STAGES: { key: ProspectStatus; label: string }[] = [
+  { key: 'new', label: 'New' },
+  { key: 'qualified', label: 'Qualified' },
+  { key: 'proposal', label: 'Proposal' },
+  { key: 'negotiation', label: 'Negotiation' },
+  { key: 'won', label: 'Won' },
+  { key: 'lost', label: 'Lost' },
+]
+
+function SalespersonCardView({ card: c }: { card: SalespersonCard }) {
+  const prospectsLink = c.salesperson_user_id ? `/prospects?salesperson_user_id=${c.salesperson_user_id}` : '/prospects'
+  return (
+    <div className="salesperson-card" data-testid="salesperson-card">
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
+        <strong>{c.name}</strong>
+        {c.kind !== 'no_prospect' && (
+          <Link to={prospectsLink} className="muted" style={{ fontSize: '0.85em' }}>
+            {c.open_prospects} open
+          </Link>
+        )}
+      </div>
+      {c.kind !== 'no_prospect' && (
+        <div className="stage-row">
+          {STAGES.map((st) => (
+            <span key={st.key} className={`stage-chip${c.prospects_by_stage[st.key] ? '' : ' empty'}`}>
+              {st.label} <b>{c.prospects_by_stage[st.key] ?? 0}</b>
+            </span>
+          ))}
+        </div>
+      )}
+      <dl className="salesperson-figures">
+        <dt>Quoted</dt>
+        <dd>{money(c.quoted_sgd)}</dd>
+        <dt>Billed</dt>
+        <dd>{money(c.billed_sgd)}</dd>
+        <dt>Paid</dt>
+        <dd>{money(c.paid_sgd)}</dd>
+      </dl>
     </div>
   )
 }

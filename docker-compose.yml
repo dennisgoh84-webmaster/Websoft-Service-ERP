@@ -83,6 +83,25 @@ services:
       migrate-php:
         condition: service_completed_successfully
 
+  # The server's timer (Dennis, 2026-09-26: "Add a timer to the
+  # server"). Runs Laravel's scheduler -- routes/console.php lists what
+  # runs when: the 08:45 overdue-approval reminder (SRV-019) and the
+  # Email Inbox check every five minutes. Same image and settings as the
+  # backend; it serves no requests.
+  scheduler:
+    build: ./backend-php
+    restart: unless-stopped
+    entrypoint: []
+    command: ["php", "artisan", "schedule:work"]
+    environment: *backend_php_env
+    volumes:
+      - uploads_data:/var/www/html/storage/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate-php:
+        condition: service_completed_successfully
+
   frontend:
     build: ./frontend
     restart: unless-stopped

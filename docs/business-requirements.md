@@ -289,6 +289,14 @@ resolves the remaining Service Operations items from that document: 1.1,
   Nothing is auto-approved and nothing is blocked — the flag is a
   prompt, not an enforcement (pragmatic default: Dennis gave the
   deadline, not a consequence).
+- **Daily reminder email at 8:45 am** (Dennis, 2026-09-26, decision
+  9.1 / #50: "Flag + email the approvers", "Add a timer to the
+  server"). On any day with overdue records, each active Service Lead
+  and Sales Manager gets one email listing them (record, Job Order,
+  customer, engineer, days waiting). It is sent from the system
+  mailbox, and nothing goes out on a day with none overdue. Each send,
+  or skip, is recorded in Event Logs. The server's `scheduler` service
+  runs it.
 - Excess-usage review (SRV-004 / SRV-011) is unchanged by this rule:
   it is about the treatment of excess hours, not the approval of the
   record.
@@ -782,6 +790,13 @@ conversion" note on this set of rules). Decision record:
   not-available.~~ **Closed 2026-09-15** by SALES-008 below: the two
   tiles count `pending_approval` and `sent` quotations respectively.
 
+- **Per-salesperson cards** (Dennis, 2026-09-26, decision 12.2 / #50).
+  Each salesperson's card shows their prospects by stage, and what they
+  quoted, billed and got paid in the financial year. Work counts on its
+  prospect's salesperson; work with no prospect goes on a "No prospect"
+  card. The owner, Sales Manager and Sales Supervisor see every card;
+  anyone else sees only their own.
+
 ### SALES-008 — Quotation status model — CONFIRMED (2026-09-15)
 
 - Dennis, 2026-09-15: "Quotation status to clarify." Settled on the
@@ -799,8 +814,8 @@ conversion" note on this set of rules). Decision record:
     approval in the system.
   - **Send to customer** (approved → sent): requires approval first.
   - **Accept** (sent → accepted): only a quotation the customer has
-    actually been sent can be accepted; the accept-to-Contract
-    conversion (11.1) is unchanged.
+    actually been sent can be accepted. What it creates is set out in
+    SALES-011.
   - **To revise** (sent → `to_revise`, with what the customer asked to
     change) — Dennis, 2026-09-15: "the status come back is Accepted /
     Rejected / To Revise". Quotation lines are not editable once
@@ -818,6 +833,30 @@ conversion" note on this set of rules). Decision record:
 - The Sales Dashboard's "Quotations Pending Approval" = count of
   `pending_approval`; "Pending Confirmation by Client" = count of
   `sent`. Each tile opens the Quotations list filtered to that status.
+
+### SALES-011 — What accepting a quotation creates — CONFIRMED and built (2026-09-26)
+
+- **Product lines → a Sales Invoice, issued on acceptance** (Dennis,
+  2026-09-26, decision 11.2: "Straight away on acceptance"). A product
+  line is one whose catalog item is **Product**-type (hardware, a
+  licence sold outright); Service-type items and free-text lines are
+  not.
+  - The invoice is issued the moment the quotation is accepted, through
+    the same path as Raise Sales Invoice (GST, numbering, due date, GL
+    posting).
+  - A product kept in stock takes its stock from the warehouse picked
+    on Accept, at weighted average cost. If any warehouse is short, the
+    whole acceptance is refused and nothing changes; stock is never
+    negative.
+  - A product line's quantity must be whole.
+  - A non-stock product line carries the quotation line's cost, so its
+    gross profit is known.
+  - The invoice carries the quotation's prospect, and the quotation
+    records the invoice.
+- **Hour lines → one Service Support contract; every other line → one
+  Annual contract**, as confirmed 2026-09-10 (11.1). A renewal
+  quotation renews its contract with those lines, and its product
+  lines are invoiced as above.
 
 ### SALES-009 — Prospect / Leads — CONFIRMED and built (2026-09-26)
 
@@ -949,6 +988,28 @@ supporting reports also… all use the data that is kept inside."
   correction to a return already filed as a GST F7; this records the
   corrected figures, it does not file anything.) Revise is for whoever
   may submit -- FULL on GST and Account Period (confirmed 2026-09-26).
+
+## Software Tasks
+
+### DEV-001 — Software Task statuses — CONFIRMED and built (2026-09-26)
+
+- **Statuses** (Dennis, 2026-09-26, decision 12.1 / #50): a task goes
+  **Open → Programming → For Testing → Tested → Released**. Open may go
+  straight to For Testing. A failed test sends a task from For Testing
+  back to Programming, and a Tested task can be reopened for testing.
+- **Released** means the change has gone out. It can only follow
+  Tested, and it is final.
+- **Who moves a task:** anyone with EDIT on Software Development, for
+  every move including Released. Each move is recorded in Event Logs.
+- **Tasks that already existed** were placed by what they showed:
+  - tested ones became Tested;
+  - untested ones past their finish date became For Testing;
+  - the rest became Open.
+- **Per-programmer cards** on Software Tasks show each programmer's
+  open tasks, overdue ones (past the finish date and not yet tested)
+  and ones awaiting test (decision 12.3).
+- Support Monitoring's "Un-Tested S/T" still counts every task not yet
+  Tested or Released.
 
 ## Conceptual Business Entities
 

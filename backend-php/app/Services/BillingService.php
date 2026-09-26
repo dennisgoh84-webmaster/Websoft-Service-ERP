@@ -197,6 +197,10 @@ class BillingService
                 'unit_of_measure' => $line['unit_of_measure'] ?? null,
                 'unit_price_sgd' => $unitPrice->toString(),
                 'line_amount_sgd' => $amount->toString(),
+                // A known unit cost for a line that moves no stock (a
+                // quotation line's cost, decision #32); a stock line's
+                // cost always comes from the stock it takes instead.
+                'known_unit_cost' => isset($line['unit_cost_sgd']) && $line['unit_cost_sgd'] !== null ? Money::of($line['unit_cost_sgd']) : null,
             ];
         }
 
@@ -214,6 +218,14 @@ class BillingService
         // transaction, a refusal on line 3 unwinds lines 1 and 2 and
         // the invoice with them.
         foreach ($prepared as $row) {
+            $knownUnitCost = $row['known_unit_cost'];
+            unset($row['known_unit_cost']);
+            if ($row['stock_item_id'] === null && $knownUnitCost !== null) {
+                $row['unit_cost_sgd'] = $knownUnitCost->toString();
+                $row['cost_amount_sgd'] = $knownUnitCost->multipliedBy($row['quantity'])->quantize()->toString();
+                $cost = $cost->plus(Money::of($row['cost_amount_sgd']));
+                $anyCostKnown = true;
+            }
             if ($row['stock_item_id'] !== null) {
                 if ($row['warehouse_id'] === null) {
                     throw new BillingRuleViolation(

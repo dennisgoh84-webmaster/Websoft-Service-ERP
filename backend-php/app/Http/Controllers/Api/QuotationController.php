@@ -17,6 +17,7 @@ use App\Models\Prospect;
 use App\Models\Quotation;
 use App\Models\QuotationLine;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\DocxForms;
@@ -86,6 +87,9 @@ class QuotationController extends Controller
             'total_amount_sgd' => (float) $quotation->total_amount_sgd,
             'converted_contract_id' => $quotation->converted_contract_id,
             'converted_annual_contract_id' => $quotation->converted_annual_contract_id,
+            // Decision 11.2: the Sales Invoice issued for its product lines on acceptance.
+            'converted_invoice_id' => $quotation->converted_invoice_id,
+            'converted_invoice_number' => $quotation->convertedInvoice?->invoice_number,
             'created_at' => optional($quotation->created_at)->toJSON(),
             'submitted_at' => optional($quotation->submitted_at)->toJSON(),
             'approved_at' => optional($quotation->approved_at)->toJSON(),
@@ -114,6 +118,11 @@ class QuotationController extends Controller
                 'line_total_sgd' => (float) $l->line_total_sgd,
                 'reference_code_id' => $l->reference_code_id,
                 'cost_sgd' => $l->cost_sgd !== null ? (float) $l->cost_sgd : null,
+                // What Accept will do with the line (only worked out while
+                // it can still be accepted): a product line goes on the
+                // Sales Invoice, and a stock line also needs a warehouse.
+                'is_product_line' => $quotation->status === Quotation::STATUS_SENT ? QuotationService::isProductLine($l) : null,
+                'is_stock_line' => $quotation->status === Quotation::STATUS_SENT ? QuotationService::stockItemFor($l) !== null : null,
             ])->values(),
         ];
     }
@@ -427,10 +436,15 @@ class QuotationController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'edit');
 
         $quotation = $this->quotationOrFail($user->company_id, $quotationId);
+        // The warehouse stock lines leave from, when the quotation has any (decision 11.2).
+        $warehouseId = $request->validate(['warehouse_id' => 'sometimes|nullable|uuid'])['warehouse_id'] ?? null;
+        if ($warehouseId !== null && ! Warehouse::where('company_id', $user->company_id)->whereKey($warehouseId)->exists()) {
+            throw new ApiException(422, 'That warehouse is not one of this company\'s.');
+        }
 
         try {
-            $message = DB::transaction(function () use ($quotation, $user) {
-                $msg = QuotationService::acceptQuotation($quotation, $user->id);
+            $message = DB::transaction(function () use ($quotation, $user, $warehouseId) {
+                $msg = QuotationService::acceptQuotation($quotation, $user->id, $warehouseId);
                 $quotation->save();
 
                 return $msg;

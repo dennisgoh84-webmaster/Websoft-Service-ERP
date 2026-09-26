@@ -1,14 +1,41 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import ExportControl from '../components/ExportControl'
-import { api, downloadBlob, type CurrentUser, type SoftwareTask } from '../lib/api'
+import { api, downloadBlob, type CurrentUser, type ProgrammerCard, type SoftwareTask, type SoftwareTaskStatus } from '../lib/api'
 import DateInput from '../components/DateInput'
 import { formatDate } from '../lib/format'
+
+// Decision 12.1 (Dennis, 2026-09-26): Open -> Programming -> For Testing -> Tested -> Released.
+const STATUS_LABEL: Record<SoftwareTaskStatus, string> = {
+  open: 'Open',
+  programming: 'Programming',
+  for_testing: 'For Testing',
+  tested: 'Tested',
+  released: 'Released',
+}
+const STATUS_BADGE: Record<SoftwareTaskStatus, string> = {
+  open: 'status-not-started',
+  programming: 'status-in-progress',
+  for_testing: 'status-watch',
+  tested: 'active',
+  released: 'renewed',
+}
+// The button that moves a task to each status.
+const MOVE_LABEL: Record<SoftwareTaskStatus, string> = {
+  open: 'Back to Open',
+  programming: 'Start programming',
+  for_testing: 'Send for testing',
+  tested: 'Mark tested',
+  released: 'Release',
+}
 
 export default function SoftwareTasksPage() {
   const [tasks, setTasks] = useState<SoftwareTask[]>([])
   const [users, setUsers] = useState<CurrentUser[]>([])
   const [error, setError] = useState<string | null>(null)
   const [untestedOnly, setUntestedOnly] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<SoftwareTaskStatus | ''>('')
+  const [programmers, setProgrammers] = useState<ProgrammerCard[]>([])
+  const [busy, setBusy] = useState<string | null>(null)
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -19,11 +46,15 @@ export default function SoftwareTasksPage() {
   const [testerId, setTesterId] = useState('')
 
   function refresh() {
-    api.listSoftwareTasks({ untested_only: untestedOnly }).then(setTasks).catch((e) => setError(e.message))
+    api
+      .listSoftwareTasks({ untested_only: untestedOnly, status: statusFilter || undefined })
+      .then(setTasks)
+      .catch((e) => setError(e.message))
     api.listUsers().then(setUsers).catch((e) => setError(e.message))
+    api.softwareTaskProgrammers().then(setProgrammers).catch(() => setProgrammers([]))
   }
 
-  useEffect(refresh, [untestedOnly])
+  useEffect(refresh, [untestedOnly, statusFilter])
 
   const userName = (id: string | null) => (id ? users.find((u) => u.id === id)?.full_name ?? id.slice(0, 8) : null)
 
@@ -63,14 +94,16 @@ export default function SoftwareTasksPage() {
     }
   }
 
-  async function onToggleTested(task: SoftwareTask) {
+  async function onMove(task: SoftwareTask, to: SoftwareTaskStatus) {
     setError(null)
+    setBusy(task.id)
     try {
-      if (task.is_tested) await api.reopenSoftwareTaskTesting(task.id)
-      else await api.markSoftwareTaskTested(task.id)
+      await api.moveSoftwareTask(task.id, to)
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update task')
+    } finally {
+      setBusy(null)
     }
   }
 
@@ -135,9 +168,41 @@ export default function SoftwareTasksPage() {
         </form>
       </div>
 
+      {programmers.length > 0 && (
+        <div className="card">
+          <h2 style={{ marginTop: 0 }}>By programmer</h2>
+          <p className="muted" style={{ marginTop: 0 }}>Tasks not yet tested: open, past their finish date, and waiting for a tester.</p>
+          <div className="salesperson-grid">
+            {programmers.map((p) => (
+              <div key={p.programmer_id ?? 'none'} className="salesperson-card" data-testid="programmer-card">
+                <strong>{p.name}</strong>
+                <dl className="salesperson-figures">
+                  <dt>Open</dt>
+                  <dd>{p.open}</dd>
+                  <dt>Overdue</dt>
+                  <dd>{p.overdue > 0 ? <span className="badge exceeded">{p.overdue}</span> : 0}</dd>
+                  <dt>Awaiting test</dt>
+                  <dd>{p.awaiting_test}</dd>
+                  <dt>Hours</dt>
+                  <dd>{p.hours}</dd>
+                </dl>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2>Tasks ({tasks.length})</h2>
+          <select aria-label="Status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as SoftwareTaskStatus | '')}>
+            <option value="">All statuses</option>
+            {(Object.keys(STATUS_LABEL) as SoftwareTaskStatus[]).map((st) => (
+              <option key={st} value={st}>
+                {STATUS_LABEL[st]}
+              </option>
+            ))}
+          </select>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
             <input type="checkbox" checked={untestedOnly} onChange={(e) => setUntestedOnly(e.target.checked)} />
             Un-tested only
@@ -178,16 +243,26 @@ export default function SoftwareTasksPage() {
                   <td>{t.programming_hours ?? <span className="muted">-</span>}</td>
                   <td>{userName(t.tester_user_id) ?? <span className="muted">-</span>}</td>
                   <td>
-                    <span className={`badge ${t.is_tested ? 'active' : 'draft'}`}>
-                      {t.is_tested ? 'Tested' : 'Un-tested'}
-                    </span>
+                    <span className={`badge ${STATUS_BADGE[t.status]}`}>{STATUS_LABEL[t.status]}</span>
+                    {t.released_at && <div className="muted" style={{ fontSize: '0.8em' }}>{formatDate(t.released_at)}</div>}
                   </td>
                   <td>
-                    {t.tester_user_id && (
-                      <button className="secondary" onClick={() => onToggleTested(t)}>
-                        {t.is_tested ? 'Reopen testing' : 'Mark tested'}
-                      </button>
-                    )}
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {t.next_statuses.map((to) => (
+                        <button
+                          key={to}
+                          className={to === 'open' || (t.status === 'for_testing' && to === 'programming') || (t.status === 'tested' && to === 'for_testing') ? 'secondary' : ''}
+                          disabled={busy === t.id}
+                          onClick={() => onMove(t, to)}
+                        >
+                          {t.status === 'for_testing' && to === 'programming'
+                            ? 'Failed test'
+                            : t.status === 'tested' && to === 'for_testing'
+                              ? 'Reopen testing'
+                              : MOVE_LABEL[to]}
+                        </button>
+                      ))}
+                    </div>
                   </td>
                 </tr>
               ))}

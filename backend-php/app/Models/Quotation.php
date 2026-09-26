@@ -52,7 +52,7 @@ class Quotation extends Model
     protected $fillable = [
         'company_id', 'quotation_number', 'customer_id', 'quotation_date', 'valid_until',
         'status', 'notes', 'amount_sgd', 'tax_code', 'gst_rate', 'gst_amount_sgd',
-        'total_amount_sgd', 'converted_contract_id', 'converted_annual_contract_id',
+        'total_amount_sgd', 'converted_contract_id', 'converted_annual_contract_id', 'converted_invoice_id',
         'created_by_user_id',
         'submitted_at', 'submitted_by_user_id', 'approved_at', 'approved_by_user_id', 'sent_at', 'returned_reason',
         'renews_contract_id',
@@ -104,6 +104,12 @@ class Quotation extends Model
     public function convertedContract(): BelongsTo
     {
         return $this->belongsTo(Contract::class, 'converted_contract_id');
+    }
+
+    /** The Sales Invoice issued for its product lines on acceptance (decision 11.2). */
+    public function convertedInvoice(): BelongsTo
+    {
+        return $this->belongsTo(Invoice::class, 'converted_invoice_id');
     }
 
     public function convertedAnnualContract(): BelongsTo

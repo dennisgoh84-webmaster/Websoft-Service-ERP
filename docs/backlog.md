@@ -299,8 +299,8 @@ shipped and when.
   - [x] Self-testing program (every screen, desktop and phone) plus the nightly report on the test server. **Built 2026-09-26** ([self-test.md](self-test.md)). To switch the nightly run on: `sudo ./deploy/install-selftest.sh <email>` on the test server (the email goes out through Maintenance → System Email). Its first runs found and fixed six bugs, listed in self-test.md.
   - [ ] Bank Book: no direct keying; bank charges and interest go through Receipt / Payment.
   - [ ] Credit Note document (GST and GL reversal, owner approval above the customer's limit).
-  - [ ] Accepted quotation: product / stock lines to a Sales Invoice, hours to a contract.
-  - [ ] Overdue Service Record approval: daily email to the approvers.
+  - [x] Accepted quotation: product lines become a Sales Invoice issued on acceptance, and hours go to a contract. Built 2026-09-26 (SALES-011).
+  - [x] Overdue Service Record approval: daily 8:45 email to the approvers, sent by the new server `scheduler` service. Built 2026-09-26 (SRV-019).
   - [ ] Full multi-currency on sales and purchases (original + SGD, exchange gain/loss).
   - [ ] Data Migration: bring across everything since a cut-off date picked at run time (10.1).
   - [ ] AI Assistant: Service Record drafting from the technician's notes.
@@ -310,12 +310,12 @@ shipped and when.
   - [ ] eApproval: move Payment Voucher (with Bank Authority), PO and Service Record approval onto it.
   - [ ] AI spending cap per company instead of one for the installation.
   - [ ] Helpdesk Portal: customer attachments when raising an incident.
-  - [ ] Sales Dashboard: per-salesperson cards (prospects by stage, quoted, billed, paid).
+  - [x] Sales Dashboard: per-salesperson cards (prospects by stage, quoted, billed, paid). Built 2026-09-26 (SALES-007).
   - [ ] AI Assistant: a fallback model, set on the AI settings screen.
   - [ ] PDPA: archive before expiry for the owner only, with a reason, enforced on the server.
   - [ ] Event Logs: From / To day filter.
   - [ ] Staff Master: square crop when uploading a photo.
-  - [ ] Software Task statuses (Open → Programming → For Testing → Tested → Released) and a per-programmer Dev dashboard.
+  - [x] Software Task statuses (Open → Programming → For Testing → Tested → Released) and per-programmer cards on Software Tasks. Built 2026-09-26.
 
 - [x] **Prospect / Leads + Sales Supervisor / Sales Staff roles** --
   built 2026-09-26 (SALES-009 / SALES-010 in business-requirements.md).

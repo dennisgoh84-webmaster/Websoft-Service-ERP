@@ -2,23 +2,27 @@
 
 namespace App\Services;
 
+use App\Exceptions\BillingRuleViolation;
 use App\Exceptions\ContractRuleViolation;
+use App\Exceptions\InventoryRuleViolation;
 use App\Exceptions\QuotationRuleViolation;
 use App\Models\Contract;
+use App\Models\Product;
 use App\Models\Prospect;
 use App\Models\Quotation;
 use App\Models\QuotationLine;
+use App\Models\StockItem;
 use App\Models\User;
 use App\Support\Money;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Sales Quotation business logic: totals and the accept -> auto-
- * Contract conversion. Mirrors backend/app/services/quotations.py
- * exactly -- see App\Models\Quotation's docstring for the confirmed
- * 2026-09-10 splitting rule (hourly lines -> one Service Support
- * contract; every other line -> one Annual contract).
+ * Sales Quotation business logic: totals and what accepting one
+ * creates -- see acceptQuotation(): product lines -> a Sales Invoice
+ * issued on acceptance (decision 11.2, 2026-09-26); hourly lines -> one
+ * Service Support contract; every other line -> one Annual contract
+ * (2026-09-10).
  */
 class QuotationService
 {
@@ -50,10 +54,44 @@ class QuotationService
     }
 
     /**
-     * Marks the quotation Accepted and attempts to auto-create
-     * Contract(s) from it -- confirmed 2026-09-10: a quotation's lines
-     * split by unit of measure into up to two separate contracts,
-     * never one blending both:
+     * A product line (decision 11.2, Dennis 2026-09-26: "Lines whose
+     * catalog product is a Product"): its catalog item is Product-type
+     * (hardware, a licence sold outright). Service-type items and
+     * free-text lines are not.
+     */
+    public static function isProductLine(QuotationLine $line): bool
+    {
+        return $line->product_id !== null && $line->product?->product_type === Product::TYPE_PRODUCT;
+    }
+
+    /** The stock item a product line draws from, if the product is kept in stock. */
+    public static function stockItemFor(QuotationLine $line): ?StockItem
+    {
+        if (! self::isProductLine($line)) {
+            return null;
+        }
+
+        return StockItem::where('company_id', $line->product->company_id)
+            ->where('product_id', $line->product_id)
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->first();
+    }
+
+    /**
+     * Marks the quotation Accepted and creates what it sold.
+     *
+     * Product lines (isProductLine) -- decision 11.2, Dennis 2026-09-26,
+     * "Straight away on acceptance" -- become one Sales Invoice issued
+     * there and then, through the same path as Raise Sales Invoice: a
+     * line whose product is kept in stock takes it from $warehouseId at
+     * its weighted average cost, and if any warehouse is short the whole
+     * acceptance is refused (stock is never negative). Quantities must
+     * be whole. The invoice carries the quotation's prospect.
+     *
+     * The remaining lines split as confirmed 2026-09-10, by unit of
+     * measure, into up to two separate contracts, never one blending
+     * both:
      *   - Lines whose unit is "Hours"/"Hour" -> one SERVICE_SUPPORT
      *     contract, summing their hours and their value. SRV-002/012's
      *     10-hour minimum still applies with no override, so this half
@@ -226,7 +264,7 @@ class QuotationService
         }
     }
 
-    public static function acceptQuotation(Quotation $quotation, string $actorUserId): string
+    public static function acceptQuotation(Quotation $quotation, string $actorUserId, ?string $warehouseId = null): string
     {
         // Only a quotation the customer actually has can be accepted --
         // acceptance is their confirmation of what was sent (BILL-006
@@ -235,18 +273,24 @@ class QuotationService
         $quotation->status = Quotation::STATUS_ACCEPTED;
         self::markProspectWon($quotation, $actorUserId);
 
-        $hourlyLines = $quotation->lines->filter(fn ($line) => self::isHourly($line->unit_of_measure));
-        $otherLines = $quotation->lines->reject(fn ($line) => self::isHourly($line->unit_of_measure));
+        $quotation->loadMissing('lines.product');
+        $productLines = $quotation->lines->filter(fn ($line) => self::isProductLine($line));
+        $contractLines = $quotation->lines->reject(fn ($line) => self::isProductLine($line));
+        $hourlyLines = $contractLines->filter(fn ($line) => self::isHourly($line->unit_of_measure));
+        $otherLines = $contractLines->reject(fn ($line) => self::isHourly($line->unit_of_measure));
+
+        $messages = [];
+        if ($productLines->isNotEmpty()) {
+            $messages[] = self::invoiceProductLines($quotation, $productLines, $warehouseId, $actorUserId);
+        }
 
         // A renewal quotation (raised from an expiring contract, SALES-006)
         // renews THAT contract through the same path the Renew form
         // uses, so SRV-010/016 apply exactly; it never creates a fresh
         // one beside it.
-        if ($quotation->renews_contract_id) {
-            return self::acceptRenewal($quotation, $hourlyLines, $otherLines, $actorUserId);
+        if ($quotation->renews_contract_id && $contractLines->isNotEmpty()) {
+            return self::acceptRenewal($quotation, $hourlyLines, $contractLines, $actorUserId, $messages);
         }
-
-        $messages = [];
 
         if ($hourlyLines->isNotEmpty()) {
             $hourlyQty = $hourlyLines->reduce(fn (Money $c, $l) => $c->plus(Money::of($l->quantity)), Money::of(0));
@@ -335,11 +379,13 @@ class QuotationService
      * contract is left as it was, and the message says so, so the
      * Renew form (with this quotation picked) is the next step.
      */
-    private static function acceptRenewal(Quotation $quotation, $hourlyLines, $otherLines, string $actorUserId): string
+    private static function acceptRenewal(Quotation $quotation, $hourlyLines, $contractLines, string $actorUserId, array $before = []): string
     {
         $prior = Contract::findOrFail($quotation->renews_contract_id);
         $hours = $hourlyLines->reduce(fn (Money $c, $l) => $c->plus(Money::of($l->quantity)), Money::of(0));
-        $value = $quotation->lines->reduce(fn (Money $c, $l) => $c->plus(Money::of($l->line_total_sgd)), Money::of(0));
+        // Product lines were invoiced on acceptance, so they are not part of the renewed contract's value.
+        $value = $contractLines->reduce(fn (Money $c, $l) => $c->plus(Money::of($l->line_total_sgd)), Money::of(0));
+        $invoiced = $before ? ' '.implode(' ', $before) : '';
 
         try {
             $new = ContractService::renewContract(
@@ -349,7 +395,7 @@ class QuotationService
                 actorUserId: $actorUserId,
             );
         } catch (ContractRuleViolation $e) {
-            $message = "Quotation accepted, but {$prior->contract_number} was not renewed: {$e->getMessage()} "
+            $message = "Quotation accepted.{$invoiced} But {$prior->contract_number} was not renewed: {$e->getMessage()} "
                 .'Renew it from the contract page, picking this quotation.';
             Audit::record('quotation', $quotation->id, 'accepted', $actorUserId, details: $message);
 
@@ -365,7 +411,8 @@ class QuotationService
         }
 
         $message = sprintf(
-            'Quotation accepted. %s renewed as %s (%s).',
+            'Quotation accepted.%s %s renewed as %s (%s).',
+            $invoiced,
             $prior->contract_number,
             $new->contract_number,
             $new->contract_kind === Contract::KIND_SERVICE_SUPPORT
@@ -375,6 +422,61 @@ class QuotationService
         Audit::record('quotation', $quotation->id, 'accepted', $actorUserId, details: $message);
 
         return $message;
+    }
+
+    /**
+     * Issues the Sales Invoice for a quotation's product lines (decision
+     * 11.2). Refusals -- a part quantity, a stock line with no warehouse
+     * named, not enough stock -- throw QuotationRuleViolation so the
+     * whole acceptance rolls back.
+     */
+    private static function invoiceProductLines(Quotation $quotation, $productLines, ?string $warehouseId, string $actorUserId): string
+    {
+        $lines = [];
+        foreach ($productLines as $line) {
+            $qty = Money::of($line->quantity);
+            if ($qty->toString() !== $qty->quantize(0)->toString()) {
+                throw new QuotationRuleViolation(sprintf(
+                    '"%s" is quoted as %s; a Sales Invoice line needs a whole quantity. Revise the quotation first.',
+                    $line->description, self::formatG($qty->toFloat()),
+                ));
+            }
+            $stockItem = self::stockItemFor($line);
+            if ($stockItem !== null && $warehouseId === null) {
+                throw new QuotationRuleViolation(
+                    "\"{$line->description}\" is a stock item: pick the warehouse its stock leaves from."
+                );
+            }
+            $lines[] = [
+                'description' => $line->description,
+                'quantity' => (int) $qty->toFloat(),
+                'unit_price_sgd' => (string) $line->unit_price_sgd,
+                'product_id' => $line->product_id,
+                'stock_item_id' => $stockItem?->id,
+                'warehouse_id' => $stockItem ? $warehouseId : null,
+                'unit_of_measure' => $line->unit_of_measure,
+                'unit_cost_sgd' => $line->cost_sgd !== null ? (string) $line->cost_sgd : null,
+            ];
+        }
+
+        try {
+            $invoice = BillingService::issueSalesInvoice(
+                companyId: $quotation->company_id,
+                customerId: $quotation->customer_id,
+                lines: $lines,
+                actorUserId: $actorUserId,
+                description: "Quotation {$quotation->quotation_number}",
+            );
+        } catch (InventoryRuleViolation|BillingRuleViolation $e) {
+            throw new QuotationRuleViolation("Not accepted: {$e->getMessage()}");
+        }
+        if ($quotation->prospect_id !== null) {
+            $invoice->prospect_id = $quotation->prospect_id;
+            $invoice->save();
+        }
+        $quotation->converted_invoice_id = $invoice->id;
+
+        return sprintf('Sales Invoice %s issued (SGD %s before GST).', $invoice->invoice_number, Money::of($invoice->amount_sgd)->toString());
     }
 
     /** PHP equivalent of Python's f"{value:g}" formatting used in the accept-message text. */

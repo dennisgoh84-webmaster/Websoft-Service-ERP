@@ -5,7 +5,10 @@ namespace App\Services;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\Invoice;
+use App\Models\Prospect;
 use App\Models\Quotation;
+use App\Models\User;
+use App\Support\Money;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -211,5 +214,101 @@ class SalesDashboardService
             'count' => Quotation::where('company_id', $companyId)->where('status', Quotation::STATUS_SENT)->count(),
             'not_available' => false,
         ];
+    }
+
+    /**
+     * Per-salesperson cards (decision 12.2, Dennis 2026-09-26, #50).
+     *
+     * - **Who sees what:** managers see all; staff see their own.
+     *   seesAllProspects() -- the owner, Sales Manager and Sales
+     *   Supervisor -- see every card; anyone else sees only their own.
+     * - **Whose card work counts on:** the prospect's salesperson.
+     *   Quotations and invoices reach a salesperson only through their
+     *   prospect. Work with no prospect goes on a "No prospect" card, and
+     *   prospects with no salesperson on a "No salesperson" card; both
+     *   are for managers only.
+     * - **What each card shows:** prospects by stage are the pipeline as
+     *   it stands. Quoted (sent or accepted quotations, by quotation
+     *   date), billed and paid (invoices, by issue date) cover the
+     *   financial year, like the dashboard's other figures. Default
+     *   taken 2026-09-26, recorded in open-business-decisions #50.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function salespersonCards(User $viewer, ?int $year = null): array
+    {
+        $companyId = $viewer->company_id;
+        ['start' => $from, 'end' => $to] = self::financialYearRange($companyId, $year);
+        $all = $viewer->seesAllProspects();
+        $key = fn (?string $id) => $id ?? 'none';
+
+        $cards = [];
+        $card = function (string $k) use (&$cards) {
+            $cards[$k] ??= ['prospects_by_stage' => array_fill_keys(Prospect::STATUSES, 0), 'quoted' => Money::of(0), 'billed' => Money::of(0), 'paid' => Money::of(0)];
+
+            return $k;
+        };
+
+        // Everyone in a sales role gets a card, even before their first prospect.
+        if ($all) {
+            User::where('company_id', $companyId)->where('is_active', true)
+                ->whereIn('role', [User::ROLE_SALES_MANAGER, User::ROLE_SALES_SUPERVISOR, User::ROLE_SALES_STAFF])
+                ->pluck('id')->each(fn ($id) => $card($id));
+        } else {
+            $card($viewer->id);
+        }
+
+        $prospects = Prospect::where('company_id', $companyId)
+            ->when(! $all, fn ($q) => $q->where('salesperson_user_id', $viewer->id))
+            ->selectRaw('salesperson_user_id, status, count(*) as n')->groupBy('salesperson_user_id', 'status')->get();
+        foreach ($prospects as $row) {
+            $k = $card($key($row->salesperson_user_id));
+            $cards[$k]['prospects_by_stage'][$row->status] = (int) $row->n;
+        }
+
+        $quoted = Quotation::query()->leftJoin('prospects', 'prospects.id', '=', 'quotations.prospect_id')
+            ->where('quotations.company_id', $companyId)
+            ->whereIn('quotations.status', Prospect::QUOTED_STATUSES)
+            ->whereBetween('quotations.quotation_date', [$from->toDateString(), $to->toDateString()])
+            ->when(! $all, fn ($q) => $q->where('prospects.salesperson_user_id', $viewer->id))
+            ->selectRaw('quotations.prospect_id is null as no_prospect, prospects.salesperson_user_id, sum(quotations.total_amount_sgd) as total')
+            ->groupByRaw('quotations.prospect_id is null, prospects.salesperson_user_id')->get();
+        foreach ($quoted as $row) {
+            $k = $card($row->no_prospect ? 'no_prospect' : $key($row->salesperson_user_id));
+            $cards[$k]['quoted'] = $cards[$k]['quoted']->plus(Money::of($row->total ?? 0));
+        }
+
+        $billed = Invoice::query()->leftJoin('prospects', 'prospects.id', '=', 'invoices.prospect_id')
+            ->where('invoices.company_id', $companyId)
+            ->whereBetween('invoices.issued_at', [$from, $to])
+            ->when(! $all, fn ($q) => $q->where('prospects.salesperson_user_id', $viewer->id))
+            ->selectRaw('invoices.prospect_id is null as no_prospect, prospects.salesperson_user_id, sum(invoices.total_amount_sgd) as billed, sum(invoices.amount_paid_sgd) as paid')
+            ->groupByRaw('invoices.prospect_id is null, prospects.salesperson_user_id')->get();
+        foreach ($billed as $row) {
+            $k = $card($row->no_prospect ? 'no_prospect' : $key($row->salesperson_user_id));
+            $cards[$k]['billed'] = $cards[$k]['billed']->plus(Money::of($row->billed ?? 0));
+            $cards[$k]['paid'] = $cards[$k]['paid']->plus(Money::of($row->paid ?? 0));
+        }
+
+        $names = User::whereIn('id', array_filter(array_keys($cards), fn ($k) => $k !== 'none' && $k !== 'no_prospect'))->pluck('full_name', 'id');
+        $out = [];
+        foreach ($cards as $k => $c) {
+            $out[] = [
+                'salesperson_user_id' => in_array($k, ['none', 'no_prospect'], true) ? null : $k,
+                'kind' => $k === 'none' ? 'no_salesperson' : ($k === 'no_prospect' ? 'no_prospect' : 'salesperson'),
+                'name' => match ($k) {
+                    'none' => 'No salesperson', 'no_prospect' => 'No prospect', default => $names[$k] ?? 'Unknown'
+                },
+                'prospects_by_stage' => $c['prospects_by_stage'],
+                'open_prospects' => array_sum(array_intersect_key($c['prospects_by_stage'], array_flip(Prospect::ACTIVE_STATUSES))),
+                'quoted_sgd' => $c['quoted']->toFloat(),
+                'billed_sgd' => $c['billed']->toFloat(),
+                'paid_sgd' => $c['paid']->toFloat(),
+            ];
+        }
+        // Salespeople by what they billed, then the two catch-all cards last.
+        usort($out, fn ($a, $b) => [$a['kind'] !== 'salesperson', -$a['billed_sgd'], $a['name']] <=> [$b['kind'] !== 'salesperson', -$b['billed_sgd'], $b['name']]);
+
+        return $out;
     }
 }

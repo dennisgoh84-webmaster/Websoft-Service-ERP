@@ -846,8 +846,24 @@ export interface SoftwareTask {
   programming_hours: number | null
   tester_user_id: string | null
   is_tested: boolean
+  /** Decision 12.1 (2026-09-26): Open -> Programming -> For Testing -> Tested -> Released. */
+  status: SoftwareTaskStatus
+  /** Where it may move next. */
+  next_statuses: SoftwareTaskStatus[]
+  released_at: string | null
   tested_at: string | null
   created_at: string
+}
+
+export type SoftwareTaskStatus = 'open' | 'programming' | 'for_testing' | 'tested' | 'released'
+
+export interface ProgrammerCard {
+  programmer_id: string | null
+  name: string
+  open: number
+  awaiting_test: number
+  overdue: number
+  hours: number
 }
 
 // ---- Incident Module (2026-09-12) ----
@@ -1945,6 +1961,10 @@ export interface QuotationLine {
   /** Costing (2026-09-12): defaults from the chosen product's cost_sgd;
    * the only source of cost for a non-product (free-text) line. */
   cost_sgd: number | null
+  /** Only while the quotation can be accepted (status sent): the line goes on the
+   * Sales Invoice issued on acceptance (decision 11.2), and takes stock from a warehouse. */
+  is_product_line?: boolean | null
+  is_stock_line?: boolean | null
 }
 
 // ---- Prospect / Leads ----
@@ -2114,6 +2134,9 @@ export interface Quotation {
   total_amount_sgd: number
   converted_contract_id: string | null
   converted_annual_contract_id: string | null
+  /** The Sales Invoice issued for its product lines on acceptance (decision 11.2). */
+  converted_invoice_id?: string | null
+  converted_invoice_number?: string | null
   created_at: string
   submitted_at: string | null
   approved_at: string | null
@@ -2618,6 +2641,18 @@ export interface InboxMailbox {
   added: number
 }
 
+// ---- Sales Dashboard: per-salesperson cards (decision 12.2) ----
+export interface SalespersonCard {
+  salesperson_user_id: string | null
+  kind: 'salesperson' | 'no_salesperson' | 'no_prospect'
+  name: string
+  prospects_by_stage: Record<ProspectStatus, number>
+  open_prospects: number
+  quoted_sgd: number
+  billed_sgd: number
+  paid_sgd: number
+}
+
 export const api = {
   me: () => request<CurrentUser>('/auth/me'),
   acknowledgeAiDataConsent: () => request<{ ai_data_consent_at: string; ai_data_consent_required: boolean }>('/auth/ai-consent', { method: 'POST', body: JSON.stringify({ accepted: true }) }),
@@ -3108,6 +3143,8 @@ export const api = {
 
   // ---- Sales Dashboard ----
   salesDashboardSummary: (year?: number) => request<SalesDashboardSummary>(`/sales-dashboard/summary${qs({ year })}`),
+  salesDashboardSalespeople: (year?: number) =>
+    request<{ financial_year: number; sees_all: boolean; cards: SalespersonCard[] }>(`/sales-dashboard/salespeople${qs({ year })}`),
   salesDashboardArBreakdown: (bucket: string) =>
     request<SalesDashboardArRow[]>(`/sales-dashboard/ar-breakdown${qs({ bucket })}`),
   exportSalesDashboardArBreakdownCsv: (bucket: string) => requestBlob(`/sales-dashboard/ar-breakdown/export.csv${qs({ bucket })}`),
@@ -3197,13 +3234,14 @@ export const api = {
 
   // Software Task
   listSoftwareTasks: (
-    filters: { assigned_programmer_id?: string; tester_user_id?: string; untested_only?: boolean } = {},
+    filters: { assigned_programmer_id?: string; tester_user_id?: string; untested_only?: boolean; status?: SoftwareTaskStatus } = {},
   ) =>
     request<SoftwareTask[]>(
       `/software-tasks${qs({
         assigned_programmer_id: filters.assigned_programmer_id,
         tester_user_id: filters.tester_user_id,
         untested_only: filters.untested_only ? 'true' : undefined,
+        status: filters.status,
       })}`,
     ),
   exportSoftwareTasksCsv: (
@@ -3247,6 +3285,9 @@ export const api = {
       tester_user_id: string | null
     }>,
   ) => request<SoftwareTask>(`/software-tasks/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  moveSoftwareTask: (id: string, status: SoftwareTaskStatus) =>
+    request<SoftwareTask>(`/software-tasks/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
+  softwareTaskProgrammers: () => request<ProgrammerCard[]>('/software-tasks/programmers'),
   markSoftwareTaskTested: (id: string) =>
     request<SoftwareTask>(`/software-tasks/${id}/mark-tested`, { method: 'POST' }),
   reopenSoftwareTaskTesting: (id: string) =>
@@ -3743,8 +3784,11 @@ export const api = {
     request<Quotation>(`/quotations/${id}/to-revise`, { method: 'POST', body: JSON.stringify({ reason }) }),
   /** Raises the revision: a new draft copy of a to-revise quotation, linked back to it. */
   reviseQuotation: (id: string) => request<Quotation>(`/quotations/${id}/revise`, { method: 'POST' }),
-  acceptQuotation: (id: string) =>
-    request<{ quotation: Quotation; message: string }>(`/quotations/${id}/accept`, { method: 'POST' }),
+  acceptQuotation: (id: string, warehouseId?: string) =>
+    request<{ quotation: Quotation; message: string }>(`/quotations/${id}/accept`, {
+      method: 'POST',
+      body: JSON.stringify(warehouseId ? { warehouse_id: warehouseId } : {}),
+    }),
   rejectQuotation: (id: string) => request<Quotation>(`/quotations/${id}/reject`, { method: 'POST' }),
 
   // ---- Operations Reports ----

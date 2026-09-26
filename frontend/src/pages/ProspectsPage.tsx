@@ -36,7 +36,7 @@ export default function ProspectsPage() {
 
   const [filterStatus, setFilterStatus] = useState('')
   const [filterCustomer, setFilterCustomer] = useState(searchParams.get('customer_id') ?? '')
-  const [filterSalesperson, setFilterSalesperson] = useState('')
+  const [filterSalesperson, setFilterSalesperson] = useState(searchParams.get('salesperson_user_id') ?? '')
   const [filterText, setFilterText] = useState('')
 
   const filters = {

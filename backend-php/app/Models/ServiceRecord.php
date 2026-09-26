@@ -95,6 +95,12 @@ class ServiceRecord extends Model
         return $this->belongsTo(Company::class);
     }
 
+    /** The engineer whose work this records. */
+    public function employee(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'employee_user_id');
+    }
+
     public function jobOrder(): BelongsTo
     {
         return $this->belongsTo(JobOrder::class);

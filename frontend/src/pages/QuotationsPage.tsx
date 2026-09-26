@@ -14,6 +14,7 @@ import {
   type Quotation,
   type QuotationStatus,
   type ReferenceCode,
+  type Warehouse,
 } from '../lib/api'
 import { formatMoney as money, formatDate, todayIso } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
@@ -79,6 +80,12 @@ export default function QuotationsPage() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  // Accepting a quotation with product lines issues its Sales Invoice
+  // there and then (decision 11.2), so it is confirmed first, with the
+  // warehouse its stock lines leave from.
+  const [accepting, setAccepting] = useState<Quotation | null>(null)
+  const [acceptWarehouseId, setAcceptWarehouseId] = useState('')
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   // BILL-006: only the Sales Manager (or the owner) approves. The
   // backend enforces it; this just hides a button that would 409.
   const { user } = useAuth()
@@ -272,12 +279,21 @@ export default function QuotationsPage() {
     }
   }
 
-  async function onAccept(q: Quotation) {
+  async function onAccept(q: Quotation, warehouseId?: string) {
     setError(null)
     setMessage(null)
+    if (q.lines.some((l) => l.is_product_line) && accepting?.id !== q.id) {
+      setAccepting(q)
+      setAcceptWarehouseId('')
+      if (q.lines.some((l) => l.is_stock_line) && warehouses.length === 0) {
+        api.listWarehouses().then((ws) => setWarehouses(ws.filter((w) => w.is_active !== false))).catch(() => setWarehouses([]))
+      }
+      return
+    }
     try {
-      const result = await api.acceptQuotation(q.id)
+      const result = await api.acceptQuotation(q.id, warehouseId)
       setMessage(result.message)
+      setAccepting(null)
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to accept quotation')
@@ -329,6 +345,16 @@ export default function QuotationsPage() {
         unconverted). Lines can be picked from the <Link to="/product-catalog">Product Catalog</Link> or typed free text.
       </p>
       {error && <div className="error-banner">{error}</div>}
+      {accepting && (
+        <AcceptPanel
+          quotation={accepting}
+          warehouses={warehouses}
+          warehouseId={acceptWarehouseId}
+          onWarehouse={setAcceptWarehouseId}
+          onConfirm={() => onAccept(accepting, acceptWarehouseId || undefined)}
+          onCancel={() => setAccepting(null)}
+        />
+      )}
       {message && (
         <p className="muted" style={{ marginBottom: 12 }}>
           {message}
@@ -617,6 +643,11 @@ export default function QuotationsPage() {
                         <Link to={`/contracts/${q.converted_annual_contract_id}`}>Annual contract</Link>
                       </div>
                     )}
+                    {q.converted_invoice_number && (
+                      <div className="muted">
+                        <Link to="/invoices">Sales Invoice {q.converted_invoice_number}</Link>
+                      </div>
+                    )}
                   </td>
                   <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button
@@ -708,6 +739,59 @@ export default function QuotationsPage() {
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/** Confirms an acceptance that issues a Sales Invoice (decision 11.2). */
+function AcceptPanel({
+  quotation: q,
+  warehouses,
+  warehouseId,
+  onWarehouse,
+  onConfirm,
+  onCancel,
+}: {
+  quotation: Quotation
+  warehouses: Warehouse[]
+  warehouseId: string
+  onWarehouse: (id: string) => void
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  const productLines = q.lines.filter((l) => l.is_product_line)
+  const needsWarehouse = productLines.some((l) => l.is_stock_line)
+  const net = productLines.reduce((sum, l) => sum + l.line_total_sgd, 0)
+  const others = q.lines.length - productLines.length
+  return (
+    <div className="card">
+      <h2 style={{ marginTop: 0 }}>Accept {q.quotation_number}</h2>
+      <p>
+        Accepting issues a Sales Invoice now for its {productLines.length} product line{productLines.length === 1 ? '' : 's'} (
+        {money(net)} before GST): {productLines.map((l) => l.description).join(', ')}.
+        {others > 0 ? ` The other ${others} line${others === 1 ? '' : 's'} become${others === 1 ? 's' : ''} a contract as before.` : ''}
+      </p>
+      {needsWarehouse && (
+        <div className="form-row">
+          <label htmlFor="accept-warehouse">Stock leaves from</label>
+          <select id="accept-warehouse" value={warehouseId} onChange={(e) => onWarehouse(e.target.value)}>
+            <option value="">Select warehouse...</option>
+            {warehouses.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.code} — {w.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <button onClick={onConfirm} disabled={needsWarehouse && !warehouseId}>
+          Accept and issue invoice
+        </button>
+        <button className="secondary" onClick={onCancel}>
+          Cancel
+        </button>
       </div>
     </div>
   )
