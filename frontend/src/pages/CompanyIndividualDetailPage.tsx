@@ -18,6 +18,7 @@ import {
 } from '../lib/api'
 import { formatDate, formatDateTime, formatMoney as money } from '../lib/format'
 import DateInput from '../components/DateInput'
+import { useAuth } from '../lib/AuthContext'
 
 const ACTION_LABELS: Record<string, string> = {
   created: 'Created',
@@ -96,6 +97,8 @@ export default function CompanyIndividualDetailPage() {
   const [relationshipTypes, setRelationshipTypes] = useState<SetupListItem[]>([])
   const [dataExpiryDraft, setDataExpiryDraft] = useState('')
   const [savingDataExpiry, setSavingDataExpiry] = useState(false)
+  const [archiveReason, setArchiveReason] = useState('')
+  const { user: authUser } = useAuth()
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([])
   const [productUsage, setProductUsage] = useState<CompanyIndividualProductUsageRow[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -365,12 +368,14 @@ export default function CompanyIndividualDetailPage() {
     }
   }
 
-  async function onToggleArchive() {
+  async function onToggleArchive(e?: FormEvent) {
+    e?.preventDefault()
     if (!id || !customer) return
     setError(null)
     try {
-      if (customer.is_archived) await api.unarchiveCompanyIndividual(id)
-      else await api.archiveCompanyIndividual(id)
+      if (customer.is_archived) await api.unarchiveCompanyIndividual(id, archiveReason.trim())
+      else await api.archiveCompanyIndividual(id, archiveReason.trim())
+      setArchiveReason('')
       refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update archive status')
@@ -533,9 +538,10 @@ export default function CompanyIndividualDetailPage() {
   if (notFound) return <p>Not found. <Link to="/company-individuals">Back to Company / Individual</Link></p>
   if (!customer) return <p>Loading...</p>
 
-  // "The archive button is only to appear after the expiry date"
-  // (2026-09-12) -- a UI-level gate, not a backend restriction: an
-  // already-archived record can always be unarchived regardless of date.
+  // Archiving: after the expiry date for anyone with FULL access; before
+  // it for the owner only, with a reason (28.2, 2026-09-26, enforced by
+  // the server as well).
+  const isOwner = authUser?.role === 'owner'
   const isPastExpiry = Boolean(customer.data_expiry_date && new Date(customer.data_expiry_date) < new Date())
 
   // The ID and name are always FULL CAPITALS (Dennis, 2026-09-26) -- shown
@@ -1337,19 +1343,39 @@ export default function CompanyIndividualDetailPage() {
             <> Archived {formatDateTime(customer.archived_at)}.</>
           )}
         </p>
-        {customer.is_archived ? (
-          <button className="secondary" onClick={onToggleArchive}>
-            Unarchive
-          </button>
-        ) : isPastExpiry ? (
-          <button className="secondary" onClick={onToggleArchive}>
-            Archive now
-          </button>
+        {/* PDPA 28.2 (2026-09-26): after the expiry date anyone with FULL access archives;
+            before it (or with no date) only the owner, with a reason. Unarchiving needs a
+            reason. All enforced by the server too. */}
+        {customer.is_archived || isPastExpiry || isOwner ? (
+          <form onSubmit={onToggleArchive} style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 520 }}>
+            {!customer.is_archived && !isPastExpiry && (
+              <p className="muted" style={{ margin: 0 }}>
+                {customer.data_expiry_date
+                  ? 'This record is not past its data expiry date yet. As the owner you can archive it early, with a reason.'
+                  : 'No data expiry date is set. As the owner you can archive it anyway, with a reason.'}
+              </p>
+            )}
+            <label htmlFor="archive-reason">
+              {customer.is_archived ? 'Reason for bringing it back' : isPastExpiry ? 'Reason (optional)' : 'Reason for archiving early'}
+            </label>
+            <textarea
+              id="archive-reason"
+              rows={2}
+              value={archiveReason}
+              onChange={(e) => setArchiveReason(e.target.value)}
+              required={customer.is_archived || !isPastExpiry}
+            />
+            <div>
+              <button type="submit" className="secondary" disabled={(customer.is_archived || !isPastExpiry) && !archiveReason.trim()}>
+                {customer.is_archived ? 'Unarchive' : 'Archive now'}
+              </button>
+            </div>
+          </form>
         ) : (
           <p className="muted">
             {customer.data_expiry_date
-              ? 'Archiving becomes available once the data expiry date above has passed.'
-              : 'Record PDPA consent (or set a data expiry date above) to enable archiving.'}
+              ? 'Archiving becomes available once the data expiry date above has passed (the owner can archive earlier, with a reason).'
+              : 'Record PDPA consent (or set a data expiry date above) to enable archiving; the owner can archive earlier, with a reason.'}
           </p>
         )}
       </div>

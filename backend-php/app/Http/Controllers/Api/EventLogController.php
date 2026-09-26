@@ -103,12 +103,12 @@ class EventLogController extends Controller
             $query->where('actor_user_id', $actor);
         }
         if ($from = $request->query('date_from')) {
-            $query->where('at', '>=', Carbon::parse($from)->startOfDay());
+            $query->where('at', '>=', Carbon::parse($from, config('app.timezone'))->startOfDay());
         }
         if ($to = $request->query('date_to')) {
             // Python compares against the START of the following day, so
             // date_to is inclusive of everything logged on that date.
-            $query->where('at', '<', Carbon::parse($to)->addDay()->startOfDay());
+            $query->where('at', '<', Carbon::parse($to, config('app.timezone'))->addDay()->startOfDay());
         }
         if ($q = $request->query('q')) {
             $like = '%'.$q.'%';

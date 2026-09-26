@@ -231,27 +231,27 @@ class DatabaseSeeder extends Seeder
         // exempt supply doesn't need a code change -- same list as
         // backend/scripts/seed_demo.py's TAX_CODES.
         foreach ([
-            ['SR', 'Standard-rated supply', '9.00'],
-            ['ZR', 'Zero-rated supply (e.g. export of services)', '0.00'],
-            ['ES', 'Exempt supply', '0.00'],
-            ['OS', 'Out of scope', '0.00'],
-        ] as [$code, $name, $rate]) {
+            ['SR', 'Standard-rated supply', '9.00', '1'],
+            ['ZR', 'Zero-rated supply (e.g. export of services)', '0.00', '2'],
+            ['ES', 'Exempt supply', '0.00', '3'],
+            ['OS', 'Out of scope', '0.00', 'out_of_scope'],
+        ] as [$code, $name, $rate, $box]) {
             TaxCode::updateOrCreate(
                 ['company_id' => $company->id, 'code' => $code],
-                ['name' => $name, 'rate_percent' => $rate, 'is_active' => true, 'kind' => TaxCode::KIND_SUPPLY],
+                ['name' => $name, 'rate_percent' => $rate, 'is_active' => true, 'kind' => TaxCode::KIND_SUPPLY, 'form5_box' => $box],
             );
         }
         // IRAS purchase codes, for supplier bills (2026-09-26).
         foreach ([
-            ['TX', 'Standard-rated purchase', '9.00'],
-            ['ZP', 'Zero-rated purchase', '0.00'],
-            ['EP', 'Exempt purchase', '0.00'],
-            ['OP', 'Out-of-scope purchase', '0.00'],
-            ['NR', 'Purchase from a supplier not registered for GST', '0.00'],
-        ] as [$code, $name, $rate]) {
+            ['TX', 'Standard-rated purchase', '9.00', '5'],
+            ['ZP', 'Zero-rated purchase', '0.00', '5'],
+            ['EP', 'Exempt purchase', '0.00', 'not_taxable'],
+            ['OP', 'Out-of-scope purchase', '0.00', 'not_taxable'],
+            ['NR', 'Purchase from a supplier not registered for GST', '0.00', 'not_taxable'],
+        ] as [$code, $name, $rate, $box]) {
             TaxCode::updateOrCreate(
                 ['company_id' => $company->id, 'code' => $code],
-                ['name' => $name, 'rate_percent' => $rate, 'is_active' => true, 'kind' => TaxCode::KIND_PURCHASE],
+                ['name' => $name, 'rate_percent' => $rate, 'is_active' => true, 'kind' => TaxCode::KIND_PURCHASE, 'form5_box' => $box],
             );
         }
 

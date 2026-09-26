@@ -214,12 +214,41 @@ class CompanyIndividualTest extends TestCase
         $token = $this->ownerToken($company);
         $customer = CompanyIndividual::factory()->for($company)->create();
 
-        $this->postJson("/api/company-individuals/{$customer->id}/archive", [], $this->authHeaders($token))
+        $this->postJson("/api/company-individuals/{$customer->id}/archive", ['reason' => 'Customer closed down'], $this->authHeaders($token))
             ->assertOk()->assertJson(['is_archived' => true]);
 
         $log = $this->getJson("/api/company-individuals/{$customer->id}/audit-log", $this->authHeaders($token));
         $log->assertOk();
         $this->assertContains('archived', collect($log->json())->pluck('action')->all());
+    }
+
+    public function test_archiving_before_expiry_is_for_the_owner_with_a_reason_and_unarchiving_needs_one(): void
+    {
+        $company = Company::factory()->create();
+        $ownerH = $this->authHeaders($this->ownerToken($company));
+        ModuleCatalog::firstOrCreate(['key' => 'company_individual_management'], ['name' => 'Customer Management', 'is_built' => true]);
+        CompanyModule::updateOrCreate(['company_id' => $company->id, 'module_key' => 'company_individual_management'], ['enabled' => true]);
+        $group = Group::factory()->for($company)->create();
+        GroupModuleAuthority::create(['group_id' => $group->id, 'module_key' => 'company_individual_management', 'access_level' => GroupModuleAuthority::FULL]);
+        $clerk = User::factory()->for($company)->create(['role' => User::ROLE_FINANCE, 'hashed_password' => PasswordPolicy::hash('demo1234')]);
+        UserCompanyAccess::create(['user_id' => $clerk->id, 'company_id' => $company->id, 'group_id' => $group->id]);
+        $clerkH = $this->authHeaders($this->post('/api/auth/login', ['username' => $clerk->email, 'password' => 'demo1234'])->json('access_token'));
+
+        $current = CompanyIndividual::factory()->for($company)->create(['data_expiry_date' => now()->addYear()->toDateString()]);
+        $expired = CompanyIndividual::factory()->for($company)->create(['data_expiry_date' => now()->subDay()->toDateString()]);
+
+        // Before expiry: not for FULL access alone, and the owner must give a reason.
+        $this->postJson("/api/company-individuals/{$current->id}/archive", ['reason' => 'x'], $clerkH)->assertStatus(403);
+        $this->postJson("/api/company-individuals/{$current->id}/archive", [], $ownerH)->assertStatus(422);
+        $this->postJson("/api/company-individuals/{$current->id}/archive", ['reason' => 'Asked to be forgotten'], $ownerH)->assertOk();
+        $this->assertDatabaseHas('audit_log_entries', ['entity_id' => $current->id, 'action' => 'archived', 'reason' => 'Asked to be forgotten']);
+
+        // Past expiry: anyone with FULL access, no reason needed.
+        $this->postJson("/api/company-individuals/{$expired->id}/archive", [], $clerkH)->assertOk()->assertJson(['is_archived' => true]);
+
+        // Bringing one back needs a reason.
+        $this->postJson("/api/company-individuals/{$expired->id}/unarchive", [], $clerkH)->assertStatus(422);
+        $this->postJson("/api/company-individuals/{$expired->id}/unarchive", ['reason' => 'Archived by mistake'], $clerkH)->assertOk()->assertJson(['is_archived' => false]);
     }
 
     public function test_pdpa_consent_is_server_timestamped(): void

@@ -32,7 +32,7 @@ class TaxCodeController extends Controller
     private const MODULE = 'finance_accounting';
 
     /** @var array<int, string> */
-    private const EXPORT_FIELDS = ['code', 'name', 'kind', 'rate_percent', 'is_active'];
+    private const EXPORT_FIELDS = ['code', 'name', 'kind', 'rate_percent', 'form5_box', 'is_active'];
 
     public function index(Request $request)
     {
@@ -87,7 +87,9 @@ class TaxCodeController extends Controller
             'name' => 'required|string|min:1|max:100',
             'rate_percent' => 'required|numeric|min:0|max:100',
             'kind' => 'sometimes|in:'.implode(',', TaxCode::KINDS),
+            'form5_box' => 'sometimes|nullable|string',
         ]);
+        $this->assertBoxFitsKind($data['form5_box'] ?? null, $data['kind'] ?? TaxCode::KIND_SUPPLY);
 
         $exists = TaxCode::where('company_id', $user->company_id)->where('code', $data['code'])->first();
         if ($exists) {
@@ -127,6 +129,7 @@ class TaxCodeController extends Controller
             'rate_percent' => 'sometimes|numeric|min:0|max:100',
             'is_active' => 'sometimes|boolean',
             'kind' => 'sometimes|in:'.implode(',', TaxCode::KINDS),
+            'form5_box' => 'sometimes|nullable|string',
         ]);
 
         $taxCode = TaxCode::where('company_id', $user->company_id)->find($taxCodeId);
@@ -134,12 +137,19 @@ class TaxCodeController extends Controller
             throw new ApiException(404, 'Tax code not found');
         }
 
+        if (array_key_exists('form5_box', $data) || array_key_exists('kind', $data)) {
+            $this->assertBoxFitsKind(
+                array_key_exists('form5_box', $data) ? $data['form5_box'] : $taxCode->form5_box,
+                $data['kind'] ?? $taxCode->kind,
+            );
+        }
+
         DB::transaction(function () use ($data, $taxCode, $user) {
             // Python compares old != new per field and records only what
             // actually changed, stringifying both sides.
             $oldValue = [];
             $newValue = [];
-            foreach (['code', 'name', 'rate_percent', 'is_active', 'kind'] as $field) {
+            foreach (['code', 'name', 'rate_percent', 'is_active', 'kind', 'form5_box'] as $field) {
                 if (! array_key_exists($field, $data)) {
                     continue;
                 }
@@ -191,6 +201,7 @@ class TaxCodeController extends Controller
             'name' => $t->name,
             'kind' => $t->kind,
             'rate_percent' => (string) $t->rate_percent,
+            'form5_box' => $t->form5_box ?? '',
             'is_active' => $t->is_active,
         ])->all();
     }
@@ -207,6 +218,15 @@ class TaxCodeController extends Controller
             'rate_percent' => (float) $t->rate_percent,
             'is_active' => $t->is_active,
             'kind' => $t->kind,
+            'form5_box' => $t->form5_box,
         ];
+    }
+
+    /** A supply code goes in a supply box, a purchase code in a purchase box (decision 47.4). */
+    private function assertBoxFitsKind(?string $box, string $kind): void
+    {
+        if ($box !== null && $box !== '' && ! in_array($box, TaxCode::FORM5_BOXES[$kind] ?? [], true)) {
+            throw new ApiException(422, sprintf('A %s code counts in one of: %s.', $kind, implode(', ', TaxCode::FORM5_BOXES[$kind])));
+        }
     }
 }

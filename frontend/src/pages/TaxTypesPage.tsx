@@ -6,6 +6,22 @@ import { useEffect, useState, type FormEvent } from 'react'
 import ExportControl from '../components/ExportControl'
 import { api, downloadBlob, type TaxCode } from '../lib/api'
 
+// Where each code counts in the IRAS Form 5 (Dennis, 2026-09-26, decision 47.4).
+const FORM5_BOXES: Record<'supply' | 'purchase', { value: string; label: string }[]> = {
+  supply: [
+    { value: '1', label: 'Box 1 -- standard-rated supplies' },
+    { value: '2', label: 'Box 2 -- zero-rated supplies' },
+    { value: '3', label: 'Box 3 -- exempt supplies' },
+    { value: 'out_of_scope', label: 'Out of scope (revenue only)' },
+  ],
+  purchase: [
+    { value: '5', label: 'Box 5 -- taxable purchases' },
+    { value: 'not_taxable', label: 'Not a taxable purchase' },
+  ],
+}
+const boxLabel = (kind: 'supply' | 'purchase', box: string | null) =>
+  FORM5_BOXES[kind].find((b) => b.value === box)?.label ?? 'Not set (standard-rated if it charges GST)'
+
 export default function TaxTypesPage() {
   const [taxCodes, setTaxCodes] = useState<TaxCode[]>([])
   const [showInactive, setShowInactive] = useState(false)
@@ -15,6 +31,7 @@ export default function TaxTypesPage() {
   const [name, setName] = useState('')
   const [ratePercent, setRatePercent] = useState('')
   const [kind, setKind] = useState<'supply' | 'purchase'>('supply')
+  const [form5Box, setForm5Box] = useState('1')
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Record<string, string>>({})
 
@@ -29,7 +46,7 @@ export default function TaxTypesPage() {
     setError(null)
     setCreating(true)
     try {
-      await api.createTaxCode({ code, name, rate_percent: Number(ratePercent), kind })
+      await api.createTaxCode({ code, name, rate_percent: Number(ratePercent), kind, form5_box: form5Box })
       setCode('')
       setName('')
       setRatePercent('')
@@ -38,6 +55,16 @@ export default function TaxTypesPage() {
       setError(err instanceof Error ? err.message : 'Failed to create tax type')
     } finally {
       setCreating(false)
+    }
+  }
+
+  async function onSetBox(taxCode: TaxCode, box: string) {
+    setError(null)
+    try {
+      await api.updateTaxCode(taxCode.id, { form5_box: box || null })
+      refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to set the Form 5 box')
     }
   }
 
@@ -96,6 +123,7 @@ export default function TaxTypesPage() {
               <th>Name</th>
               <th>Used on</th>
               <th>Rate %</th>
+              <th>Form 5 box</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -115,6 +143,20 @@ export default function TaxTypesPage() {
                 <td>{t.kind === 'purchase' ? 'Supplier bills' : 'Sales'}</td>
                 <td>{t.rate_percent}%</td>
                 <td>
+                  <select
+                    aria-label={`Form 5 box for ${t.code}`}
+                    value={t.form5_box ?? ''}
+                    onChange={(e) => onSetBox(t, e.target.value)}
+                  >
+                    {!t.form5_box && <option value="">{boxLabel(t.kind, null)}</option>}
+                    {FORM5_BOXES[t.kind].map((b) => (
+                      <option key={b.value} value={b.value}>
+                        {b.label}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td>
                   <span className={`badge ${t.is_active ? 'active' : 'draft'}`}>
                     {t.is_active ? 'Active' : 'Retired'}
                   </span>
@@ -128,7 +170,7 @@ export default function TaxTypesPage() {
             ))}
             {taxCodes.length === 0 && (
               <tr>
-                <td colSpan={6} className="muted">
+                <td colSpan={7} className="muted">
                   No tax types yet.
                 </td>
               </tr>
@@ -150,9 +192,26 @@ export default function TaxTypesPage() {
           </div>
           <div className="form-row">
             <label>Used on</label>
-            <select value={kind} onChange={(e) => setKind(e.target.value as 'supply' | 'purchase')}>
+            <select
+              value={kind}
+              onChange={(e) => {
+                const k = e.target.value as 'supply' | 'purchase'
+                setKind(k)
+                setForm5Box(FORM5_BOXES[k][0].value)
+              }}
+            >
               <option value="supply">Sales (supply codes: SR, ZR, ES, OS)</option>
               <option value="purchase">Supplier bills (purchase codes: TX, ZP, EP, OP, NR)</option>
+            </select>
+          </div>
+          <div className="form-row">
+            <label htmlFor="tax-form5-box">Form 5 box</label>
+            <select id="tax-form5-box" value={form5Box} onChange={(e) => setForm5Box(e.target.value)}>
+              {FORM5_BOXES[kind].map((b) => (
+                <option key={b.value} value={b.value}>
+                  {b.label}
+                </option>
+              ))}
             </select>
           </div>
           <div className="form-row">

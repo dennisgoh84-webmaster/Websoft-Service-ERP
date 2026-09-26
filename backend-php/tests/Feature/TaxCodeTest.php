@@ -198,12 +198,12 @@ class TaxCodeTest extends TestCase
         $response->assertHeader('Content-Disposition', 'attachment; filename=tax-types.csv');
         $csv = $response->getContent();
 
-        $this->assertStringContainsString("code,name,kind,rate_percent,is_active\r\n", $csv);
+        $this->assertStringContainsString("code,name,kind,rate_percent,form5_box,is_active\r\n", $csv);
         // Python's csv.DictWriter stringifies a bool as True/False,
         // not 1/0; quotes only where the field needs them
         // (QUOTE_MINIMAL -- a space is not a reason, though PHP's own
         // fputcsv would quote on one); and ends a record with CRLF.
-        $this->assertStringContainsString("SR,Standard Rated,supply,9.00,True\r\n", $csv);
+        $this->assertStringContainsString("SR,Standard Rated,supply,9.00,,True\r\n", $csv);
     }
 
     public function test_xlsx_export_is_a_real_xlsx_package_not_an_html_table(): void

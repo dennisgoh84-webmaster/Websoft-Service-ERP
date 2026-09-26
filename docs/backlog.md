@@ -305,16 +305,16 @@ shipped and when.
   - [ ] Data Migration: bring across everything since a cut-off date picked at run time (10.1).
   - [ ] AI Assistant: Service Record drafting from the technician's notes.
   - [x] Email Inbox: the server reads the helpdesk mailbox over IMAP (no HTTPS needed), with Log as Incident / Convert to Job Order. Built 2026-09-26 (Operations → Email Inbox).
-  - [ ] Tax Types: a Form 5 box setting per sales tax code, used by the GST Calculation (47.4).
+  - [x] Tax Types: a Form 5 box setting per tax code (sales and purchase), used by the GST Calculation (47.4). Built 2026-09-26: Maintenance → Tax Types, built-in codes pre-set as they worked before.
   - [ ] Helpdesk Portal: one-time AI declaration tick before the portal chat.
   - [ ] eApproval: move Payment Voucher (with Bank Authority), PO and Service Record approval onto it.
   - [ ] AI spending cap per company instead of one for the installation.
   - [ ] Helpdesk Portal: customer attachments when raising an incident.
   - [x] Sales Dashboard: per-salesperson cards (prospects by stage, quoted, billed, paid). Built 2026-09-26 (SALES-007).
   - [ ] AI Assistant: a fallback model, set on the AI settings screen.
-  - [ ] PDPA: archive before expiry for the owner only, with a reason, enforced on the server.
-  - [ ] Event Logs: From / To day filter.
-  - [ ] Staff Master: square crop when uploading a photo.
+  - [x] PDPA: archive before expiry for the owner only, with a reason, enforced on the server; unarchiving by anyone with FULL access, with a reason. Built 2026-09-26.
+  - [x] Event Logs: From / To day filter. Built 2026-09-26.
+  - [x] Staff Master: square crop when uploading a photo (drag and zoom, saved as 400 × 400). Built 2026-09-26.
   - [x] Software Task statuses (Open → Programming → For Testing → Tested → Released) and per-programmer cards on Software Tasks. Built 2026-09-26.
 
 - [x] **Prospect / Leads + Sales Supervisor / Sales Staff roles** --

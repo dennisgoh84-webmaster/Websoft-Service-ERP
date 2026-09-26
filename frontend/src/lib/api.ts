@@ -1387,6 +1387,9 @@ export interface TaxCode {
   is_active: boolean
   /** A supply code (sales: SR / ZR / ES / OS) or a purchase code (supplier bills: TX / ZP / EP / OP / NR). */
   kind: 'supply' | 'purchase'
+  /** Where it counts in the IRAS Form 5 (decision 47.4): '1' | '2' | '3' | 'out_of_scope' for sales,
+   * '5' | 'not_taxable' for purchases; null = the built-in placing. */
+  form5_box: string | null
 }
 
 // ---- Document Control ----
@@ -2977,8 +2980,10 @@ export const api = {
       body: JSON.stringify({ document }),
     }),
   /** Soft-archive-in-place -- all data stays, just hidden from normal lists. */
-  archiveCompanyIndividual: (id: string) => request<CompanyIndividual>(`/company-individuals/${id}/archive`, { method: 'POST' }),
-  unarchiveCompanyIndividual: (id: string) => request<CompanyIndividual>(`/company-individuals/${id}/unarchive`, { method: 'POST' }),
+  archiveCompanyIndividual: (id: string, reason?: string) =>
+    request<CompanyIndividual>(`/company-individuals/${id}/archive`, { method: 'POST', body: JSON.stringify({ reason: reason ?? '' }) }),
+  unarchiveCompanyIndividual: (id: string, reason: string) =>
+    request<CompanyIndividual>(`/company-individuals/${id}/unarchive`, { method: 'POST', body: JSON.stringify({ reason }) }),
 
   // CompanyIndividual Groups (tag linking separate companies in one group)
   listCompanyIndividualGroups: (includeInactive = false) =>
@@ -4070,9 +4075,9 @@ export const api = {
   // ---- Tax Type (Tax Code maintenance) ----
   listTaxCodes: (includeInactive = false, kind?: 'supply' | 'purchase') =>
     request<TaxCode[]>(`/tax-codes${qs({ include_inactive: includeInactive ? 'true' : undefined, kind })}`),
-  createTaxCode: (payload: { code: string; name: string; rate_percent: number; kind?: 'supply' | 'purchase' }) =>
+  createTaxCode: (payload: { code: string; name: string; rate_percent: number; kind?: 'supply' | 'purchase'; form5_box?: string | null }) =>
     request<TaxCode>('/tax-codes', { method: 'POST', body: JSON.stringify(payload) }),
-  updateTaxCode: (id: string, payload: Partial<{ code: string; name: string; rate_percent: number; is_active: boolean; kind: 'supply' | 'purchase' }>) =>
+  updateTaxCode: (id: string, payload: Partial<{ code: string; name: string; rate_percent: number; is_active: boolean; kind: 'supply' | 'purchase'; form5_box: string | null }>) =>
     request<TaxCode>(`/tax-codes/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   exportTaxCodesCsv: (includeInactive = false) =>
     requestBlob(`/tax-codes/export.csv${includeInactive ? '?include_inactive=true' : ''}`),

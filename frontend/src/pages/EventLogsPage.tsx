@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import ExportControl from '../components/ExportControl'
 import { api, downloadBlob, type AuditLogEntry, type EventLogFilters, type StaffUser } from '../lib/api'
-import { isoToMonth, monthEndISO, monthStartISO } from '../lib/period'
+import DateInput from '../components/DateInput'
 import { formatDateTime } from '../lib/format'
 
 const ENTITY_TYPES = [
@@ -142,21 +142,15 @@ export default function EventLogsPage() {
               ))}
             </select>
           </div>
+          {/* Day filters (Dennis, 2026-09-26, 14.1: "Add day filter") -- Event Logs
+              is often searched for one day's changes; every other screen stays by month. */}
           <div className="form-row" style={{ margin: 0 }}>
-            <label>Period from</label>
-            <input
-              type="month"
-              value={isoToMonth(dateFrom)}
-              onChange={(e) => setDateFrom(monthStartISO(e.target.value))}
-            />
+            <label htmlFor="event-logs-from">From</label>
+            <DateInput id="event-logs-from" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
           </div>
           <div className="form-row" style={{ margin: 0 }}>
-            <label>Period to</label>
-            <input
-              type="month"
-              value={isoToMonth(dateTo)}
-              onChange={(e) => setDateTo(monthEndISO(e.target.value))}
-            />
+            <label htmlFor="event-logs-to">To</label>
+            <DateInput id="event-logs-to" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} />
           </div>
           <div className="form-row" style={{ margin: 0 }}>
             <label>Search</label>

@@ -280,10 +280,26 @@ class CompanyIndividualController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'full');
 
         $customer = $this->customerOrFail($user, $customerId);
+        $reason = trim((string) $request->input('reason', ''));
+        // PDPA 28.2 (Dennis, 2026-09-26): a record is archived once its data
+        // expiry date has passed. Archiving it earlier -- or one with no
+        // expiry date agreed -- is for the owner only, with a reason, and is
+        // enforced here, not only on screen.
+        $pastExpiry = $customer->data_expiry_date !== null && Carbon::parse($customer->data_expiry_date)->lt(Carbon::today());
+        if (! $pastExpiry) {
+            if ($user->role !== User::ROLE_OWNER) {
+                throw new ApiException(403, 'Only the owner can archive a record before its data expiry date.');
+            }
+            if ($reason === '') {
+                throw new ApiException(422, 'Give the reason for archiving this record before its data expiry date.');
+            }
+        }
         $customer->is_archived = true;
         $customer->archived_at = Carbon::now();
         Audit::record(
             'customer', $customer->id, 'archived', $user->id,
+            reason: $reason !== '' ? $reason : null,
+            details: $pastExpiry ? 'Archived after its data expiry date' : 'Archived before its data expiry date',
             oldValue: ['is_archived' => false], newValue: ['is_archived' => true],
         );
         // PORTAL-004 / design §5: archiving a customer disables every
@@ -311,10 +327,16 @@ class CompanyIndividualController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'full');
 
         $customer = $this->customerOrFail($user, $customerId);
+        // Bringing a record back needs a reason (Dennis, 2026-09-26, Backlog 2): anyone with FULL access.
+        $reason = trim((string) $request->input('reason', ''));
+        if ($reason === '') {
+            throw new ApiException(422, 'Give the reason for bringing this record back from the archive.');
+        }
         $customer->is_archived = false;
         $customer->archived_at = null;
         Audit::record(
             'customer', $customer->id, 'unarchived', $user->id,
+            reason: $reason,
             oldValue: ['is_archived' => true], newValue: ['is_archived' => false],
         );
         $customer->save();

@@ -11,6 +11,7 @@ use App\Models\GstReturn;
 use App\Models\Invoice;
 use App\Models\ModuleCatalog;
 use App\Models\SupplierInvoice;
+use App\Models\TaxCode;
 use App\Models\User;
 use App\Models\UserCompanyAccess;
 use App\Services\PasswordPolicy;
@@ -246,6 +247,31 @@ class GstReturnTest extends TestCase
         $this->postJson("/api/accounting-periods/{$id}/close", [], $this->h)->assertOk();
         $this->postJson("/api/accounting-periods/{$id}/gst-calculate", [], $this->h)->assertOk();
         $this->postJson("/api/accounting-periods/{$id}/gst-revise", ['reason' => 'x'], $this->h)->assertStatus(409);
+    }
+
+    public function test_each_tax_code_counts_in_the_form_5_box_set_on_it(): void
+    {
+        // Decision 47.4 (2026-09-26): a code the company added itself, set to box 2 (zero-rated).
+        TaxCode::create(['company_id' => $this->company->id, 'code' => 'ZX', 'name' => 'Zero-rated export', 'rate_percent' => 0,
+            'is_active' => true, 'kind' => TaxCode::KIND_SUPPLY, 'form5_box' => '2']);
+        // A purchase code set to "not a taxable purchase" even though it carries GST.
+        TaxCode::create(['company_id' => $this->company->id, 'code' => 'IM', 'name' => 'Import, claimed elsewhere', 'rate_percent' => 9,
+            'is_active' => true, 'kind' => TaxCode::KIND_PURCHASE, 'form5_box' => 'not_taxable']);
+        $id = $this->period('2026-09-01', '2026-09-30', 'Sep 2026');
+        $this->invoice('2026-09-05 10:00:00+08', 'ZX', 400, 0);
+        $this->invoice('2026-09-06 10:00:00+08', 'SR', 100, 9);
+        $this->bill('2026-09-08', 200, 18, code: 'IM');
+        $this->postJson("/api/accounting-periods/{$id}/close", [], $this->h)->assertOk();
+
+        $boxes = collect($this->postJson("/api/accounting-periods/{$id}/gst-calculate", [], $this->h)->assertOk()->json('boxes'))->pluck('amount_sgd', 'box');
+        $this->assertEqualsWithDelta(100, $boxes[1], 0.001);
+        $this->assertEqualsWithDelta(400, $boxes[2], 0.001, 'ZX counts in box 2 as set');
+        $this->assertEqualsWithDelta(0, $boxes[5], 0.001, 'IM is set as not a taxable purchase');
+
+        // A supply code cannot be put in a purchase box.
+        $zx = TaxCode::where('code', 'ZX')->first();
+        $this->patchJson("/api/tax-codes/{$zx->id}", ['form5_box' => '5'], $this->h)->assertStatus(422);
+        $this->patchJson("/api/tax-codes/{$zx->id}", ['form5_box' => '3'], $this->h)->assertOk()->assertJsonPath('form5_box', '3');
     }
 
     public function test_a_view_only_group_can_read_but_not_calculate(): void

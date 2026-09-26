@@ -36,7 +36,7 @@ export const journalVoucher = {
 }
 
 export const staff = {
-  name: 'Staff: add a support engineer (must change password at first sign-in)',
+  name: 'Staff: add a support engineer (must change password at first sign-in), then crop and save a photo',
   screen: '/staff',
   async run({ page, profileName }) {
     const t = tag(profileName)
@@ -57,5 +57,39 @@ export const staff = {
     expectStored('Role', u.role, 'support_engineer')
     expectStored('Must change password at first sign-in', u.must_change_password, 'true')
     if (!rows(await apiGet(page, '/users')).some((x) => x.id === u.id)) throw new Error('The new staff member is not in the staff list.')
+
+    // Photo: a wide picture is uploaded, dragged and zoomed in the square
+    // crop box, and saved as a 400 x 400 JPEG (Backlog 2, 2026-09-26).
+    await open(page, `/staff/${u.id}`)
+    const png = await page.evaluate(() => {
+      const c = document.createElement('canvas')
+      c.width = 900
+      c.height = 500
+      const x = c.getContext('2d')
+      x.fillStyle = '#2a6'
+      x.fillRect(0, 0, 900, 500)
+      x.fillStyle = '#c33'
+      x.fillRect(300, 100, 300, 300)
+      return c.toDataURL('image/png').split(',')[1]
+    })
+    await page.locator('#staff-photo').setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') })
+    const crop = page.getByTestId('photo-cropper')
+    await crop.waitFor()
+    const b = await crop.getByAltText('Photo to crop').locator('..').boundingBox()
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(b.x + b.width / 2 + 30, b.y + b.height / 2, { steps: 5 })
+    await page.mouse.up()
+    await crop.locator('#photo-zoom').fill('1.5')
+    await button(crop, 'Use this crop').click()
+    await card(page, 'Profile').getByAltText(/photo$/).waitFor()
+    await submit(page, button(page, 'Save changes'), `/api/users/${u.id}`, 'PATCH')
+    const saved = await apiGet(page, `/users/${u.id}`)
+    expectStored('Photo format', saved.photo?.slice(0, 23), 'data:image/jpeg;base64,')
+    const dims = await page.evaluate(
+      (src) => new Promise((ok) => { const i = new Image(); i.onload = () => ok(`${i.naturalWidth}x${i.naturalHeight}`); i.src = src }),
+      saved.photo,
+    )
+    expectStored('Photo size (cropped square)', dims, '400x400')
   },
 }

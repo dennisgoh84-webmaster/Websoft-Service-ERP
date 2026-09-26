@@ -9,6 +9,7 @@ use App\Models\GstReturn;
 use App\Models\GstReturnLine;
 use App\Models\Invoice;
 use App\Models\SupplierInvoice;
+use App\Models\TaxCode;
 use App\Models\User;
 use App\Support\Money;
 use Illuminate\Support\Carbon;
@@ -70,6 +71,27 @@ class GstReturns
 
     private const BOX_BY_PURCHASE_CODE = ['TX' => '5', 'ZP' => '5', 'EP' => 'not_taxable', 'OP' => 'not_taxable', 'NR' => 'not_taxable'];
 
+    /** @var array<string, array<string, string>> company id => code => its Form 5 box setting */
+    private static array $boxSettings = [];
+
+    /**
+     * The Form 5 box a code is set to count in (decision 47.4, 2026-09-26:
+     * each tax code carries its own setting on Tax Types). A code with no
+     * setting falls back to the built-in placing below.
+     */
+    private static function boxSetting(string $companyId, string $code): ?string
+    {
+        self::$boxSettings[$companyId] ??= TaxCode::where('company_id', $companyId)->whereNotNull('form5_box')
+            ->get(['code', 'form5_box'])->mapWithKeys(fn (TaxCode $t) => [strtoupper($t->code) => $t->form5_box])->all();
+
+        return self::$boxSettings[$companyId][$code] ?? null;
+    }
+
+    private static function supplyBox(string $companyId, string $code, Money $gst): string
+    {
+        return self::boxSetting($companyId, $code) ?? self::BOX_BY_TAX_CODE[$code] ?? ($gst->toFloat() > 0 ? '1' : 'out_of_scope');
+    }
+
     private const BOOKED_BILL_STATUSES = [
         SupplierInvoice::STATUS_APPROVED, SupplierInvoice::STATUS_PARTIALLY_PAID, SupplierInvoice::STATUS_PAID,
     ];
@@ -85,6 +107,8 @@ class GstReturns
             throw new ApiException(409, "Lock the period first: {$period->name} is still open, so its figures can still change. Close All, then run the GST Calculation.");
         }
         self::assertNotSubmitted($period);
+
+        self::$boxSettings = []; // read the settings fresh for each calculation
 
         return DB::transaction(function () use ($period, $actor) {
             $lines = [...self::outputLines($period), ...self::creditNoteLines($period), ...self::inputLines($period)];
@@ -277,7 +301,7 @@ class GstReturns
                     'party_id' => $i->customer_id,
                     'party_name' => $i->customer?->name,
                     'tax_code' => $i->tax_code,
-                    'box' => self::BOX_BY_TAX_CODE[$code] ?? ($gst->toFloat() > 0 ? '1' : 'out_of_scope'),
+                    'box' => self::supplyBox($i->company_id, $code, $gst),
                     'net_sgd' => Money::of($i->amount_sgd ?? 0)->toString(),
                     'gst_sgd' => $gst->toString(),
                 ];
@@ -315,7 +339,7 @@ class GstReturns
                     'party_id' => $n->customer_id,
                     'party_name' => $n->customer?->name,
                     'tax_code' => $n->tax_code,
-                    'box' => self::BOX_BY_TAX_CODE[$code] ?? ($gst->toFloat() > 0 ? '1' : 'out_of_scope'),
+                    'box' => self::supplyBox($n->company_id, $code, $gst),
                     'net_sgd' => Money::of(0)->minus(Money::of($n->amount_sgd))->toString(),
                     'gst_sgd' => Money::of(0)->minus($gst)->toString(),
                 ];
@@ -335,7 +359,7 @@ class GstReturns
             ->map(function (SupplierInvoice $b) {
                 $gst = Money::of($b->gst_amount_sgd ?? 0);
                 $code = strtoupper((string) $b->tax_code);
-                $box = self::BOX_BY_PURCHASE_CODE[$code] ?? ($b->tax_code === null
+                $box = self::boxSetting($b->company_id, $code) ?? self::BOX_BY_PURCHASE_CODE[$code] ?? ($b->tax_code === null
                     ? ($gst->toFloat() > 0 ? '5' : 'no_gst')
                     : ($gst->toFloat() > 0 ? '5' : 'not_taxable'));
 

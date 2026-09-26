@@ -1,12 +1,15 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import CompanyAccessCard from '../components/CompanyAccessCard'
+import PhotoCropper from '../components/PhotoCropper'
 import { api, type AuditLogEntry, type StaffUser, type UserRole, ROLE_LABELS } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import { formatDate, formatDateTime } from '../lib/format'
 
 const ROLES = Object.keys(ROLE_LABELS) as UserRole[]
-const MAX_PHOTO_BYTES = 300 * 1024
+// The picture picked is cropped square and shrunk to 400 x 400 before
+// saving (PhotoCropper), so the original may be large.
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024
 
 const ACTION_LABELS: Record<string, string> = {
   created: 'Account created',
@@ -31,6 +34,7 @@ export default function StaffDetailPage() {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<UserRole>('support_engineer')
   const [photo, setPhoto] = useState<string | null>(null)
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
   const [forcePasswordChange, setForcePasswordChange] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -87,6 +91,7 @@ export default function StaffDetailPage() {
 
   function onPickPhoto(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
     setError(null)
     if (!file.type.startsWith('image/')) {
@@ -94,11 +99,11 @@ export default function StaffDetailPage() {
       return
     }
     if (file.size > MAX_PHOTO_BYTES) {
-      setError('That image is too large -- please use one under 300 KB.')
+      setError('That image is too large -- please use one under 10 MB.')
       return
     }
     const reader = new FileReader()
-    reader.onload = () => setPhoto(reader.result as string)
+    reader.onload = () => setCropSrc(reader.result as string)
     reader.onerror = () => setError('Could not read that file.')
     reader.readAsDataURL(file)
   }
@@ -184,7 +189,18 @@ export default function StaffDetailPage() {
                   )}
                 </div>
               </div>
-              <input type="file" accept="image/*" onChange={onPickPhoto} />
+              {cropSrc ? (
+                <PhotoCropper
+                  src={cropSrc}
+                  onDone={(url) => {
+                    setPhoto(url)
+                    setCropSrc(null)
+                  }}
+                  onCancel={() => setCropSrc(null)}
+                />
+              ) : (
+                <input id="staff-photo" type="file" accept="image/*" onChange={onPickPhoto} />
+              )}
               {photo && (
                 <button
                   type="button"

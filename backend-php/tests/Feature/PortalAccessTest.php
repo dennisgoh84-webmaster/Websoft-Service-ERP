@@ -280,7 +280,7 @@ class PortalAccessTest extends TestCase
         [$otherCustomer, $otherContact] = $this->customerWithContact($company, contactEmail: 'carol@other.example');
         $this->postJson($this->path($otherCustomer, $otherContact), [], $this->headers($token))->assertOk();
 
-        $this->postJson("/api/company-individuals/{$customer->id}/archive", [], $this->headers($token))->assertOk();
+        $this->postJson("/api/company-individuals/{$customer->id}/archive", ['reason' => 'Customer closed down'], $this->headers($token))->assertOk();
 
         foreach ([$contact, $second] as $c) {
             $pu = PortalUser::where('contact_id', $c->id)->firstOrFail();

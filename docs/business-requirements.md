@@ -672,6 +672,15 @@ Status: **CONFIRMED / DECIDED** (2026-09-14). Full design in
 - Settles the outstanding half of decision 12.1 -- see
   [open-business-decisions.md #43](open-business-decisions.md#43-ai-assistant-pdpa-self-declaration-at-login-raised-and-built-2026-09-15).
 
+### PDPA-003 — Archiving and unarchiving a Company / Individual — CONFIRMED and built (2026-09-26)
+
+- Once its data expiry date has passed, a Company / Individual can be
+  archived by anyone with FULL access; a reason is optional.
+- **Before expiry** (or with no expiry date), only the **owner** can
+  archive it, and a reason is required. The server enforces both.
+- **Unarchiving** is for anyone with FULL access, always with a reason.
+- Each archive and unarchive is written to Event Logs with its reason.
+
 ### PDPA-001 — Data expiry defaults to five years from consent — pragmatic default (2026-09-15)
 
 - A Company/Individual's **data expiry date** lives in the PDPA & Data
@@ -1007,6 +1016,13 @@ supporting reports also… all use the data that is kept inside."
   in box 5. Box 8 = 6 − 7. **Boxes 9–12 stay zero** — confirmed
   2026-09-26 as not relevant to Webmaster. Defaults behind this mapping:
   [open-business-decisions.md #47](open-business-decisions.md#47-gst-f5-workflow-defaults-taken-raised-and-built-2026-09-26).
+- **The box is set on each tax code** (2026-09-26): Maintenance → Tax
+  Types gives every sales code a Form 5 box (1, 2, 3 or out of scope)
+  and every purchase code one (5 or not taxable). The built-in codes
+  are pre-set as above; a new code is counted where it is set, and a
+  code with no box set falls back to the mapping above (an unknown
+  sales code with GST counts as box 1). A box that does not fit the
+  code's kind is refused.
 - **Reports read only what was kept**: Accounting Reports → **GST
   Return (Form 5)** adds up the saved months in the chosen range (a
   quarter is its three months) and names any month not yet calculated

@@ -31,10 +31,20 @@ class TaxCode extends Model
 
     public const KINDS = [self::KIND_SUPPLY, self::KIND_PURCHASE];
 
+    /**
+     * Where a code counts in the IRAS Form 5 (decision 47.4, 2026-09-26):
+     * a supply code in box 1, 2 or 3 or out of scope (revenue only); a
+     * purchase code in box 5 or as not a taxable purchase.
+     */
+    public const FORM5_BOXES = [
+        self::KIND_SUPPLY => ['1', '2', '3', 'out_of_scope'],
+        self::KIND_PURCHASE => ['5', 'not_taxable'],
+    ];
+
     /** The purchase code a bill gets when none is chosen: standard-rated. */
     public const DEFAULT_PURCHASE_CODE = 'TX';
 
-    protected $fillable = ['company_id', 'code', 'name', 'rate_percent', 'is_active', 'kind'];
+    protected $fillable = ['company_id', 'code', 'name', 'rate_percent', 'is_active', 'kind', 'form5_box'];
 
     protected $casts = [
         'rate_percent' => 'decimal:2',

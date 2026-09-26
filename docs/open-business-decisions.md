@@ -1993,6 +1993,52 @@ Top 10 billing customers -- count an invoice net of its issued credit
 notes, while the Sales GP report and commission keep each invoice's own
 figures as issued.
 
+## 51b. Backlog 2: questions answered on the decision page (2026-09-26)
+
+Every item left in Backlog 2 had its questions put on the decision page
+at once. Dennis kept the recommendation on all 21. The build list is in
+backlog.md.
+
+| Area | Question | Answer |
+|---|---|---|
+| Credit Note | What can it credit? | **Always against one Sales Invoice**: whole lines, part quantities or an amount. |
+| Credit Note | If the invoice was already paid? | **Finance chooses**: the credit stays on the customer's account for their next invoice, or is refunded with a Payment Voucher. |
+| Credit Note | Goods sent back? | **Tick "goods returned" per line** and pick the warehouse; stock goes back at the cost it left at. |
+| Credit Note | Within the customer's limit, who approves? | **Nobody**: anyone with EDIT on Billing issues it straight away; above the limit (or with none set) it waits for the owner. |
+| Multi-currency | Where does a document's currency come from? | **The Company / Individual's own default currency**, changeable on the document. |
+| Multi-currency | Which rate? | **The Currency Rate Table** (latest rate on or before the document date), editable on the document. |
+| Multi-currency | When is gain / loss booked? | **Only when paid** (realised); no month-end revaluation. |
+| Multi-currency | Foreign-currency bank accounts? | **Yes**, e.g. a USD account whose Bank Book runs in USD with the SGD value beside each line. |
+| Data Migration | What does the cut-off date cover? | **Transactions only**; customers, contacts and contracts come across whole. |
+| Data Migration | Open items from before the cut-off? | **Brought in if still open** (unpaid, active, not closed). |
+| AI Assistant | Service Record drafting | **A "Draft with AI" button** by the work description: rough notes in any language become a proper English description to edit and save. |
+| AI Assistant | Spending cap | **Per company** (settles the two earlier answers), with the installation total shown. |
+| eApproval | Which Payment Vouchers need approval? | **Above an amount set per Bank Authority**; below it they go straight. |
+| eApproval | What is a Bank Authority? | **The signatories of one bank account**, with "any one" or "all must" set per authority. |
+| eApproval | Purchase Orders | **Keep the supplier's PO limit**: within it no approval; above it the eApproval approvers decide. |
+| eApproval | Service Records | **Add Reject with a reason**; approvers are an authority with Nico and Cherish (any one). |
+| eApproval | Telling approvers | **Email as each item arrives**, plus the Approval Center. |
+| Helpdesk Portal | What can customers attach? | **Photos, screenshots and PDFs**, up to 10 MB each and 5 per incident. |
+| Helpdesk Portal | Adding later | **Yes, while the incident is open**. |
+| GST | Form 5 box setting | **Sales and purchase codes**; built-in codes pre-set as they work today. |
+| PDPA | Unarchiving | **Anyone with FULL access, with a reason** (archiving before expiry stays owner-only with a reason). |
+
+The Credit Note itself was built by a parallel session the same day
+(BILL-003, commit 2aa6a48). These answers go with its follow-up
+questions on the page.
+
+Small details nobody foresaw, built with the recommended default
+(each named in a code comment too):
+
+- **Staff photo crop**: the square crop is saved as a 400 × 400 JPEG,
+  so a picture of any size (up to 10 MB) can be picked; the round
+  outline in the crop box shows how it appears as an avatar.
+- **Form 5 box**: a tax code with no box set counts where it did
+  before (the built-in mapping); an unknown sales code with GST counts
+  in box 1. A box that does not fit the code's kind is refused.
+- **Event Logs day filter**: From and To are whole Singapore days, To
+  included.
+
 ## How to use this document
 
 - Do not start detailed schema or workflow design for an area until the
