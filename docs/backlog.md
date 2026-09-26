@@ -295,6 +295,14 @@ shipped and when.
 
 ## Confirmed scope, not yet built
 
+- [ ] **Answered 2026-09-26, to build** ([open-business-decisions.md #49](open-business-decisions.md#49-outstanding-questions-answered-by-pick-list-2026-09-26)):
+  - [ ] Self-testing program (every screen, desktop and phone) plus the nightly report on the test server.
+  - [ ] Bank Book: no direct keying; bank charges and interest go through Receipt / Payment.
+  - [ ] Credit Note document (GST and GL reversal, owner approval above the customer's limit).
+  - [ ] Accepted quotation: product / stock lines to a Sales Invoice, hours to a contract.
+  - [ ] Overdue Service Record approval: daily email to the approvers.
+  - [ ] Full multi-currency on sales and purchases (original + SGD, exchange gain/loss).
+
 - [x] **Prospect / Leads + Sales Supervisor / Sales Staff roles** --
   built 2026-09-26 (SALES-009 / SALES-010 in business-requirements.md).
   Replaces the "CRM" activities. Dennis confirmed the defaults

@@ -1872,6 +1872,22 @@ before building. Implementation is in `app/routers/mobile.py`,
 
 ---
 
+## 49. Outstanding questions answered by pick-list (2026-09-26)
+
+Asked as pick-lists (CLAUDE.md, "Working with Dennis"). Each answer is
+decided; the build is tracked in backlog.md.
+
+| Item | Question | Answer |
+|---|---|---|
+| Self-test | Build a saved self-testing program? | **Build it, with a nightly report**: one command runs it, walking every screen on a desktop and a phone-sized screen, keying in fields, saving and checking what was stored. It runs before every push, and nightly on the test server with a pass/fail email and screenshots of failures. |
+| 47.5 | Who may Revise a submitted GST return? | **Same as Submit**: FULL on GST and Account Period. Built. |
+| 4b.5 | Currencies other than SGD? | **Full multi-currency**: sales and purchases in any currency, keeping the original and SGD amounts, with exchange gain/loss. Closes 4b.5. |
+| 2.7 / #38 | Build the Credit Note document? | **Build it now**: a Credit Note against an invoice reverses its GST and ledger entries and counts in the GST Calculation; above the customer's credit note limit it needs the owner's approval. |
+| 11.2 | Accepted quotation with product / hardware lines | **Split automatically**: product and stock lines go to a Sales Invoice, hour and service lines to a contract as now. |
+| 9.1 / SRV-019 | Service Record unapproved a week after submission | **Flag + email the approvers** once a day while any are overdue. |
+| 9.2 / SRV-020 | Billable Job Order approval raises an invoice? | **Keep as is**: bill by milestone or a hand-raised Sales Invoice. Closed. |
+| 31.1 | Bank Book lines keyed directly | Dennis (Other): **"Should not allow them to key direct, have to key in through receipt or payment."** Bank charges, interest etc. come in as a Receipt or Payment, which reach both the Bank Book and the GL; direct keying in the Bank Book is removed. |
+
 ## How to use this document
 
 - Do not start detailed schema or workflow design for an area until the
