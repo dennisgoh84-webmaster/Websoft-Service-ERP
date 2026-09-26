@@ -2659,9 +2659,14 @@ export interface SalespersonCard {
   name: string
   prospects_by_stage: Record<ProspectStatus, number>
   open_prospects: number
+  /** Financial year to date. */
   quoted_sgd: number
   billed_sgd: number
   paid_sgd: number
+  /** This calendar month (Dennis, 2026-09-26: "This month, with the year beside it"). */
+  quoted_month_sgd: number
+  billed_month_sgd: number
+  paid_month_sgd: number
 }
 
 export const api = {
@@ -3155,7 +3160,7 @@ export const api = {
   // ---- Sales Dashboard ----
   salesDashboardSummary: (year?: number) => request<SalesDashboardSummary>(`/sales-dashboard/summary${qs({ year })}`),
   salesDashboardSalespeople: (year?: number) =>
-    request<{ financial_year: number; sees_all: boolean; cards: SalespersonCard[] }>(`/sales-dashboard/salespeople${qs({ year })}`),
+    request<{ financial_year: number; sees_all: boolean; month_label: string; cards: SalespersonCard[] }>(`/sales-dashboard/salespeople${qs({ year })}`),
   salesDashboardArBreakdown: (bucket: string) =>
     request<SalesDashboardArRow[]>(`/sales-dashboard/ar-breakdown${qs({ bucket })}`),
   exportSalesDashboardArBreakdownCsv: (bucket: string) => requestBlob(`/sales-dashboard/ar-breakdown/export.csv${qs({ bucket })}`),

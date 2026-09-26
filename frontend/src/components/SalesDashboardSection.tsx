@@ -34,7 +34,7 @@ export default function SalesDashboardSection() {
   const [drillDownBucket, setDrillDownBucket] = useState<string | null>(null)
   const [drillDownRows, setDrillDownRows] = useState<SalesDashboardArRow[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [people, setPeople] = useState<{ sees_all: boolean; cards: SalespersonCard[] } | null>(null)
+  const [people, setPeople] = useState<{ sees_all: boolean; month_label: string; cards: SalespersonCard[] } | null>(null)
 
   function refresh() {
     api.salesDashboardSummary().then(setSummary).catch((e) => setSummaryError(e instanceof Error ? e.message : 'Failed to load'))
@@ -165,12 +165,12 @@ export default function SalesDashboardSection() {
         <div className="card">
           <h2 style={{ marginTop: 0 }}>{people.sees_all ? 'By salesperson' : 'My figures'}</h2>
           <p className="muted" style={{ marginTop: 0 }}>
-            Prospects by stage as they stand today; quoted, billed and paid for FY{summary?.financial_year ?? ''}. Work counts on
-            its prospect's salesperson.
+            Prospects by stage as they stand today; quoted, billed and paid for {people.month_label} and for FY
+            {summary?.financial_year ?? ''} to date. Work counts on its prospect's salesperson.
           </p>
           <div className="salesperson-grid">
             {people.cards.map((c) => (
-              <SalespersonCardView key={c.salesperson_user_id ?? c.kind} card={c} />
+              <SalespersonCardView key={c.salesperson_user_id ?? c.kind} card={c} monthLabel={people.month_label} year={summary?.financial_year} />
             ))}
           </div>
         </div>
@@ -276,7 +276,7 @@ const STAGES: { key: ProspectStatus; label: string }[] = [
   { key: 'lost', label: 'Lost' },
 ]
 
-function SalespersonCardView({ card: c }: { card: SalespersonCard }) {
+function SalespersonCardView({ card: c, monthLabel, year }: { card: SalespersonCard; monthLabel: string; year?: number }) {
   const prospectsLink = c.salesperson_user_id ? `/prospects?salesperson_user_id=${c.salesperson_user_id}` : '/prospects'
   return (
     <div className="salesperson-card" data-testid="salesperson-card">
@@ -297,14 +297,32 @@ function SalespersonCardView({ card: c }: { card: SalespersonCard }) {
           ))}
         </div>
       )}
-      <dl className="salesperson-figures">
-        <dt>Quoted</dt>
-        <dd>{money(c.quoted_sgd)}</dd>
-        <dt>Billed</dt>
-        <dd>{money(c.billed_sgd)}</dd>
-        <dt>Paid</dt>
-        <dd>{money(c.paid_sgd)}</dd>
-      </dl>
+      <table className="salesperson-figures">
+        <thead>
+          <tr>
+            <th></th>
+            <th>{monthLabel}</th>
+            <th>FY{year ?? ''}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Quoted</th>
+            <td>{money(c.quoted_month_sgd)}</td>
+            <td>{money(c.quoted_sgd)}</td>
+          </tr>
+          <tr>
+            <th>Billed</th>
+            <td>{money(c.billed_month_sgd)}</td>
+            <td>{money(c.billed_sgd)}</td>
+          </tr>
+          <tr>
+            <th>Paid</th>
+            <td>{money(c.paid_month_sgd)}</td>
+            <td>{money(c.paid_sgd)}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   )
 }

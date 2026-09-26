@@ -1695,3 +1695,26 @@ button.date-input-calendar {
   margin: 0;
   text-align: right;
 }
+/* The salesperson card's month-and-year figures (a table, not the dl above). */
+table.salesperson-figures {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+}
+table.salesperson-figures th,
+table.salesperson-figures td {
+  padding: 2px 0 2px 8px;
+  border: 0;
+  text-align: right;
+  font-weight: normal;
+  white-space: nowrap;
+}
+table.salesperson-figures th:first-child {
+  text-align: left;
+  padding-left: 0;
+  color: var(--text-muted);
+}
+table.salesperson-figures thead th {
+  font-size: 0.8em;
+  color: var(--text-muted);
+}

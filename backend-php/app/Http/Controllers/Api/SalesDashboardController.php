@@ -10,6 +10,7 @@ use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\SalesDashboardService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 /**
  * NEW FEATURE (not a Python->PHP conversion -- see
@@ -68,6 +69,7 @@ class SalesDashboardController extends Controller
         return response()->json([
             'financial_year' => $year ?? SalesDashboardService::currentFinancialYear($user->company_id),
             'sees_all' => $user->seesAllProspects(),
+            'month_label' => Carbon::now()->format('M Y'),
             'cards' => SalesDashboardService::salespersonCards($user, $year),
         ]);
     }

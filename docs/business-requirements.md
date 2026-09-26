@@ -822,7 +822,9 @@ conversion" note on this set of rules). Decision record:
 
 - **Per-salesperson cards** (Dennis, 2026-09-26, decision 12.2 / #50).
   Each salesperson's card shows their prospects by stage, and what they
-  quoted, billed and got paid in the financial year. Work counts on its
+  quoted, billed and got paid this month, with the financial year to
+  date beside it (Dennis, 2026-09-26: "This month, with the year beside
+  it"). Work counts on its
   prospect's salesperson; work with no prospect goes on a "No prospect"
   card. The owner, Sales Manager and Sales Supervisor see every card;
   anyone else sees only their own.

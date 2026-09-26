@@ -71,6 +71,22 @@ class SalespersonCardsTest extends TestCase
         DB::table('invoices')->where('id', $inv->id)->update(['issued_at' => $issued]);
     }
 
+    public function test_this_month_is_shown_beside_the_financial_year(): void
+    {
+        [, $h] = $this->login(User::ROLE_SALES_MANAGER, 'Cherish');
+        [$amy] = $this->login(User::ROLE_SALES_STAFF, 'Amy');
+        $p = $this->prospect($amy, Prospect::STATUS_PROPOSAL);
+        $this->quotation($p, 700, Quotation::STATUS_SENT, '2026-08-15'); // earlier this financial year
+        $this->quotation($p, 300, Quotation::STATUS_SENT, '2026-09-20'); // this month
+        $this->invoice($p, 500, 0, '2026-07-05 10:00:00+08');
+
+        $card = collect($this->getJson('/api/sales-dashboard/salespeople', $h)->assertOk()->assertJsonPath('month_label', 'Sep 2026')->json('cards'))->firstWhere('name', 'Amy');
+        $this->assertSame(1000.0, (float) $card['quoted_sgd']);
+        $this->assertSame(300.0, (float) $card['quoted_month_sgd']);
+        $this->assertSame(500.0, (float) $card['billed_sgd']);
+        $this->assertSame(0.0, (float) $card['billed_month_sgd']);
+    }
+
     public function test_work_counts_on_the_prospects_salesperson_and_managers_see_every_card(): void
     {
         [, $mgrH] = $this->login(User::ROLE_SALES_MANAGER, 'Cherish');
@@ -91,6 +107,9 @@ class SalespersonCardsTest extends TestCase
         $cards = collect($this->getJson('/api/sales-dashboard/salespeople', $mgrH)->assertOk()->assertJsonPath('sees_all', true)->json('cards'))->keyBy('name');
 
         $this->assertSame(1000.0, (float) $cards['Amy']['quoted_sgd']);
+        // This month (September 2026) beside the year: the 1 Sep quotation and 10 Sep invoice both fall in it.
+        $this->assertSame(1000.0, (float) $cards['Amy']['quoted_month_sgd']);
+        $this->assertSame(1090.0, (float) $cards['Amy']['billed_month_sgd']);
         $this->assertSame(1090.0, (float) $cards['Amy']['billed_sgd']);
         $this->assertSame(500.0, (float) $cards['Amy']['paid_sgd']);
         $this->assertSame(1, $cards['Amy']['prospects_by_stage']['proposal']);

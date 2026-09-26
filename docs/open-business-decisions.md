@@ -1928,7 +1928,8 @@ key in (commission rate, per-customer limits, accounting periods).
 From 2026-09-26, open questions go on one page, **Websoft Decisions**
 (https://claude.ai/artifact/Rk2LsEp9qDcqggjqstJeTv), with the
 recommended answer already selected. Dennis submits them together.
-Raised there for the Sales / Service batch:
+Raised there for the Sales / Service batch (plus 12.2's card period,
+raised once the cards were built):
 
 - 11.2: when the Sales Invoice for a quotation's product lines is
   raised, and which lines count as product lines;
@@ -1950,7 +1951,7 @@ changed one):
 | SRV-019: at what time? | **8:45 am**, only on days when at least one Service Record is overdue. |
 | 12.2: who sees which salesperson cards? | **Managers see all, staff see their own** (owner, Sales Manager and Sales Supervisor see all). |
 | 12.2: whose card does work count on? | **The prospect's salesperson.** Work with no prospect goes on a "No prospect" card. |
-| (default taken) What period do the salesperson cards cover? | Prospects by stage show the pipeline as it stands; quoted, billed and paid cover the dashboard's financial year, like its other figures. A sales-role user with no work yet still gets an empty card. *To confirm.* |
+| 12.2: what period do the salesperson cards cover? | **This month, with the year beside it** (changed from the recommendation, which was the financial year only). Quoted, billed and paid are shown for this calendar month and for the financial year to date; prospects by stage show the pipeline as it stands. A sales-role user with no work yet still gets an empty card. |
 | 12.1: where do existing Software Tasks land? | **By what they show today**: tested ones become Tested; untested ones past their finish date become For Testing; the rest become Open. Each move is logged in Event Logs. |
 | 12.1: who may mark Released? | **Anyone with EDIT on Software Development**, and only from Tested. |
 

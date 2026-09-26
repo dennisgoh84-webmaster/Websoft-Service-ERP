@@ -229,9 +229,10 @@ class SalesDashboardService
      *   are for managers only.
      * - **What each card shows:** prospects by stage are the pipeline as
      *   it stands. Quoted (sent or accepted quotations, by quotation
-     *   date), billed and paid (invoices, by issue date) cover the
-     *   financial year, like the dashboard's other figures. Default
-     *   taken 2026-09-26, recorded in open-business-decisions #50.
+     *   date), billed and paid (invoices, by issue date) are each given
+     *   for this calendar month and for the financial year to date
+     *   (Dennis, 2026-09-26, #50: "This month, with the year beside
+     *   it").
      *
      * @return list<array<string, mixed>>
      */
@@ -244,7 +245,8 @@ class SalesDashboardService
 
         $cards = [];
         $card = function (string $k) use (&$cards) {
-            $cards[$k] ??= ['prospects_by_stage' => array_fill_keys(Prospect::STATUSES, 0), 'quoted' => Money::of(0), 'billed' => Money::of(0), 'paid' => Money::of(0)];
+            $zero = ['quoted' => Money::of(0), 'billed' => Money::of(0), 'paid' => Money::of(0)];
+            $cards[$k] ??= ['prospects_by_stage' => array_fill_keys(Prospect::STATUSES, 0), 'year' => $zero, 'month' => $zero];
 
             return $k;
         };
@@ -266,28 +268,32 @@ class SalesDashboardService
             $cards[$k]['prospects_by_stage'][$row->status] = (int) $row->n;
         }
 
-        $quoted = Quotation::query()->leftJoin('prospects', 'prospects.id', '=', 'quotations.prospect_id')
-            ->where('quotations.company_id', $companyId)
-            ->whereIn('quotations.status', Prospect::QUOTED_STATUSES)
-            ->whereBetween('quotations.quotation_date', [$from->toDateString(), $to->toDateString()])
-            ->when(! $all, fn ($q) => $q->where('prospects.salesperson_user_id', $viewer->id))
-            ->selectRaw('quotations.prospect_id is null as no_prospect, prospects.salesperson_user_id, sum(quotations.total_amount_sgd) as total')
-            ->groupByRaw('quotations.prospect_id is null, prospects.salesperson_user_id')->get();
-        foreach ($quoted as $row) {
-            $k = $card($row->no_prospect ? 'no_prospect' : $key($row->salesperson_user_id));
-            $cards[$k]['quoted'] = $cards[$k]['quoted']->plus(Money::of($row->total ?? 0));
-        }
+        // The same sums for the financial year and for this calendar month.
+        $periods = ['year' => [$from, $to], 'month' => [Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()]];
+        foreach ($periods as $period => [$pFrom, $pTo]) {
+            $quoted = Quotation::query()->leftJoin('prospects', 'prospects.id', '=', 'quotations.prospect_id')
+                ->where('quotations.company_id', $companyId)
+                ->whereIn('quotations.status', Prospect::QUOTED_STATUSES)
+                ->whereBetween('quotations.quotation_date', [$pFrom->toDateString(), $pTo->toDateString()])
+                ->when(! $all, fn ($q) => $q->where('prospects.salesperson_user_id', $viewer->id))
+                ->selectRaw('quotations.prospect_id is null as no_prospect, prospects.salesperson_user_id, sum(quotations.total_amount_sgd) as total')
+                ->groupByRaw('quotations.prospect_id is null, prospects.salesperson_user_id')->get();
+            foreach ($quoted as $row) {
+                $k = $card($row->no_prospect ? 'no_prospect' : $key($row->salesperson_user_id));
+                $cards[$k][$period]['quoted'] = $cards[$k][$period]['quoted']->plus(Money::of($row->total ?? 0));
+            }
 
-        $billed = Invoice::query()->leftJoin('prospects', 'prospects.id', '=', 'invoices.prospect_id')
-            ->where('invoices.company_id', $companyId)
-            ->whereBetween('invoices.issued_at', [$from, $to])
-            ->when(! $all, fn ($q) => $q->where('prospects.salesperson_user_id', $viewer->id))
-            ->selectRaw('invoices.prospect_id is null as no_prospect, prospects.salesperson_user_id, sum(invoices.total_amount_sgd) as billed, sum(invoices.amount_paid_sgd) as paid')
-            ->groupByRaw('invoices.prospect_id is null, prospects.salesperson_user_id')->get();
-        foreach ($billed as $row) {
-            $k = $card($row->no_prospect ? 'no_prospect' : $key($row->salesperson_user_id));
-            $cards[$k]['billed'] = $cards[$k]['billed']->plus(Money::of($row->billed ?? 0));
-            $cards[$k]['paid'] = $cards[$k]['paid']->plus(Money::of($row->paid ?? 0));
+            $billed = Invoice::query()->leftJoin('prospects', 'prospects.id', '=', 'invoices.prospect_id')
+                ->where('invoices.company_id', $companyId)
+                ->whereBetween('invoices.issued_at', [$pFrom, $pTo])
+                ->when(! $all, fn ($q) => $q->where('prospects.salesperson_user_id', $viewer->id))
+                ->selectRaw('invoices.prospect_id is null as no_prospect, prospects.salesperson_user_id, sum(invoices.total_amount_sgd) as billed, sum(invoices.amount_paid_sgd) as paid')
+                ->groupByRaw('invoices.prospect_id is null, prospects.salesperson_user_id')->get();
+            foreach ($billed as $row) {
+                $k = $card($row->no_prospect ? 'no_prospect' : $key($row->salesperson_user_id));
+                $cards[$k][$period]['billed'] = $cards[$k][$period]['billed']->plus(Money::of($row->billed ?? 0));
+                $cards[$k][$period]['paid'] = $cards[$k][$period]['paid']->plus(Money::of($row->paid ?? 0));
+            }
         }
 
         $names = User::whereIn('id', array_filter(array_keys($cards), fn ($k) => $k !== 'none' && $k !== 'no_prospect'))->pluck('full_name', 'id');
@@ -301,9 +307,14 @@ class SalesDashboardService
                 },
                 'prospects_by_stage' => $c['prospects_by_stage'],
                 'open_prospects' => array_sum(array_intersect_key($c['prospects_by_stage'], array_flip(Prospect::ACTIVE_STATUSES))),
-                'quoted_sgd' => $c['quoted']->toFloat(),
-                'billed_sgd' => $c['billed']->toFloat(),
-                'paid_sgd' => $c['paid']->toFloat(),
+                // The financial year to date ...
+                'quoted_sgd' => $c['year']['quoted']->toFloat(),
+                'billed_sgd' => $c['year']['billed']->toFloat(),
+                'paid_sgd' => $c['year']['paid']->toFloat(),
+                // ... and this calendar month.
+                'quoted_month_sgd' => $c['month']['quoted']->toFloat(),
+                'billed_month_sgd' => $c['month']['billed']->toFloat(),
+                'paid_month_sgd' => $c['month']['paid']->toFloat(),
             ];
         }
         // Salespeople by what they billed, then the two catch-all cards last.
