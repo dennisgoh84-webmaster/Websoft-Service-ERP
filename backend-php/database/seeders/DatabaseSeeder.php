@@ -123,6 +123,7 @@ class DatabaseSeeder extends Seeder
         ['6500', 'Bank charges', Account::TYPE_EXPENSE],
         ['6600', 'Depreciation', Account::TYPE_EXPENSE],
         ['6700', 'Bad debts written off', Account::TYPE_EXPENSE],
+        ['6800', 'Exchange (gain) / loss', Account::TYPE_EXPENSE],
         ['6900', 'Other operating expenses', Account::TYPE_EXPENSE],
     ];
 

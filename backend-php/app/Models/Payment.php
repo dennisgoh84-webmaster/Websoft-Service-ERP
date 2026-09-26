@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCurrency;
 use App\Models\Concerns\HasUuidPrimaryKey;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -17,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Payment extends Model
 {
+    use HasCurrency;
     use HasFactory, HasUuidPrimaryKey;
 
     public $timestamps = false;
@@ -39,6 +41,7 @@ class Payment extends Model
         // Data Migration (docs/data-migration.md) -- zero/null on every
         // receipt recorded in this system.
         'pre_migration_allocated_sgd', 'migrated_at',
+        'currency_code', 'exchange_rate', 'amount_fx',
     ];
 
     protected $attributes = ['method' => self::METHOD_BANK_TRANSFER, 'pre_migration_allocated_sgd' => '0.00'];
@@ -103,5 +106,19 @@ class Payment extends Model
         }
 
         return Money::of($this->amount_sgd)->minus($this->allocatedSgd());
+    }
+
+    /** What is still unallocated in the receipt's own currency. */
+    public function unallocatedFx(): Money
+    {
+        if ($this->isOther()) {
+            return Money::of(0);
+        }
+        $allocated = $this->allocations->reduce(
+            fn (Money $carry, PaymentAllocation $a) => $carry->plus(Money::of($a->amount_fx ?? $a->amount_sgd)),
+            Money::of($this->pre_migration_allocated_sgd ?? 0),
+        );
+
+        return $this->fx('amount')->minus($allocated);
     }
 }

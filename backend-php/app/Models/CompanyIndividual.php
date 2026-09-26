@@ -28,6 +28,13 @@ class CompanyIndividual extends Model
 
     public const TYPE_COMPANY = 'company';
 
+    /** Multi-currency: stored upper case; blank means SGD. */
+    public function setDefaultCurrencyAttribute(?string $value): void
+    {
+        $value = strtoupper(trim((string) $value));
+        $this->attributes['default_currency'] = $value === '' || $value === 'SGD' ? null : $value;
+    }
+
     protected $fillable = [
         'company_id', 'customer_type', 'name', 'customer_group_id',
         'legacy_customer_code', 'contact_person', 'uen', 'gst_registration_no',
@@ -36,7 +43,7 @@ class CompanyIndividual extends Model
         'address_postal_code', 'address_country', 'tags', 'industry_code',
         'exclude_auto_sent', 'terms_and_conditions', 'memo', 'billing_notes',
         'payment_terms_days', 'is_customer', 'is_supplier',
-        'po_approval_limit_sgd', 'credit_note_approval_limit_sgd', 'credit_limit_sgd',
+        'po_approval_limit_sgd', 'credit_note_approval_limit_sgd', 'credit_limit_sgd', 'default_currency',
         'pdpa_consent_given', 'pdpa_consent_at', 'pdpa_agreement_document',
         'data_expiry_date', 'is_archived', 'archived_at', 'is_active',
     ];

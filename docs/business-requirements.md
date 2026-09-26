@@ -654,6 +654,37 @@ payment." Built 2026-09-26.
   #51): an Other receipt or payment carries no GST. So bank interest
   received is not counted in the GST Calculation as an exempt supply.
 
+### ACC-006 — Multi-currency — CONFIRMED and built (2026-09-26)
+
+- **Sales and purchases in any currency** (#49): Quotations, Sales
+  Invoices, Credit Notes, Receipts, Purchase Orders, supplier bills and
+  Payment Vouchers each carry a currency and an exchange rate ("1 unit
+  = X SGD"), and keep every figure twice: in that currency and in SGD.
+  The General Ledger, every report and the GST return read the SGD.
+- **The currency** starts as the Company / Individual's own **default
+  currency** (set on its file; blank = SGD) and can be changed on the
+  document.
+- **The rate** starts as the **Currency Rate Table**'s latest active
+  rate on or before the document date, and can be changed on the
+  document. A foreign currency with no rate there, and none keyed, is
+  refused. A PO's bill and an accepted quotation's invoice take the
+  table's rate on their own date (else the original document's).
+- **GST** on a foreign-currency document is worked out in its currency
+  and kept in SGD at its rate. A credit note is always in its invoice's
+  currency and at its rate, so it reverses exactly what was posted.
+- **Exchange gain / loss is booked only when paid** (realised; no
+  month-end revaluation): a receipt or payment settles documents in its
+  own currency only; allocating it clears the invoice or bill at the
+  invoice's or bill's rate, and the difference to the receipt's or
+  payment's own SGD value is posted to **6800 Exchange (gain) / loss**
+  (a gain credits it, a loss debits it), dated the receipt or payment
+  date. The last allocation of a document takes exactly what is left in
+  SGD, so no cent is stranded.
+- **Foreign-currency bank accounts**: a bank account's currency (e.g.
+  USD) runs its Bank Book in that currency with the SGD value beside
+  each line, and takes only vouchers in that currency; a foreign-
+  currency voucher can also go through an SGD account (converted).
+
 ## Customer Portal Business Rules (CONFIRMED)
 
 Status: **CONFIRMED / DECIDED** (2026-09-14). Full design in

@@ -64,6 +64,11 @@ class CreditNoteController extends Controller
             'gst_rate' => $n->gst_rate === null ? null : (float) $n->gst_rate,
             'gst_amount_sgd' => (float) $n->gst_amount_sgd,
             'total_amount_sgd' => (float) $n->total_amount_sgd,
+            'currency_code' => $n->currencyCode(),
+            'exchange_rate' => (float) $n->rate(),
+            'amount_fx' => $n->fx('amount')->toFloat(),
+            'gst_amount_fx' => $n->fx('gst_amount')->toFloat(),
+            'total_amount_fx' => $n->fx('total_amount')->toFloat(),
             'status' => $n->status,
             'raised_by' => $n->raisedBy?->full_name,
             'raised_at' => $n->raised_at?->toIso8601String(),
@@ -114,7 +119,10 @@ class CreditNoteController extends Controller
         Authority::requireModuleAccess($user, self::MODULE, 'edit');
         $data = $request->validate([
             'invoice_id' => 'required|uuid',
-            'amount_sgd' => 'required|numeric|gt:0',
+            // Net of GST, in the invoice's own currency (multi-currency);
+            // `amount_sgd` is kept for an SGD invoice.
+            'amount' => 'required_without:amount_sgd|nullable|numeric|gt:0',
+            'amount_sgd' => 'required_without:amount|nullable|numeric|gt:0',
             'reason' => 'required|string|max:1000',
         ]);
         $invoice = Invoice::find($data['invoice_id']);
@@ -123,7 +131,7 @@ class CreditNoteController extends Controller
         }
 
         try {
-            $note = CreditNotes::raise($invoice, $user, (string) $data['amount_sgd'], $data['reason']);
+            $note = CreditNotes::raise($invoice, $user, (string) ($data['amount'] ?? $data['amount_sgd']), $data['reason']);
         } catch (ARRuleViolation $e) {
             throw new ApiException(422, $e->getMessage());
         }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCurrency;
 use App\Models\Concerns\HasUuidPrimaryKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -21,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Quotation extends Model
 {
+    use HasCurrency;
     use HasFactory, HasUuidPrimaryKey;
 
     public $timestamps = false;
@@ -58,6 +60,7 @@ class Quotation extends Model
         'renews_contract_id',
         'to_revise_at', 'revision_reason', 'revised_from_quotation_id',
         'prospect_id',
+        'currency_code', 'exchange_rate', 'amount_fx', 'gst_amount_fx', 'total_amount_fx',
     ];
 
     // Mirrors the DB column defaults (see the migration) so a freshly

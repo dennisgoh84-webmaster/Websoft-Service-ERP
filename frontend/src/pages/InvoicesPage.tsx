@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import CreditLimitWarning from '../components/CreditLimitWarning'
+import CurrencyFields, { currencyPayload, type CurrencyValue } from '../components/CurrencyFields'
 import { EmailIcon, PrintIcon, WhatsAppIcon } from '../components/DocActionIcons'
 import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
@@ -18,7 +19,7 @@ import {
   type StockLevelRow,
   type Warehouse,
 } from '../lib/api'
-import { formatMoney as money, formatDate } from '../lib/format'
+import { formatMoney as money, formatDate, todayIso } from '../lib/format'
 
 /**
  * A line on the "Raise Sales Invoice" form. Held as strings while the
@@ -75,6 +76,8 @@ export default function InvoicesPage() {
   // Raise Sales Invoice form
   const [showRaise, setShowRaise] = useState(false)
   const [raiseCustomerId, setRaiseCustomerId] = useState('')
+  // Multi-currency: the customer's own currency, at today's rate from the table.
+  const [raiseCur, setRaiseCur] = useState<CurrencyValue>({ currency: 'SGD', rate: '' })
   const [raiseDescription, setRaiseDescription] = useState('')
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()])
   const [saving, setSaving] = useState(false)
@@ -145,12 +148,13 @@ export default function InvoicesPage() {
       const invoice = await api.createSalesInvoice({
         customer_id: raiseCustomerId,
         description: raiseDescription || undefined,
+        ...currencyPayload(raiseCur),
         lines: lines
           .filter((l) => l.description && l.quantity && l.unitPrice !== '')
           .map((l) => ({
             description: l.description,
             quantity: parseInt(l.quantity, 10),
-            unit_price_sgd: parseFloat(l.unitPrice),
+            unit_price: parseFloat(l.unitPrice),
             product_id: l.productId || undefined,
             stock_item_id: l.stockItemId || undefined,
             warehouse_id: l.warehouseId || undefined,
@@ -257,7 +261,7 @@ export default function InvoicesPage() {
     setMessage(null)
     setCnSaving(true)
     try {
-      const cn = await api.raiseCreditNote({ invoice_id: invoice.id, amount_sgd: parseFloat(cnAmount), reason: cnReason })
+      const cn = await api.raiseCreditNote({ invoice_id: invoice.id, amount: parseFloat(cnAmount), reason: cnReason })
       setMessage(
         `Credit note for ${money(cn.total_amount_sgd)} on ${invoice.invoice_number} raised -- waiting for approval by ` +
           (cn.needs_owner ? 'the owner' : 'Finance, the Sales Manager or the owner') +
@@ -395,7 +399,17 @@ export default function InvoicesPage() {
                 />
               </label>
             </div>
-          <CreditLimitWarning customerId={raiseCustomerId} addingSgd={draftNet} />
+          <CurrencyFields
+            idPrefix="invoice"
+            value={raiseCur}
+            onChange={setRaiseCur}
+            date={todayIso()}
+            partyCurrency={customers.find((c) => c.id === raiseCustomerId)?.default_currency ?? null}
+          />
+          <CreditLimitWarning
+            customerId={raiseCustomerId}
+            addingSgd={raiseCur.currency === 'SGD' ? draftNet : draftNet * (parseFloat(raiseCur.rate) || 0)}
+          />
 
             <div className="report-table-wrap" style={{ overflowX: 'auto' }}>
               <table>
@@ -820,9 +834,19 @@ export default function InvoicesPage() {
                 </td>
                 <td>
                   <strong>{money(inv.total_amount_sgd)}</strong>
+                  {inv.currency_code && inv.currency_code !== 'SGD' && (
+                    <div className="muted small">
+                      {inv.currency_code} {(inv.total_amount_fx ?? 0).toFixed(2)} @ {inv.exchange_rate}
+                    </div>
+                  )}
                 </td>
                 <td>
                   {money(inv.outstanding_sgd)}
+                  {inv.currency_code && inv.currency_code !== 'SGD' && (
+                    <div className="muted small">
+                      {inv.currency_code} {(inv.outstanding_fx ?? 0).toFixed(2)}
+                    </div>
+                  )}
                   {inv.credited_sgd > 0 && <div className="muted">credited {money(inv.credited_sgd)}</div>}
                 </td>
                 <td style={{ whiteSpace: 'nowrap' }}>
@@ -913,7 +937,7 @@ export default function InvoicesPage() {
                     <form className="credit-note-form" onSubmit={(e) => onRaiseCreditNote(e, inv)}>
                       <h3 style={{ marginTop: 0 }}>Credit note on {inv.invoice_number}</h3>
                       <div className="form-row">
-                        <label>Amount to credit, net of GST (SGD)</label>
+                        <label>Amount to credit, net of GST ({inv.currency_code ?? 'SGD'})</label>
                         <input type="number" min="0.01" step="0.01" value={cnAmount} onChange={(e) => setCnAmount(e.target.value)} required />
                       </div>
                       <div className="form-row">

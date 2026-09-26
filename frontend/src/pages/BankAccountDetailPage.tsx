@@ -119,6 +119,11 @@ export default function BankAccountDetailPage() {
           <div style={{ fontSize: 20, fontVariantNumeric: 'tabular-nums' }}>
             {formatMoney(ledger.opening_balance_sgd)}
           </div>
+          {ledger.currency_code && ledger.currency_code !== 'SGD' && (
+            <div className="muted">
+              {ledger.currency_code} {(ledger.opening_balance_fx ?? 0).toFixed(2)}
+            </div>
+          )}
           {ledger.opening_balance_date && <div className="muted">as at {formatDate(ledger.opening_balance_date)}</div>}
         </div>
         <div>
@@ -195,12 +200,19 @@ export default function BankAccountDetailPage() {
                   <td>{r.reference ?? '-'}</td>
                   <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     {r.debit_sgd ? formatMoney(r.debit_sgd) : ''}
+                    {!!r.debit_fx && <div className="muted small">{ledger.currency_code} {r.debit_fx.toFixed(2)}</div>}
                   </td>
                   <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     {r.credit_sgd ? formatMoney(r.credit_sgd) : ''}
+                    {!!r.credit_fx && <div className="muted small">{ledger.currency_code} {r.credit_fx.toFixed(2)}</div>}
                   </td>
                   <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     {formatMoney(r.running_balance_sgd)}
+                    {r.running_balance_fx !== undefined && (
+                      <div className="muted small">
+                        {ledger.currency_code} {r.running_balance_fx.toFixed(2)}
+                      </div>
+                    )}
                   </td>
                   <td>
                     {!r.is_voided && (

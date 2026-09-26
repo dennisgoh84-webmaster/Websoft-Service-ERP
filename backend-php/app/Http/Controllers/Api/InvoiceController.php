@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
 use App\Exceptions\BillingRuleViolation;
+use App\Exceptions\CurrencyRuleViolation;
 use App\Exceptions\InventoryRuleViolation;
 use App\Http\Controllers\Api\Concerns\SendsDocuments;
 use App\Http\Controllers\Api\Concerns\SendsExports;
@@ -19,9 +20,11 @@ use App\Models\Warehouse;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\BillingService;
+use App\Services\Currency;
 use App\Services\DocxForms;
 use App\Services\Posting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -68,6 +71,13 @@ class InvoiceController extends Controller
             'gst_rate' => (float) $invoice->gst_rate,
             'gst_amount_sgd' => (float) $invoice->gst_amount_sgd,
             'total_amount_sgd' => (float) $invoice->total_amount_sgd,
+            // Multi-currency: the invoice's own currency, rate and figures in it.
+            'currency_code' => $invoice->currencyCode(),
+            'exchange_rate' => (float) $invoice->rate(),
+            'amount_fx' => $invoice->fx('amount')->toFloat(),
+            'gst_amount_fx' => $invoice->fx('gst_amount')->toFloat(),
+            'total_amount_fx' => $invoice->fx('total_amount')->toFloat(),
+            'outstanding_fx' => $invoice->outstandingFx()->toFloat(),
             'amount_paid_sgd' => (float) $invoice->amount_paid_sgd,
             // Taken off by issued credit notes (BILL-003).
             'credited_sgd' => (float) $invoice->credited_sgd,
@@ -95,6 +105,8 @@ class InvoiceController extends Controller
                 'unit_of_measure' => $l->unit_of_measure,
                 'unit_price_sgd' => (float) $l->unit_price_sgd,
                 'line_amount_sgd' => (float) $l->line_amount_sgd,
+                'unit_price_fx' => (float) ($l->unit_price_fx ?? $l->unit_price_sgd),
+                'line_amount_fx' => (float) ($l->line_amount_fx ?? $l->line_amount_sgd),
                 'unit_cost_sgd' => $l->unit_cost_sgd !== null ? (float) $l->unit_cost_sgd : null,
                 'cost_amount_sgd' => $l->cost_amount_sgd !== null ? (float) $l->cost_amount_sgd : null,
             ])->values(),
@@ -208,7 +220,12 @@ class InvoiceController extends Controller
             'lines' => 'required|array|min:1',
             'lines.*.description' => 'required|string',
             'lines.*.quantity' => 'required|integer|gt:0',
-            'lines.*.unit_price_sgd' => 'required|numeric|min:0',
+            // Multi-currency: `unit_price` is in the invoice's currency;
+            // `unit_price_sgd` is kept for an SGD invoice.
+            'lines.*.unit_price' => 'required_without:lines.*.unit_price_sgd|nullable|numeric|min:0',
+            'lines.*.unit_price_sgd' => 'required_without:lines.*.unit_price|nullable|numeric|min:0',
+            'currency_code' => 'sometimes|nullable|string|size:3',
+            'exchange_rate' => 'sometimes|nullable|numeric|gt:0',
             'lines.*.product_id' => 'sometimes|nullable|uuid',
             'lines.*.stock_item_id' => 'sometimes|nullable|uuid',
             'lines.*.warehouse_id' => 'sometimes|nullable|uuid',
@@ -216,6 +233,11 @@ class InvoiceController extends Controller
         ]);
 
         $this->assertBelongsToCompany($user->company_id, $data);
+        try {
+            [$currency, $rate] = Currency::resolve($user->company_id, $data['currency_code'] ?? null, $data['exchange_rate'] ?? null, Carbon::today(), $data['customer_id']);
+        } catch (CurrencyRuleViolation $e) {
+            throw new ApiException(422, $e->getMessage());
+        }
 
         try {
             $invoice = DB::transaction(fn () => BillingService::issueSalesInvoice(
@@ -224,6 +246,8 @@ class InvoiceController extends Controller
                 lines: $data['lines'],
                 actorUserId: $user->id,
                 description: $data['description'] ?? null,
+                currency: $currency,
+                rate: $rate,
             ));
         } catch (BillingRuleViolation|InventoryRuleViolation $e) {
             throw new ApiException(422, $e->getMessage());

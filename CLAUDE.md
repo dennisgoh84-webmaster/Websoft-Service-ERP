@@ -8,7 +8,7 @@
 | Repository | [github.com/dennisgoh84-webmaster/Websoft-Service-ERP](https://github.com/dennisgoh84-webmaster/Websoft-Service-ERP) |
 | Company | Webmaster Consultancy Pte Ltd |
 | Country | Singapore |
-| Currency | SGD |
+| Currency | SGD (base; other currencies on sales and purchases since 2026-09-26) |
 | Timezone | Asia/Singapore |
 | Database | PostgreSQL |
 
@@ -50,7 +50,9 @@ granted per group (VIEW / EDIT / FULL) under **Group Authority**.
   who and when and locks the month — **Revise** reopens it for a
   corrected return, keeping the submitted one; supplier bills carry a
   purchase tax code and GST is worked out from it, as on sales), Commission Management, Accounting and
-  Operations Reports.
+  Operations Reports. Sales and purchases in any currency, each figure
+  kept in its currency and in SGD, with realised exchange gain/loss to
+  6800 and foreign-currency bank accounts.
 - **Stock** — Stock Master, Goods Receive / Transfer / Return / Issue
   Notes, Stock Adjustment (weighted average cost; stock never negative;
   movements never post to the GL — Finance journals it at month end).

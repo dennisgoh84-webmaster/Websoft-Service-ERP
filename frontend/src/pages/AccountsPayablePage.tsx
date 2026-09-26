@@ -5,6 +5,7 @@ import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type Account, type APAgingReport, type CompanyIndividual, type PurchaseOrder, type SupplierInvoice, type TaxCode } from '../lib/api'
 import DateInput from '../components/DateInput'
+import CurrencyFields, { currencyPayload, type CurrencyValue } from '../components/CurrencyFields'
 import { formatMoney as money, formatDate, todayIso } from '../lib/format'
 
 const BILL_BADGE: Record<string, string> = {
@@ -41,6 +42,8 @@ export default function AccountsPayablePage() {
   const [billRef, setBillRef] = useState('')
   // The supplier's own invoice date -- it decides the bill's GST period.
   const [billDate, setBillDate] = useState(todayIso())
+  // Multi-currency: the supplier's own currency, at the rate table's rate.
+  const [billCur, setBillCur] = useState<CurrencyValue>({ currency: 'SGD', rate: '' })
 
   // ACC-004: reverse a bill's GL posting. A mirror-image voucher is posted;
   // the bill and its original entry are untouched.
@@ -96,7 +99,8 @@ export default function AccountsPayablePage() {
         supplier_invoice_no: billRef || undefined,
         invoice_date: billDate || todayIso(),
         description: billDesc,
-        amount_sgd: parseFloat(billAmount),
+        amount: parseFloat(billAmount),
+        ...currencyPayload(billCur),
         tax_code: billTaxCode,
         expense_account_id: billExpenseAccountId || null,
       })
@@ -286,7 +290,14 @@ export default function AccountsPayablePage() {
                     {b.tax_code && <div className="muted">Tax code {b.tax_code}{b.gst_rate !== null ? ` (${b.gst_rate}%)` : ''}</div>}
                     {b.match_note && <div className="muted">{b.match_note}</div>}
                   </td>
-                  <td>{money(b.total_amount_sgd)}</td>
+                  <td>
+                    {money(b.total_amount_sgd)}
+                    {b.currency_code && b.currency_code !== 'SGD' && (
+                      <div className="muted small">
+                        {b.currency_code} {(b.total_amount_fx ?? 0).toFixed(2)} @ {b.exchange_rate}
+                      </div>
+                    )}
+                  </td>
                   <td>
                     <strong>{money(b.outstanding_sgd)}</strong>
                   </td>
@@ -376,6 +387,7 @@ export default function AccountsPayablePage() {
             <label>Supplier's invoice date</label>
             <DateInput value={billDate} onChange={(e) => setBillDate(e.target.value)} required />
           </div>
+          <CurrencyFields idPrefix="bill" value={billCur} onChange={setBillCur} date={billDate} partyCurrency={suppliers.find((x) => x.id === billSupplier)?.default_currency ?? null} />
           <div className="form-row">
             <label>Expense account (optional — defaults to 5000 Cost of services)</label>
             <select value={billExpenseAccountId} onChange={(e) => setBillExpenseAccountId(e.target.value)}>
@@ -392,7 +404,7 @@ export default function AccountsPayablePage() {
             <input value={billDesc} onChange={(e) => setBillDesc(e.target.value)} required />
           </div>
           <div className="form-row">
-            <label>Amount, net of GST (SGD)</label>
+            <label>Amount, net of GST ({billCur.currency})</label>
             <input
               type="number"
               min="0.01"

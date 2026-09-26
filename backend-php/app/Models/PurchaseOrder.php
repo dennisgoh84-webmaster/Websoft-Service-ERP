@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCurrency;
 use App\Models\Concerns\HasUuidPrimaryKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -15,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class PurchaseOrder extends Model
 {
+    use HasCurrency;
     use HasFactory, HasUuidPrimaryKey;
 
     public $timestamps = false;
@@ -31,6 +33,7 @@ class PurchaseOrder extends Model
         'company_id', 'supplier_id', 'po_number', 'order_date', 'description',
         'amount_sgd', 'gst_amount_sgd', 'total_amount_sgd', 'status',
         'approved_by_user_id', 'approved_at', 'cancel_reason', 'cancelled_at', 'cancelled_by_user_id',
+        'currency_code', 'exchange_rate', 'amount_fx', 'gst_amount_fx', 'total_amount_fx',
     ];
 
     protected $attributes = [

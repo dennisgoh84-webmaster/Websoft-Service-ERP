@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
+use App\Exceptions\CurrencyRuleViolation;
 use App\Exceptions\PayablesRuleViolation;
 use App\Exceptions\PostingError;
 use App\Http\Controllers\Api\Concerns\SendsDocuments;
 use App\Http\Controllers\Api\Concerns\SendsExports;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
+use App\Models\BankAccount;
 use App\Models\Company;
 use App\Models\CompanyIndividual;
 use App\Models\SupplierInvoice;
@@ -16,6 +18,7 @@ use App\Models\SupplierPayment;
 use App\Services\ApprovalService;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\Currency;
 use App\Services\DocxForms;
 use App\Services\Numbering;
 use App\Services\PayablesService;
@@ -104,6 +107,11 @@ class SupplierPaymentController extends Controller
             'amount_sgd' => (float) $payment->amount_sgd,
             'allocated_sgd' => $payment->allocatedSgd()->toFloat(),
             'unallocated_sgd' => $payment->unallocatedSgd()->toFloat(),
+            // Multi-currency: the payment's own currency, rate and figures in it.
+            'currency_code' => $payment->currencyCode(),
+            'exchange_rate' => (float) $payment->rate(),
+            'amount_fx' => $payment->fx('amount')->toFloat(),
+            'unallocated_fx' => $payment->unallocatedFx()->toFloat(),
             'method' => $payment->method,
             'reference' => $payment->reference,
             'notes' => $payment->notes,
@@ -113,6 +121,7 @@ class SupplierPaymentController extends Controller
             'allocations' => $payment->allocations->map(fn ($a) => [
                 'id' => $a->id, 'supplier_invoice_id' => $a->supplier_invoice_id,
                 'bill_number' => $billNumbers->get($a->supplier_invoice_id), 'amount_sgd' => (float) $a->amount_sgd,
+                'amount_fx' => (float) ($a->amount_fx ?? $a->amount_sgd), 'fx_difference_sgd' => (float) ($a->fx_difference_sgd ?? 0),
             ])->values(),
             'bank_account_id' => $payment->bank_account_id,
             'gl_status' => $glEntry ? 'posted' : 'not_posted',
@@ -214,14 +223,20 @@ class SupplierPaymentController extends Controller
             'supplier_id' => 'required_without:gl_account_id|nullable|uuid',
             'gl_account_id' => 'required_without:supplier_id|nullable|uuid',
             'payment_date' => 'required|date',
-            'amount_sgd' => 'required|numeric|gt:0',
+            // Multi-currency: `amount` is in the payment's currency (SGD
+            // unless another is given); `amount_sgd` is kept for an SGD one.
+            'amount' => 'required_without:amount_sgd|nullable|numeric|gt:0',
+            'amount_sgd' => 'required_without:amount|nullable|numeric|gt:0',
+            'currency_code' => 'sometimes|nullable|string|size:3',
+            'exchange_rate' => 'sometimes|nullable|numeric|gt:0',
             'method' => 'sometimes|in:bank_transfer,paynow,cheque,cash,credit_card,other',
             'reference' => 'sometimes|nullable|string',
             'notes' => 'sometimes|nullable|string',
             'bank_account_id' => 'required|uuid',
             'allocations' => 'sometimes|array',
             'allocations.*.supplier_invoice_id' => 'required_with:allocations|uuid',
-            'allocations.*.amount_sgd' => 'required_with:allocations|numeric|gt:0',
+            'allocations.*.amount' => 'sometimes|numeric|gt:0',
+            'allocations.*.amount_sgd' => 'sometimes|numeric|gt:0',
         ]);
         $supplier = null;
         if (! empty($data['supplier_id']) && ! empty($data['gl_account_id'])) {
@@ -243,9 +258,23 @@ class SupplierPaymentController extends Controller
             $supplier = $this->supplierOrFail($user->company_id, $data['supplier_id']);
         }
         $to = $supplier ? $supplier->name : "{$account->code} {$account->name} ({$data['notes']})";
+        try {
+            [$currency, $rate] = Currency::resolve($user->company_id, $data['currency_code'] ?? null, $data['exchange_rate'] ?? null, $data['payment_date'], $data['supplier_id'] ?? null);
+        } catch (CurrencyRuleViolation $e) {
+            throw new ApiException(422, $e->getMessage());
+        }
+        if (! Currency::isBase($currency) && empty($data['amount'])) {
+            throw new ApiException(422, "Key the amount paid in {$currency}.");
+        }
+        $amountFx = Money::of($data['amount'] ?? $data['amount_sgd']);
+        $bankCurrency = Currency::code(BankAccount::where('company_id', $user->company_id)->whereKey($data['bank_account_id'])->value('currency_code'));
+        if (! Currency::isBase($bankCurrency) && $bankCurrency !== $currency) {
+            throw new ApiException(422, "That bank account is in {$bankCurrency}; a {$currency} payment goes out of an SGD or {$currency} account.");
+        }
+        $data['amount_sgd'] = Currency::toSgd($amountFx, $rate)->toString();
 
         try {
-            $payment = DB::transaction(function () use ($user, $data, $to) {
+            $payment = DB::transaction(function () use ($user, $data, $to, $currency, $rate, $amountFx) {
                 $payment = SupplierPayment::create([
                     'company_id' => $user->company_id,
                     'supplier_id' => $data['supplier_id'] ?? null,
@@ -253,6 +282,9 @@ class SupplierPaymentController extends Controller
                     'voucher_number' => Numbering::next($user->company_id, 'payment'),
                     'payment_date' => $data['payment_date'],
                     'amount_sgd' => $data['amount_sgd'],
+                    'currency_code' => $currency,
+                    'exchange_rate' => $rate,
+                    'amount_fx' => $amountFx->toString(),
                     'method' => $data['method'] ?? SupplierPayment::METHOD_BANK_TRANSFER,
                     'reference' => $data['reference'] ?? null,
                     'notes' => $data['notes'] ?? null,
@@ -280,7 +312,7 @@ class SupplierPaymentController extends Controller
 
                 foreach ($data['allocations'] ?? [] as $entry) {
                     $bill = $this->billOrFail($user->company_id, $entry['supplier_invoice_id']);
-                    PayablesService::allocateSupplierPayment($payment, $bill, Money::of($entry['amount_sgd']));
+                    PayablesService::allocateSupplierPayment($payment, $bill, Money::of($entry['amount'] ?? $entry['amount_sgd']));
                 }
 
                 Audit::record(
@@ -313,7 +345,9 @@ class SupplierPaymentController extends Controller
         $data = $request->validate([
             'allocations' => 'required|array|min:1',
             'allocations.*.supplier_invoice_id' => 'required|uuid',
-            'allocations.*.amount_sgd' => 'required|numeric|gt:0',
+            // In the documents' own currency; `amount_sgd` is kept for SGD ones.
+            'allocations.*.amount' => 'required_without:allocations.*.amount_sgd|numeric|gt:0',
+            'allocations.*.amount_sgd' => 'required_without:allocations.*.amount|numeric|gt:0',
         ]);
 
         try {
@@ -321,8 +355,9 @@ class SupplierPaymentController extends Controller
                 $applied = [];
                 foreach ($data['allocations'] as $entry) {
                     $bill = $this->billOrFail($user->company_id, $entry['supplier_invoice_id']);
-                    PayablesService::allocateSupplierPayment($payment, $bill, Money::of($entry['amount_sgd']));
-                    $applied[] = "{$bill->bill_number}={$entry['amount_sgd']}";
+                    $amount = $entry['amount'] ?? $entry['amount_sgd'];
+                    PayablesService::allocateSupplierPayment($payment, $bill, Money::of($amount));
+                    $applied[] = "{$bill->bill_number}={$amount}";
                 }
 
                 Audit::record(

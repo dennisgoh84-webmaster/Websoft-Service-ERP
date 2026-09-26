@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCurrency;
 use App\Models\Concerns\HasUuidPrimaryKey;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -15,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class SupplierPayment extends Model
 {
+    use HasCurrency;
     use HasFactory, HasUuidPrimaryKey;
 
     public $timestamps = false;
@@ -34,6 +36,7 @@ class SupplierPayment extends Model
     protected $fillable = [
         'company_id', 'supplier_id', 'gl_account_id', 'voucher_number', 'payment_date', 'amount_sgd',
         'method', 'reference', 'notes', 'bank_account_id', 'paid_by_user_id',
+        'currency_code', 'exchange_rate', 'amount_fx',
     ];
 
     protected $attributes = ['method' => self::METHOD_BANK_TRANSFER];
@@ -88,5 +91,17 @@ class SupplierPayment extends Model
         }
 
         return Money::of($this->amount_sgd)->minus($this->allocatedSgd());
+    }
+
+    /** What is still unallocated in the payment's own currency. */
+    public function unallocatedFx(): Money
+    {
+        if ($this->isOther()) {
+            return Money::of(0);
+        }
+        $allocated = $this->allocations->reduce(
+            fn (Money $carry, SupplierPaymentAllocation $a) => $carry->plus(Money::of($a->amount_fx ?? $a->amount_sgd)), Money::of(0));
+
+        return $this->fx('amount')->minus($allocated);
     }
 }

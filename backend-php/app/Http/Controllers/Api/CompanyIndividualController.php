@@ -64,6 +64,7 @@ class CompanyIndividualController extends Controller
         'industry_code', 'exclude_auto_sent', 'terms_and_conditions', 'memo',
         'billing_notes', 'payment_terms_days', 'data_expiry_date',
         'is_customer', 'is_supplier', 'po_approval_limit_sgd', 'credit_note_approval_limit_sgd', 'credit_limit_sgd',
+        'default_currency',
     ];
 
     private function customerOrFail(User $user, string $customerId): CompanyIndividual
@@ -1031,6 +1032,8 @@ class CompanyIndividualController extends Controller
             'po_approval_limit_sgd' => 'sometimes|nullable|numeric|min:0',
             'credit_note_approval_limit_sgd' => 'sometimes|nullable|numeric|min:0',
             'credit_limit_sgd' => 'sometimes|nullable|numeric|min:0',
+            // The currency its documents start in (multi-currency, 2026-09-26); blank = SGD.
+            'default_currency' => ['sometimes', 'nullable', 'string', 'regex:/^[A-Za-z]{3}$/'],
             // A record can be a customer, a supplier, or both -- see
             // CompanyIndividual's model docstring (2026-09-12: folded
             // the former standalone Supplier table into this one as a

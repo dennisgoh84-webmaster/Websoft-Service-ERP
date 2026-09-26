@@ -25,6 +25,7 @@ class QuotationLine extends Model
     protected $fillable = [
         'quotation_id', 'product_id', 'description', 'unit_of_measure', 'quantity',
         'unit_price_sgd', 'line_total_sgd', 'reference_code_id', 'cost_sgd',
+        'unit_price_fx', 'line_total_fx',
     ];
 
     protected $casts = [

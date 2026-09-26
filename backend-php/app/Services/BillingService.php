@@ -170,11 +170,17 @@ class BillingService
         array $lines,
         string $actorUserId,
         ?string $description = null,
+        string $currency = 'SGD',
+        string $rate = '1',
     ): Invoice {
         if ($lines === []) {
             throw new BillingRuleViolation('A sales invoice needs at least one line.');
         }
 
+        // Multi-currency: each line's price is in the invoice's currency
+        // (`unit_price`, or `unit_price_sgd` for an SGD invoice); its SGD
+        // figure is at the invoice's rate.
+        $netFx = Money::of(0);
         $net = Money::of(0);
         $cost = Money::of(0);
         $anyCostKnown = false;
@@ -182,8 +188,11 @@ class BillingService
 
         foreach (array_values($lines) as $i => $line) {
             $qty = (int) $line['quantity'];
-            $unitPrice = Money::of($line['unit_price_sgd']);
-            $amount = $unitPrice->multipliedBy($qty)->quantize();
+            $unitPriceFx = Money::of($line['unit_price'] ?? $line['unit_price_sgd']);
+            $amountFx = $unitPriceFx->multipliedBy($qty)->quantize();
+            $unitPrice = Currency::toSgd($unitPriceFx, $rate);
+            $amount = Currency::toSgd($amountFx, $rate);
+            $netFx = $netFx->plus($amountFx);
             $net = $net->plus($amount);
 
             $prepared[] = [
@@ -197,6 +206,8 @@ class BillingService
                 'unit_of_measure' => $line['unit_of_measure'] ?? null,
                 'unit_price_sgd' => $unitPrice->toString(),
                 'line_amount_sgd' => $amount->toString(),
+                'unit_price_fx' => $unitPriceFx->toString(),
+                'line_amount_fx' => $amountFx->toString(),
                 // A known unit cost for a line that moves no stock (a
                 // quotation line's cost, decision #32); a stock line's
                 // cost always comes from the stock it takes instead.
@@ -211,6 +222,21 @@ class BillingService
             description: $description ?? self::describeLines($prepared),
             netAmount: $net,
         );
+        // GST is worked out in the invoice's currency and each figure kept
+        // in SGD at its rate (the GST return reads the SGD figures).
+        [, , $gstFx, $totalFx] = Tax::applyGst($companyId, $netFx);
+        $gstSgd = Currency::isBase($currency) ? Money::of($invoice->gst_amount_sgd) : Currency::toSgd($gstFx, $rate);
+        $invoice->fill([
+            'currency_code' => $currency,
+            'exchange_rate' => $rate,
+            'gst_amount_sgd' => $gstSgd->toString(),
+            'total_amount_sgd' => $net->plus($gstSgd)->toString(),
+            'amount_fx' => $netFx->toString(),
+            'gst_amount_fx' => $gstFx->toString(),
+            'total_amount_fx' => $totalFx->toString(),
+            'amount_paid_fx' => '0.00',
+            'credited_fx' => '0.00',
+        ]);
         $invoice->save();
 
         // Stock moves only once the invoice exists, so every movement

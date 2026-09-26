@@ -416,6 +416,8 @@ export interface CompanyIndividual {
   credit_note_approval_limit_sgd: number | null
   /** The most this customer may owe at once -- a separate setting from the credit note limit. */
   credit_limit_sgd: number | null
+  /** The currency its documents start in (multi-currency); null = SGD. */
+  default_currency: string | null
   /** On the single-record read only: what it owes now, and whether that is over its credit limit. */
   outstanding_sgd?: number
   over_credit_limit?: boolean
@@ -570,6 +572,8 @@ export type CompanyIndividualFields = Partial<{
   po_approval_limit_sgd: number | null
   credit_note_approval_limit_sgd: number | null
   credit_limit_sgd: number | null
+  /** The currency its documents start in (multi-currency); null = SGD. */
+  default_currency: string | null
   is_customer: boolean
   is_supplier: boolean
   data_expiry_date: string | null
@@ -1106,6 +1110,12 @@ export interface InvoiceLine {
 /** A credit note against a Sales Invoice (BILL-003). The number is given when it is issued. */
 export interface CreditNote {
   id: string
+  /** Multi-currency (2026-09-26): the document's own currency and rate, and its figures in it. */
+  currency_code?: string
+  exchange_rate?: number
+  amount_fx?: number
+  gst_amount_fx?: number
+  total_amount_fx?: number
   credit_note_number: string | null
   invoice_id: string
   invoice_number: string
@@ -1134,6 +1144,13 @@ export interface CreditNote {
 
 export interface Invoice {
   id: string
+  /** Multi-currency (2026-09-26): the document's own currency and rate, and its figures in it. */
+  currency_code?: string
+  exchange_rate?: number
+  amount_fx?: number
+  gst_amount_fx?: number
+  total_amount_fx?: number
+  outstanding_fx?: number
   invoice_number: string
   customer_id: string
   contract_id: string | null
@@ -1178,6 +1195,13 @@ export interface PaymentAllocation {
 
 export interface Payment {
   id: string
+  /** Multi-currency (2026-09-26): the document's own currency and rate, and its figures in it. */
+  currency_code?: string
+  exchange_rate?: number
+  amount_fx?: number
+  gst_amount_fx?: number
+  total_amount_fx?: number
+  unallocated_fx?: number
   voucher_number: string
   /** Null on an Other receipt (bank interest and the like), which is against gl_account instead. */
   customer_id: string | null
@@ -1334,6 +1358,9 @@ export interface BankAccount {
   /** Opening balance + every non-voided transaction to date -- computed
    * server-side, not something you set directly. */
   current_balance_sgd: number
+  /** A foreign-currency account's figures in its own currency (multi-currency); null for SGD. */
+  opening_balance_fx: number | null
+  current_balance_fx: number | null
   is_active: boolean
 }
 
@@ -1354,6 +1381,10 @@ export interface BankTransaction {
   voided_at: string | null
   created_at: string
   running_balance_sgd: number
+  /** On a foreign-currency account: the line and running balance in its own currency. */
+  debit_fx?: number | null
+  credit_fx?: number | null
+  running_balance_fx?: number
   // Set when the Bank step (ACC-002) created this line from a voucher.
   source_type: 'payment' | 'supplier_payment' | null
   source_id: string | null
@@ -1361,6 +1392,8 @@ export interface BankTransaction {
 
 export interface BankLedger {
   bank_account_id: string
+  currency_code?: string
+  opening_balance_fx?: number | null
   opening_balance_sgd: number
   opening_balance_date: string | null
   rows: BankTransaction[]
@@ -1795,6 +1828,12 @@ export type BillStatus = 'awaiting_match' | 'exception' | 'approved' | 'partiall
 
 export interface PurchaseOrder {
   id: string
+  /** Multi-currency (2026-09-26): the document's own currency and rate, and its figures in it. */
+  currency_code?: string
+  exchange_rate?: number
+  amount_fx?: number
+  gst_amount_fx?: number
+  total_amount_fx?: number
   po_number: string
   supplier_id: string
   order_date: string
@@ -1813,6 +1852,13 @@ export interface PurchaseOrder {
 
 export interface SupplierInvoice {
   id: string
+  /** Multi-currency (2026-09-26): the document's own currency and rate, and its figures in it. */
+  currency_code?: string
+  exchange_rate?: number
+  amount_fx?: number
+  gst_amount_fx?: number
+  total_amount_fx?: number
+  outstanding_fx?: number
   bill_number: string
   supplier_invoice_no: string | null
   supplier_id: string
@@ -1845,6 +1891,13 @@ export interface SupplierPaymentAllocation {
 
 export interface SupplierPayment {
   id: string
+  /** Multi-currency (2026-09-26): the document's own currency and rate, and its figures in it. */
+  currency_code?: string
+  exchange_rate?: number
+  amount_fx?: number
+  gst_amount_fx?: number
+  total_amount_fx?: number
+  unallocated_fx?: number
   voucher_number: string
   /** Null on an Other payment (bank charges and the like), which is against gl_account instead. */
   supplier_id: string | null
@@ -2174,6 +2227,12 @@ export type ProspectActivityPayload = {
 
 export interface Quotation {
   id: string
+  /** Multi-currency (2026-09-26): the document's own currency and rate, and its figures in it. */
+  currency_code?: string
+  exchange_rate?: number
+  amount_fx?: number
+  gst_amount_fx?: number
+  total_amount_fx?: number
   quotation_number: string
   customer_id: string
   prospect_id: string | null
@@ -3401,6 +3460,13 @@ export const api = {
     }),
 
   // AI Assistant
+  // Multi-currency (2026-09-26): the currencies a document can be in, and
+  // the Currency Rate Table's rate on a date.
+  listDocumentCurrencies: () => request<string[]>('/currency-rates/currencies'),
+  currencyRateAsAt: (currency_code: string, date: string) =>
+    request<{ currency_code: string; date: string; rate: number | null }>(
+      `/currency-rates/as-at?currency_code=${encodeURIComponent(currency_code)}&date=${encodeURIComponent(date)}`,
+    ),
   getAiSettings: () => request<AiSettings>('/ai/settings'),
   updateAiSettings: (
     payload: Partial<{
@@ -3483,10 +3549,15 @@ export const api = {
   createSalesInvoice: (payload: {
     customer_id: string
     description?: string
+    /** Multi-currency: the document's currency and rate (else the party's default, at the table's rate). */
+    currency_code?: string
+    exchange_rate?: number
     lines: {
       description: string
       quantity: number
-      unit_price_sgd: number
+      /** In the document's currency; `unit_price_sgd` only for an SGD one. */
+      unit_price?: number
+      unit_price_sgd?: number
       product_id?: string
       stock_item_id?: string
       warehouse_id?: string
@@ -3503,7 +3574,8 @@ export const api = {
   listCreditNotes: (filters: { status?: string; customer_id?: string; invoice_id?: string } = {}) =>
     request<CreditNote[]>(`/credit-notes${qs(filters)}`),
   getCreditNote: (id: string) => request<CreditNote>(`/credit-notes/${id}`),
-  raiseCreditNote: (payload: { invoice_id: string; amount_sgd: number; reason: string }) =>
+  /** The amount is net of GST, in the invoice's own currency (multi-currency). */
+  raiseCreditNote: (payload: { invoice_id: string; amount?: number; amount_sgd?: number; reason: string }) =>
     request<CreditNote>('/credit-notes', { method: 'POST', body: JSON.stringify(payload) }),
   approveCreditNote: (id: string) => request<CreditNote>(`/credit-notes/${id}/approve`, { method: 'POST' }),
   rejectCreditNote: (id: string, reason: string) =>
@@ -3527,12 +3599,17 @@ export const api = {
     customer_id?: string
     gl_account_id?: string
     payment_date: string
-    amount_sgd: number
+    /** In the document's currency; `amount_sgd` only for an SGD one. */
+    amount?: number
+    amount_sgd?: number
+    /** Multi-currency: the document's currency and rate (else the party's default, at the table's rate). */
+    currency_code?: string
+    exchange_rate?: number
     bank_account_id: string
     method?: string
     reference?: string
     notes?: string
-    allocations?: { invoice_id: string; amount_sgd: number }[]
+    allocations?: { invoice_id: string; amount_sgd?: number; amount?: number }[]
   }) =>
     request<Payment>('/accounts-receivable/payments', {
       method: 'POST',
@@ -3556,7 +3633,7 @@ export const api = {
   exportPaymentDocx: (id: string) => requestBlob(`/accounts-receivable/payments/${id}/export.docx`),
   emailReceipt: (id: string) =>
     request<{ sent: boolean; to: string }>(`/accounts-receivable/payments/${id}/email`, { method: 'POST' }),
-  allocatePayment: (id: string, allocations: { invoice_id: string; amount_sgd: number }[]) =>
+  allocatePayment: (id: string, allocations: { invoice_id: string; amount_sgd?: number; amount?: number }[]) =>
     request<Payment>(`/accounts-receivable/payments/${id}/allocate`, {
       method: 'POST',
       body: JSON.stringify({ allocations }),
@@ -3607,7 +3684,12 @@ export const api = {
     supplier_id: string
     order_date: string
     description: string
-    amount_sgd: number
+    /** In the document's currency; `amount_sgd` only for an SGD one. */
+    amount?: number
+    amount_sgd?: number
+    /** Multi-currency: the document's currency and rate (else the party's default, at the table's rate). */
+    currency_code?: string
+    exchange_rate?: number
   }) => request<PurchaseOrder>('/accounts-payable/purchase-orders', { method: 'POST', body: JSON.stringify(payload) }),
   approvePurchaseOrder: (id: string) =>
     request<PurchaseOrder>(`/accounts-payable/purchase-orders/${id}/approve`, { method: 'POST' }),
@@ -3628,7 +3710,12 @@ export const api = {
     supplier_invoice_no?: string
     invoice_date: string
     description: string
-    amount_sgd: number
+    /** In the document's currency; `amount_sgd` only for an SGD one. */
+    amount?: number
+    amount_sgd?: number
+    /** Multi-currency: the document's currency and rate (else the party's default, at the table's rate). */
+    currency_code?: string
+    exchange_rate?: number
     /** A purchase tax code; GST is worked out from its rate, never keyed in. Default TX. */
     tax_code?: string
     expense_account_id?: string | null
@@ -3649,14 +3736,19 @@ export const api = {
     supplier_id?: string
     gl_account_id?: string
     payment_date: string
-    amount_sgd: number
+    /** In the document's currency; `amount_sgd` only for an SGD one. */
+    amount?: number
+    amount_sgd?: number
+    /** Multi-currency: the document's currency and rate (else the party's default, at the table's rate). */
+    currency_code?: string
+    exchange_rate?: number
     bank_account_id: string
     method?: string
     reference?: string
     notes?: string
-    allocations?: { supplier_invoice_id: string; amount_sgd: number }[]
+    allocations?: { supplier_invoice_id: string; amount_sgd?: number; amount?: number }[]
   }) => request<SupplierPayment>('/accounts-payable/payments', { method: 'POST', body: JSON.stringify(payload) }),
-  allocateSupplierPayment: (id: string, allocations: { supplier_invoice_id: string; amount_sgd: number }[]) =>
+  allocateSupplierPayment: (id: string, allocations: { supplier_invoice_id: string; amount_sgd?: number; amount?: number }[]) =>
     request<SupplierPayment>(`/accounts-payable/payments/${id}/allocate`, {
       method: 'POST',
       body: JSON.stringify({ allocations }),
@@ -3835,12 +3927,17 @@ export const api = {
     quotation_date: string
     valid_until?: string
     notes?: string
+    /** Multi-currency: the document's currency and rate (else the party's default, at the table's rate). */
+    currency_code?: string
+    exchange_rate?: number
     lines: {
       product_id?: string | null
       description: string
       unit_of_measure?: string
       quantity: number
-      unit_price_sgd: number
+      /** In the document's currency; `unit_price_sgd` only for an SGD one. */
+      unit_price?: number
+      unit_price_sgd?: number
       reference_code_id?: string | null
       cost_sgd?: number | null
     }[]
@@ -4045,6 +4142,7 @@ export const api = {
     currency_code?: string
     gl_account_id?: string | null
     opening_balance_sgd?: number
+    opening_balance_fx?: number | null
     opening_balance_date?: string | null
   }) => request<BankAccount>('/bank-accounts', { method: 'POST', body: JSON.stringify(payload) }),
   updateBankAccount: (

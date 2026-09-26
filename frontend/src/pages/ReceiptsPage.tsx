@@ -7,6 +7,7 @@ import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type BankAccount, type CompanyIndividual, type Invoice, type Payment } from '../lib/api'
 import { formatMoney as money, formatDate, todayIso } from '../lib/format'
 import DateInput from '../components/DateInput'
+import CurrencyFields, { currencyPayload, type CurrencyValue } from '../components/CurrencyFields'
 import OtherVoucherFields from '../components/OtherVoucherFields'
 import { useOtherVoucherAccounts } from '../lib/otherVoucherAccounts'
 
@@ -36,6 +37,8 @@ export default function ReceiptsPage() {
   const [description, setDescription] = useState('')
   const [customerId, setCustomerId] = useState('')
   const [paymentDate, setPaymentDate] = useState(todayIso())
+  // Multi-currency: the customer's own currency, at the rate table's rate.
+  const [cur, setCur] = useState<CurrencyValue>({ currency: 'SGD', rate: '' })
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState('bank_transfer')
   const [reference, setReference] = useState('')
@@ -72,7 +75,8 @@ export default function ReceiptsPage() {
       const rv = await api.recordPayment({
         ...(kind === 'other' ? { gl_account_id: glAccountId, notes: description } : { customer_id: customerId }),
         payment_date: paymentDate,
-        amount_sgd: parseFloat(amount),
+        amount: parseFloat(amount),
+        ...currencyPayload(cur),
         bank_account_id: bankAccountId,
         method,
         reference: reference || undefined,
@@ -112,7 +116,7 @@ export default function ReceiptsPage() {
     setMessage(null)
     try {
       await api.allocatePayment(payment.id, [
-        { invoice_id: choice.invoiceId, amount_sgd: parseFloat(choice.amount) },
+        { invoice_id: choice.invoiceId, amount: parseFloat(choice.amount) },
       ])
       setAllocFor((prev) => ({ ...prev, [payment.id]: { invoiceId: '', amount: '' } }))
       setMessage('Allocated.')
@@ -236,8 +240,15 @@ export default function ReceiptsPage() {
               required
             />
           </div>
+          <CurrencyFields
+            idPrefix="receipt"
+            value={cur}
+            onChange={setCur}
+            date={paymentDate}
+            partyCurrency={kind === 'other' ? null : (customers.find((c) => c.id === customerId)?.default_currency ?? null)}
+          />
           <div className="form-row">
-            <label>Amount received (SGD)</label>
+            <label>Amount received ({cur.currency})</label>
             <input
               type="number"
               min="0.01"
@@ -322,10 +333,17 @@ export default function ReceiptsPage() {
                       customerName(p.customer_id)
                     )}
                   </td>
-                  <td>{money(p.amount_sgd)}</td>
+                  <td>
+                    {money(p.amount_sgd)}
+                    {p.currency_code && p.currency_code !== 'SGD' && (
+                      <div className="muted small">
+                        {p.currency_code} {(p.amount_fx ?? 0).toFixed(2)} @ {p.exchange_rate}
+                      </div>
+                    )}
+                  </td>
                   <td>
                     {p.unallocated_sgd > 0 ? (
-                      <strong>{money(p.unallocated_sgd)}</strong>
+                      <strong>{p.currency_code && p.currency_code !== 'SGD' ? `${p.currency_code} ${(p.unallocated_fx ?? 0).toFixed(2)}` : money(p.unallocated_sgd)}</strong>
                     ) : (
                       <span className="muted">{p.kind === 'other' ? 'to an account' : 'fully allocated'}</span>
                     )}

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
+use App\Exceptions\CurrencyRuleViolation;
 use App\Exceptions\QuotationRuleViolation;
 use App\Http\Controllers\Api\Concerns\SendsDocuments;
 use App\Http\Controllers\Api\Concerns\SendsExports;
@@ -20,6 +21,7 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\Currency;
 use App\Services\DocxForms;
 use App\Services\Numbering;
 use App\Services\QuotationService;
@@ -85,6 +87,11 @@ class QuotationController extends Controller
             'gst_rate' => (float) $quotation->gst_rate,
             'gst_amount_sgd' => (float) $quotation->gst_amount_sgd,
             'total_amount_sgd' => (float) $quotation->total_amount_sgd,
+            'currency_code' => $quotation->currencyCode(),
+            'exchange_rate' => (float) $quotation->rate(),
+            'amount_fx' => $quotation->fx('amount')->toFloat(),
+            'gst_amount_fx' => $quotation->fx('gst_amount')->toFloat(),
+            'total_amount_fx' => $quotation->fx('total_amount')->toFloat(),
             'converted_contract_id' => $quotation->converted_contract_id,
             'converted_annual_contract_id' => $quotation->converted_annual_contract_id,
             // Decision 11.2: the Sales Invoice issued for its product lines on acceptance.
@@ -116,6 +123,8 @@ class QuotationController extends Controller
                 'quantity' => (float) $l->quantity,
                 'unit_price_sgd' => (float) $l->unit_price_sgd,
                 'line_total_sgd' => (float) $l->line_total_sgd,
+                'unit_price_fx' => (float) ($l->unit_price_fx ?? $l->unit_price_sgd),
+                'line_total_fx' => (float) ($l->line_total_fx ?? $l->line_total_sgd),
                 'reference_code_id' => $l->reference_code_id,
                 'cost_sgd' => $l->cost_sgd !== null ? (float) $l->cost_sgd : null,
                 // What Accept will do with the line (only worked out while
@@ -213,7 +222,12 @@ class QuotationController extends Controller
             'lines.*.description' => 'required|string',
             'lines.*.unit_of_measure' => 'sometimes|nullable|string',
             'lines.*.quantity' => 'required|numeric|gt:0',
-            'lines.*.unit_price_sgd' => 'required|numeric|min:0',
+            // Multi-currency: `unit_price` is in the quotation's currency;
+            // `unit_price_sgd` is kept for an SGD quotation.
+            'lines.*.unit_price' => 'required_without:lines.*.unit_price_sgd|nullable|numeric|min:0',
+            'lines.*.unit_price_sgd' => 'required_without:lines.*.unit_price|nullable|numeric|min:0',
+            'currency_code' => 'sometimes|nullable|string|size:3',
+            'exchange_rate' => 'sometimes|nullable|numeric|gt:0',
             'lines.*.reference_code_id' => 'sometimes|nullable|uuid',
             'lines.*.cost_sgd' => 'sometimes|nullable|numeric',
         ]);
@@ -228,8 +242,13 @@ class QuotationController extends Controller
             throw new ApiException(422, 'A quotation needs at least one line.');
         }
         $prospect = empty($data['prospect_id']) ? null : $this->prospectFor($user->company_id, $data['prospect_id'], $data['customer_id']);
+        try {
+            [$currency, $xrate] = Currency::resolve($user->company_id, $data['currency_code'] ?? null, $data['exchange_rate'] ?? null, $data['quotation_date'], $data['customer_id']);
+        } catch (CurrencyRuleViolation $e) {
+            throw new ApiException(422, $e->getMessage());
+        }
 
-        $quotation = DB::transaction(function () use ($user, $data, $customer, $lines, $prospect) {
+        $quotation = DB::transaction(function () use ($user, $data, $customer, $lines, $prospect, $currency, $xrate) {
             $quotation = Quotation::create([
                 'company_id' => $user->company_id,
                 'quotation_number' => Numbering::next($user->company_id, 'quotation'),
@@ -239,11 +258,14 @@ class QuotationController extends Controller
                 'valid_until' => $data['valid_until'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'created_by_user_id' => $user->id,
+                'currency_code' => $currency,
+                'exchange_rate' => $xrate,
             ]);
 
             foreach ($lines as $line) {
                 $qty = Money::of($line['quantity']);
-                $price = Money::of($line['unit_price_sgd']);
+                $priceFx = Money::of($line['unit_price'] ?? $line['unit_price_sgd']);
+                $price = Currency::toSgd($priceFx, $xrate);
 
                 // Reference Monitor: an explicit reference_code_id on
                 // the line always wins; otherwise fall back to the
@@ -281,7 +303,9 @@ class QuotationController extends Controller
                     'unit_of_measure' => $line['unit_of_measure'] ?? null,
                     'quantity' => $qty->toString(),
                     'unit_price_sgd' => $price->toString(),
-                    'line_total_sgd' => $qty->multipliedByMoney($price)->quantize()->toString(),
+                    'line_total_sgd' => Currency::toSgd($qty->multipliedByMoney($priceFx)->quantize(), $xrate)->toString(),
+                    'unit_price_fx' => $priceFx->toString(),
+                    'line_total_fx' => $qty->multipliedByMoney($priceFx)->quantize()->toString(),
                     'reference_code_id' => $referenceCodeId,
                     'cost_sgd' => $costSgd,
                 ]);

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
+use App\Exceptions\CurrencyRuleViolation;
 use App\Exceptions\PayablesRuleViolation;
 use App\Http\Controllers\Api\Concerns\SendsDocuments;
 use App\Http\Controllers\Api\Concerns\SendsExports;
@@ -16,6 +17,7 @@ use App\Models\TaxCode;
 use App\Services\ApprovalService;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\Currency;
 use App\Services\DocxForms;
 use App\Services\Numbering;
 use App\Services\PayablesService;
@@ -82,6 +84,11 @@ class PurchaseOrderController extends Controller
             'amount_sgd' => (float) $po->amount_sgd,
             'gst_amount_sgd' => (float) $po->gst_amount_sgd,
             'total_amount_sgd' => (float) $po->total_amount_sgd,
+            'currency_code' => $po->currencyCode(),
+            'exchange_rate' => (float) $po->rate(),
+            'amount_fx' => $po->fx('amount')->toFloat(),
+            'gst_amount_fx' => $po->fx('gst_amount')->toFloat(),
+            'total_amount_fx' => $po->fx('total_amount')->toFloat(),
             'status' => $po->status,
             // eApproval (Backlog 2): above the supplier's limit, where the approvers' decision stands.
             'approval_status' => ApprovalService::stateOf($po->company_id, 'purchase_order', $po->id),
@@ -179,12 +186,30 @@ class PurchaseOrderController extends Controller
             'supplier_id' => 'required|uuid',
             'order_date' => 'required|date',
             'description' => 'required|string|min:1',
-            'amount_sgd' => 'required|numeric|gt:0',
+            // Multi-currency: `amount` is in the PO's currency; `amount_sgd` is kept for an SGD one.
+            'amount' => 'required_without:amount_sgd|nullable|numeric|gt:0',
+            'amount_sgd' => 'required_without:amount|nullable|numeric|gt:0',
+            'currency_code' => 'sometimes|nullable|string|size:3',
+            'exchange_rate' => 'sometimes|nullable|numeric|gt:0',
         ]);
         $this->supplierOrFail($user->company_id, $data['supplier_id']);
+        try {
+            [$currency, $xrate] = Currency::resolve($user->company_id, $data['currency_code'] ?? null, $data['exchange_rate'] ?? null, $data['order_date'], $data['supplier_id']);
+        } catch (CurrencyRuleViolation $e) {
+            throw new ApiException(422, $e->getMessage());
+        }
+        if (! Currency::isBase($currency) && empty($data['amount'])) {
+            throw new ApiException(422, "Key the amount in {$currency}.");
+        }
 
-        $po = DB::transaction(function () use ($user, $data) {
-            [$_taxCode, $_rate, $gst, $total] = Tax::applyGst($user->company_id, Money::of($data['amount_sgd']));
+        $po = DB::transaction(function () use ($user, $data, $currency, $xrate) {
+            // Worked out in the PO's currency, then each figure in SGD at its rate.
+            $netFx = Money::of($data['amount'] ?? $data['amount_sgd']);
+            [$_taxCode, $_rate, $gstFx, $totalFx] = Tax::applyGst($user->company_id, $netFx);
+            $data['amount_sgd'] = Currency::toSgd($netFx, $xrate)->toString();
+            $gst = Currency::toSgd($gstFx, $xrate);
+            $total = Money::of($data['amount_sgd'])->plus($gst);
+            // The supplier's limit is in SGD.
             $needsOwner = PayablesService::poNeedsOwnerApproval($data['supplier_id'], $total);
 
             $po = PurchaseOrder::create([
@@ -196,6 +221,11 @@ class PurchaseOrderController extends Controller
                 'amount_sgd' => $data['amount_sgd'],
                 'gst_amount_sgd' => $gst->toString(),
                 'total_amount_sgd' => $total->toString(),
+                'currency_code' => $currency,
+                'exchange_rate' => $xrate,
+                'amount_fx' => $netFx->toString(),
+                'gst_amount_fx' => $gstFx->toString(),
+                'total_amount_fx' => $totalFx->toString(),
                 'status' => $needsOwner ? PurchaseOrder::STATUS_PENDING_APPROVAL : PurchaseOrder::STATUS_DRAFT,
             ]);
 
@@ -274,6 +304,13 @@ class PurchaseOrderController extends Controller
         try {
             $bill = DB::transaction(function () use ($po, $user) {
                 PayablesService::assertPoImportableToAp($po);
+                // Multi-currency: the bill is in the PO's currency, at the
+                // Currency Rate Table's rate on the bill date (else the PO's own).
+                $code = $po->currencyCode();
+                $billRate = Currency::rateOn($user->company_id, $code, Carbon::today()) ?? $po->rate();
+                $gstFx = $po->fx('gst_amount');
+                $netSgd = Currency::toSgd($po->fx('amount'), $billRate);
+                $gstSgd = Currency::toSgd($gstFx, $billRate);
 
                 $bill = SupplierInvoice::create([
                     'company_id' => $user->company_id,
@@ -283,14 +320,20 @@ class PurchaseOrderController extends Controller
                     'invoice_date' => Carbon::today()->toDateString(),
                     'due_date' => PayablesService::dueDateForBill($po->supplier_id, Carbon::today())?->toDateString(),
                     'description' => $po->description,
-                    'amount_sgd' => $po->amount_sgd,
+                    'amount_sgd' => $netSgd->toString(),
                     // A PO is raised at the standard rate, so its bill is a
                     // standard-rated purchase at the rate the PO charged.
-                    'tax_code' => Money::of($po->gst_amount_sgd ?? 0)->toFloat() > 0 ? TaxCode::DEFAULT_PURCHASE_CODE : null,
-                    'gst_rate' => Money::of($po->amount_sgd)->toFloat() > 0
-                        ? round((float) $po->gst_amount_sgd * 100 / (float) $po->amount_sgd, 2) : null,
-                    'gst_amount_sgd' => $po->gst_amount_sgd,
-                    'total_amount_sgd' => $po->total_amount_sgd,
+                    'tax_code' => $gstFx->toFloat() > 0 ? TaxCode::DEFAULT_PURCHASE_CODE : null,
+                    'gst_rate' => $po->fx('amount')->toFloat() > 0
+                        ? round($gstFx->toFloat() * 100 / $po->fx('amount')->toFloat(), 2) : null,
+                    'gst_amount_sgd' => $gstSgd->toString(),
+                    'total_amount_sgd' => $netSgd->plus($gstSgd)->toString(),
+                    'currency_code' => $code,
+                    'exchange_rate' => $billRate,
+                    'amount_fx' => $po->fx('amount')->toString(),
+                    'gst_amount_fx' => $gstFx->toString(),
+                    'total_amount_fx' => $po->fx('total_amount')->toString(),
+                    'amount_paid_fx' => '0.00',
                 ]);
                 PayablesService::matchBillToPo($bill, $user->id);
 

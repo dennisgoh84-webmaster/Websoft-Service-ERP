@@ -162,7 +162,7 @@ allowed because the prior one is marked reversed).
   Sales Invoice period locks (`Posting::postCreditNote`).
 - **Project / hardware invoice types** — accounts mapped, no issuing
   path yet.
-- **Bank charges / FX** — single-currency SGD only; `BankAccount.currency_code`
+- **Bank charges / FX** — multi-currency since 2026-09-26 (business-requirements ACC-006): lines post in SGD; a realised exchange difference is posted to 6800 when a foreign-currency receipt or payment is allocated. Before then: single-currency SGD only; `BankAccount.currency_code`
   is stored but not used in posting.
 
 ## 5. Migration

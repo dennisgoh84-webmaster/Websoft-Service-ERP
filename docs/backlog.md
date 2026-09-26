@@ -301,7 +301,7 @@ shipped and when.
   - [x] Credit Note document (GST and GL reversal, owner approval above the customer's limit). **Built 2026-09-26** (BILL-003): raised from the invoice row, approved on Accounts → Credit Note, printable. Open: crediting a paid invoice, and returned goods (decision page, #52).
   - [x] Accepted quotation: product lines become a Sales Invoice issued on acceptance, and hours go to a contract. Built 2026-09-26 (SALES-011).
   - [x] Overdue Service Record approval: daily 8:45 email to the approvers, sent by the new server `scheduler` service. Built 2026-09-26 (SRV-019).
-  - [ ] Full multi-currency on sales and purchases (original + SGD, exchange gain/loss).
+  - [x] Full multi-currency on sales and purchases (original + SGD, exchange gain/loss). Built 2026-09-26 (ACC-006): quotations, invoices, credit notes, receipts, POs, bills and payment vouchers; realised gain/loss to 6800; foreign-currency bank accounts.
   - [x] Data Migration: bring across everything since a cut-off date picked at run time (10.1). Built 2026-09-26: picked on the dry run; transactions only, open items brought in whatever their date.
   - [x] AI Assistant: Service Record drafting from the technician's notes. Built 2026-09-26: "✨ Draft with AI" by the work description on the Job Order and the phone's Time Out.
   - [x] Email Inbox: the server reads the helpdesk mailbox over IMAP (no HTTPS needed), with Log as Incident / Convert to Job Order. Built 2026-09-26 (Operations → Email Inbox).

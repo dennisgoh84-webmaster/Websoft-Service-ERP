@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\BankBook;
+use App\Services\Currency;
 use App\Support\Money;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -48,6 +49,10 @@ class BankTransactionController extends Controller
             ->orderBy('transaction_date')->orderBy('created_at')->get();
 
         $running = Money::of($bankAccount->opening_balance_sgd);
+        // A foreign-currency account (multi-currency) runs in its own
+        // currency too, with the SGD value beside each line.
+        $foreign = ! Currency::isBase($bankAccount->currency_code);
+        $runningFx = Money::of($bankAccount->opening_balance_fx ?? 0);
         $unreconciled = 0;
         $rows = [];
         foreach ($txns as $txn) {
@@ -56,17 +61,20 @@ class BankTransactionController extends Controller
             // rather than read per row.
             if (! $txn->is_voided) {
                 $running = $running->plus(Money::of($txn->debit_sgd))->minus(Money::of($txn->credit_sgd));
+                $runningFx = $runningFx->plus(Money::of($txn->debit_fx ?? 0))->minus(Money::of($txn->credit_fx ?? 0));
                 if (! $txn->is_reconciled) {
                     $unreconciled++;
                 }
             }
-            $rows[] = $this->out($txn, $running);
+            $rows[] = $this->out($txn, $running) + ($foreign ? ['running_balance_fx' => $runningFx->toFloat()] : []);
         }
 
         return response()->json([
             'bank_account_id' => $bankAccount->id,
             'opening_balance_sgd' => (float) $bankAccount->opening_balance_sgd,
             'opening_balance_date' => $bankAccount->opening_balance_date?->toDateString(),
+            'currency_code' => Currency::code($bankAccount->currency_code),
+            'opening_balance_fx' => $foreign ? (float) ($bankAccount->opening_balance_fx ?? 0) : null,
             'rows' => $rows,
             'closing_balance_sgd' => $running->toFloat(),
             'reconciled_balance_sgd' => BankBook::reconciledBalance(
@@ -276,6 +284,8 @@ class BankTransactionController extends Controller
             'reference' => $txn->reference,
             'debit_sgd' => (float) $txn->debit_sgd,
             'credit_sgd' => (float) $txn->credit_sgd,
+            'debit_fx' => $txn->debit_fx !== null ? (float) $txn->debit_fx : null,
+            'credit_fx' => $txn->credit_fx !== null ? (float) $txn->credit_fx : null,
             'is_reconciled' => $txn->is_reconciled,
             'reconciled_at' => $txn->reconciled_at?->toJSON(),
             'is_voided' => $txn->is_voided,

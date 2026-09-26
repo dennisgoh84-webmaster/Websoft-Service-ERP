@@ -15,6 +15,7 @@ import { goodsReceive, stockAdjustment, stockItem, warehouse } from './stock.mjs
 import { journalVoucher, staff } from './admin.mjs'
 import { mobileApp } from './mobile.mjs'
 import { aiAssistant } from './ai.mjs'
+import { multiCurrency } from './currency.mjs'
 
 export const FLOWS = [
   setupLists,
@@ -45,4 +46,6 @@ export const FLOWS = [
   staff,
   aiAssistant,
   mobileApp,
+  // Last: it changes the customer's default currency.
+  multiCurrency,
 ]

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCurrency;
 use App\Models\Concerns\HasUuidPrimaryKey;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -19,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class SupplierInvoice extends Model
 {
+    use HasCurrency;
     use HasFactory, HasUuidPrimaryKey;
 
     public $timestamps = false;
@@ -44,6 +46,7 @@ class SupplierInvoice extends Model
         'supplier_invoice_no', 'invoice_date', 'due_date', 'description',
         'amount_sgd', 'tax_code', 'gst_rate', 'gst_amount_sgd', 'total_amount_sgd', 'amount_paid_sgd',
         'match_status', 'match_note', 'status',
+        'currency_code', 'exchange_rate', 'amount_fx', 'gst_amount_fx', 'total_amount_fx', 'amount_paid_fx',
     ];
 
     protected $attributes = [
@@ -82,6 +85,14 @@ class SupplierInvoice extends Model
     public function outstandingSgd(): Money
     {
         $remaining = Money::of($this->total_amount_sgd ?? 0)->minus(Money::of($this->amount_paid_sgd ?? 0));
+
+        return $remaining->toFloat() < 0 ? Money::of(0) : $remaining;
+    }
+
+    /** What is still owed in the bill's own currency (never negative). */
+    public function outstandingFx(): Money
+    {
+        $remaining = $this->fx('total_amount')->minus($this->fx('amount_paid'));
 
         return $remaining->toFloat() < 0 ? Money::of(0) : $remaining;
     }

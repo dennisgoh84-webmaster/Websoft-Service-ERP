@@ -135,6 +135,9 @@ class PayablesService
         if ($po->status !== PurchaseOrder::STATUS_APPROVED) {
             $problems[] = "the purchase order is {$po->status}, not approved";
         }
+        if ($po->currencyCode() !== $bill->currencyCode()) {
+            $problems[] = "the bill is in {$bill->currencyCode()} but the purchase order is in {$po->currencyCode()}";
+        }
         if ($problems !== []) {
             $note = implode('; ', $problems);
             $bill->match_status = SupplierInvoice::MATCH_EXCEPTION;
@@ -145,11 +148,13 @@ class PayablesService
             return $bill;
         }
 
-        $poTotal = Money::of($po->total_amount_sgd);
-        $billTotal = Money::of($bill->total_amount_sgd);
+        // Compared in the documents' own currency (multi-currency).
+        $poTotal = $po->fx('total_amount');
+        $billTotal = $bill->fx('total_amount');
+        $code = $bill->currencyCode();
         $variance = $poTotal->toFloat() === $billTotal->toFloat() ? '' : sprintf(
-            ' The bill (SGD %s) differs from the purchase order (SGD %s); it is approved and paid on the billed amount (open item 4.5).',
-            $billTotal->toString(), $poTotal->toString(),
+            ' The bill (%s %s) differs from the purchase order (%s %s); it is approved and paid on the billed amount (open item 4.5).',
+            $code, $billTotal->toString(), $code, $poTotal->toString(),
         );
 
         // PUR-002 satisfied -> PUR-003 auto-approves it for payment.
@@ -178,9 +183,14 @@ class PayablesService
      */
     public static function recalculateBillStatus(SupplierInvoice $bill): void
     {
-        $paid = SupplierPaymentAllocation::where('supplier_invoice_id', $bill->id)->get()
-            ->reduce(fn (Money $carry, SupplierPaymentAllocation $a) => $carry->plus(Money::of($a->amount_sgd)), Money::of(0));
-        $bill->amount_paid_sgd = $paid->toString();
+        // Paid in SGD at the BILL's rate (multi-currency; the payment's own
+        // SGD value differs by the realised exchange difference); settled
+        // or not is judged in the bill's own currency.
+        $allocations = SupplierPaymentAllocation::where('supplier_invoice_id', $bill->id)->get();
+        $paidSgd = $allocations->reduce(fn (Money $carry, SupplierPaymentAllocation $a) => $carry->plus(Money::of($a->bill_amount_sgd ?? $a->amount_sgd)), Money::of(0));
+        $paid = $allocations->reduce(fn (Money $carry, SupplierPaymentAllocation $a) => $carry->plus(Money::of($a->amount_fx ?? $a->amount_sgd)), Money::of(0));
+        $bill->amount_paid_sgd = $paidSgd->toString();
+        $bill->amount_paid_fx = $paid->toString();
 
         if ($bill->status === SupplierInvoice::STATUS_EXCEPTION && $paid->toFloat() <= 0) {
             $bill->save();
@@ -188,7 +198,7 @@ class PayablesService
             return; // an unresolved exception stays an exception
         }
 
-        $total = Money::of($bill->total_amount_sgd);
+        $total = $bill->fx('total_amount');
         if ($paid->toFloat() <= 0) {
             $bill->status = $bill->match_status === SupplierInvoice::MATCH_MATCHED
                 ? SupplierInvoice::STATUS_APPROVED : SupplierInvoice::STATUS_AWAITING_MATCH;
@@ -215,20 +225,45 @@ class PayablesService
         if ($bill->status === SupplierInvoice::STATUS_EXCEPTION) {
             throw new PayablesRuleViolation("{$bill->bill_number} is a matching exception and is not approved for payment (PUR-003). Resolve the mismatch first.");
         }
-        if ($amount->toFloat() > $payment->unallocatedSgd()->toFloat()) {
-            throw new PayablesRuleViolation("Only SGD {$payment->unallocatedSgd()->toString()} of this payment is still unallocated.");
+        // Multi-currency: the amount is in the documents' own currency, and
+        // a payment settles bills in its own currency only.
+        $code = $bill->currencyCode();
+        if ($payment->currencyCode() !== $code) {
+            throw new PayablesRuleViolation("{$payment->voucher_number} is in {$payment->currencyCode()} but bill {$bill->bill_number} is in {$code} -- a payment settles bills in its own currency.");
         }
-        if ($amount->toFloat() > $bill->outstandingSgd()->toFloat()) {
-            throw new PayablesRuleViolation("Bill {$bill->bill_number} only has SGD {$bill->outstandingSgd()->toString()} outstanding.");
+        $paymentLeft = $payment->unallocatedFx();
+        $billLeft = $bill->outstandingFx();
+        if ($amount->toFloat() > $paymentLeft->toFloat()) {
+            throw new PayablesRuleViolation("Only {$code} {$paymentLeft->toString()} of this payment is still unallocated.");
         }
+        if ($amount->toFloat() > $billLeft->toFloat()) {
+            throw new PayablesRuleViolation("Bill {$bill->bill_number} only has {$code} {$billLeft->toString()} outstanding.");
+        }
+
+        // Each side in SGD at its own document's rate; the last of a
+        // document takes exactly what it has left.
+        $paymentSgd = $amount->toString() === $paymentLeft->toString() ? $payment->unallocatedSgd() : Currency::toSgd($amount, $payment->rate());
+        $billSgd = $amount->toString() === $billLeft->toString() ? $bill->outstandingSgd() : Currency::toSgd($amount, $bill->rate());
+        $difference = $billSgd->minus($paymentSgd); // + gain (paid less SGD than owed), - loss
 
         $allocation = SupplierPaymentAllocation::create([
             'company_id' => $payment->company_id,
             'payment_id' => $payment->id,
             'supplier_invoice_id' => $bill->id,
-            'amount_sgd' => $amount->toString(),
+            'amount_sgd' => $paymentSgd->toString(),
+            'amount_fx' => $amount->toString(),
+            'bill_amount_sgd' => $billSgd->toString(),
+            'fx_difference_sgd' => $difference->toString(),
         ]);
         self::recalculateBillStatus($bill);
+        if ($difference->toString() !== '0.00') {
+            Posting::postExchangeDifference(
+                companyId: $payment->company_id, receivable: false, allocationId: $allocation->id,
+                voucherNumber: "{$payment->voucher_number}-FX-{$bill->bill_number}", on: Carbon::parse($payment->payment_date),
+                difference: $difference, narration: "Exchange difference, payment {$payment->voucher_number} on bill {$bill->bill_number} ({$code})",
+                actorUserId: null,
+            );
+        }
         // unallocatedSgd()/allocatedSgd() reduce over the cached
         // `allocations` relation -- refresh it so a second allocation
         // against the same $payment instance (e.g. several lines in

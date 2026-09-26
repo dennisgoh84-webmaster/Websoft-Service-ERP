@@ -2063,6 +2063,17 @@ Small details nobody foresaw, built with the recommended default
 - **eApproval, Payment Vouchers**: an authority with no bank account
   set covers every account. The PV is still posted to the GL when saved
   (ACC-003); only the Bank step waits.
+- **Multi-currency, one account for gain and loss**: 6800 "Exchange
+  (gain) / loss" (an expense account; a gain is a credit on it), added
+  to every company's chart.
+- **Multi-currency, which documents**: contract and excess-usage
+  invoices stay SGD (contracts are in SGD); a foreign-currency
+  quotation's hourly lines become an SGD contract value at its rate.
+  Data Migration still brings SGD documents only.
+- **Multi-currency, catalog prices**: a product's price is in SGD; on a
+  foreign-currency document the line price is keyed in that currency.
+- **Multi-currency, limits**: credit limits, PO and credit note
+  approval limits and the Bank Authority amount compare SGD figures.
 - **Approval Center**: shown to everyone signed in, listing only what
   waits on their own authorities; approvers need no Core Administration
   access to decide.

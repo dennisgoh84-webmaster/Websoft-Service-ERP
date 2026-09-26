@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
+use App\Exceptions\CurrencyRuleViolation;
 use App\Exceptions\PayablesRuleViolation;
 use App\Exceptions\PostingError;
 use App\Http\Controllers\Api\Concerns\SendsExports;
@@ -14,6 +15,7 @@ use App\Models\SupplierInvoice;
 use App\Models\TaxCode;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\Currency;
 use App\Services\Numbering;
 use App\Services\PayablesService;
 use App\Services\Posting;
@@ -85,6 +87,13 @@ class SupplierInvoiceController extends Controller
             'total_amount_sgd' => (float) $bill->total_amount_sgd,
             'amount_paid_sgd' => (float) $bill->amount_paid_sgd,
             'outstanding_sgd' => $bill->outstandingSgd()->toFloat(),
+            // Multi-currency: the bill's own currency, rate and figures in it.
+            'currency_code' => $bill->currencyCode(),
+            'exchange_rate' => (float) $bill->rate(),
+            'amount_fx' => $bill->fx('amount')->toFloat(),
+            'gst_amount_fx' => $bill->fx('gst_amount')->toFloat(),
+            'total_amount_fx' => $bill->fx('total_amount')->toFloat(),
+            'outstanding_fx' => $bill->outstandingFx()->toFloat(),
             'match_status' => $bill->match_status,
             'match_note' => $bill->match_note,
             'status' => $bill->status,
@@ -188,7 +197,11 @@ class SupplierInvoiceController extends Controller
             'supplier_invoice_no' => 'sometimes|nullable|string',
             'invoice_date' => 'required|date',
             'description' => 'required|string|min:1',
-            'amount_sgd' => 'required|numeric|gt:0',
+            // Multi-currency: `amount` is in the bill's currency; `amount_sgd` is kept for an SGD one.
+            'amount' => 'required_without:amount_sgd|nullable|numeric|gt:0',
+            'amount_sgd' => 'required_without:amount|nullable|numeric|gt:0',
+            'currency_code' => 'sometimes|nullable|string|size:3',
+            'exchange_rate' => 'sometimes|nullable|numeric|gt:0',
             // GST is worked out from the tax code, as on a Sales Invoice
             // (Dennis, 2026-09-26) -- never keyed in.
             'tax_code' => 'sometimes|nullable|string|max:10',
@@ -209,12 +222,24 @@ class SupplierInvoiceController extends Controller
             throw new ApiException(422, "{$code} is not an active purchase tax code. Pick one of the purchase codes under Maintenance -> Tax Types.");
         }
         $this->supplierOrFail($user->company_id, $data['supplier_id']);
+        try {
+            [$currency, $xrate] = Currency::resolve($user->company_id, $data['currency_code'] ?? null, $data['exchange_rate'] ?? null, $data['invoice_date'], $data['supplier_id']);
+        } catch (CurrencyRuleViolation $e) {
+            throw new ApiException(422, $e->getMessage());
+        }
+        if (! Currency::isBase($currency) && empty($data['amount'])) {
+            throw new ApiException(422, "Key the amount in {$currency}.");
+        }
 
         try {
-            $bill = DB::transaction(function () use ($user, $data, $taxCode, $expenseAccountId) {
-                $net = Money::of($data['amount_sgd']);
+            $bill = DB::transaction(function () use ($user, $data, $taxCode, $expenseAccountId, $currency, $xrate) {
+                // GST worked out in the bill's currency, then each figure in
+                // SGD at the bill's rate (the GST return reads the SGD).
+                $netFx = Money::of($data['amount'] ?? $data['amount_sgd']);
                 $rate = Money::of($taxCode->rate_percent);
-                $gst = Tax::gstFor($net, $rate);
+                $gstFx = Tax::gstFor($netFx, $rate);
+                $net = Currency::toSgd($netFx, $xrate);
+                $gst = Currency::toSgd($gstFx, $xrate);
 
                 $bill = SupplierInvoice::create([
                     'company_id' => $user->company_id,
@@ -231,6 +256,12 @@ class SupplierInvoiceController extends Controller
                     'gst_rate' => $rate->toString(),
                     'gst_amount_sgd' => $gst->toString(),
                     'total_amount_sgd' => $net->plus($gst)->toString(),
+                    'currency_code' => $currency,
+                    'exchange_rate' => $xrate,
+                    'amount_fx' => $netFx->toString(),
+                    'gst_amount_fx' => $gstFx->toString(),
+                    'total_amount_fx' => $netFx->plus($gstFx)->toString(),
+                    'amount_paid_fx' => '0.00',
                 ]);
 
                 PayablesService::matchBillToPo($bill, $user->id);

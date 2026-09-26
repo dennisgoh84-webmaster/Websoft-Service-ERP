@@ -23,6 +23,7 @@ class InvoiceLine extends Model
         'company_id', 'invoice_id', 'line_no', 'description', 'product_id',
         'stock_item_id', 'warehouse_id', 'quantity', 'unit_of_measure',
         'unit_price_sgd', 'line_amount_sgd', 'unit_cost_sgd', 'cost_amount_sgd',
+        'unit_price_fx', 'line_amount_fx',
     ];
 
     protected $casts = [

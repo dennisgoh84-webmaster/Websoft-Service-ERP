@@ -53,6 +53,14 @@ class Posting
     // expenses account" -- the seeded 6700 "Bad debts written off".
     public const BAD_DEBT_EXPENSE = '6700';
 
+    // Multi-currency (2026-09-26): realised exchange gain / loss, booked
+    // when a foreign-currency receipt or payment is allocated.
+    public const EXCHANGE_DIFFERENCE = '6800';
+
+    public const SOURCE_EXCHANGE_DIFFERENCE_AR = 'payment_allocation';
+
+    public const SOURCE_EXCHANGE_DIFFERENCE_AP = 'supplier_payment_allocation';
+
     private const REVENUE_BY_INVOICE_TYPE = [
         Invoice::TYPE_CONTRACT_ANNUAL => '4000',
         Invoice::TYPE_EXCESS_USAGE => '4010',
@@ -315,6 +323,33 @@ class Posting
     }
 
     /**
+     * Realised exchange difference (multi-currency, "only when paid"),
+     * posted when a foreign-currency receipt or payment is allocated. A
+     * gain clears what is left on the control account against 6800
+     * (Dr AR or AP / Cr 6800); a loss the other way (Dr 6800 / Cr AR or
+     * AP). Dated the receipt's or payment's own date.
+     */
+    public static function postExchangeDifference(
+        string $companyId, bool $receivable, string $allocationId, string $voucherNumber, Carbon $on,
+        Money $difference, string $narration, ?string $actorUserId,
+    ): JournalEntry {
+        $control = self::accountByCode($companyId, $receivable ? self::AR_CONTROL : self::AP_CONTROL);
+        $fx = self::accountByCode($companyId, self::EXCHANGE_DIFFERENCE);
+        $amount = $difference->toFloat() < 0 ? Money::of(0)->minus($difference) : $difference;
+        $gain = $difference->toFloat() > 0;
+        $lines = $gain
+            ? [self::line($control, $amount, Money::of(0), $narration), self::line($fx, Money::of(0), $amount, 'Exchange gain')]
+            : [self::line($fx, $amount, Money::of(0), 'Exchange loss'), self::line($control, Money::of(0), $amount, $narration)];
+
+        return self::post(
+            companyId: $companyId, voucherType: JournalEntry::TYPE_JOURNAL, voucherNumber: $voucherNumber,
+            entryDate: $on, narration: $narration, lines: $lines,
+            sourceType: $receivable ? self::SOURCE_EXCHANGE_DIFFERENCE_AR : self::SOURCE_EXCHANGE_DIFFERENCE_AP, sourceId: $allocationId,
+            actorUserId: $actorUserId, auditEntityType: $receivable ? 'payment_allocation' : 'supplier_payment_allocation',
+        );
+    }
+
+    /**
      * §4.3 Receipt Voucher -- on save. Dr bank GL / Cr 1100 AR; an
      * Other receipt (bank interest and the like, #49 / 31.1) credits
      * its own GL account instead of AR.
@@ -475,6 +510,8 @@ class Posting
         string $docType,
         string $actorUserId,
         string $auditEntityType,
+        string $currency = 'SGD',
+        ?Money $amountFx = null,
     ): BankTransaction {
         if ($bankAccountId === null) {
             throw new PostingError('Set a bank account on this voucher before banking it.');
@@ -485,6 +522,13 @@ class Posting
         }
         if (self::liveBankTransactionFor($sourceType, $sourceId) !== null) {
             throw new PostingError("{$voucherNumber} is already in the bank book.");
+        }
+        // A foreign-currency account (multi-currency) runs its Bank Book in
+        // its own currency, so only a voucher in that currency goes in it.
+        $bankCurrency = Currency::code($bank->currency_code);
+        $foreignBank = ! Currency::isBase($bankCurrency);
+        if ($foreignBank && Currency::code($currency) !== $bankCurrency) {
+            throw new PostingError("{$bank->bank_name} is a {$bankCurrency} account; {$voucherNumber} is in ".Currency::code($currency).'.');
         }
         self::guard($companyId, $on, $docType, 'bank');
 
@@ -497,6 +541,8 @@ class Posting
             'reference' => $reference,
             'debit_sgd' => $moneyIn ? $amount->toString() : '0.00',
             'credit_sgd' => $moneyIn ? '0.00' : $amount->toString(),
+            'debit_fx' => $foreignBank ? ($moneyIn ? ($amountFx ?? $amount)->toString() : '0.00') : null,
+            'credit_fx' => $foreignBank ? ($moneyIn ? '0.00' : ($amountFx ?? $amount)->toString()) : null,
             'source_type' => $sourceType,
             'source_id' => $sourceId,
             'created_by_user_id' => $actorUserId,
@@ -536,6 +582,7 @@ class Posting
             description: trim("{$payment->voucher_number} — {$customerName}", ' —'),
             reference: $payment->reference, docType: 'receipt_voucher',
             actorUserId: $actorUserId, auditEntityType: 'payment',
+            currency: $payment->currencyCode(), amountFx: $payment->fx('amount'),
         );
     }
 
@@ -551,6 +598,7 @@ class Posting
             description: trim("{$payment->voucher_number} — {$supplierName}", ' —'),
             reference: $payment->reference, docType: 'payment_voucher',
             actorUserId: $actorUserId, auditEntityType: 'supplier_payment',
+            currency: $payment->currencyCode(), amountFx: $payment->fx('amount'),
         );
     }
 

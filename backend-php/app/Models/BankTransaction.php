@@ -26,6 +26,8 @@ class BankTransaction extends Model
         'description', 'reference', 'source_type', 'source_id', 'debit_sgd',
         'credit_sgd', 'is_reconciled', 'reconciled_at', 'is_voided', 'void_reason',
         'voided_at', 'created_by_user_id',
+        // A foreign-currency account's line in its own currency (multi-currency).
+        'debit_fx', 'credit_fx',
     ];
 
     protected $attributes = [

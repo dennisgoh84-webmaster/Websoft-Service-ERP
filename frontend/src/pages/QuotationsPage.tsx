@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import CreditLimitWarning from '../components/CreditLimitWarning'
+import CurrencyFields, { currencyPayload, type CurrencyValue } from '../components/CurrencyFields'
 import { EmailIcon, PrintIcon, WhatsAppIcon } from '../components/DocActionIcons'
 import DocumentAttachmentsPanel from '../components/DocumentAttachmentsPanel'
 import ExportControl from '../components/ExportControl'
@@ -103,6 +104,8 @@ export default function QuotationsPage() {
   const [prospectId, setProspectId] = useState(searchParams.get('prospect_id') ?? '')
   const [customerProspects, setCustomerProspects] = useState<Prospect[]>([])
   const [quotationDate, setQuotationDate] = useState(todayIso())
+  // Multi-currency: the customer's own currency, at the rate table's rate.
+  const [quoteCur, setQuoteCur] = useState<CurrencyValue>({ currency: 'SGD', rate: '' })
   const [validUntil, setValidUntil] = useState('')
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()])
@@ -177,6 +180,7 @@ export default function QuotationsPage() {
         quotation_date: quotationDate,
         valid_until: validUntil || undefined,
         notes: notes || undefined,
+        ...currencyPayload(quoteCur),
         lines: lines
           .filter((l) => l.description && l.quantity && l.unitPrice)
           .map((l) => ({
@@ -184,7 +188,7 @@ export default function QuotationsPage() {
             description: l.description,
             unit_of_measure: l.unitOfMeasure || undefined,
             quantity: parseFloat(l.quantity),
-            unit_price_sgd: parseFloat(l.unitPrice),
+            unit_price: parseFloat(l.unitPrice),
             reference_code_id: l.referenceCodeId || undefined,
             cost_sgd: l.costSgd ? parseFloat(l.costSgd) : undefined,
           })),
@@ -401,6 +405,13 @@ export default function QuotationsPage() {
             <label>Date</label>
             <DateInput value={quotationDate} onChange={(e) => setQuotationDate(e.target.value)} required />
           </div>
+          <CurrencyFields
+            idPrefix="quotation"
+            value={quoteCur}
+            onChange={setQuoteCur}
+            date={quotationDate}
+            partyCurrency={customers.find((c) => c.id === customerId)?.default_currency ?? null}
+          />
           <div className="form-row">
             <label>Valid until</label>
             <DateInput value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
@@ -614,7 +625,14 @@ export default function QuotationsPage() {
                   </td>
                   <td>{formatDate(q.quotation_date)}</td>
                   <td>{q.valid_until ?? <span className="muted">-</span>}</td>
-                  <td>{money(q.total_amount_sgd)}</td>
+                  <td>
+                    {money(q.total_amount_sgd)}
+                    {q.currency_code && q.currency_code !== 'SGD' && (
+                      <div className="muted small">
+                        {q.currency_code} {(q.total_amount_fx ?? 0).toFixed(2)}
+                      </div>
+                    )}
+                  </td>
                   <td>
                     <span className={`badge ${STATUS_BADGE[q.status]}`}>{STATUS_LABEL[q.status]}</span>
                     {q.status === 'draft' && q.returned_reason && (

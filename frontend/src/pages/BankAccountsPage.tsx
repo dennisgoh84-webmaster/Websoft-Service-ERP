@@ -21,6 +21,8 @@ export default function BankAccountsPage() {
   const [currencyCode, setCurrencyCode] = useState('SGD')
   const [glAccountId, setGlAccountId] = useState('')
   const [openingBalance, setOpeningBalance] = useState('0')
+  // A foreign-currency account's opening balance in its own currency (multi-currency).
+  const [openingBalanceFx, setOpeningBalanceFx] = useState('')
   const [openingBalanceDate, setOpeningBalanceDate] = useState('')
   const [creating, setCreating] = useState(false)
 
@@ -51,6 +53,7 @@ export default function BankAccountsPage() {
         currency_code: currencyCode || 'SGD',
         gl_account_id: glAccountId || null,
         opening_balance_sgd: Number(openingBalance) || 0,
+        opening_balance_fx: currencyCode && currencyCode !== 'SGD' ? Number(openingBalanceFx) || 0 : null,
         opening_balance_date: openingBalanceDate || null,
       })
       setBankName('')
@@ -198,6 +201,15 @@ export default function BankAccountsPage() {
               ))}
             </select>
           </div>
+          {currencyCode && currencyCode !== 'SGD' && (
+            <div className="form-row">
+              <label htmlFor="bank-opening-fx">Opening balance ({currencyCode})</label>
+              <input id="bank-opening-fx" type="number" step="0.01" value={openingBalanceFx} onChange={(e) => setOpeningBalanceFx(e.target.value)} />
+              <span className="muted">
+                A {currencyCode} account's Bank Book runs in {currencyCode}, with the SGD value beside each line.
+              </span>
+            </div>
+          )}
           <div className="form-row">
             <label>Opening balance (SGD)</label>
             <input

@@ -12,6 +12,7 @@ import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type CompanyIndividual, type PurchaseOrder } from '../lib/api'
 import DateInput from '../components/DateInput'
+import CurrencyFields, { currencyPayload, type CurrencyValue } from '../components/CurrencyFields'
 import { formatMoney as money, todayIso } from '../lib/format'
 
 const PO_BADGE: Record<string, string> = {
@@ -38,6 +39,8 @@ export default function PurchaseOrdersPage() {
   const [poSupplier, setPoSupplier] = useState('')
   const [poDesc, setPoDesc] = useState('')
   const [poDate, setPoDate] = useState(todayIso())
+  // Multi-currency: the supplier's own currency, at the rate table's rate.
+  const [poCur, setPoCur] = useState<CurrencyValue>({ currency: 'SGD', rate: '' })
   const [poAmount, setPoAmount] = useState('')
 
   function refresh() {
@@ -59,7 +62,8 @@ export default function PurchaseOrdersPage() {
         supplier_id: poSupplier,
         order_date: poDate || todayIso(),
         description: poDesc,
-        amount_sgd: parseFloat(poAmount),
+        amount: parseFloat(poAmount),
+        ...currencyPayload(poCur),
       })
       setPoDesc('')
       setPoAmount('')
@@ -186,7 +190,14 @@ export default function PurchaseOrdersPage() {
                     <td>{po.po_number}</td>
                     <td>{supplierName(po.supplier_id)}</td>
                     <td>{po.description}</td>
-                    <td>{money(po.total_amount_sgd)}</td>
+                    <td>
+                      {money(po.total_amount_sgd)}
+                      {po.currency_code && po.currency_code !== 'SGD' && (
+                        <div className="muted small">
+                          {po.currency_code} {(po.total_amount_fx ?? 0).toFixed(2)}
+                        </div>
+                      )}
+                    </td>
                     <td>
                       <span className={`badge ${PO_BADGE[po.status] ?? 'draft'}`}>
                         {po.status.replace('_', ' ')}
@@ -302,12 +313,13 @@ export default function PurchaseOrdersPage() {
             <label>Order date</label>
             <DateInput value={poDate} onChange={(e) => setPoDate(e.target.value)} required />
           </div>
+          <CurrencyFields idPrefix="po" value={poCur} onChange={setPoCur} date={poDate} partyCurrency={supplierOf(poSupplier)?.default_currency ?? null} />
           <div className="form-row">
             <label>Description</label>
             <input value={poDesc} onChange={(e) => setPoDesc(e.target.value)} required />
           </div>
           <div className="form-row">
-            <label>Amount, net of GST (SGD)</label>
+            <label>Amount, net of GST ({poCur.currency})</label>
             <input
               type="number"
               min="0.01"

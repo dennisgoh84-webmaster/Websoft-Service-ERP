@@ -53,6 +53,24 @@ class BankBook
         return self::sumInto(Money::of($openingBalance), $rows);
     }
 
+    /**
+     * A foreign-currency account's balance in its own currency
+     * (multi-currency): its opening balance there, plus each line's
+     * amount in that currency.
+     */
+    public static function currentBalanceFx(BankAccount $bankAccount, ?Carbon $asAt = null): Money
+    {
+        $query = BankTransaction::where('bank_account_id', $bankAccount->id)->where('is_voided', false);
+        if ($asAt !== null) {
+            $query->whereDate('transaction_date', '<=', $asAt->toDateString());
+        }
+
+        return $query->get()->reduce(
+            fn (Money $carry, BankTransaction $t) => $carry->plus(Money::of($t->debit_fx ?? 0))->minus(Money::of($t->credit_fx ?? 0)),
+            Money::of($bankAccount->opening_balance_fx ?? 0),
+        );
+    }
+
     /** @param Collection<int, BankTransaction> $rows */
     private static function sumInto(Money $opening, $rows): Money
     {

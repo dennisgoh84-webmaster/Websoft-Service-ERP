@@ -7,9 +7,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Middleware\Authenticate;
 use App\Models\CurrencyRate;
 use App\Models\GroupModuleAuthority;
+use App\Models\SetupListItem;
 use App\Services\Audit;
 use App\Services\Authority;
+use App\Services\Currency;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -53,6 +56,39 @@ class CurrencyRateController extends Controller
             $query->orderBy('currency_code')->orderByDesc('effective_date')->get()
                 ->map(fn (CurrencyRate $r) => $this->out($r))
         );
+    }
+
+    /**
+     * The rate a new document starts with (multi-currency, 2026-09-26):
+     * the latest active rate on or before the date. Any signed-in user
+     * -- every document form asks, not only Finance.
+     */
+    public function asAt(Request $request)
+    {
+        $user = Authenticate::user($request);
+        $data = $request->validate(['currency_code' => 'required|string|size:3', 'date' => 'required|date']);
+        $code = Currency::code($data['currency_code']);
+
+        return response()->json([
+            'currency_code' => $code,
+            'date' => Carbon::parse($data['date'])->toDateString(),
+            'rate' => ($rate = Currency::rateOn($user->company_id, $code, $data['date'])) === null ? null : (float) $rate,
+        ]);
+    }
+
+    /** The currencies a document can be raised in: SGD, every currency in the rate table, and the Currency setup list. */
+    public function currencies(Request $request)
+    {
+        $user = Authenticate::user($request);
+        $codes = collect([Currency::BASE])
+            ->merge(CurrencyRate::where('company_id', $user->company_id)->where('is_active', true)->distinct()->pluck('currency_code'))
+            ->merge(SetupListItem::where('list_type', SetupListItem::TYPE_CURRENCY)->where('is_active', true)->pluck('code'))
+            ->map(fn ($c) => Currency::code((string) $c))
+            ->filter(fn ($c) => preg_match('/^[A-Z]{3}$/', $c))
+            ->unique()->sort()->values();
+        $codes = $codes->reject(fn ($c) => $c === Currency::BASE)->prepend(Currency::BASE)->values();
+
+        return response()->json($codes);
     }
 
     public function store(Request $request)

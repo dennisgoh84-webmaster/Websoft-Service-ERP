@@ -17,7 +17,10 @@ class SupplierPaymentAllocation extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['company_id', 'payment_id', 'supplier_invoice_id', 'amount_sgd'];
+    // amount_sgd: the payment's side, at its rate; bill_amount_sgd: what it
+    // cleared off the bill, at the bill's rate; fx_difference_sgd: the
+    // realised exchange gain (+) or loss (-) booked with it (multi-currency).
+    protected $fillable = ['company_id', 'payment_id', 'supplier_invoice_id', 'amount_sgd', 'amount_fx', 'bill_amount_sgd', 'fx_difference_sgd'];
 
     protected $casts = [
         'amount_sgd' => 'decimal:2',

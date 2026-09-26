@@ -11,6 +11,7 @@ use App\Models\BankAccount;
 use App\Services\Audit;
 use App\Services\Authority;
 use App\Services\BankBook;
+use App\Services\Currency;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
@@ -48,6 +49,9 @@ class BankAccountController extends Controller
             'opening_balance_sgd' => (float) $bank->opening_balance_sgd,
             'opening_balance_date' => optional($bank->opening_balance_date)->toDateString(),
             'current_balance_sgd' => $balance->toFloat(),
+            // A foreign-currency account also runs in its own currency (multi-currency).
+            'opening_balance_fx' => $bank->opening_balance_fx !== null ? (float) $bank->opening_balance_fx : null,
+            'current_balance_fx' => Currency::isBase($bank->currency_code) ? null : BankBook::currentBalanceFx($bank)->toFloat(),
             'is_active' => $bank->is_active,
         ];
     }
@@ -143,6 +147,7 @@ class BankAccountController extends Controller
             'currency_code' => 'sometimes|string|min:3|max:3',
             'gl_account_id' => 'sometimes|nullable|uuid',
             'opening_balance_sgd' => 'sometimes|numeric',
+            'opening_balance_fx' => 'sometimes|nullable|numeric',
             'opening_balance_date' => 'sometimes|nullable|date',
         ]);
 
@@ -179,6 +184,7 @@ class BankAccountController extends Controller
             'currency_code' => 'sometimes|string|min:3|max:3',
             'gl_account_id' => 'sometimes|nullable|uuid',
             'opening_balance_sgd' => 'sometimes|numeric',
+            'opening_balance_fx' => 'sometimes|nullable|numeric',
             'opening_balance_date' => 'sometimes|nullable|date',
             'is_active' => 'sometimes|boolean',
         ]);

@@ -39,13 +39,23 @@ class QuotationService
             fn (Money $carry, $line) => $carry->plus(Money::of($line->line_total_sgd)),
             Money::of(0),
         );
-        [$taxCode, $rate, $gst, $total] = Tax::applyGst($quotation->company_id, $net);
+        // Multi-currency: GST worked out in the quotation's currency, and
+        // each figure kept in SGD at its rate.
+        $netFx = $quotation->lines->reduce(
+            fn (Money $carry, $line) => $carry->plus(Money::of($line->line_total_fx ?? $line->line_total_sgd)),
+            Money::of(0),
+        );
+        [$taxCode, $rate, $gstFx, $totalFx] = Tax::applyGst($quotation->company_id, $netFx);
+        $gst = Currency::toSgd($gstFx, $quotation->rate());
 
         $quotation->amount_sgd = $net->toString();
         $quotation->tax_code = $taxCode;
         $quotation->gst_rate = $rate->toString();
         $quotation->gst_amount_sgd = $gst->toString();
-        $quotation->total_amount_sgd = $total->toString();
+        $quotation->total_amount_sgd = $net->plus($gst)->toString();
+        $quotation->amount_fx = $netFx->toString();
+        $quotation->gst_amount_fx = $gstFx->toString();
+        $quotation->total_amount_fx = $totalFx->toString();
     }
 
     private static function isHourly(?string $unitOfMeasure): bool
@@ -211,6 +221,8 @@ class QuotationService
                 'renews_contract_id' => $original->renews_contract_id,
                 'revised_from_quotation_id' => $original->id,
                 'prospect_id' => $original->prospect_id,
+                'currency_code' => $original->currencyCode(),
+                'exchange_rate' => $original->rate(),
             ]);
             foreach ($original->lines as $line) {
                 QuotationLine::create([
@@ -221,6 +233,8 @@ class QuotationService
                     'quantity' => $line->quantity,
                     'unit_price_sgd' => $line->unit_price_sgd,
                     'line_total_sgd' => $line->line_total_sgd,
+                    'unit_price_fx' => $line->unit_price_fx,
+                    'line_total_fx' => $line->line_total_fx,
                     'reference_code_id' => $line->reference_code_id,
                     'cost_sgd' => $line->cost_sgd,
                 ]);
@@ -450,7 +464,7 @@ class QuotationService
             $lines[] = [
                 'description' => $line->description,
                 'quantity' => (int) $qty->toFloat(),
-                'unit_price_sgd' => (string) $line->unit_price_sgd,
+                'unit_price' => (string) ($line->unit_price_fx ?? $line->unit_price_sgd),
                 'product_id' => $line->product_id,
                 'stock_item_id' => $stockItem?->id,
                 'warehouse_id' => $stockItem ? $warehouseId : null,
@@ -459,6 +473,10 @@ class QuotationService
             ];
         }
 
+        // In the quotation's currency, at the Currency Rate Table's rate on
+        // the invoice date (else the quotation's own rate).
+        $code = $quotation->currencyCode();
+        $invoiceRate = Currency::rateOn($quotation->company_id, $code, Carbon::today()) ?? $quotation->rate();
         try {
             $invoice = BillingService::issueSalesInvoice(
                 companyId: $quotation->company_id,
@@ -466,6 +484,8 @@ class QuotationService
                 lines: $lines,
                 actorUserId: $actorUserId,
                 description: "Quotation {$quotation->quotation_number}",
+                currency: $code,
+                rate: $invoiceRate,
             );
         } catch (InventoryRuleViolation|BillingRuleViolation $e) {
             throw new QuotationRuleViolation("Not accepted: {$e->getMessage()}");

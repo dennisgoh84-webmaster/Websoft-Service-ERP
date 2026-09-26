@@ -22,7 +22,7 @@ class BankAccount extends Model
     protected $fillable = [
         'company_id', 'bank_name', 'account_name', 'account_number', 'branch',
         'swift_code', 'currency_code', 'gl_account_id', 'opening_balance_sgd',
-        'opening_balance_date', 'is_active',
+        'opening_balance_date', 'is_active', 'opening_balance_fx',
     ];
 
     protected $attributes = [

@@ -6,6 +6,7 @@ import ExportControl from '../components/ExportControl'
 import SignaturePanel from '../components/SignaturePanel'
 import { api, downloadBlob, type BankAccount, type CompanyIndividual, type SupplierInvoice, type SupplierPayment } from '../lib/api'
 import DateInput from '../components/DateInput'
+import CurrencyFields, { currencyPayload, type CurrencyValue } from '../components/CurrencyFields'
 import OtherVoucherFields from '../components/OtherVoucherFields'
 import { useOtherVoucherAccounts } from '../lib/otherVoucherAccounts'
 import { formatMoney as money, todayIso } from '../lib/format'
@@ -28,6 +29,8 @@ export default function PaymentVoucherPage() {
   const [payAmount, setPayAmount] = useState('')
   const [payRef, setPayRef] = useState('')
   const [payDate, setPayDate] = useState(todayIso())
+  // Multi-currency: the supplier's own currency, at the rate table's rate.
+  const [payCur, setPayCur] = useState<CurrencyValue>({ currency: 'SGD', rate: '' })
   // ACC-001: every payment names the bank account the money left from.
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([])
   const [bankAccountId, setBankAccountId] = useState('')
@@ -59,7 +62,8 @@ export default function PaymentVoucherPage() {
       const pv = await api.recordSupplierPayment({
         ...(kind === 'other' ? { gl_account_id: glAccountId, notes: description } : { supplier_id: paySupplier }),
         payment_date: payDate || todayIso(),
-        amount_sgd: parseFloat(payAmount),
+        amount: parseFloat(payAmount),
+        ...currencyPayload(payCur),
         bank_account_id: bankAccountId,
         reference: payRef || undefined,
       })
@@ -95,7 +99,7 @@ export default function PaymentVoucherPage() {
     setError(null)
     try {
       await api.allocateSupplierPayment(payment.id, [
-        { supplier_invoice_id: choice.billId, amount_sgd: parseFloat(choice.amount) },
+        { supplier_invoice_id: choice.billId, amount: parseFloat(choice.amount) },
       ])
       setAllocFor((prev) => ({ ...prev, [payment.id]: { billId: '', amount: '' } }))
       refresh()
@@ -218,7 +222,14 @@ export default function PaymentVoucherPage() {
                       supplierName(p.supplier_id)
                     )}
                   </td>
-                  <td>{money(p.amount_sgd)}</td>
+                  <td>
+                    {money(p.amount_sgd)}
+                    {p.currency_code && p.currency_code !== 'SGD' && (
+                      <div className="muted small">
+                        {p.currency_code} {(p.amount_fx ?? 0).toFixed(2)} @ {p.exchange_rate}
+                      </div>
+                    )}
+                  </td>
                   <td>
                     {p.unallocated_sgd > 0 ? (
                       <strong>{money(p.unallocated_sgd)}</strong>
@@ -385,8 +396,9 @@ export default function PaymentVoucherPage() {
             <label>Payment date</label>
             <DateInput value={payDate} onChange={(e) => setPayDate(e.target.value)} required />
           </div>
+          <CurrencyFields idPrefix="pv" value={payCur} onChange={setPayCur} date={payDate} partyCurrency={kind === 'other' ? null : (supplierOf(paySupplier)?.default_currency ?? null)} />
           <div className="form-row">
-            <label>Amount (SGD)</label>
+            <label>Amount ({payCur.currency})</label>
             <input
               type="number"
               min="0.01"

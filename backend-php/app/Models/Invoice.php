@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCurrency;
 use App\Models\Concerns\HasUuidPrimaryKey;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\Model;
@@ -28,6 +29,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Invoice extends Model
 {
+    use HasCurrency;
     use HasUuidPrimaryKey;
 
     public $timestamps = false;
@@ -76,6 +78,8 @@ class Invoice extends Model
         // invoice raised in this system.
         'pre_migration_paid_sgd', 'migrated_at',
         'prospect_id',
+        // Multi-currency (2026-09-26): the document's own currency and its figures in it.
+        'currency_code', 'exchange_rate', 'amount_fx', 'gst_amount_fx', 'total_amount_fx', 'amount_paid_fx', 'credited_fx',
     ];
 
     protected $casts = [
@@ -148,6 +152,17 @@ class Invoice extends Model
         $remaining = Money::of($this->total_amount_sgd ?? 0)
             ->minus(Money::of($this->amount_paid_sgd ?? 0))
             ->minus(Money::of($this->credited_sgd ?? 0));
+
+        return $remaining->toFloat() < 0 ? Money::of(0) : $remaining;
+    }
+
+    /** What is still owed in the invoice's own currency (never negative). */
+    public function outstandingFx(): Money
+    {
+        if ($this->status === self::STATUS_WRITTEN_OFF) {
+            return Money::of(0);
+        }
+        $remaining = $this->fx('total_amount')->minus($this->fx('amount_paid'))->minus($this->fx('credited'));
 
         return $remaining->toFloat() < 0 ? Money::of(0) : $remaining;
     }

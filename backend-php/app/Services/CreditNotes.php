@@ -43,14 +43,19 @@ class CreditNotes
     /** BILL-003's routine approvers: Finance and the Sales Manager -- and the owner, who may approve anything. */
     public const ROUTINE_APPROVER_ROLES = [User::ROLE_OWNER, User::ROLE_FINANCE, User::ROLE_SALES_MANAGER];
 
-    /** What a new credit note on this invoice may still take off: what it owes, less credit notes already waiting on it. */
-    public static function creditableSgd(Invoice $invoice, ?string $exceptNoteId = null): Money
+    /**
+     * What a new credit note on this invoice may still take off, in the
+     * invoice's own currency (multi-currency; a credit note is always in
+     * its invoice's currency and at its rate): what it owes, less credit
+     * notes already waiting on it.
+     */
+    public static function creditableFx(Invoice $invoice, ?string $exceptNoteId = null): Money
     {
         $pending = CreditNote::where('invoice_id', $invoice->id)->where('status', CreditNote::STATUS_PENDING)
             ->when($exceptNoteId, fn ($q) => $q->where('id', '!=', $exceptNoteId))
             ->get()
-            ->reduce(fn (Money $carry, CreditNote $n) => $carry->plus(Money::of($n->total_amount_sgd)), Money::of(0));
-        $left = $invoice->outstandingSgd()->minus($pending);
+            ->reduce(fn (Money $carry, CreditNote $n) => $carry->plus($n->fx('total_amount')), Money::of(0));
+        $left = $invoice->outstandingFx()->minus($pending);
 
         return $left->toFloat() < 0 ? Money::of(0) : $left;
     }
@@ -84,19 +89,26 @@ class CreditNotes
         if ($invoice->status === Invoice::STATUS_WRITTEN_OFF) {
             throw new ARRuleViolation("{$invoice->invoice_number} was written off, so there is nothing left on it to credit.");
         }
-        $net = Money::of($netAmount);
-        if ($net->toFloat() <= 0) {
+        // Keyed in the invoice's own currency; kept in SGD at the invoice's
+        // rate, so it reverses exactly what the invoice posted.
+        $netFx = Money::of($netAmount);
+        if ($netFx->toFloat() <= 0) {
             throw new ARRuleViolation('The credit note amount must be more than zero.');
         }
+        $code = $invoice->currencyCode();
         $rate = Money::of($invoice->gst_rate ?? 0);
-        $gst = Tax::gstFor($net, $rate);
-        $total = $net->plus($gst);
-        $creditable = self::creditableSgd($invoice);
-        if ($total->toFloat() > $creditable->toFloat()) {
-            throw new ARRuleViolation("SGD {$total->toString()} with GST is more than can be credited on {$invoice->invoice_number}: SGD {$creditable->toString()} (what it still owes, less credit notes already waiting on it).");
+        $gstFx = Tax::gstFor($netFx, $rate);
+        $totalFx = $netFx->plus($gstFx);
+        $creditable = self::creditableFx($invoice);
+        if ($totalFx->toFloat() > $creditable->toFloat()) {
+            throw new ARRuleViolation("{$code} {$totalFx->toString()} with GST is more than can be credited on {$invoice->invoice_number}: {$code} {$creditable->toString()} (what it still owes, less credit notes already waiting on it).");
         }
+        $gst = Currency::toSgd($gstFx, $invoice->rate());
+        // Crediting all that is left takes exactly what is left in SGD, so no cent is stranded.
+        $total = $totalFx->toString() === $invoice->outstandingFx()->toString() ? $invoice->outstandingSgd() : Currency::toSgd($totalFx, $invoice->rate());
+        $net = $total->minus($gst);
 
-        return DB::transaction(function () use ($invoice, $actor, $net, $gst, $total, $rate, $reason) {
+        return DB::transaction(function () use ($invoice, $actor, $net, $gst, $total, $rate, $reason, $code, $netFx, $gstFx, $totalFx) {
             $note = CreditNote::create([
                 'company_id' => $invoice->company_id,
                 'invoice_id' => $invoice->id,
@@ -107,6 +119,11 @@ class CreditNotes
                 'gst_rate' => $rate->toString(),
                 'gst_amount_sgd' => $gst->toString(),
                 'total_amount_sgd' => $total->toString(),
+                'currency_code' => $code,
+                'exchange_rate' => $invoice->rate(),
+                'amount_fx' => $netFx->toString(),
+                'gst_amount_fx' => $gstFx->toString(),
+                'total_amount_fx' => $totalFx->toString(),
                 'status' => CreditNote::STATUS_PENDING,
                 'raised_by_user_id' => $actor->id,
                 'raised_at' => now(),
@@ -136,7 +153,7 @@ class CreditNotes
                     : 'Credit notes are approved by Finance, the Sales Manager or the owner (BILL-003).'));
         }
         $invoice = $note->invoice;
-        if (Money::of($note->total_amount_sgd)->toFloat() > self::creditableSgd($invoice, $note->id)->toFloat()) {
+        if ($note->fx('total_amount')->toFloat() > self::creditableFx($invoice, $note->id)->toFloat()) {
             throw new ARRuleViolation("{$invoice->invoice_number} now owes less than this credit note takes off -- it was paid or credited since. Reject this one and raise a smaller one.");
         }
 

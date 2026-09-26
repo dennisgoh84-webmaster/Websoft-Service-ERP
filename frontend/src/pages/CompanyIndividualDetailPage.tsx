@@ -59,6 +59,7 @@ function emptyForm() {
     po_approval_limit_sgd: '',
     credit_note_approval_limit_sgd: '',
     credit_limit_sgd: '',
+    default_currency: 'SGD',
     data_expiry_date: '',
   }
 }
@@ -80,6 +81,10 @@ export default function CompanyIndividualDetailPage() {
   const navigate = useNavigate()
 
   const [customer, setCustomer] = useState<CompanyIndividual | null>(null)
+  const [currencyCodes, setCurrencyCodes] = useState<string[]>(['SGD'])
+  useEffect(() => {
+    api.listDocumentCurrencies().then(setCurrencyCodes).catch(() => {})
+  }, [])
   const [contacts, setContacts] = useState<Contact[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
   const [relationships, setRelationships] = useState<CompanyIndividualRelationship[]>([])
@@ -177,6 +182,7 @@ export default function CompanyIndividualDetailPage() {
           po_approval_limit_sgd: c.po_approval_limit_sgd === null ? '' : String(c.po_approval_limit_sgd),
           credit_note_approval_limit_sgd: c.credit_note_approval_limit_sgd === null ? '' : String(c.credit_note_approval_limit_sgd),
           credit_limit_sgd: c.credit_limit_sgd === null ? '' : String(c.credit_limit_sgd),
+          default_currency: c.default_currency ?? 'SGD',
           data_expiry_date: c.data_expiry_date ?? '',
         })
         setDataExpiryDraft(c.data_expiry_date ?? '')
@@ -290,6 +296,7 @@ export default function CompanyIndividualDetailPage() {
         credit_note_approval_limit_sgd:
           form.credit_note_approval_limit_sgd === '' ? null : parseFloat(form.credit_note_approval_limit_sgd),
         credit_limit_sgd: form.credit_limit_sgd === '' ? null : parseFloat(form.credit_limit_sgd),
+        default_currency: form.default_currency === 'SGD' ? null : form.default_currency,
       })
       refresh()
     } catch (err) {
@@ -821,6 +828,24 @@ export default function CompanyIndividualDetailPage() {
             <p className="muted" style={{ margin: '4px 0 0' }}>
               A purchase order to this supplier up to this amount (incl. GST) can be approved by staff with authority; above it,
               only the owner.
+            </p>
+          </div>
+          <div className="form-row">
+            <label htmlFor="ci-default-currency">Default currency</label>
+            <select
+              id="ci-default-currency"
+              value={form.default_currency}
+              onChange={(e) => setForm((p) => ({ ...p, default_currency: e.target.value }))}
+            >
+              {(currencyCodes.includes(form.default_currency) ? currencyCodes : [...currencyCodes, form.default_currency]).map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <p className="muted" style={{ margin: '4px 0 0' }}>
+              Quotations, invoices, receipts, purchase orders, bills and payments to this party start in this currency;
+              it can be changed on each one. Add currencies under Currency Rate Table.
             </p>
           </div>
           <div className="form-row">

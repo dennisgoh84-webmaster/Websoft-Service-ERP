@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCurrency;
 use App\Models\Concerns\HasUuidPrimaryKey;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class CreditNote extends Model
 {
+    use HasCurrency;
     use HasUuidPrimaryKey;
 
     public const STATUS_PENDING = 'pending_approval';
@@ -29,6 +31,7 @@ class CreditNote extends Model
         'company_id', 'credit_note_number', 'invoice_id', 'customer_id', 'reason',
         'amount_sgd', 'tax_code', 'gst_rate', 'gst_amount_sgd', 'total_amount_sgd', 'status',
         'raised_by_user_id', 'raised_at', 'decided_by_user_id', 'decided_at', 'decision_note', 'issued_at',
+        'currency_code', 'exchange_rate', 'amount_fx', 'gst_amount_fx', 'total_amount_fx',
     ];
 
     protected $casts = [

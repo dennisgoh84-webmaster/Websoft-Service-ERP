@@ -119,15 +119,27 @@ class AccountsReceivableService
         // Starts from what the old system had already settled on a
         // migrated invoice (zero on every invoice raised here), which
         // has no allocation rows behind it -- see docs/data-migration.md.
-        $paid = PaymentAllocation::where('invoice_id', $invoice->id)->get()
-            ->reduce(fn (Money $carry, PaymentAllocation $a) => $carry->plus(Money::of($a->amount_sgd)), Money::of($invoice->pre_migration_paid_sgd ?? 0));
+        // Paid in SGD is what each allocation cleared at the INVOICE's rate
+        // (multi-currency: the receipt's own SGD value can differ -- that
+        // difference is the realised exchange gain or loss); paid in the
+        // invoice's currency is what was allocated.
+        $allocations = PaymentAllocation::where('invoice_id', $invoice->id)->get();
+        $pre = Money::of($invoice->pre_migration_paid_sgd ?? 0);
+        $paid = $allocations->reduce(fn (Money $carry, PaymentAllocation $a) => $carry->plus(Money::of($a->invoice_amount_sgd ?? $a->amount_sgd)), $pre);
+        $paidFx = $allocations->reduce(fn (Money $carry, PaymentAllocation $a) => $carry->plus(Money::of($a->amount_fx ?? $a->amount_sgd)), $pre);
         $invoice->amount_paid_sgd = $paid->toString();
+        $invoice->amount_paid_fx = $paidFx->toString();
         // Issued credit notes take their total off too (BILL-003).
-        $credited = CreditNote::where('invoice_id', $invoice->id)->where('status', CreditNote::STATUS_ISSUED)->get()
-            ->reduce(fn (Money $carry, CreditNote $c) => $carry->plus(Money::of($c->total_amount_sgd)), Money::of(0));
+        $notes = CreditNote::where('invoice_id', $invoice->id)->where('status', CreditNote::STATUS_ISSUED)->get();
+        $credited = $notes->reduce(fn (Money $carry, CreditNote $c) => $carry->plus(Money::of($c->total_amount_sgd)), Money::of(0));
+        $creditedFx = $notes->reduce(fn (Money $carry, CreditNote $c) => $carry->plus($c->fx('total_amount')), Money::of(0));
         $invoice->credited_sgd = $credited->toString();
+        $invoice->credited_fx = $creditedFx->toString();
 
-        $total = Money::of($invoice->total_amount_sgd);
+        // Settled or not is judged in the invoice's own currency.
+        $total = $invoice->fx('total_amount');
+        $paid = $paidFx;
+        $credited = $creditedFx;
         $settled = $paid->plus($credited);
         if ($settled->toFloat() <= 0) {
             $invoice->status = Invoice::STATUS_OUTSTANDING;
@@ -155,20 +167,45 @@ class AccountsReceivableService
         if ($invoice->status === Invoice::STATUS_WRITTEN_OFF) {
             throw new ARRuleViolation('That invoice has been written off.');
         }
-        if ($amount->toFloat() > $payment->unallocatedSgd()->toFloat()) {
-            throw new ARRuleViolation("Only SGD {$payment->unallocatedSgd()->toString()} of this payment is still unallocated.");
+        // Multi-currency: the amount is in the documents' own currency, and
+        // a receipt settles invoices in its own currency only.
+        $code = $invoice->currencyCode();
+        if ($payment->currencyCode() !== $code) {
+            throw new ARRuleViolation("{$payment->voucher_number} is in {$payment->currencyCode()} but invoice {$invoice->invoice_number} is in {$code} -- a receipt settles invoices in its own currency.");
         }
-        if ($amount->toFloat() > $invoice->outstandingSgd()->toFloat()) {
-            throw new ARRuleViolation("Invoice {$invoice->invoice_number} only has SGD {$invoice->outstandingSgd()->toString()} outstanding.");
+        $paymentLeft = $payment->unallocatedFx();
+        $invoiceLeft = $invoice->outstandingFx();
+        if ($amount->toFloat() > $paymentLeft->toFloat()) {
+            throw new ARRuleViolation("Only {$code} {$paymentLeft->toString()} of this payment is still unallocated.");
         }
+        if ($amount->toFloat() > $invoiceLeft->toFloat()) {
+            throw new ARRuleViolation("Invoice {$invoice->invoice_number} only has {$code} {$invoiceLeft->toString()} outstanding.");
+        }
+
+        // Each side in SGD at its own document's rate -- the last of a
+        // document takes exactly what it has left, so no cent is stranded.
+        $paymentSgd = $amount->toString() === $paymentLeft->toString() ? $payment->unallocatedSgd() : Currency::toSgd($amount, $payment->rate());
+        $invoiceSgd = $amount->toString() === $invoiceLeft->toString() ? $invoice->outstandingSgd() : Currency::toSgd($amount, $invoice->rate());
+        $difference = $paymentSgd->minus($invoiceSgd); // + gain, - loss
 
         $allocation = PaymentAllocation::create([
             'company_id' => $payment->company_id,
             'payment_id' => $payment->id,
             'invoice_id' => $invoice->id,
-            'amount_sgd' => $amount->toString(),
+            'amount_sgd' => $paymentSgd->toString(),
+            'amount_fx' => $amount->toString(),
+            'invoice_amount_sgd' => $invoiceSgd->toString(),
+            'fx_difference_sgd' => $difference->toString(),
         ]);
         self::recalculateInvoiceStatus($invoice);
+        if ($difference->toString() !== '0.00') {
+            Posting::postExchangeDifference(
+                companyId: $payment->company_id, receivable: true, allocationId: $allocation->id,
+                voucherNumber: "{$payment->voucher_number}-FX-{$invoice->invoice_number}", on: Carbon::parse($payment->payment_date),
+                difference: $difference, narration: "Exchange difference, receipt {$payment->voucher_number} on invoice {$invoice->invoice_number} ({$code})",
+                actorUserId: null,
+            );
+        }
         // unallocatedSgd()/allocatedSgd() reduce over the cached
         // `allocations` relation -- refresh it so a second allocation
         // against the same $payment instance (e.g. several lines in
